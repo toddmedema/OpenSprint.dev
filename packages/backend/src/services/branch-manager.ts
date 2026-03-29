@@ -30,7 +30,7 @@ const RUNTIME_EXCLUDE_FOR_WIP = [
  * Note: `node_modules/` in .gitignore does not ignore a symlink named `node_modules`,
  * so we explicitly unstage any node_modules pathspec after `git add -A`.
  */
-const DEPENDENCY_EXCLUDE_PATHS_FOR_WIP = [":(glob)**/node_modules"];
+const DEPENDENCY_EXCLUDE_PATHS_FOR_WIP = [":(glob)**/node_modules", ":(glob)**/node_modules/**"];
 const WIP_EXCLUDE_PATHS = [...RUNTIME_EXCLUDE_FOR_WIP, ...DEPENDENCY_EXCLUDE_PATHS_FOR_WIP];
 const log = createLogger("branch-manager");
 const DIFF_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
@@ -828,6 +828,7 @@ export class BranchManager {
    */
   async rebaseContinue(repoPath: string): Promise<void> {
     await this.gitExec(repoPath, ["add", "-A"]);
+    await this.resetExcludedWipPaths(repoPath);
     const noHooks = getGitNoHooksPath();
     try {
       await this.gitExec(

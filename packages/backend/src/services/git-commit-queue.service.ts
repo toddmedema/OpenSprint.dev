@@ -53,6 +53,8 @@ export class MergeJobError extends Error {
       cwd?: string;
       exitCode?: number | null;
       signal?: string | null;
+      classificationConfidence?: "high" | "low";
+      classificationReason?: string;
     }
   ) {
     super(message);

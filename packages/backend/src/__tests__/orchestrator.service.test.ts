@@ -1477,6 +1477,25 @@ describe("OrchestratorService (slot-based model)", () => {
           2
         )
       );
+      await fs.writeFile(
+        path.join(worktreePath, "package-lock.json"),
+        JSON.stringify(
+          {
+            name: "quality-gate-worktree",
+            lockfileVersion: 3,
+            requires: true,
+            packages: {
+              "": {
+                name: "quality-gate-worktree",
+                version: "1.0.0",
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+      await fs.writeFile(path.join(worktreePath, "node_modules", ".opensprint-test"), "ok");
     }
 
     const runMergeQualityGates = () =>

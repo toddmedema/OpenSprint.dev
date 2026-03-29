@@ -104,6 +104,61 @@ export class ValidationWorkspaceService {
     }
   }
 
+  private async verifyWorkspaceReady(
+    repoPath: string,
+    worktreePath: string,
+    kind: ValidationWorkspaceKind
+  ): Promise<void> {
+    const packageJsonPath = path.join(worktreePath, "package.json");
+    try {
+      await fs.access(packageJsonPath);
+    } catch {
+      throw new Error(`Validation workspace package.json is missing: ${packageJsonPath}`);
+    }
+
+    const repoLockfilePath = path.join(repoPath, "package-lock.json");
+    const workspaceLockfilePath = path.join(worktreePath, "package-lock.json");
+    const repoHasLockfile = await fs
+      .access(repoLockfilePath)
+      .then(() => true)
+      .catch(() => false);
+    if (repoHasLockfile) {
+      try {
+        await fs.access(workspaceLockfilePath);
+      } catch {
+        throw new Error(
+          `Validation workspace package-lock.json is missing: ${workspaceLockfilePath}`
+        );
+      }
+    }
+
+    const nodeModulesPath = path.join(worktreePath, "node_modules");
+    if (!(await this.isNodeModulesUsable(nodeModulesPath))) {
+      throw new Error(
+        `Validation workspace node_modules is missing or unusable at ${nodeModulesPath}`
+      );
+    }
+
+    try {
+      await this.runCommand(
+        {
+          command: "git",
+          args: ["rev-parse", "--verify", "HEAD"],
+        },
+        {
+          cwd: worktreePath,
+          timeout: 30_000,
+        }
+      );
+    } catch (err) {
+      throw new Error(
+        `${kind} workspace git validation failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
   async createBaselineWorkspace(
     repoPath: string,
     baseBranch: string
@@ -131,6 +186,7 @@ export class ValidationWorkspaceService {
       }
     );
     await this.branchManager.symlinkNodeModules(repoPath, worktreePath);
+    await this.verifyWorkspaceReady(repoPath, worktreePath, "baseline");
 
     return {
       kind: "baseline",
@@ -173,6 +229,7 @@ export class ValidationWorkspaceService {
     );
 
     await this.ensureMergedCandidateNodeModules(repoPath, worktreePath);
+    await this.verifyWorkspaceReady(repoPath, worktreePath, "merged_candidate");
 
     return {
       kind: "merged_candidate",

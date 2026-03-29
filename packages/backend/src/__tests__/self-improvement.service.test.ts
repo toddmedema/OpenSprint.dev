@@ -347,5 +347,46 @@ describe("SelfImprovementService", () => {
       );
       expect(taskStore.create).not.toHaveBeenCalled();
     });
+
+    it("reopens a recently closed remediation task for the same failure fingerprint", async () => {
+      const { taskStore } = await import("../services/task-store.service.js");
+      const recentlyClosedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        {
+          id: "os-closed",
+          status: "closed",
+          source: "self-improvement",
+          selfImprovementKind: "baseline-quality-gate",
+          baselineBaseBranch: "main",
+          baselineFailureFingerprint:
+            "npm run test|stderr | baseline failure|baseline",
+          updated_at: recentlyClosedAt,
+        } as never,
+      ]);
+
+      const result = await service.ensureBaselineQualityGateTask(projectId, {
+        baseBranch: "main",
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        firstErrorLine: "stderr | baseline failure",
+        outputSnippet: "stderr | baseline failure",
+        validationWorkspace: "baseline",
+      });
+
+      expect(result).toEqual({ taskId: "os-closed", created: false });
+      expect(taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        "os-closed",
+        expect.objectContaining({
+          status: "open",
+          assignee: "",
+          extra: expect.objectContaining({
+            baselineFailureFingerprint:
+              "npm run test|stderr | baseline failure|baseline",
+          }),
+        })
+      );
+      expect(taskStore.create).not.toHaveBeenCalled();
+    });
   });
 });

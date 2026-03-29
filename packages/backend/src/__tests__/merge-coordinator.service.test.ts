@@ -819,6 +819,7 @@ describe("MergeCoordinatorService", () => {
       outputSnippet: "stderr | baseline failure",
       firstErrorLine: "stderr | baseline failure",
       worktreePath: null,
+      validationWorkspace: "baseline",
     });
     expect(mockGitQueueEnqueueAndWait).not.toHaveBeenCalled();
     expect(mockHost.taskStore.setMergeStage).toHaveBeenCalledWith(
@@ -835,6 +836,17 @@ describe("MergeCoordinatorService", () => {
       })
     );
     expect(mockNotificationCreateAgentFailed).toHaveBeenCalledTimes(1);
+    const { eventLogService } = await import("../services/event-log.service.js");
+    const baselineCheckEvent = vi
+      .mocked(eventLogService.append)
+      .mock.calls.map(([, event]) => event)
+      .find((event) => event.event === "baseline.check");
+    expect(baselineCheckEvent?.data).toEqual(
+      expect.objectContaining({
+        source: "merge_precheck",
+        outcome: "failing",
+      })
+    );
 
     hostState.slots.set(taskId, makeSlot());
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
@@ -918,6 +930,27 @@ describe("MergeCoordinatorService", () => {
     expect(mockNotificationResolve).not.toHaveBeenCalled();
   });
 
+  it("skips remediation task creation for low-confidence environment baseline failures", async () => {
+    const { selfImprovementService } = await import("../services/self-improvement.service.js");
+    mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
+      if (!isBaselineValidation(options)) return null;
+      return {
+        command: "npm run build",
+        reason: "Command failed with exit code 1",
+        output: "Error: Cannot find module '@app/shared'",
+        firstErrorLine: "Error: Cannot find module '@app/shared'",
+        category: "environment_setup",
+        classificationConfidence: "low",
+        classificationReason: "matched ambiguous environment fingerprint",
+      };
+    });
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(selfImprovementService.ensureBaselineQualityGateTask).not.toHaveBeenCalled();
+    expect(mockNotificationCreateAgentFailed).toHaveBeenCalledTimes(1);
+  });
+
   it("resolves baseline blocker notification when baseline quality gates recover", async () => {
     let nowMs = 1_000_000;
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
@@ -965,6 +998,11 @@ describe("MergeCoordinatorService", () => {
       nowMs += 61_000;
       hostState.slots.set(taskId, makeSlot());
       mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+      expect(mockNotificationResolve).not.toHaveBeenCalled();
+      nowMs += 61_000;
+      hostState.slots.set(taskId, makeSlot());
       await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
       expect(mockNotificationResolve).toHaveBeenCalledWith(projectId, "af-baseline");
@@ -1015,6 +1053,14 @@ describe("MergeCoordinatorService", () => {
       mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
       (mockHost.taskStore.listAll as ReturnType<typeof vi.fn>).mockResolvedValue([remediationTask]);
 
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+      expect(mockHost.taskStore.close).not.toHaveBeenCalledWith(
+        projectId,
+        "os-rem-1",
+        "Baseline restored"
+      );
+      nowMs += 61_000;
+      hostState.slots.set(taskId, makeSlot());
       await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
       expect(mockHost.taskStore.close).toHaveBeenCalledWith(
@@ -1433,7 +1479,20 @@ describe("MergeCoordinatorService", () => {
       outputSnippet: "stderr | rebased main failure",
       firstErrorLine: "stderr | rebased main failure",
       worktreePath: null,
+      validationWorkspace: "baseline",
     });
+    const { eventLogService } = await import("../services/event-log.service.js");
+    const baselineCheckEvent = vi
+      .mocked(eventLogService.append)
+      .mock.calls.map(([, event]) => event)
+      .find((event) => event.event === "baseline.check");
+    expect(baselineCheckEvent?.data).toEqual(
+      expect.objectContaining({
+        source: "push_precheck",
+        outcome: "failing",
+        validationWorkspace: "baseline",
+      })
+    );
     expect(pushMainToOrigin).not.toHaveBeenCalled();
   });
 

@@ -112,7 +112,30 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
     await execAsync("git init", { cwd: repoPath });
     await execAsync("git checkout -b main", { cwd: repoPath });
     await fs.writeFile(path.join(repoPath, "README"), "initial");
-    await execAsync("git add README && git commit -m init", { cwd: repoPath });
+    await fs.writeFile(
+      path.join(repoPath, "package.json"),
+      JSON.stringify({ name: "git-queue-test", private: true }, null, 2)
+    );
+    await fs.writeFile(
+      path.join(repoPath, "package-lock.json"),
+      JSON.stringify(
+        {
+          name: "git-queue-test",
+          lockfileVersion: 3,
+          requires: true,
+          packages: {
+            "": { name: "git-queue-test", private: true },
+          },
+        },
+        null,
+        2
+      )
+    );
+    await fs.mkdir(path.join(repoPath, "node_modules"), { recursive: true });
+    await fs.writeFile(path.join(repoPath, "node_modules", ".opensprint-test"), "ok");
+    await execAsync("git add README package.json package-lock.json && git commit -m init", {
+      cwd: repoPath,
+    });
   });
 
   afterEach(async () => {

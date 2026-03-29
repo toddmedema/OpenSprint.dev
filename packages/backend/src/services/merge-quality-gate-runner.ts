@@ -25,11 +25,7 @@ const NPM_INCLUDE_DEV_ENV = {
   npm_config_omit: "",
 } as const;
 const QUALITY_GATE_ENV_FINGERPRINTS: RegExp[] = [
-  /\bmodule_not_found\b/i,
-  /\bcannot find module\b/i,
-  /\bcannot find package\b/i,
   /\bspawn\s+\S+\s+enoent\b/i,
-  /\benoent\b/i,
   /\beacces\b/i,
   /\bmissing script:\b/i,
   /\bnode_modules\b/i,
@@ -40,6 +36,12 @@ const QUALITY_GATE_ENV_FINGERPRINTS: RegExp[] = [
   /\bneeded a single revision\b/i,
   /\bpackage\.json\b/i,
   /\bworktree\b/i,
+];
+const QUALITY_GATE_ENV_AMBIGUOUS_FINGERPRINTS: RegExp[] = [
+  /\bmodule_not_found\b/i,
+  /\bcannot find module\b/i,
+  /\bcannot find package\b/i,
+  /\benoent\b/i,
 ];
 
 export interface MergeQualityGateRunOptions {
@@ -69,6 +71,8 @@ export interface MergeQualityGateFailure {
   cwd?: string;
   exitCode?: number | null;
   signal?: string | null;
+  classificationConfidence?: "high" | "low";
+  classificationReason?: string;
 }
 
 interface MergeQualityGateRunnerDeps {
@@ -305,6 +309,8 @@ function buildFailure(params: {
   cwd?: string | null;
   exitCode?: number | null;
   signal?: string | null;
+  classificationConfidence?: "high" | "low";
+  classificationReason?: string;
   autoRepairAttempted?: boolean;
   autoRepairSucceeded?: boolean;
   autoRepairCommands?: string[];
@@ -336,6 +342,55 @@ function buildFailure(params: {
     cwd: params.cwd?.trim() || undefined,
     exitCode: params.exitCode ?? undefined,
     signal: params.signal ?? undefined,
+    classificationConfidence: params.classificationConfidence ?? "high",
+    classificationReason: params.classificationReason ?? undefined,
+  };
+}
+
+function classifyQualityGateFailureCategory(failure: {
+  reason: string;
+  output: string;
+  firstErrorLine: string;
+  code?: string;
+  exitCode?: number | null;
+}): {
+  category: "environment_setup" | "quality_gate";
+  confidence: "high" | "low";
+  reason: string;
+} {
+  if (failure.code === "ENOENT" || failure.code === "EACCES") {
+    return {
+      category: "environment_setup",
+      confidence: "high",
+      reason: `process error code ${failure.code}`,
+    };
+  }
+  if (failure.exitCode === 127 || failure.exitCode === 126) {
+    return {
+      category: "environment_setup",
+      confidence: "high",
+      reason: `shell exit code ${failure.exitCode}`,
+    };
+  }
+  const text = `${failure.reason}\n${failure.output}\n${failure.firstErrorLine}`;
+  if (QUALITY_GATE_ENV_FINGERPRINTS.some((fingerprint) => fingerprint.test(text))) {
+    return {
+      category: "environment_setup",
+      confidence: "high",
+      reason: "matched high-confidence environment fingerprint",
+    };
+  }
+  if (QUALITY_GATE_ENV_AMBIGUOUS_FINGERPRINTS.some((fingerprint) => fingerprint.test(text))) {
+    return {
+      category: "environment_setup",
+      confidence: "low",
+      reason: "matched ambiguous environment fingerprint",
+    };
+  }
+  return {
+    category: "quality_gate",
+    confidence: "high",
+    reason: "no environment fingerprint detected",
   };
 }
 
@@ -366,17 +421,14 @@ function extractCommandFailure(
     getFirstNonEmptyLine(rawOutput) ??
     getFirstNonEmptyLine(reason) ??
     "Unknown quality gate failure";
-  const category =
-    params.category ??
-    (isQualityGateEnvironmentFailure({
-      reason,
-      output,
-      firstErrorLine,
-      code: typeof commandErr.code === "string" ? commandErr.code : undefined,
-      exitCode: typeof commandErr.exitCode === "number" ? commandErr.exitCode : null,
-    })
-      ? "environment_setup"
-      : "quality_gate");
+  const classification = classifyQualityGateFailureCategory({
+    reason,
+    output,
+    firstErrorLine,
+    code: typeof commandErr.code === "string" ? commandErr.code : undefined,
+    exitCode: typeof commandErr.exitCode === "number" ? commandErr.exitCode : null,
+  });
+  const category = params.category ?? classification.category;
 
   return buildFailure({
     command,
@@ -394,20 +446,13 @@ function extractCommandFailure(
       typeof commandErr.signal === "string" || commandErr.signal == null
         ? (commandErr.signal ?? null)
         : String(commandErr.signal),
+    classificationConfidence:
+      params.category != null ? "high" : classification.confidence,
+    classificationReason:
+      params.category != null
+        ? `category forced by ${params.category} precheck`
+        : classification.reason,
   });
-}
-
-function isQualityGateEnvironmentFailure(failure: {
-  reason: string;
-  output: string;
-  firstErrorLine: string;
-  code?: string;
-  exitCode?: number | null;
-}): boolean {
-  if (failure.code === "ENOENT" || failure.code === "EACCES") return true;
-  if (failure.exitCode === 127 || failure.exitCode === 126) return true;
-  const text = `${failure.reason}\n${failure.output}\n${failure.firstErrorLine}`;
-  return QUALITY_GATE_ENV_FINGERPRINTS.some((fingerprint) => fingerprint.test(text));
 }
 
 async function ensurePathExists(
@@ -488,6 +533,21 @@ async function prepareGateCommand(
     };
   }
 
+  const spec = parseCommandSpec(command);
+  if (spec.command === "npm") {
+    const lockfilePath = path.join(cwd, "package-lock.json");
+    const lockfileFailure = await ensurePathExists(
+      lockfilePath,
+      `Validation workspace package-lock.json is missing: ${lockfilePath}`,
+      {
+        command,
+        validationWorkspace,
+        worktreePath: cwd,
+      }
+    );
+    if (lockfileFailure) return { failure: lockfileFailure };
+  }
+
   const nodeModulesFailure = await ensurePathExists(
     path.join(cwd, "node_modules"),
     `Validation workspace node_modules is missing for ${cwd}`,
@@ -552,7 +612,6 @@ async function prepareGateCommand(
     };
   }
 
-  const spec = parseCommandSpec(command);
   const executable = resolveCommandExecutable(spec.command);
   if (!executable) {
     return {

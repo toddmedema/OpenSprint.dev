@@ -1782,7 +1782,7 @@ describe("failure root-cause analysis prompt integration", () => {
     const systemPrompt = reviewCall[0].systemPrompt as string;
     expect(systemPrompt).toContain("Failure Root-Cause Analysis");
     expect(systemPrompt).toContain("Group failures by pattern/root cause");
-    expect(systemPrompt).toContain("[Root Cause]");
+    expect(systemPrompt).toContain("do not use special title prefixes");
     expect(systemPrompt).toContain("Remediation steps");
     expect(systemPrompt).toContain("Acceptance criteria");
 

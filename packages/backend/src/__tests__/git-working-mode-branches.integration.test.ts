@@ -108,7 +108,41 @@ describe("Git working mode Branches — full Execute flow integration", () => {
     await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
     await execAsync('git config user.name "Test"', { cwd: repoPath });
     await fs.writeFile(path.join(repoPath, "README"), "initial");
-    await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+    await fs.writeFile(
+      path.join(repoPath, "package.json"),
+      JSON.stringify(
+        {
+          name: "git-branches-integration",
+          private: true,
+          scripts: {
+            lint: "node -e \"process.exit(0)\"",
+            test: "node -e \"process.exit(0)\"",
+          },
+        },
+        null,
+        2
+      )
+    );
+    await fs.writeFile(
+      path.join(repoPath, "package-lock.json"),
+      JSON.stringify(
+        {
+          name: "git-branches-integration",
+          lockfileVersion: 3,
+          requires: true,
+          packages: {
+            "": { name: "git-branches-integration", private: true },
+          },
+        },
+        null,
+        2
+      )
+    );
+    await fs.mkdir(path.join(repoPath, "node_modules"), { recursive: true });
+    await fs.writeFile(path.join(repoPath, "node_modules", ".opensprint-test"), "ok");
+    await execAsync('git add README package.json package-lock.json && git commit -m "initial"', {
+      cwd: repoPath,
+    });
 
     branchManager = new BranchManager();
     removeTaskWorktreeSpy = vi.spyOn(branchManager, "removeTaskWorktree");

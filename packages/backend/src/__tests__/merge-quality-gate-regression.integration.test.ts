@@ -149,7 +149,26 @@ describe("Cross-service quality-gate regression integration", () => {
       path.join(dirPath, "package.json"),
       JSON.stringify({ name: "test-workspace", private: true, scripts: { lint: "eslint ." } })
     );
+    await fs.writeFile(
+      path.join(dirPath, "package-lock.json"),
+      JSON.stringify(
+        {
+          name: "test-workspace",
+          lockfileVersion: 3,
+          requires: true,
+          packages: {
+            "": {
+              name: "test-workspace",
+              private: true,
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
     await fs.mkdir(path.join(dirPath, "node_modules"), { recursive: true });
+    await fs.writeFile(path.join(dirPath, "node_modules", ".opensprint-test"), "ok");
   }
 
   beforeEach(async () => {

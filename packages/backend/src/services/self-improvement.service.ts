@@ -25,6 +25,7 @@ const BASELINE_QUALITY_GATE_TASK_SOURCE = "merge-quality-gate-baseline";
 const BASELINE_QUALITY_GATE_TASK_COMPLEXITY = 6;
 const BASELINE_QUALITY_GATE_REASON_LIMIT = 1200;
 const BASELINE_QUALITY_GATE_OUTPUT_LIMIT = 2400;
+const BASELINE_QUALITY_GATE_REOPEN_WINDOW_MS = 60 * 60 * 1000;
 
 /** Result of SelfImprovementService.run: success, skipped (in progress), or skipped (no changes). */
 export type SelfImprovementRunResult =
@@ -58,12 +59,20 @@ export interface BaselineQualityGateTaskInput {
   outputSnippet?: string | null;
   worktreePath?: string | null;
   firstErrorLine?: string | null;
+  validationWorkspace?: "baseline" | "merged_candidate" | "task_worktree" | "repo_root" | null;
 }
 
 function truncateText(value: string | null | undefined, maxLen: number): string {
   const trimmed = value?.trim() ?? "";
   if (trimmed.length <= maxLen) return trimmed;
   return `${trimmed.slice(0, maxLen).trimEnd()}...`;
+}
+
+function buildBaselineFailureFingerprint(input: BaselineQualityGateTaskInput): string {
+  const command = input.command.trim().toLowerCase();
+  const firstErrorLine = (input.firstErrorLine ?? input.reason).trim().toLowerCase();
+  const workspace = (input.validationWorkspace ?? "unknown").trim().toLowerCase();
+  return `${command}|${firstErrorLine}|${workspace}`.slice(0, 600);
 }
 
 /**
@@ -269,6 +278,8 @@ export class SelfImprovementService {
     const description = this.buildBaselineQualityGateTaskDescription(input);
     const reason = truncateText(input.reason, BASELINE_QUALITY_GATE_REASON_LIMIT);
     const outputSnippet = truncateText(input.outputSnippet, BASELINE_QUALITY_GATE_OUTPUT_LIMIT);
+    const fingerprint = buildBaselineFailureFingerprint(input);
+    const observedAtIso = new Date().toISOString();
     const extra = {
       source: "self-improvement",
       selfImprovementKind: "baseline-quality-gate",
@@ -279,6 +290,9 @@ export class SelfImprovementService {
       failedGateOutputSnippet: outputSnippet,
       firstErrorLine: input.firstErrorLine?.trim() || null,
       worktreePath: input.worktreePath ?? null,
+      validationWorkspace: input.validationWorkspace ?? null,
+      baselineFailureFingerprint: fingerprint,
+      baselineFailureObservedAt: observedAtIso,
       baselineQualityGateCommands: getMergeQualityGateCommands(),
     };
 
@@ -306,6 +320,42 @@ export class SelfImprovementService {
         extra,
       });
       return { taskId: existing.id, created: false };
+    }
+
+    const nowMs = Date.now();
+    const recentlyClosedMatch = allTasks.find((task) => {
+      const status = (task.status as string) ?? "open";
+      if (status !== "closed") return false;
+      const source = (task as { source?: unknown }).source;
+      const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
+      const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
+      const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
+      const existingFingerprint = (
+        task as { baselineFailureFingerprint?: unknown }
+      ).baselineFailureFingerprint;
+      if (
+        source !== "self-improvement" ||
+        (kind !== "baseline-quality-gate" && sourceId !== BASELINE_QUALITY_GATE_TASK_SOURCE) ||
+        baseBranch !== input.baseBranch ||
+        existingFingerprint !== fingerprint
+      ) {
+        return false;
+      }
+      const updatedAtRaw = (task.updated_at as string | undefined) ?? "";
+      const updatedAtMs = Date.parse(updatedAtRaw);
+      return Number.isFinite(updatedAtMs) && nowMs - updatedAtMs <= BASELINE_QUALITY_GATE_REOPEN_WINDOW_MS;
+    });
+    if (recentlyClosedMatch) {
+      await taskStore.update(projectId, recentlyClosedMatch.id, {
+        status: "open",
+        assignee: "",
+        title,
+        description,
+        priority: 0,
+        complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
+        extra,
+      });
+      return { taskId: recentlyClosedMatch.id, created: false };
     }
 
     const created = await taskStore.create(projectId, title, {

@@ -262,7 +262,7 @@ export function buildFailureReviewSystemSupplement(failures: CollectedFailure[])
   lines.push(
     "3. **Identify recurring failure patterns** that appear across multiple tasks. Prioritize patterns by frequency (how many tasks affected) and impact (blocked vs. requeued).",
     "4. **Propose root-cause fix tasks.** Each fix task MUST include:",
-    "   - A clear title prefixed with `[Root Cause]`.",
+    "   - A clear title that states the root-cause fix (do not use special title prefixes).",
     "   - A `description` containing:",
     "     - **Root cause:** one-sentence explanation of the underlying problem.",
     "     - **Affected area:** file path(s), module(s), or subsystem(s) involved.",
@@ -298,7 +298,7 @@ export function buildFailureReviewUserSupplement(failures: CollectedFailure[]): 
   return [
     "",
     `**Failure Review:** The failures section above contains ${failures.length} failure(s)${statsLine}. ` +
-      "Analyze them for root causes and include `[Root Cause]`-prefixed fix tasks in your output. " +
+      "Analyze them for root causes and include concrete root-cause fix tasks in your output. " +
       "See the system instructions for the required fix-task format.",
   ].join("\n");
 }

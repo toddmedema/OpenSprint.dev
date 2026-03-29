@@ -55,6 +55,20 @@ describe("runMergeQualityGates", () => {
         path.join(worktreePath, "package.json"),
         JSON.stringify({ name: "tmp-app", version: "1.0.0", scripts }, null, 2)
       );
+      await fs.writeFile(
+        path.join(worktreePath, "package-lock.json"),
+        JSON.stringify(
+          {
+            name: "tmp-app",
+            version: "1.0.0",
+            lockfileVersion: 3,
+            requires: true,
+            packages: {},
+          },
+          null,
+          2
+        )
+      );
     }
     if (includeNodeModules) {
       await fs.mkdir(path.join(worktreePath, "node_modules"), { recursive: true });
@@ -487,5 +501,80 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       "npm ls --depth=0 --include=dev",
       "npm run build",
     ]);
+  });
+
+  it("marks ambiguous environment fingerprints with low confidence", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run build") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed with exit code 1",
+            stderr:
+              "Error: Cannot find module '@app/shared' imported from src/server.ts",
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-ambiguous",
+        branchName: "opensprint/os-ambiguous",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+      }
+    );
+
+    expect(failure).toEqual(
+      expect.objectContaining({
+        category: "environment_setup",
+        classificationConfidence: "low",
+      })
+    );
+    expect(failure?.classificationReason).toContain("ambiguous");
+  });
+
+  it("fails precheck with high confidence when package-lock is missing for npm gates", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" });
+    await fs.rm(path.join(worktreePath, "package-lock.json"), { force: true });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+        makeCommandResult(spec, options.cwd)
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-lockfile",
+        branchName: "opensprint/os-lockfile",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+      }
+    );
+
+    expect(failure).toEqual(
+      expect.objectContaining({
+        category: "environment_setup",
+        classificationConfidence: "high",
+      })
+    );
+    expect(failure?.reason).toContain("package-lock.json");
   });
 });

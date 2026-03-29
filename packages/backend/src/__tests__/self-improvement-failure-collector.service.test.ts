@@ -587,7 +587,7 @@ describe("buildFailureReviewSystemSupplement", () => {
     expect(result).toContain("Classify each group as environmental/infrastructure or code/logic");
     expect(result).toContain("Identify recurring failure patterns");
     expect(result).toContain("Propose root-cause fix tasks");
-    expect(result).toContain("[Root Cause]");
+    expect(result).toContain("do not use special title prefixes");
     expect(result).toContain("Root cause:");
     expect(result).toContain("Affected area:");
     expect(result).toContain("Remediation steps:");
@@ -722,7 +722,7 @@ describe("buildFailureReviewUserSupplement", () => {
     ];
     const result = buildFailureReviewUserSupplement(failures);
     expect(result).toContain("1 failure(s)");
-    expect(result).toContain("[Root Cause]");
+    expect(result).toContain("concrete root-cause fix tasks");
     expect(result).toContain("Failure Review");
   });
 
@@ -903,7 +903,7 @@ describe("prompt snapshot tests — failure-review dimension", () => {
          - **Code/logic:** failures caused by bugs, incorrect implementations, test logic errors, or merge conflicts from overlapping changes.
       3. **Identify recurring failure patterns** that appear across multiple tasks. Prioritize patterns by frequency (how many tasks affected) and impact (blocked vs. requeued).
       4. **Propose root-cause fix tasks.** Each fix task MUST include:
-         - A clear title prefixed with \`[Root Cause]\`.
+         - A clear title that states the root-cause fix (do not use special title prefixes).
          - A \`description\` containing:
            - **Root cause:** one-sentence explanation of the underlying problem.
            - **Affected area:** file path(s), module(s), or subsystem(s) involved.
@@ -946,7 +946,7 @@ describe("prompt snapshot tests — failure-review dimension", () => {
          - **Environmental/infrastructure:** failures caused by environment setup, missing tools, dependency issues, CI configuration, or quality-gate command misconfiguration.
       3. **Identify recurring failure patterns** that appear across multiple tasks. Prioritize patterns by frequency (how many tasks affected) and impact (blocked vs. requeued).
       4. **Propose root-cause fix tasks.** Each fix task MUST include:
-         - A clear title prefixed with \`[Root Cause]\`.
+         - A clear title that states the root-cause fix (do not use special title prefixes).
          - A \`description\` containing:
            - **Root cause:** one-sentence explanation of the underlying problem.
            - **Affected area:** file path(s), module(s), or subsystem(s) involved.
@@ -997,7 +997,7 @@ describe("prompt snapshot tests — failure-review dimension", () => {
          - **Code/logic:** failures caused by bugs, incorrect implementations, test logic errors, or merge conflicts from overlapping changes.
       3. **Identify recurring failure patterns** that appear across multiple tasks. Prioritize patterns by frequency (how many tasks affected) and impact (blocked vs. requeued).
       4. **Propose root-cause fix tasks.** Each fix task MUST include:
-         - A clear title prefixed with \`[Root Cause]\`.
+         - A clear title that states the root-cause fix (do not use special title prefixes).
          - A \`description\` containing:
            - **Root cause:** one-sentence explanation of the underlying problem.
            - **Affected area:** file path(s), module(s), or subsystem(s) involved.
@@ -1027,7 +1027,7 @@ describe("prompt snapshot tests — failure-review dimension", () => {
     ];
     expect(buildFailureReviewUserSupplement(failures)).toMatchInlineSnapshot(`
       "
-      **Failure Review:** The failures section above contains 1 failure(s) (1 requeued). Analyze them for root causes and include \`[Root Cause]\`-prefixed fix tasks in your output. See the system instructions for the required fix-task format."
+      **Failure Review:** The failures section above contains 1 failure(s) (1 requeued). Analyze them for root causes and include concrete root-cause fix tasks in your output. See the system instructions for the required fix-task format."
     `);
   });
 
@@ -1057,7 +1057,7 @@ describe("prompt snapshot tests — failure-review dimension", () => {
     ];
     expect(buildFailureReviewUserSupplement(failures)).toMatchInlineSnapshot(`
       "
-      **Failure Review:** The failures section above contains 3 failure(s) (2 blocked, 1 requeued, 2 with multiple attempts). Analyze them for root causes and include \`[Root Cause]\`-prefixed fix tasks in your output. See the system instructions for the required fix-task format."
+      **Failure Review:** The failures section above contains 3 failure(s) (2 blocked, 1 requeued, 2 with multiple attempts). Analyze them for root causes and include concrete root-cause fix tasks in your output. See the system instructions for the required fix-task format."
     `);
   });
 

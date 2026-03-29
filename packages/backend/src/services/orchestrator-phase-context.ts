@@ -32,6 +32,8 @@ export interface RetryQualityGateDetail {
   cwd?: string | null;
   exitCode?: number | null;
   signal?: string | null;
+  classificationConfidence?: "high" | "low" | null;
+  classificationReason?: string | null;
 }
 
 /** Condensed prior failure for multi-attempt prompts (avoids ping-pong regressions). */
