@@ -331,20 +331,25 @@ describe("Navbar", () => {
       }
       renderNavbar(<Navbar project={null} />);
       const nav = screen.getByRole("navigation") as HTMLElement;
+      const backdrop = screen.getByTestId("navbar-electron-drag-backdrop") as HTMLElement;
       const logoLink = screen.getByTestId("navbar-logo-link") as HTMLElement;
       const rightSlot = screen.getByTestId("navbar-right-slot") as HTMLElement;
       const rightControls = screen.getByTestId("navbar-right-controls") as HTMLElement;
       // React sets -webkit-app-region on the style object; jsdom may not serialize it to getAttribute("style")
       const navStyleObj = nav.style as unknown as Record<string, string>;
+      const backdropStyleObj = backdrop.style as unknown as Record<string, string>;
       const logoStyleObj = logoLink.style as unknown as Record<string, string>;
       const rightStyleObj = rightSlot.style as unknown as Record<string, string>;
       const rightControlsStyleObj = rightControls.style as unknown as Record<string, string>;
-      expect(navStyleObj.webkitAppRegion || navStyleObj.WebkitAppRegion).toBe("drag");
+      expect(navStyleObj.webkitAppRegion || navStyleObj.WebkitAppRegion).toBeUndefined();
+      expect(backdropStyleObj.webkitAppRegion || backdropStyleObj.WebkitAppRegion).toBe("drag");
       expect(logoStyleObj.webkitAppRegion || logoStyleObj.WebkitAppRegion).toBe("no-drag");
       expect(rightStyleObj.webkitAppRegion || rightStyleObj.WebkitAppRegion).toBeUndefined();
       expect(rightControlsStyleObj.webkitAppRegion || rightControlsStyleObj.WebkitAppRegion).toBe(
         "no-drag"
       );
+      expect(rightSlot.className).toContain("pointer-events-none");
+      expect(rightControls.className).toContain("pointer-events-auto");
     } finally {
       if (typeof window !== "undefined") {
         if (prev !== undefined) (window as unknown as { electron: unknown }).electron = prev;
@@ -377,7 +382,9 @@ describe("Navbar", () => {
       const tablistStyleObj = tablist.style as unknown as Record<string, string>;
       const centerStyleObj = centerColumn.style as unknown as Record<string, string>;
       expect(centerStyleObj.webkitAppRegion || centerStyleObj.WebkitAppRegion).toBeUndefined();
+      expect(centerColumn.className).toContain("pointer-events-none");
       expect(tablistStyleObj.webkitAppRegion || tablistStyleObj.WebkitAppRegion).toBe("no-drag");
+      expect(tablist.className).toContain("pointer-events-auto");
     } finally {
       if (typeof window !== "undefined") {
         if (prev !== undefined) (window as unknown as { electron: unknown }).electron = prev;
