@@ -258,19 +258,19 @@ export function Navbar({
           {showProjectSelect ? (
             <div
               data-testid="navbar-project-select"
-              className={`relative hidden min-[800px]:flex flex-1 items-center min-w-0 max-w-full ${electronChrome ? "pointer-events-auto" : ""}`}
+              className="relative hidden min-[800px]:flex flex-1 items-center min-w-0 max-w-full"
               ref={dropdownRef}
-              style={
-                isElectronWin || isElectronMac
-                  ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)
-                  : undefined
-              }
             >
               <button
                 ref={projectTriggerRef}
                 type="button"
                 onClick={() => setDropdownOpen((o) => !o)}
-                className="dropdown-trigger inline-flex max-w-full items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle"
+                className={`dropdown-trigger inline-flex max-w-full items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle ${electronChrome ? "pointer-events-auto" : ""}`}
+                style={
+                  isElectronWin || isElectronMac
+                    ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)
+                    : undefined
+                }
                 aria-expanded={dropdownOpen}
                 aria-haspopup="listbox"
                 aria-label={`Select project: ${project ? project.name : "All Projects"}`}

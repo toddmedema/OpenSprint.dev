@@ -211,7 +211,7 @@ export function ExecuteAgentChatPanel({
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-theme-border shrink-0">
+      <div className="p-3 shrink-0">
         <ChatInput
           value={chatInput}
           onChange={setChatInput}

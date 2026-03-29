@@ -447,6 +447,14 @@ describe("ExecuteAgentChatPanel", () => {
     expect(screen.getByPlaceholderText("Message the agent…")).toBeInTheDocument();
   });
 
+  it("does not render a border-t divider above the chat input", () => {
+    render(<ExecuteAgentChatPanel {...defaultProps} />);
+
+    const input = screen.getByPlaceholderText("Message the agent…");
+    const composerBlock = input.parentElement?.parentElement;
+    expect(composerBlock?.className).not.toMatch(/\bborder-t\b/);
+  });
+
   it("applies dark mode classes when html has data-theme=dark", () => {
     document.documentElement.setAttribute("data-theme", "dark");
     const messages: ExecuteChatMessage[] = [

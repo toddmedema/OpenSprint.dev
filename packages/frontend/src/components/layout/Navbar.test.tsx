@@ -358,6 +358,32 @@ describe("Navbar", () => {
     }
   });
 
+  it("on macOS Electron, project picker wrapper stays pointer-events-none so flex-1 spare area drags the window", () => {
+    const prev =
+      typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
+    try {
+      if (typeof window !== "undefined") {
+        (window as unknown as { electron: { isElectron: true; platform: string } }).electron = {
+          isElectron: true,
+          platform: "darwin",
+        };
+      }
+      const mockProject = makeProject("proj-1", "Test Project");
+      renderNavbar(<Navbar project={mockProject} currentPhase="sketch" onPhaseChange={vi.fn()} />);
+      const projectSelect = screen.getByTestId("navbar-project-select");
+      const trigger = screen.getByRole("button", { name: /Select project: Test Project/i });
+      expect(projectSelect.className).not.toContain("pointer-events-auto");
+      expect(trigger.className).toContain("pointer-events-auto");
+      const triggerStyle = trigger.style as unknown as Record<string, string>;
+      expect(triggerStyle.webkitAppRegion || triggerStyle.WebkitAppRegion).toBe("no-drag");
+    } finally {
+      if (typeof window !== "undefined") {
+        if (prev !== undefined) (window as unknown as { electron: unknown }).electron = prev;
+        else delete (window as unknown as { electron?: unknown }).electron;
+      }
+    }
+  });
+
   it("on macOS Electron with project tabs, center column stays draggable and tablist is no-drag", () => {
     const prev =
       typeof window !== "undefined" && (window as unknown as { electron?: unknown }).electron;
