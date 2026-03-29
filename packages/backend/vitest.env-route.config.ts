@@ -11,7 +11,7 @@ export default defineProject({
   ssr: backendSsrConfig,
   test: {
     ...backendCommonTestConfig,
-    name: "env-route",
+    name: "backend-env-route",
     include: ["src/__tests__/env-route.test.ts"],
     pool: "threads",
     poolOptions: {
