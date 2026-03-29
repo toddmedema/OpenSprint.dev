@@ -164,6 +164,45 @@ describe("ArchivedSessionView", () => {
     expect(screen.getByText("block")).toBeInTheDocument();
   });
 
+  it("resets scroll position when scrollResetKey changes", () => {
+    const sessions = [
+      {
+        attempt: 1,
+        status: "approved",
+        agentType: "coder",
+        outputLog: "First session output",
+        gitDiff: null,
+        testResults: null,
+        failureReason: null,
+      },
+    ];
+    const { rerender } = render(
+      <TestWrapper>
+        <ArchivedSessionView sessions={sessions} scrollResetKey="task-1" />
+      </TestWrapper>
+    );
+
+    const scrollContainer = screen.getByTestId("archived-sessions-list");
+    expect(scrollContainer).toBeInTheDocument();
+
+    // Simulate user scroll to some offset
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 150,
+      writable: true,
+      configurable: true,
+    });
+
+    // Switch task — scrollResetKey changes
+    rerender(
+      <TestWrapper>
+        <ArchivedSessionView sessions={sessions} scrollResetKey="task-2" />
+      </TestWrapper>
+    );
+
+    // For single session, scrollTop should reset to 0
+    expect(scrollContainer.scrollTop).toBe(0);
+  });
+
   it("filters NDJSON outputLog to show extracted text only", () => {
     const sessions = [
       {

@@ -87,7 +87,13 @@ const SessionCard = React.memo(function SessionCard({
   );
 });
 
-function ArchivedSessionViewInner({ sessions }: { sessions: AgentSession[] }) {
+function ArchivedSessionViewInner({
+  sessions,
+  scrollResetKey,
+}: {
+  sessions: AgentSession[];
+  scrollResetKey?: string;
+}) {
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -103,6 +109,20 @@ function ArchivedSessionViewInner({ sessions }: { sessions: AgentSession[] }) {
       virtualizer.scrollToIndex(sessions.length - 1, { align: "end" });
     }
   }, [sessions.length]); // eslint-disable-line react-hooks/exhaustive-deps -- scroll only when session count changes
+
+  // Re-scroll to bottom when the selected task changes so a stale offset
+  // from a previous task is never shown.
+  const prevResetKey = useRef(scrollResetKey);
+  useEffect(() => {
+    if (scrollResetKey === undefined || scrollResetKey === prevResetKey.current) return;
+    prevResetKey.current = scrollResetKey;
+    if (sessions.length > 1) {
+      virtualizer.scrollToIndex(sessions.length - 1, { align: "end" });
+    } else {
+      const el = parentRef.current;
+      if (el) el.scrollTop = 0;
+    }
+  }, [scrollResetKey, sessions.length]); // eslint-disable-line react-hooks/exhaustive-deps -- virtualizer is stable
 
   if (sessions.length === 0) return null;
 
@@ -167,4 +187,7 @@ function ArchivedSessionViewInner({ sessions }: { sessions: AgentSession[] }) {
   );
 }
 
-export const ArchivedSessionView = React.memo(ArchivedSessionViewInner);
+export const ArchivedSessionView = React.memo(ArchivedSessionViewInner) as React.NamedExoticComponent<{
+  sessions: AgentSession[];
+  scrollResetKey?: string;
+}>;

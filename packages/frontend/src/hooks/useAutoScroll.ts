@@ -49,13 +49,20 @@ export function useAutoScroll({
 
   // Reset auto-scroll when switching tasks/sessions.
   // Clearing prevContentLengthRef ensures existing content triggers
-  // a scroll-to-bottom via the content effect below.
+  // a scroll-to-bottom via the content effect below. We also schedule
+  // an immediate scroll so the new task starts at the bottom even when
+  // autoScrollEnabled was false (user had scrolled up on the prior task).
   useEffect(() => {
     if (prevResetKeyRef.current !== resetKey) {
       prevResetKeyRef.current = resetKey;
       prevContentLengthRef.current = 0;
       setAutoScrollEnabled(true);
       setShowJumpToBottom(false);
+      const el = containerRef.current;
+      if (el) {
+        const rafId = requestAnimationFrame(() => scrollToBottom(el));
+        return () => cancelAnimationFrame(rafId);
+      }
     }
   }, [resetKey]);
 

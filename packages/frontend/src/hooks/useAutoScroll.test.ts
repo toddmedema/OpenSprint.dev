@@ -327,6 +327,42 @@ describe("useAutoScroll", () => {
     expect(mockEl.scrollTop).toBe(300);
   });
 
+  it("scrolls to bottom immediately on resetKey change even with same contentLength", () => {
+    const mockEl = makeMockEl();
+    const { result, rerender } = renderHook(
+      ({ contentLength, resetKey }: { contentLength: number; resetKey: string }) =>
+        useAutoScroll({ contentLength, resetKey }),
+      { initialProps: { contentLength: 0, resetKey: "task-1" } }
+    );
+
+    setRef(result, mockEl);
+
+    // Content arrives on task-1
+    rerender({ contentLength: 50, resetKey: "task-1" });
+    act(() => {
+      vi.advanceTimersToNextFrame();
+    });
+    expect(mockEl.scrollTop).toBe(300);
+
+    // User scrolls up
+    mockEl.scrollTop = 0;
+    act(() => {
+      result.current.handleScroll();
+    });
+    expect(result.current.autoScrollEnabled).toBe(false);
+
+    // Switch to task-2 with SAME contentLength — the resetKey effect
+    // should still trigger an immediate scroll-to-bottom via rAF.
+    rerender({ contentLength: 50, resetKey: "task-2" });
+    act(() => {
+      vi.advanceTimersToNextFrame();
+    });
+
+    expect(mockEl.scrollTop).toBe(300);
+    expect(result.current.autoScrollEnabled).toBe(true);
+    expect(result.current.showJumpToBottom).toBe(false);
+  });
+
   describe("triggerKey", () => {
     it("scrolls to bottom when triggerKey changes and auto-scroll is enabled", () => {
       const mockEl = makeMockEl();
