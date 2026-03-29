@@ -710,7 +710,10 @@ async function repairQualityGateEnvironment(
   }
 
   const shouldRelinkNodeModules =
-    validationWorkspace !== "baseline" && validationWorkspace !== "merged_candidate";
+    validationWorkspace !== "baseline" &&
+    // merged_candidate prefers an isolated npm ci install; only fall back to relinking
+    // when npm ci could not restore dependencies.
+    (validationWorkspace !== "merged_candidate" || !npmCiSucceeded);
   let symlinkSucceeded = true;
   if (shouldRelinkNodeModules) {
     commands.push("symlinkNodeModules");

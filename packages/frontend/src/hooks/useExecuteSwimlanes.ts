@@ -194,14 +194,14 @@ export function useExecuteSwimlanes(
 
   const selfImprovementCount = implTasks.filter((t) => isSelfImprovementTask(t)).length;
   /**
-   * Toolbar order: All → In Progress → Blocked → Waiting → Ready → Done → Self-improvement.
-   * Blocked and Waiting stay in this slot order like Ready/Done; ExecuteFilterToolbar hides chips with count 0.
+   * Toolbar order: All → In Progress → Blocked → Merge Queue → Ready → Done → Self-improvement.
+   * Blocked and Merge Queue stay in this slot order like Ready/Done; ExecuteFilterToolbar hides chips with count 0.
    */
   const chipConfig: { label: string; filter: StatusFilter; count: number }[] = [
     { label: "All", filter: "all", count: totalTasks },
     { label: "In Progress", filter: "in_progress", count: inProgressCount + inReviewCount },
     { label: "Blocked", filter: "blocked", count: blockedOnHumanCount },
-    { label: "Waiting", filter: "waiting_to_merge", count: waitingToMergeCount },
+    { label: "Merge Queue", filter: "waiting_to_merge", count: waitingToMergeCount },
     { label: "Ready", filter: "ready", count: readyCount },
     { label: "Done", filter: "done", count: doneCount },
     ...(selfImprovementCount > 0

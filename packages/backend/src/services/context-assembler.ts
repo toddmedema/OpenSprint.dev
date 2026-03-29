@@ -536,10 +536,12 @@ export class ContextAssembler {
     } else {
       prompt += `2. Implement the task according to the acceptance criteria.\n`;
     }
+    prompt += `${config.useExistingBranch ? "4" : "3"}. Keep scope tight: only change files required by this ticket and acceptance criteria. Do not fix unrelated failures or refactor adjacent systems unless the ticket explicitly requires it.\n`;
+    prompt += `   If you discover unrelated problems, note them in your summary instead of broadening this task.\n`;
 
-    prompt += `${config.useExistingBranch ? "4" : "3"}. Write comprehensive tests (unit, and integration where applicable).\n`;
-    prompt += `${config.useExistingBranch ? "5" : "4"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
-    prompt += `${config.useExistingBranch ? "6" : "5"}. Run the smallest relevant non-watch verification for the workspaces you touch while iterating. Prefer scoped tests first, and add scoped build/typecheck and lint commands whenever your changes could affect them (for example TypeScript, exported interfaces, build config, or linted frontend/backend code).\n`;
+    prompt += `${config.useExistingBranch ? "5" : "4"}. Write comprehensive tests (unit, and integration where applicable).\n`;
+    prompt += `${config.useExistingBranch ? "6" : "5"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
+    prompt += `${config.useExistingBranch ? "7" : "6"}. Run the smallest relevant non-watch verification for the workspaces you touch while iterating. Prefer scoped tests first, and add scoped build/typecheck and lint commands whenever your changes could affect them (for example TypeScript, exported interfaces, build config, or linted frontend/backend code).\n`;
     prompt += `   Before writing \`result.json\`, run the merge quality gates from the repository root so your changes do not break the build: ${mergeQualityGateList}. The orchestrator runs the same commands automatically after you finish — fix any failures before reporting success. Never use watch mode or leave test processes running in the background.\n`;
     if (config.attempt > 1) {
       prompt += `   **Retry:** Your previous attempt failed validation. Ensure every merge gate command above passes locally before you write \`result.json\`.\n`;
@@ -549,7 +551,7 @@ export class ContextAssembler {
       config.repoPath && config.taskId
         ? path.join(config.repoPath, ".opensprint", "active", config.taskId, "result.json")
         : `.opensprint/active/${config.taskId}/result.json`;
-    prompt += `${config.useExistingBranch ? "7" : "6"}. Write your result to \`${resultJsonPath}\` using this exact JSON format:\n`;
+    prompt += `${config.useExistingBranch ? "8" : "7"}. Write your result to \`${resultJsonPath}\` using this exact JSON format:\n`;
     prompt += `   \`\`\`json\n`;
     prompt += `   { "status": "success", "summary": "Brief description of what you implemented" }\n`;
     prompt += `   \`\`\`\n`;

@@ -104,7 +104,7 @@ describe("useExecuteSwimlanes", () => {
       count: 0,
     });
     expect(result.current.chipConfig.find((c) => c.filter === "waiting_to_merge")).toMatchObject({
-      label: "Waiting",
+      label: "Merge Queue",
       count: 0,
     });
     expect(result.current.chipConfig.map((c) => c.filter)).toEqual([
@@ -161,7 +161,7 @@ describe("useExecuteSwimlanes", () => {
     expect(result.current.filteredTasks.map((t) => t.id)).toEqual(["epic-a.1", "epic-a.2"]);
   });
 
-  it("chipConfig follows All → In Progress → Blocked → Waiting → Ready → Done → Self-improvement order when all are present", () => {
+  it("chipConfig follows All → In Progress → Blocked → Merge Queue → Ready → Done → Self-improvement order when all are present", () => {
     const tasks: Task[] = [
       task({ id: "epic-a.1", kanbanColumn: "in_progress" }),
       task({ id: "epic-a.2", kanbanColumn: "blocked" }),
@@ -182,7 +182,7 @@ describe("useExecuteSwimlanes", () => {
       "self_improvement",
     ]);
     expect(result.current.chipConfig.find((c) => c.filter === "waiting_to_merge")!.label).toBe(
-      "Waiting"
+      "Merge Queue"
     );
     expect(result.current.chipConfig.find((c) => c.filter === "blocked")!.label).toBe("Blocked");
   });

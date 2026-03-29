@@ -17,6 +17,7 @@ import type { StatusFilter } from "../../lib/executeTaskFilter";
 import { EXECUTE_SECTION_HEADER_STICKY_TOP } from "../../lib/phaseMainScrollLayout";
 import { RelativeTimestampDisplay } from "../RelativeTimestampDisplay";
 import { UptimeDisplay } from "../UptimeDisplay";
+import { formatUntilTimestamp } from "../../lib/formatting";
 
 const ACTIVE_TASK_TICK_MS = 10_000;
 
@@ -52,7 +53,7 @@ export interface TimelineListProps {
 }
 
 const SECTION_LABELS: Record<string, string> = {
-  waiting_to_merge: "Waiting to Merge",
+  waiting_to_merge: "Merge Queue",
   [TIMELINE_SECTION.active]: "In Progress",
   [TIMELINE_SECTION.queue]: "Up Next",
   [TIMELINE_SECTION.completed]: "Completed",
@@ -61,6 +62,55 @@ const SECTION_LABELS: Record<string, string> = {
   in_line: "Up Next",
   planning: "Planning",
 };
+
+function getMergeQueueDescription(task: Task): string {
+  if (task.mergeGateState === "merging") {
+    return "Merging now";
+  }
+  if (task.mergeGateState === "validating") {
+    return "Running pre-merge checks";
+  }
+  if (task.mergeGateState === "blocked_on_baseline" || task.mergeWaitingOnMain) {
+    return "Blocked on main baseline checks";
+  }
+  if (task.mergeGateState === "candidate_fix_needed") {
+    return "Needs code fixes before merge";
+  }
+  if (task.mergeGateState === "environment_repair_needed") {
+    return "Needs environment repair before merge";
+  }
+  return "Queued for merge";
+}
+
+function getMergeQueueRetrySuffix(task: Task): string | null {
+  if (!task.mergePausedUntil) return null;
+  const until = formatUntilTimestamp(task.mergePausedUntil);
+  return until === "soon" ? "Retry eligible soon" : `Retry eligible ${until}`;
+}
+
+function getTimelineRightLabel(
+  task: Task,
+  epicName: string
+): { text: string; title: string; testId: "task-row-epic-name" | "task-row-merge-description" } | null {
+  if (task.kanbanColumn === "waiting_to_merge") {
+    const description = getMergeQueueDescription(task);
+    const retrySuffix = getMergeQueueRetrySuffix(task);
+    const text = retrySuffix ? `${description} • ${retrySuffix}` : description;
+    return {
+      text,
+      title: text,
+      testId: "task-row-merge-description",
+    };
+  }
+  if (epicName) {
+    return {
+      text: epicName,
+      title: epicName,
+      testId: "task-row-epic-name",
+    };
+  }
+  return null;
+}
 
 function TimelineRow({
   task,
@@ -91,6 +141,7 @@ function TimelineRow({
   const isDone = task.kanbanColumn === "done";
   const isInProgress = task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review";
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const rightLabel = getTimelineRightLabel(task, epicName);
 
   return (
     <div
@@ -118,13 +169,13 @@ function TimelineRow({
               Self-improvement
             </span>
           )}
-          {epicName && (
+          {rightLabel && (
             <span
               className="shrink-0 text-xs text-theme-muted truncate max-w-[120px] min-[1000px]:max-w-[240px]"
-              title={epicName}
-              data-testid="task-row-epic-name"
+              title={rightLabel.title}
+              data-testid={rightLabel.testId}
             >
-              {epicName}
+              {rightLabel.text}
             </span>
           )}
           <span className="text-xs text-theme-muted shrink-0 tabular-nums">{relativeTime}</span>

@@ -308,4 +308,57 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       "npm run build",
     ]);
   });
+
+  it("falls back to relinking merged-candidate node_modules when npm ci fails", async () => {
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ls --depth=0 --include=dev") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ci") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed: npm ci",
+            stderr: "npm ERR! network request failed",
+          });
+        }
+        if (label === "npm run build") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    const symlinkNodeModules = vi.fn(async () => {
+      await fs.mkdir(path.join(worktreePath, "node_modules"), { recursive: true });
+    });
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-6",
+        branchName: "opensprint/os-6",
+        baseBranch: "main",
+        validationWorkspace: "merged_candidate",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
+
+    expect(failure).toBeNull();
+    expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
+    expect(getExecutedCommands(runCommand)).toEqual([
+      "npm ci",
+      "npm ls --depth=0 --include=dev",
+      "npm run build",
+    ]);
+  });
 });

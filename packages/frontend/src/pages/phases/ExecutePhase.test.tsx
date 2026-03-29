@@ -790,7 +790,7 @@ describe("ExecutePhase top bar", () => {
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
   });
 
-  it("shows Waiting chip (not Waiting to Merge) when waiting_to_merge tasks exist, ordered In Progress → Blocked → Waiting → Ready", () => {
+  it("shows Merge Queue chip when waiting_to_merge tasks exist, ordered In Progress → Blocked → Merge Queue → Ready", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -841,7 +841,7 @@ describe("ExecutePhase top bar", () => {
     const blockedIdx = filtersInDomOrder.indexOf("filter-chip-blocked");
     const waitingIdx = filtersInDomOrder.indexOf("filter-chip-waiting_to_merge");
     const readyIdx = filtersInDomOrder.indexOf("filter-chip-ready");
-    expect(screen.getByTestId("filter-chip-waiting_to_merge")).toHaveTextContent("Waiting");
+    expect(screen.getByTestId("filter-chip-waiting_to_merge")).toHaveTextContent("Merge Queue");
     expect(inProgressIdx).toBeLessThan(blockedIdx);
     expect(blockedIdx).toBeLessThan(waitingIdx);
     expect(waitingIdx).toBeLessThan(readyIdx);

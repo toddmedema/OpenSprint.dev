@@ -52,6 +52,7 @@ const createMockTask = (
     createdAt: string;
     complexity: Task["complexity"];
     source: string;
+    mergeGateState: Task["mergeGateState"];
     mergeWaitingOnMain: boolean;
     mergePausedUntil: string | null;
   }> = {}
@@ -171,7 +172,7 @@ describe("TimelineList", () => {
     expect(screen.getByText("Queued Task")).toBeInTheDocument();
   });
 
-  it("displays Waiting to Merge section after In Progress when waiting_to_merge tasks exist", () => {
+  it("displays Merge Queue section after In Progress when waiting_to_merge tasks exist", () => {
     const tasks = [
       createMockTask({ id: "a", kanbanColumn: "in_progress", title: "Active Task" }),
       createMockTask({
@@ -187,25 +188,25 @@ describe("TimelineList", () => {
     );
 
     expect(screen.getByTestId("timeline-section-waiting_to_merge")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Waiting to Merge" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Merge Queue" })).toBeInTheDocument();
     expect(screen.getByText("Merge me")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "In Progress" })).toBeInTheDocument();
     const headings = screen.getAllByRole("heading", { level: 3 });
     const inProgressIdx = headings.findIndex((h) => h.textContent === "In Progress");
-    const waitingToMergeIdx = headings.findIndex((h) => h.textContent === "Waiting to Merge");
+    const waitingToMergeIdx = headings.findIndex((h) => h.textContent === "Merge Queue");
     expect(inProgressIdx).toBeLessThan(waitingToMergeIdx);
 
     const row = screen.getByTestId("timeline-row-w");
     expect(within(row).queryByTestId("timeline-waiting-to-merge-badge")).not.toBeInTheDocument();
   });
 
-  it("waiting_to_merge row does not show inline merge-state badge or text", () => {
+  it("waiting_to_merge row shows merge description instead of epic name", () => {
     const tasks = [
       createMockTask({
         id: "w",
         kanbanColumn: "waiting_to_merge",
         title: "Merge me",
-        mergeWaitingOnMain: true,
+        mergeGateState: "validating",
       }),
     ];
     const plans = [createMockPlan("epic-1", "Auth Epic")];
@@ -215,14 +216,34 @@ describe("TimelineList", () => {
     );
 
     const row = screen.getByTestId("timeline-row-w");
-    expect(within(row).queryByTestId("timeline-waiting-to-merge-badge")).not.toBeInTheDocument();
-    expect(
-      within(row).queryByTestId("timeline-waiting-to-merge-inline-hint")
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Blocked on main/i)).not.toBeInTheDocument();
+    expect(within(row).getByTestId("task-row-merge-description")).toHaveTextContent(
+      "Running pre-merge checks"
+    );
+    expect(within(row).queryByTestId("task-row-epic-name")).not.toBeInTheDocument();
+    expect(within(row).queryByText("Auth Epic")).not.toBeInTheDocument();
   });
 
-  it("waiting_to_merge row does not show merge retry hint inline", () => {
+  it("non-merge row still shows epic name", () => {
+    const tasks = [
+      createMockTask({
+        id: "r",
+        kanbanColumn: "ready",
+        title: "Ready task",
+        epicId: "epic-1",
+      }),
+    ];
+    const plans = [createMockPlan("epic-1", "Auth Epic")];
+
+    renderWithProviders(
+      <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
+    );
+
+    const row = screen.getByTestId("timeline-row-r");
+    expect(within(row).getByTestId("task-row-epic-name")).toHaveTextContent("Auth Epic");
+    expect(within(row).queryByTestId("task-row-merge-description")).not.toBeInTheDocument();
+  });
+
+  it("waiting_to_merge row includes blocked-on-main with retry eligibility when paused", () => {
     vi.useFakeTimers({ now: new Date("2024-06-01T12:00:00Z").getTime() });
 
     const tasks = [
@@ -230,7 +251,8 @@ describe("TimelineList", () => {
         id: "w",
         kanbanColumn: "waiting_to_merge",
         title: "Backoff merge",
-        mergePausedUntil: "2024-06-01T11:00:00Z",
+        mergeWaitingOnMain: true,
+        mergePausedUntil: "2024-06-01T12:07:00Z",
       }),
     ];
     const plans = [createMockPlan("epic-1", "Auth Epic")];
@@ -239,8 +261,10 @@ describe("TimelineList", () => {
       <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
     );
 
-    expect(screen.queryByTestId("timeline-waiting-to-merge-badge")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Retry eligible/i)).not.toBeInTheDocument();
+    const row = screen.getByTestId("timeline-row-w");
+    expect(within(row).getByTestId("task-row-merge-description")).toHaveTextContent(
+      "Blocked on main baseline checks • Retry eligible in 7m"
+    );
   });
 
   it("displays Up Next section when backlog/planning tasks exist", () => {
