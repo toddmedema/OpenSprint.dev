@@ -4,6 +4,22 @@
  */
 import { clampTaskComplexity, PLAN_MARKDOWN_SECTIONS } from "@opensprint/shared";
 
+export const MAX_TASKS_PER_PLAN = 15;
+
+/**
+ * Validate that a batch of tasks does not exceed the per-plan cap.
+ * Returns whether the batch is valid, the count, and the excess (0 when valid).
+ */
+export function validateTaskBatchSize(tasks: unknown[]): {
+  valid: boolean;
+  count: number;
+  excess: number;
+} {
+  const count = tasks.length;
+  const excess = Math.max(0, count - MAX_TASKS_PER_PLAN);
+  return { valid: count <= MAX_TASKS_PER_PLAN, count, excess };
+}
+
 const PLAN_UPDATE_WRAPPER_RE = /^\s*\[PLAN_UPDATE\]\s*([\s\S]*?)\s*\[\/PLAN_UPDATE\]\s*$/;
 const PROPOSED_PLAN_WRAPPER_RE = /^\s*<proposed_plan>\s*([\s\S]*?)\s*<\/proposed_plan>\s*$/i;
 const FENCED_BLOCK_RE = /^```[^\n]*\n([\s\S]*?)\n```$/;
@@ -142,6 +158,7 @@ export interface ExtractedPlannerTaskArray {
   key: "tasks" | "task_list" | "taskList";
   path: string;
   value: unknown[];
+  count: number;
 }
 
 /**
@@ -161,13 +178,13 @@ export function findPlannerTaskArray(value: unknown, path = "$"): ExtractedPlann
   const record = value as Record<string, unknown>;
 
   if (Array.isArray(record.tasks)) {
-    return { key: "tasks", path: `${path}.tasks`, value: record.tasks };
+    return { key: "tasks", path: `${path}.tasks`, value: record.tasks, count: record.tasks.length };
   }
   if (Array.isArray(record.task_list)) {
-    return { key: "task_list", path: `${path}.task_list`, value: record.task_list };
+    return { key: "task_list", path: `${path}.task_list`, value: record.task_list, count: record.task_list.length };
   }
   if (Array.isArray(record.taskList)) {
-    return { key: "taskList", path: `${path}.taskList`, value: record.taskList };
+    return { key: "taskList", path: `${path}.taskList`, value: record.taskList, count: record.taskList.length };
   }
 
   for (const [key, child] of Object.entries(record)) {

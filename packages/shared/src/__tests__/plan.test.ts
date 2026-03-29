@@ -6,6 +6,9 @@ import type {
   PlanStatus,
   PlanVersionSummary,
   PlanVersionContent,
+  CreatePlanRequest,
+  PlanHierarchyNode,
+  PlanHierarchyResponse,
 } from "../types/plan.js";
 import { PLAN_STATUS_ORDER } from "../constants/index.js";
 
@@ -87,6 +90,89 @@ describe("PlanMetadata", () => {
     expect(without.reviewedAt).toBeUndefined();
     expect(withNull.reviewedAt).toBeNull();
     expect(withTimestamp.reviewedAt).toBe("2025-03-09T12:00:00.000Z");
+  });
+
+  it("accepts optional parentPlanId for sub-plan hierarchy", () => {
+    const root: PlanMetadata = {
+      planId: "root",
+      epicId: "e-root",
+      shippedAt: null,
+      complexity: "high",
+    };
+    expect(root.parentPlanId).toBeUndefined();
+
+    const child: PlanMetadata = { ...root, planId: "child", parentPlanId: "root" };
+    expect(child.parentPlanId).toBe("root");
+  });
+});
+
+describe("Plan hierarchy fields", () => {
+  it("Plan accepts optional depth and childPlanIds", () => {
+    const plan: Plan = {
+      ...createPlan("p1", "planning"),
+      depth: 0,
+      childPlanIds: ["p1-child-1", "p1-child-2"],
+    };
+    expect(plan.depth).toBe(0);
+    expect(plan.childPlanIds).toEqual(["p1-child-1", "p1-child-2"]);
+  });
+
+  it("Plan depth and childPlanIds are optional (backward compat)", () => {
+    const plan: Plan = createPlan("p1", "building");
+    expect(plan.depth).toBeUndefined();
+    expect(plan.childPlanIds).toBeUndefined();
+  });
+});
+
+describe("CreatePlanRequest.parentPlanId", () => {
+  it("accepts optional parentPlanId", () => {
+    const req: CreatePlanRequest = { title: "Sub-plan A", parentPlanId: "root-plan" };
+    expect(req.parentPlanId).toBe("root-plan");
+  });
+
+  it("parentPlanId is optional (backward compat)", () => {
+    const req: CreatePlanRequest = { title: "Root plan" };
+    expect(req.parentPlanId).toBeUndefined();
+  });
+});
+
+describe("PlanHierarchyNode / PlanHierarchyResponse", () => {
+  it("PlanHierarchyNode represents a recursive tree", () => {
+    const leaf: PlanHierarchyNode = {
+      planId: "child-1",
+      epicId: "e-child-1",
+      parentPlanId: "root",
+      depth: 1,
+      status: "planning",
+      taskCount: 5,
+      children: [],
+    };
+    const root: PlanHierarchyNode = {
+      planId: "root",
+      epicId: "e-root",
+      depth: 0,
+      status: "building",
+      taskCount: 10,
+      children: [leaf],
+    };
+    expect(root.children).toHaveLength(1);
+    expect(root.children[0].parentPlanId).toBe("root");
+    expect(root.parentPlanId).toBeUndefined();
+  });
+
+  it("PlanHierarchyResponse wraps a root node", () => {
+    const response: PlanHierarchyResponse = {
+      root: {
+        planId: "root",
+        epicId: "e-root",
+        depth: 0,
+        status: "planning",
+        taskCount: 0,
+        children: [],
+      },
+    };
+    expect(response.root.planId).toBe("root");
+    expect(response.root.depth).toBe(0);
   });
 });
 

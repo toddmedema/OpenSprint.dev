@@ -52,6 +52,8 @@ export interface PlanMetadata {
   complexity: PlanComplexity;
   /** UI/UX mockups for this plan */
   mockups?: PlanMockup[];
+  /** Parent plan ID for sub-plan hierarchy; undefined for root plans */
+  parentPlanId?: string;
 }
 
 /** Plan with its content and metadata */
@@ -72,6 +74,10 @@ export interface Plan {
   lastTaskGenerationVersionNumber?: number;
   /** True when task generation has run for currentVersionNumber. */
   hasGeneratedPlanTasksForCurrentVersion?: boolean;
+  /** Depth in the sub-plan hierarchy (0 = root); computed from parent chain */
+  depth?: number;
+  /** IDs of immediate child plans for tree rendering */
+  childPlanIds?: string[];
 }
 
 /** Dependency edge between Plans for the dependency graph */
@@ -102,6 +108,8 @@ export interface CreatePlanRequest {
   mock_ups?: PlanMockup[];
   dependsOnPlans?: string[];
   depends_on_plans?: string[];
+  /** Parent plan ID when creating a sub-plan */
+  parentPlanId?: string;
   tasks?: Array<{
     title?: string;
     task_title?: string;
@@ -228,3 +236,19 @@ export interface GeneratePlanNeedsClarificationResult {
 }
 
 export type GeneratePlanResult = GeneratePlanCreatedResult | GeneratePlanNeedsClarificationResult;
+
+/** Recursive tree node for the plan hierarchy endpoint */
+export interface PlanHierarchyNode {
+  planId: string;
+  epicId: string;
+  parentPlanId?: string;
+  depth: number;
+  status: PlanStatus;
+  taskCount: number;
+  children: PlanHierarchyNode[];
+}
+
+/** Response shape for GET /projects/:id/plans/hierarchy */
+export interface PlanHierarchyResponse {
+  root: PlanHierarchyNode;
+}
