@@ -10,8 +10,9 @@ import type {
   PlanDependencyEdge,
   PlanComplexity,
   CrossEpicDependenciesResponse,
+  PlanHierarchyNode,
 } from "@opensprint/shared";
-import { validatePlanContent } from "@opensprint/shared";
+import { validatePlanContent, calculatePlanDepth, buildPlanTree } from "@opensprint/shared";
 import { VALID_COMPLEXITIES } from "./plan/plan-prompts.js";
 import {
   normalizePlannerTask,
@@ -21,7 +22,6 @@ import {
 } from "./plan/planner-normalize.js";
 import {
   buildDependencyEdgesCore,
-  listPlansWithEdges as listPlansWithEdgesFromModule,
   type PlanInfo,
 } from "./plan/plan-dependency-graph.js";
 import {
@@ -53,8 +53,10 @@ export interface PlanCrudStore extends PlanVersioningStore {
     updated_at: string;
     current_version_number?: number;
     last_executed_version_number?: number | null;
+    parent_plan_id?: string | null;
   } | null>;
   planListIds(projectId: string): Promise<string[]>;
+  planListByParent(projectId: string, parentPlanId: string): Promise<string[]>;
   listAll(projectId: string): Promise<StoredTask[]>;
   show(projectId: string, taskId: string): Promise<StoredTask>;
   create(projectId: string, title: string, opts?: Record<string, unknown>): Promise<{ id: string }>;
@@ -75,7 +77,7 @@ export interface PlanCrudStore extends PlanVersioningStore {
   planInsert(
     projectId: string,
     planId: string,
-    data: { epic_id: string; content: string; metadata: string }
+    data: { epic_id: string; content: string; metadata: string; parent_plan_id?: string | null }
   ): Promise<void>;
   planUpdateContent(
     projectId: string,
@@ -193,11 +195,16 @@ export class PlanCrudService {
     return buildDependencyEdgesCore(planInfos, allIssues);
   }
 
-  /** Get a single Plan by ID. Optionally pass allIssues/edges to avoid redundant store calls. */
+  /** Get a single Plan by ID. Optionally pass allIssues/edges/plansMap to avoid redundant store calls. */
   async getPlan(
     projectId: string,
     planId: string,
-    opts?: { allIssues?: StoredTask[]; edges?: PlanDependencyEdge[] }
+    opts?: {
+      allIssues?: StoredTask[];
+      edges?: PlanDependencyEdge[];
+      plansMap?: Map<string, { parentPlanId?: string }>;
+      childPlanIdsMap?: Map<string, string[]>;
+    }
   ): Promise<Plan> {
     const row = await this.taskStore.planGet(projectId, planId);
     if (!row) {
@@ -205,6 +212,7 @@ export class PlanCrudService {
     }
     const content = row.content;
     const lastModified = row.updated_at;
+    const parentPlanId = row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
     const metadata: PlanMetadata = {
       planId: (row.metadata.planId as string) ?? planId,
       epicId: (row.metadata.epicId as string) ?? "",
@@ -213,6 +221,7 @@ export class PlanCrudService {
         "reviewedAt" in row.metadata ? (row.metadata.reviewedAt as string | null) : undefined,
       complexity: (row.metadata.complexity as PlanMetadata["complexity"]) ?? "medium",
       mockups: (row.metadata.mockups as PlanMetadata["mockups"]) ?? undefined,
+      parentPlanId: parentPlanId || undefined,
     };
 
     const currentVersion = row.current_version_number ?? 1;
@@ -264,6 +273,17 @@ export class PlanCrudService {
     const hasGeneratedPlanTasksForCurrentVersion =
       lastTaskGenerationVersionNumber != null && lastTaskGenerationVersionNumber === currentVersion;
 
+    let depth: number | undefined;
+    if (opts?.plansMap) {
+      try {
+        depth = calculatePlanDepth(planId, opts.plansMap);
+      } catch {
+        depth = 1;
+      }
+    }
+
+    const childPlanIds = opts?.childPlanIdsMap?.get(planId);
+
     return {
       metadata,
       content,
@@ -276,6 +296,8 @@ export class PlanCrudService {
       lastExecutedVersionNumber: row.last_executed_version_number ?? undefined,
       lastTaskGenerationVersionNumber,
       hasGeneratedPlanTasksForCurrentVersion,
+      depth,
+      childPlanIds,
     };
   }
 
@@ -283,13 +305,62 @@ export class PlanCrudService {
     await ensurePlanHasAtLeastOneVersionFn(projectId, planId, this.taskStore);
   }
 
+  /**
+   * Build plansMap (planId → { parentPlanId }) and childPlanIdsMap from all plan rows.
+   * Used by getPlan and listPlans to compute depth/childPlanIds without extra queries.
+   */
+  private async buildHierarchyMaps(
+    projectId: string
+  ): Promise<{
+    plansMap: Map<string, { parentPlanId?: string }>;
+    childPlanIdsMap: Map<string, string[]>;
+  }> {
+    const planIds = await this.taskStore.planListIds(projectId);
+    const plansMap = new Map<string, { parentPlanId?: string }>();
+    for (const pid of planIds) {
+      const row = await this.taskStore.planGet(projectId, pid);
+      if (!row) continue;
+      const parentPlanId =
+        row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
+      plansMap.set(pid, { parentPlanId: parentPlanId || undefined });
+    }
+    const treeEntries = Array.from(plansMap.entries()).map(([planId, v]) => ({
+      planId,
+      parentPlanId: v.parentPlanId,
+    }));
+    const tree = buildPlanTree(treeEntries);
+    const childPlanIdsMap = new Map<string, string[]>();
+    for (const [parentKey, children] of tree) {
+      if (parentKey) {
+        childPlanIdsMap.set(parentKey, children.map((c) => c.planId));
+      }
+    }
+    return { plansMap, childPlanIdsMap };
+  }
+
   /** List all Plans with dependency graph in one call. */
   async listPlansWithDependencyGraph(projectId: string): Promise<PlanDependencyGraph> {
-    return listPlansWithEdgesFromModule(projectId, {
-      getPlanInfosFromStore: this.getPlanInfosFromStore.bind(this),
-      listAll: this.taskStore.listAll.bind(this.taskStore),
-      getPlan: this.getPlan.bind(this),
-    });
+    const { plansMap, childPlanIdsMap } = await this.buildHierarchyMaps(projectId);
+    const planInfos = await this.getPlanInfosFromStore(projectId);
+    const allIssues = await this.taskStore.listAll(projectId);
+    const edges = buildDependencyEdgesCore(planInfos, allIssues);
+
+    const plans: Plan[] = [];
+    for (const { planId } of planInfos) {
+      try {
+        const plan = await this.getPlan(projectId, planId, {
+          allIssues,
+          edges,
+          plansMap,
+          childPlanIdsMap,
+        });
+        plans.push(plan);
+      } catch (err) {
+        log.warn("Skipping broken plan", { planId, err: getErrorMessage(err) });
+      }
+    }
+
+    return { plans, edges };
   }
 
   /** List all Plans for a project. */
@@ -364,6 +435,7 @@ export class PlanCrudService {
       dependsOnPlans?: string[];
       depends_on_plans?: string[];
       tasks?: Array<Record<string, unknown>>;
+      parentPlanId?: string;
     }
   ): Promise<Plan> {
     await this.getRepoPath(projectId);
@@ -473,6 +545,7 @@ export class PlanCrudService {
     const mockups: PlanMockup[] = Array.isArray(rawMockups)
       ? rawMockups.filter((m) => m && typeof m === "object" && m.title && m.content)
       : [];
+    const parentPlanId = body.parentPlanId || undefined;
     const metadata: PlanMetadata = {
       planId,
       epicId: epicId,
@@ -480,11 +553,13 @@ export class PlanCrudService {
       reviewedAt: null,
       complexity,
       mockups: mockups.length > 0 ? mockups : undefined,
+      parentPlanId,
     };
     await this.taskStore.planInsert(projectId, planId, {
       epic_id: epicId,
       content: contentToWrite,
       metadata: JSON.stringify(metadata),
+      parent_plan_id: parentPlanId ?? null,
     });
 
     const plan: Plan & { _createdTaskIds?: string[]; _createdTaskTitles?: string[] } = {
@@ -649,6 +724,57 @@ export class PlanCrudService {
     }
 
     return this.getPlan(projectId, planId);
+  }
+
+  /** Get child plans under a given parent plan. */
+  async getChildPlans(projectId: string, parentPlanId: string): Promise<Plan[]> {
+    const childIds = await this.taskStore.planListByParent(projectId, parentPlanId);
+    const plans: Plan[] = [];
+    for (const childId of childIds) {
+      try {
+        const plan = await this.getPlan(projectId, childId);
+        plans.push(plan);
+      } catch (err) {
+        log.warn("Skipping broken child plan", {
+          parentPlanId,
+          childId,
+          err: getErrorMessage(err),
+        });
+      }
+    }
+    return plans;
+  }
+
+  /** Recursively build the plan hierarchy tree starting from a root plan. */
+  async getPlanHierarchy(projectId: string, rootPlanId: string): Promise<PlanHierarchyNode> {
+    const { plansMap, childPlanIdsMap } = await this.buildHierarchyMaps(projectId);
+
+    const buildNode = async (planId: string): Promise<PlanHierarchyNode> => {
+      const plan = await this.getPlan(projectId, planId, { plansMap, childPlanIdsMap });
+      const childIds = childPlanIdsMap.get(planId) ?? [];
+      const children: PlanHierarchyNode[] = [];
+      for (const childId of childIds) {
+        try {
+          children.push(await buildNode(childId));
+        } catch (err) {
+          log.warn("Skipping broken plan in hierarchy", {
+            planId: childId,
+            err: getErrorMessage(err),
+          });
+        }
+      }
+      return {
+        planId: plan.metadata.planId,
+        epicId: plan.metadata.epicId,
+        parentPlanId: plan.metadata.parentPlanId,
+        depth: plan.depth ?? 1,
+        status: plan.status,
+        taskCount: plan.taskCount,
+        children,
+      };
+    };
+
+    return buildNode(rootPlanId);
   }
 
   /** Delete a plan, its epic, and all tasks under that epic. */

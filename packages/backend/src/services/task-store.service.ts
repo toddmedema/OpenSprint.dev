@@ -1333,6 +1333,7 @@ export class TaskStoreService {
     updated_at: string;
     current_version_number: number;
     last_executed_version_number: number | null;
+    parent_plan_id: string | null;
   } | null> {
     return this.planAuditorSIFacade.planGet(projectId, planId);
   }
@@ -1354,6 +1355,10 @@ export class TaskStoreService {
 
   async planListIds(projectId: string): Promise<string[]> {
     return this.planAuditorSIFacade.planListIds(projectId);
+  }
+
+  async planListByParent(projectId: string, parentPlanId: string): Promise<string[]> {
+    return this.planAuditorSIFacade.planListByParent(projectId, parentPlanId);
   }
 
   async planUpdateContent(

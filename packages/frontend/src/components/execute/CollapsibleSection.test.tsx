@@ -66,7 +66,7 @@ describe("CollapsibleSection", () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
-  it("uses same element structure and classes as Live Output and Source Feedback", () => {
+  it("uses standardized header classes with balanced padding and gap", () => {
     const { container } = render(
       <CollapsibleSection
         title="Description"
@@ -88,7 +88,9 @@ describe("CollapsibleSection", () => {
       "flex",
       "items-center",
       "justify-between",
-      "p-4",
+      "gap-3",
+      "px-4",
+      "py-2",
       "text-left",
       "hover:bg-theme-border-subtle/50",
       "transition-colors"
@@ -102,6 +104,45 @@ describe("CollapsibleSection", () => {
       "uppercase",
       "tracking-wide"
     );
+  });
+
+  it("renders chevron SVG that rotates when expanded", () => {
+    const { container, rerender } = render(
+      <CollapsibleSection
+        title="Section"
+        expanded={false}
+        onToggle={() => {}}
+        expandAriaLabel="Expand"
+        collapseAriaLabel="Collapse"
+        contentId="c"
+        headerId="h"
+      >
+        <div />
+      </CollapsibleSection>
+    );
+
+    const svg = container.querySelector("#h svg");
+    expect(svg).toBeInTheDocument();
+    expect(svg).toHaveAttribute("aria-hidden", "true");
+    expect(svg).toHaveClass("w-4", "h-4", "shrink-0", "text-theme-muted");
+    expect(svg).not.toHaveClass("rotate-90");
+
+    rerender(
+      <CollapsibleSection
+        title="Section"
+        expanded={true}
+        onToggle={() => {}}
+        expandAriaLabel="Expand"
+        collapseAriaLabel="Collapse"
+        contentId="c"
+        headerId="h"
+      >
+        <div />
+      </CollapsibleSection>
+    );
+
+    const svgExpanded = container.querySelector("#h svg");
+    expect(svgExpanded).toHaveClass("rotate-90");
   });
 
   it("uses contentClassName when provided for compact sections", () => {

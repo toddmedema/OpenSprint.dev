@@ -19,6 +19,7 @@ export const plansTable = pgTable(
     updatedAt: text("updated_at").notNull(),
     currentVersionNumber: integer("current_version_number").notNull().default(1),
     lastExecutedVersionNumber: integer("last_executed_version_number"),
+    parentPlanId: text("parent_plan_id"),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.planId] })]
 );

@@ -38,6 +38,7 @@ describe("PlanStore", () => {
       updated_at: "2026-03-03T00:00:00Z",
       current_version_number: 1,
       last_executed_version_number: null,
+      parent_plan_id: null,
     });
   });
 
@@ -90,6 +91,7 @@ describe("PlanStore", () => {
       updated_at: "2026-03-03T00:00:00Z",
       current_version_number: 1,
       last_executed_version_number: null,
+      parent_plan_id: null,
     });
   });
 

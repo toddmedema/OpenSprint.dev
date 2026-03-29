@@ -51,6 +51,7 @@ export class TaskStorePlanAuditorSIFacade {
     updated_at: string;
     current_version_number: number;
     last_executed_version_number: number | null;
+    parent_plan_id: string | null;
   } | null> {
     await this.deps.ensureInitialized();
     return this.deps.planStore.planGet(projectId, planId);
@@ -176,6 +177,11 @@ export class TaskStorePlanAuditorSIFacade {
       await this.deps.ensureInitialized();
       await this.deps.planVersionStore.setExecutedVersion(projectId, planId, versionNumber);
     });
+  }
+
+  async planListByParent(projectId: string, parentPlanId: string): Promise<string[]> {
+    await this.deps.ensureInitialized();
+    return this.deps.planStore.planListByParent(projectId, parentPlanId);
   }
 
   async planDelete(projectId: string, planId: string): Promise<boolean> {

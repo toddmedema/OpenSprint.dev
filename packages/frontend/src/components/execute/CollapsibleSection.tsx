@@ -44,14 +44,25 @@ function CollapsibleSectionInner({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-border-subtle/50 transition-colors"
+        className="w-full flex items-center justify-between gap-3 px-4 py-2 text-left hover:bg-theme-border-subtle/50 transition-colors"
         aria-expanded={expanded}
         aria-controls={contentId}
         aria-label={expanded ? collapseAriaLabel : expandAriaLabel}
         id={headerId}
       >
         <h4 className="text-xs font-medium text-theme-muted uppercase tracking-wide">{title}</h4>
-        <span className="text-theme-muted text-xs">{expanded ? "▼" : "▶"}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`w-4 h-4 shrink-0 text-theme-muted transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
+          aria-hidden="true"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
       </button>
       {expanded && (
         <div

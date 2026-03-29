@@ -27,6 +27,7 @@ export interface PlanInsertData {
   re_execute_gate_task_id?: string | null;
   content: string;
   metadata?: Record<string, unknown> | string | null;
+  parent_plan_id?: string | null;
 }
 
 export type PlanGetResult = {
@@ -36,6 +37,7 @@ export type PlanGetResult = {
   updated_at: string;
   current_version_number: number;
   last_executed_version_number: number | null;
+  parent_plan_id: string | null;
 };
 
 export type PlanGetByEpicIdResult = {
@@ -104,14 +106,15 @@ export class PlanStore {
         updatedAt: now,
         currentVersionNumber: 1,
         lastExecutedVersionNumber: null,
+        parentPlanId: data.parent_plan_id ?? null,
       });
       return;
     }
     const client = this.getClient();
     await client.execute(
       toPgParams(
-        `INSERT INTO plans (project_id, plan_id, epic_id, gate_task_id, re_execute_gate_task_id, content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, NULL)`
+        `INSERT INTO plans (project_id, plan_id, epic_id, gate_task_id, re_execute_gate_task_id, content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number, parent_plan_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, NULL, ?)`
       ),
       [
         projectId,
@@ -122,6 +125,7 @@ export class PlanStore {
         data.content,
         metadataJson,
         now,
+        data.parent_plan_id ?? null,
       ]
     );
   }
@@ -137,6 +141,7 @@ export class PlanStore {
           updatedAt: plansTable.updatedAt,
           currentVersionNumber: plansTable.currentVersionNumber,
           lastExecutedVersionNumber: plansTable.lastExecutedVersionNumber,
+          parentPlanId: plansTable.parentPlanId,
         })
         .from(plansTable)
         .where(and(eq(plansTable.projectId, projectId), eq(plansTable.planId, planId)))
@@ -151,12 +156,13 @@ export class PlanStore {
         updated_at: row.updatedAt ?? "",
         current_version_number: row.currentVersionNumber ?? 1,
         last_executed_version_number: row.lastExecutedVersionNumber ?? null,
+        parent_plan_id: row.parentPlanId ?? null,
       };
     }
     const client = this.getClient();
     const row = await client.queryOne(
       toPgParams(
-        "SELECT content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number FROM plans WHERE project_id = ? AND plan_id = ?"
+        "SELECT content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number, parent_plan_id FROM plans WHERE project_id = ? AND plan_id = ?"
       ),
       [projectId, planId]
     );
@@ -171,6 +177,7 @@ export class PlanStore {
         row.current_version_number != null ? Number(row.current_version_number) : 1,
       last_executed_version_number:
         row.last_executed_version_number != null ? Number(row.last_executed_version_number) : null,
+      parent_plan_id: (row.parent_plan_id as string) ?? null,
     };
   }
 
@@ -425,6 +432,26 @@ export class PlanStore {
       [projectId, planId]
     );
     return (row?.shipped_content as string) ?? null;
+  }
+
+  async planListByParent(projectId: string, parentPlanId: string): Promise<string[]> {
+    const db = this.getDrizzle ? await this.getDrizzle() : null;
+    if (db) {
+      const rows = await db
+        .select({ planId: plansTable.planId })
+        .from(plansTable)
+        .where(and(eq(plansTable.projectId, projectId), eq(plansTable.parentPlanId, parentPlanId)))
+        .orderBy(plansTable.updatedAt);
+      return rows.map((r) => r.planId);
+    }
+    const client = this.getClient();
+    const rows = await client.query(
+      toPgParams(
+        "SELECT plan_id FROM plans WHERE project_id = ? AND parent_plan_id = ? ORDER BY updated_at ASC"
+      ),
+      [projectId, parentPlanId]
+    );
+    return rows.map((r) => r.plan_id as string);
   }
 
   async planDelete(projectId: string, planId: string): Promise<boolean> {
