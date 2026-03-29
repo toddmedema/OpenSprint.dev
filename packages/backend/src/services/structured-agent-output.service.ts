@@ -10,7 +10,7 @@ const log = createLogger("structured-agent-output");
 
 export interface StructuredOutputContract<T> {
   parse(content: string): T | null;
-  repairPrompt: string;
+  repairPrompt: string | ((invalidReason?: string) => string);
   invalidReason?: (content: string) => string | undefined;
   onExhausted?: (params: {
     initialRawContent: string;
@@ -38,6 +38,13 @@ export interface InvokeStructuredPlanningAgentOptions<T> extends Omit<
 > {
   messages: PlanningMessage[];
   contract: StructuredOutputContract<T>;
+}
+
+function resolveRepairPrompt(
+  repairPrompt: string | ((invalidReason?: string) => string),
+  invalidReason?: string
+): string {
+  return typeof repairPrompt === "function" ? repairPrompt(invalidReason) : repairPrompt;
 }
 
 function buildRepairMessages(
@@ -108,10 +115,11 @@ export async function invokeStructuredPlanningAgent<T>(
     invalidReason: initialInvalidReason,
   });
 
+  const resolvedRepairPrompt = resolveRepairPrompt(contract.repairPrompt, initialInvalidReason);
   const repairMessages = buildRepairMessages(
     messages,
     initialRawContent,
-    contract.repairPrompt,
+    resolvedRepairPrompt,
     initialInvalidReason
   );
   const repairResponse = await agentService.invokePlanningAgent({

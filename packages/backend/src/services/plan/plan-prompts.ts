@@ -88,6 +88,14 @@ Rules:
 - No trailing commas
 - Use double-quoted JSON keys and strings only`;
 
+export function buildTaskCountRepairPrompt(count: number): string {
+  return (
+    `Your response contained ${count} tasks which exceeds the maximum of 15. ` +
+    `Merge related tasks or drop lowest-priority items to produce at most 15 tasks. ` +
+    `Return the same JSON schema.`
+  );
+}
+
 export const AUTO_REVIEW_SYSTEM_PROMPT = `You are an auto-review agent for Open Sprint. After a plan is decomposed from a PRD, you review the generated plans and tasks against the existing codebase to identify what is already implemented.
 
 Your task: Given the list of created plans/tasks and a summary of the repository structure and key files, identify which tasks are ALREADY IMPLEMENTED in the codebase. Only mark tasks as implemented when there is clear evidence in the code (e.g., the described functionality exists, the API endpoint is present, the component is built).

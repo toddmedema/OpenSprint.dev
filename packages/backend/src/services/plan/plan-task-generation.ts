@@ -4,8 +4,8 @@
  */
 import type { Plan, ProjectSettings } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
-import { normalizePlannerTask, findPlannerTaskArray } from "./planner-normalize.js";
-import { TASK_GENERATION_SYSTEM_PROMPT, TASK_GENERATION_RETRY_PROMPT } from "./plan-prompts.js";
+import { normalizePlannerTask, findPlannerTaskArray, MAX_TASKS_PER_PLAN } from "./planner-normalize.js";
+import { TASK_GENERATION_SYSTEM_PROMPT, TASK_GENERATION_RETRY_PROMPT, buildTaskCountRepairPrompt } from "./plan-prompts.js";
 import { runPlannerWithRepoGuard } from "./plan-repo-guard.js";
 import { buildAutonomyDescription } from "../autonomy-description.js";
 import { getCombinedInstructions } from "../agent-instructions.service.js";
@@ -35,7 +35,11 @@ export interface PlanTaskGenerationDeps {
   };
 }
 
-function parseTaskGenerationContent(
+/**
+ * Extract raw task objects from agent content without enforcing the count cap.
+ * Used by both the validated parser and the onExhausted truncation fallback.
+ */
+export function extractRawTasks(
   content: unknown
 ):
   | { ok: true; rawTasks: Array<Record<string, unknown>> }
@@ -74,6 +78,25 @@ function parseTaskGenerationContent(
   }
 
   return { ok: true, rawTasks };
+}
+
+export function parseTaskGenerationContent(
+  content: unknown
+):
+  | { ok: true; rawTasks: Array<Record<string, unknown>> }
+  | { ok: false; parseFailureReason: string } {
+  const result = extractRawTasks(content);
+  if (!result.ok) return result;
+
+  if (result.rawTasks.length > MAX_TASKS_PER_PLAN) {
+    return {
+      ok: false,
+      parseFailureReason:
+        `task-count-exceeded: Planner returned ${result.rawTasks.length} tasks, max is ${MAX_TASKS_PER_PLAN}.`,
+    };
+  }
+
+  return result;
 }
 
 /**
@@ -144,10 +167,28 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
             const parsed = parseTaskGenerationContent(content);
             return parsed.ok ? parsed.rawTasks : null;
           },
-          repairPrompt: TASK_GENERATION_RETRY_PROMPT,
+          repairPrompt: (invalidReason) => {
+            if (invalidReason?.startsWith("task-count-exceeded:")) {
+              const countMatch = invalidReason.match(/returned (\d+) tasks/);
+              const count = countMatch ? Number(countMatch[1]) : 0;
+              return buildTaskCountRepairPrompt(count);
+            }
+            return TASK_GENERATION_RETRY_PROMPT;
+          },
           invalidReason: (content) => {
             const parsed = parseTaskGenerationContent(content);
             return parsed.ok ? undefined : parsed.parseFailureReason;
+          },
+          onExhausted: ({ repairRawContent, initialRawContent }) => {
+            const content = repairRawContent || initialRawContent;
+            const extracted = extractRawTasks(content);
+            if (!extracted.ok) return null;
+            if (extracted.rawTasks.length <= MAX_TASKS_PER_PLAN) return extracted.rawTasks;
+            log.warn("Task count still exceeds cap after repair; truncating", {
+              max: MAX_TASKS_PER_PLAN,
+              actual: extracted.rawTasks.length,
+            });
+            return extracted.rawTasks.slice(0, MAX_TASKS_PER_PLAN);
           },
         },
       }),

@@ -79,6 +79,16 @@ vi.mock("../services/deploy-trigger.service.js", () => ({
   triggerDeployForEvent: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("../services/orchestrator.service.js", () => ({
+  orchestratorService: {
+    nudge: vi.fn(),
+    stopProject: vi.fn(),
+    stopTaskAndFreeSlot: vi.fn().mockResolvedValue(undefined),
+    getActiveAgents: vi.fn().mockResolvedValue([]),
+    setSessionManager: vi.fn(),
+  },
+}));
+
 describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   let app: ReturnType<typeof createApp>;
   let projectService: ProjectService;
