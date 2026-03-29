@@ -129,6 +129,148 @@ export const COMPLEXITY_EVALUATION_SYSTEM_PROMPT = `Evaluate complexity (low|med
 
 export const VALID_COMPLEXITIES: PlanComplexity[] = ["low", "medium", "high", "very_high"];
 
+export const MAX_SUB_PLAN_DEPTH = 4;
+const MIN_SUB_PLANS = 2;
+const MAX_SUB_PLANS = 8;
+
+export const SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. Given a plan's markdown content and PRD context, decide whether the plan is small enough to decompose directly into implementation tasks, or whether it should first be split into smaller sub-plans.
+
+## Decision criteria
+
+Estimate the number of atomic, single-scope implementation tasks the plan would require. Each task has one primary outcome (one file concern, one endpoint, one component, one migration, one test suite, etc.).
+
+- If the plan can be covered by **15 or fewer** tasks → output strategy \`"tasks"\`.
+- If it would need **more than 15** tasks → output strategy \`"sub_plans"\` to split work into ${MIN_SUB_PLANS}–${MAX_SUB_PLANS} focused sub-plans.
+
+## Depth constraint
+
+The plan tree may be at most **${MAX_SUB_PLAN_DEPTH} levels deep** (root plan = level 1). The current depth is provided in the user message. If the current depth is already **${MAX_SUB_PLAN_DEPTH}**, you MUST use strategy \`"tasks"\` — further splitting is not allowed. Consolidate scope into at most 15 tasks.
+
+## Output format
+
+Respond with **only** valid JSON (you may wrap in a \`\`\`json code block). No prose before or after.
+
+### Strategy: tasks
+
+Use the existing task schema. Generate 8–15 tasks. Never exceed 15.
+
+\`\`\`
+{
+  "strategy": "tasks",
+  "tasks": [
+    {
+      "title": "Clear, specific action",
+      "description": "Detailed spec with numbered acceptance criteria and verification step",
+      "priority": 1,
+      "dependsOn": [],
+      "complexity": 5,
+      "files": { "modify": [], "create": [], "test": [] }
+    }
+  ]
+}
+\`\`\`
+
+Task rules (same as standard task generation):
+- Each task must have exactly one primary outcome
+- Title: clear, specific action (e.g. "Add user login API endpoint")
+- Description must contain **Acceptance criteria:** as a numbered list of verifiable conditions
+- Priority: 0 (highest/foundational) to 4 (lowest/polish)
+- dependsOn: exact titles from your output, character-for-character
+- complexity: integer 1–10
+- files: { modify?, create?, test? } with expected file paths
+
+### Strategy: sub_plans
+
+Split the plan into ${MIN_SUB_PLANS}–${MAX_SUB_PLANS} sub-plans. Each sub-plan is a focused workstream that can be independently planned and executed.
+
+\`\`\`
+{
+  "strategy": "sub_plans",
+  "sub_plans": [
+    {
+      "title": "Sub-plan feature title",
+      "overview": "One-paragraph summary of what this sub-plan covers",
+      "content": "# Sub-plan title\\n\\n## Overview\\n...full scoped markdown plan body following the plan template structure...\\n\\n## Estimated Complexity\\nmedium",
+      "depends_on_plans": ["slugified-title-of-another-sub-plan"]
+    }
+  ]
+}
+\`\`\`
+
+Sub-plan rules:
+- ${MIN_SUB_PLANS}–${MAX_SUB_PLANS} sub-plans (reject fewer or more)
+- Each sub-plan's \`content\` MUST be a complete, scoped markdown plan body following the plan template structure: ${PLAN_TEMPLATE_STRUCTURE}
+- \`depends_on_plans\`: array of slugified titles (lowercase, hyphens) of sibling sub-plans this one depends on. Use empty array [] when independent
+- Order sub-plans so foundational/infrastructure work comes first
+- Each sub-plan should be independently executable once its dependencies are met
+- Do not overlap scope between sub-plans — every part of the parent plan must appear in exactly one sub-plan
+- Keep sub-plans roughly balanced in size (each should need ~5–15 tasks when eventually decomposed)
+
+## Guidelines
+
+- Do NOT create, modify, stage, or commit repository files
+- Use double-quoted JSON keys and strings only
+- No trailing commas or comments in JSON
+- No prose outside the JSON output`;
+
+export const SUB_PLAN_DECOMPOSITION_REPAIR_PROMPT = `Your previous response could not be parsed as valid sub-plan decomposition JSON.
+
+Return ONLY a single valid JSON object matching one of these two shapes:
+
+Shape A — direct tasks (strategy "tasks"):
+{
+  "strategy": "tasks",
+  "tasks": [
+    {
+      "title": "Task title",
+      "description": "Detailed spec with acceptance criteria",
+      "priority": 1,
+      "dependsOn": [],
+      "complexity": 5,
+      "files": { "modify": [], "create": [], "test": [] }
+    }
+  ]
+}
+
+Shape B — sub-plans (strategy "sub_plans"):
+{
+  "strategy": "sub_plans",
+  "sub_plans": [
+    {
+      "title": "Sub-plan title",
+      "overview": "Brief summary",
+      "content": "# Title\\n\\n## Overview\\n...full plan markdown...",
+      "depends_on_plans": []
+    }
+  ]
+}
+
+Rules:
+- Do not create, modify, stage, or commit repository files
+- No markdown fences (unless wrapping the whole response in a json block)
+- No explanation text outside the JSON
+- No trailing commas or comments
+- Use double-quoted JSON keys and strings only
+- strategy must be exactly "tasks" or "sub_plans"
+- tasks strategy: 8–15 tasks, never exceed 15
+- sub_plans strategy: ${MIN_SUB_PLANS}–${MAX_SUB_PLANS} sub-plans`;
+
+export function buildSubPlanCountRepairPrompt(count: number): string {
+  return (
+    `Your response contained ${count} sub-plans. The allowed range is ${MIN_SUB_PLANS}–${MAX_SUB_PLANS}. ` +
+    `Merge closely related sub-plans or split overly broad ones to produce between ${MIN_SUB_PLANS} and ${MAX_SUB_PLANS} sub-plans. ` +
+    `Return the same JSON schema with strategy "sub_plans".`
+  );
+}
+
+export function buildDepthExceededTaskRepairPrompt(currentDepth: number): string {
+  return (
+    `The current plan depth is ${currentDepth}, which is the maximum (${MAX_SUB_PLAN_DEPTH}). ` +
+    `You must NOT create sub-plans. Instead, consolidate the work into at most 15 direct tasks ` +
+    `and return strategy "tasks". Return the same task JSON schema.`
+  );
+}
+
 /** Used when building generate-from-description prompt (PRD §7.2.3 sections). */
 export function getPlanTemplateStructure(): string {
   return PLAN_TEMPLATE_STRUCTURE;
