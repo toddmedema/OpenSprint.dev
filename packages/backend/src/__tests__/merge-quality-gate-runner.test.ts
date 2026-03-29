@@ -356,9 +356,11 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
 
     expect(failure).toBeNull();
     expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
-    const commands = getExecutedCommands(runCommand);
-    expect(commands).toContain("npm ci");
-    expect(commands).toContain("npm run build");
+    expect(symlinkNodeModules).toHaveBeenCalledWith(worktreePath, worktreePath);
+    const executed = getExecutedCommands(runCommand);
+    expect(executed).toContain("npm ci");
+    expect(executed).toContain("npm run build");
+    expect(executed.filter((c) => c === "npm ci")).toHaveLength(1);
   });
 
   it("merged_candidate: returns actionable error when all repair strategies fail", async () => {
@@ -372,13 +374,19 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         if (label === "npm ci") {
           throw makeCommandFailure(spec, options.cwd, {
             message: "npm ci failed",
-            stderr: "npm ERR! Missing lockfile",
+            stderr:
+              "npm ERR! code ENOLOCK\nnpm ERR! This command requires an existing lockfile.",
           });
+        }
+        if (label === "git checkout HEAD -- package.json") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ls --depth=0 --include=dev") {
+          return makeCommandResult(spec, options.cwd);
         }
         return makeCommandResult(spec, options.cwd);
       }
     );
-    // Symlink fallback also fails to restore node_modules
     const symlinkNodeModules = vi.fn(async () => undefined);
 
     const failure = await runMergeQualityGates(
@@ -402,8 +410,8 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(failure!.autoRepairAttempted).toBe(true);
     expect(failure!.autoRepairSucceeded).toBe(false);
     expect(failure!.category).toBe("environment_setup");
-    // Error output should include actionable guidance
     expect(failure!.autoRepairOutput).toMatch(/node_modules.*missing|npm ci/i);
+    expect(failure!.autoRepairOutput).toContain("npm ci");
   });
 
   it("merged_candidate: node_modules assertion catches broken state after repair", async () => {
