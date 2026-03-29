@@ -6,6 +6,8 @@
  * GET  /status         — returns current integration connection status
  * GET  /projects       — lists Todoist projects using stored token
  * PUT  /project        — selects a Todoist project for sync
+ * POST /sync           — manual sync trigger
+ * DELETE /             — disconnect and revoke token
  */
 
 import { Router, type Request } from "express";
@@ -20,6 +22,7 @@ import {
   generateOAuthState,
   buildAuthorizationUrl,
   exchangeCodeForToken,
+  revokeAccessToken,
   getTodoistOAuthConfig,
   TodoistApiClient,
   TodoistAuthError,
@@ -27,10 +30,12 @@ import {
 } from "../services/todoist-api-client.service.js";
 import type { IntegrationStoreService } from "../services/integration-store.service.js";
 import type { TokenEncryptionService } from "../services/token-encryption.service.js";
+import type { TodoistSyncService } from "../services/todoist-sync.service.js";
 import type { Permission } from "@doist/todoist-api-typescript";
 import type {
   TodoistOAuthStartResponse,
   TodoistIntegrationStatus,
+  TodoistSyncResult,
 } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 
@@ -39,6 +44,7 @@ const log = createLogger("todoist-oauth");
 const OAUTH_SCOPES: readonly Permission[] = ["data:read_write", "data:delete"];
 const STATE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const STATE_CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
+const SYNC_RATE_LIMIT_MS = 10 * 1000; // 10 seconds
 
 interface StoredOAuthState {
   projectId: string;
@@ -189,9 +195,16 @@ const selectProjectBodySchema = z.object({
 export interface TodoistIntegrationRouterDeps {
   integrationStore: Pick<
     IntegrationStoreService,
-    "upsertConnection" | "getConnection" | "getEncryptedTokenById" | "updateConnectionStatus" | "updateSelectedResource"
+    | "upsertConnection"
+    | "getConnection"
+    | "getEncryptedTokenById"
+    | "updateConnectionStatus"
+    | "updateSelectedResource"
+    | "deleteConnection"
+    | "getPendingDeletes"
   >;
   tokenEncryption: Pick<TokenEncryptionService, "encryptToken" | "decryptToken">;
+  todoistSyncService?: Pick<TodoistSyncService, "runSync">;
 }
 
 type ProjectParams = { projectId: string };
@@ -591,6 +604,131 @@ export function createTodoistIntegrationRouter(
           },
         },
       });
+    }),
+  );
+
+  // POST /sync
+  router.post(
+    "/sync",
+    validateParams(projectIdParamSchema),
+    wrapAsync(async (req: Request<ProjectParams>, res) => {
+      const { projectId } = req.params;
+      const connection = await integrationStore.getConnection(projectId, "todoist");
+
+      if (!connection) {
+        res.status(404).json({
+          error: {
+            code: "NOT_CONNECTED",
+            message: "Todoist is not connected for this project.",
+          },
+        });
+        return;
+      }
+
+      if (connection.status === "needs_reconnect") {
+        res.status(409).json({
+          error: {
+            code: "NEEDS_RECONNECT",
+            message:
+              "Todoist connection requires re-authentication. Please reconnect.",
+          },
+        });
+        return;
+      }
+
+      if (connection.last_sync_at) {
+        const lastSyncMs = new Date(connection.last_sync_at).getTime();
+        if (Date.now() - lastSyncMs < SYNC_RATE_LIMIT_MS) {
+          res.status(429).json({
+            error: {
+              code: "SYNC_RATE_LIMITED",
+              message:
+                "Sync was triggered too recently. Please wait at least 10 seconds between syncs.",
+            },
+          });
+          return;
+        }
+      }
+
+      if (!deps.todoistSyncService) {
+        res.status(500).json({
+          error: {
+            code: "SYNC_NOT_AVAILABLE",
+            message: "Sync service is not configured.",
+          },
+        });
+        return;
+      }
+
+      const result: TodoistSyncResult = await deps.todoistSyncService.runSync(
+        connection.id,
+      );
+
+      log.info("Manual sync completed", {
+        projectId,
+        imported: result.imported,
+        errors: result.errors,
+      });
+
+      res.json({ data: result });
+    }),
+  );
+
+  // DELETE /
+  router.delete(
+    "/",
+    validateParams(projectIdParamSchema),
+    wrapAsync(async (req: Request<ProjectParams>, res) => {
+      const { projectId } = req.params;
+      const connection = await integrationStore.getConnection(projectId, "todoist");
+
+      if (!connection) {
+        res.status(404).json({
+          error: {
+            code: "NOT_CONNECTED",
+            message: "Todoist is not connected for this project.",
+          },
+        });
+        return;
+      }
+
+      // Attempt token revocation — failure must not block disconnect
+      const encryptedToken = await integrationStore.getEncryptedTokenById(
+        connection.id,
+      );
+      if (encryptedToken) {
+        try {
+          const accessToken = tokenEncryption.decryptToken(encryptedToken);
+          const config = getTodoistOAuthConfig();
+          await revokeAccessToken(config.clientId, config.clientSecret, accessToken);
+          log.info("Todoist token revoked", { projectId });
+        } catch (err) {
+          log.warn("Failed to revoke Todoist token (proceeding with disconnect)", {
+            projectId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // Check for pending_delete ledger entries
+      const pendingDeletes = await integrationStore.getPendingDeletes(
+        projectId,
+        "todoist",
+      );
+      const pendingCount = pendingDeletes.length;
+
+      await integrationStore.deleteConnection(projectId, "todoist");
+
+      log.info("Todoist disconnected", { projectId, pendingDeletesWarning: pendingCount || undefined });
+
+      const body: { data: { disconnected: true; pendingDeletesWarning?: number } } = {
+        data: { disconnected: true },
+      };
+      if (pendingCount > 0) {
+        body.data.pendingDeletesWarning = pendingCount;
+      }
+
+      res.json(body);
     }),
   );
 

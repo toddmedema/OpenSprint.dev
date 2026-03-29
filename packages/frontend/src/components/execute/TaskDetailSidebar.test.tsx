@@ -901,7 +901,7 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("task-detail-error")).toHaveTextContent("Network error");
   });
 
-  it("renders Links above Description in DOM order", () => {
+  it("renders plan and dependency controls above Description in DOM order", () => {
     const depTask = {
       id: "epic-1.2",
       title: "Prerequisite Task",
@@ -937,18 +937,19 @@ describe("TaskDetailSidebar", () => {
       descriptionSectionExpanded: true,
     });
 
-    renderSidebar(props, {
+    const { container } = renderSidebar(props, {
       preloadedState: defaultPreloadedState,
     });
 
-    const linksHeader = screen.getByText("Links:");
+    const linksBlock = container.querySelector('[data-section="view-plan-deps-addlink"]');
     const descriptionHeader = screen.getByRole("button", { name: /collapse description/i });
+    expect(linksBlock).toBeTruthy();
     expect(
-      linksHeader.compareDocumentPosition(descriptionHeader) & Node.DOCUMENT_POSITION_FOLLOWING
+      linksBlock!.compareDocumentPosition(descriptionHeader) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 
-  it("hides Links section when epic is the only dependency", () => {
+  it("hides plan and dependency rows when epic is the only dependency", () => {
     const props = createMinimalProps({
       selectedTaskData: {
         id: "epic-1.1",
@@ -973,10 +974,10 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.queryByText("Links:")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar-view-plan-btn")).not.toBeInTheDocument();
   });
 
-  it("shows Plan as first item in Links when task has epicId, plan, onNavigateToPlan, and no other deps", () => {
+  it("shows Plan as first control when task has epicId, plan, onNavigateToPlan, and no other deps", () => {
     const onNavigateToPlan = vi.fn();
     const props = createMinimalProps({
       selectedTaskData: {
@@ -1003,13 +1004,12 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.getByText("Links:")).toBeInTheDocument();
     const planLink = screen.getByTestId("sidebar-view-plan-btn");
     expect(planLink).toBeInTheDocument();
     expect(planLink).toHaveTextContent(/plan:\s*plan/i);
   });
 
-  it("shows Plan as first item in Links before Blocked on, Parent, Related", () => {
+  it("shows Plan before Blocked on, Parent, Related dependency rows", () => {
     const blockedTask = {
       id: "epic-1.2",
       title: "Remove pagination",
@@ -1051,7 +1051,6 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.getByText("Links:")).toBeInTheDocument();
     const planLink = screen.getByTestId("sidebar-view-plan-btn");
     expect(planLink).toBeInTheDocument();
     expect(planLink).toHaveTextContent(/plan:\s*plan/i);
@@ -1060,7 +1059,7 @@ describe("TaskDetailSidebar", () => {
     expect(linkButtons[1].textContent).toContain("Remove pagination");
   });
 
-  it("shows Links only non-epic dependencies when epic and others exist", () => {
+  it("shows only non-epic dependencies when epic and others exist", () => {
     const depTask = {
       id: "epic-1.2",
       title: "Prerequisite Task",
@@ -1103,12 +1102,11 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.getByText("Links:")).toBeInTheDocument();
     expect(screen.getByText("Prerequisite Task")).toBeInTheDocument();
     expect(screen.queryByText("epic-1")).not.toBeInTheDocument();
   });
 
-  it("shows Links when task has only non-epic dependencies", () => {
+  it("shows dependency row when task has only non-epic dependencies", () => {
     const depTask = {
       id: "epic-1.2",
       title: "Other Task",
@@ -1148,7 +1146,6 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.getByText("Links:")).toBeInTheDocument();
     expect(screen.getByText("Other Task")).toBeInTheDocument();
   });
 
@@ -1226,7 +1223,6 @@ describe("TaskDetailSidebar", () => {
       preloadedState: defaultPreloadedState,
     });
 
-    expect(screen.getByText("Links:")).toBeInTheDocument();
     expect(screen.getByText("Blocked on:")).toBeInTheDocument();
     expect(screen.getByText("Parent:")).toBeInTheDocument();
     expect(screen.getByText("Related:")).toBeInTheDocument();

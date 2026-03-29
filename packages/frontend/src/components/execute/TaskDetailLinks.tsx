@@ -82,8 +82,7 @@ export function TaskDetailLinks({
       <div className="pt-0 px-4 pb-0">
         {showLinks && (
           <div className="text-xs">
-            <span className="text-theme-muted">Links:</span>
-            <div className="flex flex-col gap-y-1.5 mt-1.5">
+            <div className="flex flex-col gap-y-1.5">
               {hasPlanLink && (
                 <button
                   type="button"
