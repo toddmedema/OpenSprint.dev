@@ -202,32 +202,40 @@ export function Navbar({
     }
   };
 
+  const electronChrome = isElectronWin || isElectronMac;
+
   return (
     <nav
       className="relative z-[60] flex items-stretch bg-theme-surface shrink-0 overflow-hidden py-0"
-      style={{
-        height: NAVBAR_HEIGHT,
-        ...(isElectronWin || isElectronMac ? { WebkitAppRegion: "drag" } : {}),
-      }}
+      style={{ height: NAVBAR_HEIGHT }}
     >
+      {electronChrome ? (
+        <div
+          data-testid="navbar-electron-drag-backdrop"
+          className="absolute inset-0 z-0 bg-theme-surface"
+          style={{ WebkitAppRegion: "drag" } as CSSProperties}
+          aria-hidden="true"
+        />
+      ) : null}
       {/* Bottom border overlay — ensures continuous line across full width, above phase buttons */}
       <div
         data-testid="navbar-bottom-border"
         className="absolute bottom-0 left-0 right-0 h-px bg-theme-border pointer-events-none z-10"
         aria-hidden="true"
       />
-      {/* Grid: 1fr auto 1fr so center (phase tabs) is viewport-centered regardless of left content width. On Electron (Mac and Windows), no right padding so right-edge controls/settings sit flush. */}
+      {/* Grid: 1fr auto 1fr so center (phase tabs) is viewport-centered regardless of left content width. On Electron (Mac and Windows), no right padding so right-edge controls/settings sit flush.
+          Electron: pointer-events-none on chrome rows so hits reach the full-width drag backdrop; interactive clusters use pointer-events-auto + no-drag. */}
       <div
-        className={`grid w-full grid-cols-[1fr_auto_1fr] items-stretch gap-2 min-w-0 py-0 pl-4 md:pl-6 ${isElectronWin || isElectronMac ? "pr-0" : "pr-4 md:pr-6"}`}
+        className={`relative z-[1] grid w-full grid-cols-[1fr_auto_1fr] items-stretch gap-2 min-w-0 py-0 pl-4 md:pl-6 ${electronChrome ? "pr-0 pointer-events-none" : "pr-4 md:pr-6"}`}
       >
         <div
           data-testid="navbar-left-slot"
-          className={`flex items-center gap-0.5 md:gap-1 min-w-0 ${isElectronMac ? "pl-[62px] md:pl-[68px]" : ""}`}
+          className={`flex items-center gap-0.5 md:gap-1 min-w-0 ${isElectronMac ? "pl-[62px] md:pl-[68px]" : ""} ${electronChrome ? "pointer-events-none" : ""}`}
         >
           {/* On macOS Electron, leave left space for native traffic lights, then show logo + project picker. On Windows, no-drag so logo and dropdown are clickable. */}
           <Link
             to="/"
-            className="flex items-center gap-2"
+            className={`flex items-center gap-2 ${electronChrome ? "pointer-events-auto" : ""}`}
             data-testid="navbar-logo-link"
             style={
               isElectronWin || isElectronMac
@@ -252,17 +260,17 @@ export function Navbar({
               data-testid="navbar-project-select"
               className="relative hidden min-[800px]:flex flex-1 items-center min-w-0 max-w-full"
               ref={dropdownRef}
-              style={
-                isElectronWin || isElectronMac
-                  ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)
-                  : undefined
-              }
             >
               <button
                 ref={projectTriggerRef}
                 type="button"
                 onClick={() => setDropdownOpen((o) => !o)}
-                className="dropdown-trigger inline-flex max-w-full items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle"
+                className={`dropdown-trigger inline-flex max-w-full items-center gap-1 min-h-[44px] min-w-[44px] text-sm font-medium text-theme-muted hover:text-theme-text transition-colors rounded py-1 px-2 hover:bg-theme-border-subtle ${electronChrome ? "pointer-events-auto" : ""}`}
+                style={
+                  isElectronWin || isElectronMac
+                    ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)
+                    : undefined
+                }
                 aria-expanded={dropdownOpen}
                 aria-haspopup="listbox"
                 aria-label={`Select project: ${project ? project.name : "All Projects"}`}
@@ -344,10 +352,12 @@ export function Navbar({
         </div>
 
         {/* Center: Phase Tabs — viewport-centered via grid; horizontally scrollable on mobile. On Windows, no-drag so tabs are clickable. */}
-        <div className="flex justify-center min-w-0 overflow-x-auto px-1 md:px-0 items-stretch [&::-webkit-scrollbar]:h-1">
+        <div
+          className={`flex justify-center min-w-0 overflow-x-auto px-1 md:px-0 items-stretch [&::-webkit-scrollbar]:h-1 ${electronChrome ? "pointer-events-none" : ""}`}
+        >
           {project && currentPhase && onPhaseChange ? (
             <div
-              className="flex items-stretch gap-1 bg-theme-border-subtle rounded-lg py-0 px-1 shrink-0 self-stretch min-h-0"
+              className={`flex items-stretch gap-1 bg-theme-border-subtle rounded-lg py-0 px-1 shrink-0 self-stretch min-h-0 ${electronChrome ? "pointer-events-auto" : ""}`}
               role="tablist"
               aria-label="Phase navigation"
               style={
@@ -391,11 +401,11 @@ export function Navbar({
         {/* Right: Active agents + Help + Settings. On Windows Electron, no-drag so buttons are clickable; window controls at end. On Mac Electron, no right padding so settings icon is flush with window edge. */}
         <div
           data-testid="navbar-right-slot"
-          className={`flex items-center justify-end ${isElectronMac ? "pr-0" : ""}`}
+          className={`flex items-center justify-end ${isElectronMac ? "pr-0" : ""} ${electronChrome ? "pointer-events-none" : ""}`}
         >
           <div
             data-testid="navbar-right-controls"
-            className="flex items-center [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3"
+            className={`flex items-center [&>*:not(:first-child)]:pl-1 md:[&>*:not(:first-child)]:pl-3 ${electronChrome ? "pointer-events-auto" : ""}`}
             style={
               isElectronWin || isElectronMac
                 ? ({ WebkitAppRegion: "no-drag" } as CSSProperties)

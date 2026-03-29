@@ -19,7 +19,7 @@ export default defineProject({
   },
   test: {
     ...frontendCommonTestConfig,
-    name: "flow",
+    name: "frontend-flow",
     include: frontendFlowInclude,
     pool: "forks",
     poolOptions: {

@@ -12,7 +12,7 @@ export default defineProject({
   ssr: backendSsrConfig,
   test: {
     ...backendCommonTestConfig,
-    name: "integration",
+    name: "backend-integration",
     include: backendIntegrationInclude,
     pool: "forks",
     minWorkers: 1,

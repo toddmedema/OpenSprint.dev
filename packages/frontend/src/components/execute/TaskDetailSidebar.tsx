@@ -523,6 +523,7 @@ function TaskDetailSidebarInner({
               onScroll={handleLiveOutputScroll}
               showJumpToBottom={showJumpToBottom}
               jumpToBottom={jumpToBottom}
+              scrollResetKey={selectedTask}
             />
           </div>
         </CollapsibleSection>

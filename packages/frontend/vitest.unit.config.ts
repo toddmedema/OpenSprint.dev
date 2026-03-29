@@ -23,7 +23,7 @@ export default defineProject({
   },
   test: {
     ...frontendCommonTestConfig,
-    name: "unit",
+    name: "frontend-unit",
     include: frontendTestInclude,
     exclude: frontendUnitExclude,
     pool: "forks",

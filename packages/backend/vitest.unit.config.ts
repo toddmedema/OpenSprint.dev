@@ -13,7 +13,7 @@ export default defineProject({
   ssr: backendSsrConfig,
   test: {
     ...backendCommonTestConfig,
-    name: "unit",
+    name: "backend-unit",
     include: backendTestInclude,
     exclude: backendUnitExclude,
     pool: "forks",

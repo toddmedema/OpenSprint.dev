@@ -23,6 +23,8 @@ export interface TaskDetailAgentOutputProps {
   onScroll: () => void;
   showJumpToBottom: boolean;
   jumpToBottom: () => void;
+  /** Key that triggers scroll-to-bottom reset in archived sessions (e.g. selected task ID). */
+  scrollResetKey?: string;
 }
 
 export function TaskDetailAgentOutput({
@@ -38,6 +40,7 @@ export function TaskDetailAgentOutput({
   onScroll,
   showJumpToBottom,
   jumpToBottom,
+  scrollResetKey,
 }: TaskDetailAgentOutputProps) {
   const dispatch = useAppDispatch();
 
@@ -55,7 +58,7 @@ export function TaskDetailAgentOutput({
         ) : archivedSessions.length === 0 ? (
           <div className="p-4 text-theme-muted text-sm">No archived sessions for this task.</div>
         ) : (
-          <ArchivedSessionView sessions={archivedSessions} />
+          <ArchivedSessionView sessions={archivedSessions} scrollResetKey={scrollResetKey} />
         )
       ) : (
         <div className="relative flex flex-col min-h-0 flex-1">
