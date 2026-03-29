@@ -4,7 +4,6 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { setEnvPathForTesting } from "../routes/env.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
 import {
@@ -17,34 +16,31 @@ import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
 
 const mockExecFile = vi.fn();
 
-vi.mock("node:child_process", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...mod,
-    exec: vi.fn(
-      (
-        _cmd: string,
-        _opts: unknown,
-        cb: (err: Error | null, stdout: string, stderr: string) => void
-      ) => {
-        setImmediate(() => cb(null, "", ""));
-        return {
-          stdout: { on: vi.fn() },
-          stderr: { on: vi.fn() },
-        };
-      }
-    ),
-    execFile: (...args: unknown[]) => mockExecFile(...args),
-  };
-});
-
-import { envRouter } from "../routes/env.js";
+/** No importOriginal — avoids loading real child_process graph alongside env in parallel workers. */
+vi.mock("node:child_process", () => ({
+  exec: vi.fn(
+    (
+      _cmd: string,
+      _opts: unknown,
+      cb: (err: Error | null, stdout: string, stderr: string) => void
+    ) => {
+      setImmediate(() => cb(null, "", ""));
+      return {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+      };
+    }
+  ),
+  execFile: (...args: unknown[]) => mockExecFile(...args),
+}));
 
 const mockValidateApiKey = vi.fn();
 
-// Stub the whole module (no importOriginal) so real models.ts — and @anthropic-ai/sdk —
-// are never loaded here. importOriginal + parallel workers has occasionally let the real
-// validateApiKey run (network → flaky "socket hang up" on Claude).
+/**
+ * Full stub of models.js (not importOriginal / partial mock). env.ts imports validateApiKey via
+ * env-keys-validate → models; replacing models prevents any worker from evaluating models.ts
+ * (Anthropic/OpenAI SDK init and network code).
+ */
 vi.mock("../routes/models.js", () => ({
   validateApiKey: (...args: unknown[]) => mockValidateApiKey(...args),
 }));
@@ -66,6 +62,8 @@ vi.mock("../services/task-store.service.js", () => ({
   TaskStoreService: vi.fn(),
   SCHEMA_SQL: "",
 }));
+
+import { envRouter, setEnvPathForTesting } from "../routes/env.js";
 
 function createMinimalEnvApp() {
   const app = express();
@@ -120,6 +118,11 @@ describe("Env API", () => {
   });
 
   describe("POST /env/keys/validate", () => {
+    it("models module is fully stubbed (only validateApiKey export; no real models.ts surface)", async () => {
+      const m = await import("../routes/models.js");
+      expect(Object.keys(m).sort()).toEqual(["validateApiKey"]);
+    });
+
     it("returns 400 when provider and value are missing", async () => {
       const res = await withLocalSessionAuth(request(app).post(`${API_PREFIX}/env/keys/validate`)).send({});
       expect(res.status).toBe(400);
@@ -205,6 +208,13 @@ describe("Env API", () => {
   });
 
   describe("GET /env/keys", () => {
+    it("does not invoke validateApiKey (no network / models.ts for this route)", async () => {
+      mockValidateApiKey.mockClear();
+      const res = await request(app).get(`${API_PREFIX}/env/keys`);
+      expect(res.status).toBe(200);
+      expect(mockValidateApiKey).not.toHaveBeenCalled();
+    });
+
     it("returns shape with anthropic, cursor, openai, google, claudeCli, cursorCli, ollamaCli, useCustomCli booleans", async () => {
       const res = await request(app).get(`${API_PREFIX}/env/keys`);
       expect(res.status).toBe(200);

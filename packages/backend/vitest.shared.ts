@@ -54,6 +54,8 @@ export const integrationWorkers = Math.min(3, Math.max(1, Math.floor(parallelism
 export const backendUnitExclude = [
   ...backendIntegrationInclude,
   "**/git-working-mode-branches.integration.test.ts",
+  /** Run in vitest.env-route.config.ts (dedicated project + single-thread pool; avoids models mock races). */
+  "**/env-route.test.ts",
 ];
 
 export const backendResolveConfig = {

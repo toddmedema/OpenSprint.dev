@@ -26,7 +26,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { getBackendRuntimeInfo } from "../utils/runtime-info.js";
-import { validateApiKey } from "./models.js";
+import { validateApiKey } from "./env-keys-validate.js";
 import { getGlobalSettings, updateGlobalSettings } from "../services/global-settings.service.js";
 
 const execFileAsync = promisify(execFile);

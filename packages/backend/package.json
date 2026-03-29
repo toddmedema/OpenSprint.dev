@@ -11,7 +11,7 @@
     "clean": "rm -rf dist",
     "reset-in-progress-tasks": "tsx src/scripts/reset-in-progress-tasks.ts",
     "test": "npx vitest run",
-    "test:unit": "npx vitest run --project unit",
+    "test:unit": "npx vitest run --project unit --project env-route",
     "test:integration": "npx vitest run --project integration",
     "test:coverage": "npx vitest run --coverage",
     "test:watch": "vitest",
