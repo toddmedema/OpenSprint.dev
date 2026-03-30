@@ -152,6 +152,7 @@ const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
 
 // Runtime and worktree paths must stay local and never be committed.
 const PROJECT_GITIGNORE_ENTRIES = [
+  ".opensprint/*.json",
   ".opensprint/orchestrator-state.json",
   ".opensprint/worktrees/",
   ".opensprint/pending-commits.json",

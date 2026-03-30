@@ -140,6 +140,7 @@ describe("ProjectService", () => {
     // PRD §5.9: Verify .gitignore has runtime/worktree exclusions.
     const gitignorePath = path.join(repoPath, ".gitignore");
     const gitignore = await fs.readFile(gitignorePath, "utf-8");
+    expect(gitignore).toContain(".opensprint/*.json");
     expect(gitignore).toContain(".opensprint/orchestrator-state.json");
     expect(gitignore).toContain(".opensprint/worktrees/");
     expect(gitignore).toContain(".opensprint/pending-commits.json");
@@ -455,6 +456,7 @@ describe("ProjectService", () => {
     expect(project.repoPath).toBe(repoPath);
     expect(project.name).toBe("Test");
     const gitignore = await fs.readFile(path.join(repoPath, ".gitignore"), "utf-8");
+    expect(gitignore).toContain(".opensprint/*.json");
     expect(gitignore).toContain(".opensprint/runtime/");
   });
 
@@ -511,6 +513,7 @@ describe("ProjectService", () => {
     });
 
     const refreshed = await fs.readFile(gitignorePath, "utf-8");
+    expect(refreshed).toContain(".opensprint/*.json");
     expect(refreshed).toContain(".opensprint/runtime/");
   });
 
