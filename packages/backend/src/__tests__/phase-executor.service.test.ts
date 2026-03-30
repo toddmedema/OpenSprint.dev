@@ -218,6 +218,7 @@ describe("PhaseExecutorService", () => {
         syncMainWithOrigin: mockSyncMainWithOrigin,
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         rebaseOntoMain: vi.fn().mockResolvedValue(undefined),
+        rebaseContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         getConflictedFiles: vi.fn().mockResolvedValue([]),
       } as PhaseExecutorHost["branchManager"],
@@ -235,6 +236,7 @@ describe("PhaseExecutorService", () => {
       setCachedSummarizerContext: vi.fn(),
       buildReviewHistory: vi.fn().mockResolvedValue(""),
       onAgentStateChange: vi.fn().mockReturnValue(() => {}),
+      runMergerAgentAndWait: vi.fn().mockResolvedValue(true),
     };
 
     phaseExecutor = new PhaseExecutorService(mockHost, {

@@ -935,10 +935,10 @@ export class BranchManager {
    * Check whether a rebase is currently in progress.
    */
   async isRebaseInProgress(repoPath: string): Promise<boolean> {
-    const gitDir = path.join(repoPath, ".git");
     for (const dir of ["rebase-merge", "rebase-apply"]) {
       try {
-        await fs.access(path.join(gitDir, dir));
+        const candidate = await this.resolveGitMetadataPath(repoPath, dir);
+        await fs.access(candidate);
         return true;
       } catch {
         // Not present
@@ -2253,9 +2253,13 @@ export class BranchManager {
         [...gitNoHooksConfigPrefix(noHooks), "rebase", "--empty=drop", baseBranch],
         { timeout: 120_000 }
       );
-    } catch (_err) {
+    } catch (err) {
+      const rebaseActive = await this.isRebaseInProgress(wtPath);
       const conflicted = await this.getConflictedFiles(wtPath);
-      throw new RebaseConflictError(conflicted);
+      if (rebaseActive || conflicted.length > 0) {
+        throw new RebaseConflictError(conflicted);
+      }
+      throw err;
     }
   }
 }

@@ -271,12 +271,12 @@ function TaskDetailSidebarInner({
       return (
         filterAgentOutput(archivedSessions[archivedSessions.length - 1]?.outputLog ?? "") ||
         (activeTaskState?.state === "suspended"
-          ? "Agent suspended; waiting for reconnect or new output..."
+          ? "Agent suspended (no recent output); waiting for reconnect, new output, or active tool-call activity..."
           : "Waiting for agent output...")
       );
     }
     if (activeTaskState?.state === "suspended") {
-      return "Agent suspended; waiting for reconnect or new output...";
+      return "Agent suspended (no recent output); waiting for reconnect, new output, or active tool-call activity...";
     }
     return showLoadingPlaceholder ? "Loading output…" : "Waiting for agent output...";
   }, [activeTaskState?.state, agentOutputText, archivedSessions, showLoadingPlaceholder]);

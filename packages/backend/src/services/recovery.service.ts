@@ -475,6 +475,16 @@ export class RecoveryService {
 
     for (const task of toRecover) {
       try {
+        if (
+          await this.hasFreshRecoveryHeartbeatGuard(
+            repoPath,
+            task.id,
+            task.updated_at ?? null,
+            undefined
+          )
+        ) {
+          continue;
+        }
         await this.recoverTask(projectId, repoPath, task);
         recovered.push(task.id);
         eventLogService
@@ -524,6 +534,16 @@ export class RecoveryService {
 
     for (const task of toRecover) {
       try {
+        if (
+          await this.hasFreshRecoveryHeartbeatGuard(
+            repoPath,
+            task.id,
+            task.updated_at ?? null,
+            undefined
+          )
+        ) {
+          continue;
+        }
         await this.recoverTask(projectId, repoPath, task);
         recovered.push(task.id);
         eventLogService
@@ -763,12 +783,24 @@ export class RecoveryService {
   ): Promise<string[]> {
     const intents = await worktreeCleanupIntentService.list(repoPath, projectId);
     if (intents.length === 0) return [];
+    const tasks = await this.taskStore.listAll(projectId);
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
     const cleaned: string[] = [];
     for (const intent of intents) {
       const worktreeKey = intent.worktreeKey ?? intent.taskId;
       const resolvedPath = intent.worktreePath ? path.resolve(intent.worktreePath) : null;
       if (excludeWorktreeKeys.has(worktreeKey)) continue;
       if (resolvedPath && excludeWorktreePaths.has(resolvedPath)) continue;
+      const task = taskById.get(intent.taskId);
+      if (task && String(task.status ?? "") === "in_progress") {
+        log.warn("Skipping cleanup intent for in-progress task", {
+          projectId,
+          taskId: intent.taskId,
+          branchName: intent.branchName,
+          worktreePath: intent.worktreePath,
+        });
+        continue;
+      }
       try {
         if (intent.gitWorkingMode === "branches") {
           await this.branchManager.deleteBranch(repoPath, intent.branchName);
@@ -815,6 +847,51 @@ export class RecoveryService {
       }
     }
     return cleaned;
+  }
+
+  private async hasFreshRecoveryHeartbeatGuard(
+    repoPath: string,
+    taskId: string,
+    taskUpdatedAt: string | null | undefined,
+    assignmentWorktreePath?: string
+  ): Promise<boolean> {
+    const now = Date.now();
+    const candidatePaths = new Set<string>();
+    if (assignmentWorktreePath) candidatePaths.add(assignmentWorktreePath);
+    candidatePaths.add(this.branchManager.getWorktreePath(taskId));
+
+    for (const worktreePath of candidatePaths) {
+      const heartbeat = await heartbeatService.readHeartbeat(worktreePath, taskId);
+      if (!heartbeat) continue;
+      const pidAlive =
+        typeof heartbeat.processGroupLeaderPid === "number" &&
+        heartbeat.processGroupLeaderPid > 0 &&
+        isProcessAlive(heartbeat.processGroupLeaderPid);
+      if (pidAlive) {
+        log.info("Skipping recovery due to live heartbeat PID", { taskId, worktreePath });
+        return true;
+      }
+
+      const heartbeatFresh =
+        Number.isFinite(heartbeat.heartbeatTimestamp) &&
+        now - heartbeat.heartbeatTimestamp <= HEARTBEAT_STALE_MS;
+      const outputFresh =
+        Number.isFinite(heartbeat.lastOutputTimestamp) &&
+        now - heartbeat.lastOutputTimestamp <= HEARTBEAT_STALE_MS;
+      const updatedAtMs = taskUpdatedAt ? Date.parse(taskUpdatedAt) : Number.NaN;
+      const withinNoPidGuardAge =
+        !Number.isFinite(updatedAtMs) || now - updatedAtMs <= HEARTBEAT_WITHOUT_PID_MAX_AGE_MS;
+      if ((heartbeatFresh || outputFresh) && withinNoPidGuardAge) {
+        log.info("Skipping recovery due to fresh heartbeat without PID", {
+          taskId,
+          worktreePath,
+          heartbeatFresh,
+          outputFresh,
+        });
+        return true;
+      }
+    }
+    return false;
   }
 
   private async cleanupStaleInactiveWorktrees(

@@ -355,6 +355,7 @@ vi.mock("../services/agent.service.js", () => ({
     invokeCodingAgent: mockInvokeCodingAgent,
     invokeReviewAgent: mockInvokeReviewAgent,
     invokeMergerAgent: mockInvokeMergerAgent,
+    runMergerAgentAndWait: vi.fn().mockResolvedValue(true),
   },
   createProcessGroupHandle: mockCreateProcessGroupHandle,
 }));

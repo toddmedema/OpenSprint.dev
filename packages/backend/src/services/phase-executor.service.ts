@@ -11,10 +11,12 @@ import {
   resolveTestCommand,
   getAgentForComplexity,
   getProviderForAgentType,
+  type AgentConfig,
   type PlanComplexity,
+  type ProjectSettings,
 } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
-import type { BranchManager } from "./branch-manager.js";
+import { RebaseConflictError, type BranchManager } from "./branch-manager.js";
 import type { ContextAssembler } from "./context-assembler.js";
 import type { SessionManager } from "./session-manager.js";
 import type { TestRunner } from "./test-runner.js";
@@ -40,8 +42,12 @@ import { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
 import { RepoPreflightError, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { resolveExecuteReplayMetadata } from "./execute-replay-metadata.service.js";
+import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 
 const log = createLogger("phase-executor");
+
+/** Keep in sync with `MAX_PRE_VALIDATION_REBASE_MERGER_ROUNDS` in orchestrator.service.ts. */
+const MAX_RETRY_PATH_REBASE_MERGER_ROUNDS = 12;
 
 export interface PhaseExecutorHost {
   getState(projectId: string): {
@@ -77,6 +83,18 @@ export interface PhaseExecutorHost {
   setCachedSummarizerContext(projectId: string, taskId: string, context: TaskContext): void;
   buildReviewHistory(repoPath: string, taskId: string): Promise<string>;
   onAgentStateChange(projectId: string): () => void;
+  runMergerAgentAndWait(options: {
+    projectId: string;
+    cwd: string;
+    config: AgentConfig;
+    phase: "rebase_before_merge" | "merge_to_main" | "push_rebase";
+    taskId: string;
+    branchName: string;
+    conflictedFiles: string[];
+    testCommand?: string;
+    mergeQualityGates?: string[];
+    baseBranch?: string;
+  }): Promise<boolean>;
 }
 
 export class PhaseExecutorService {
@@ -126,6 +144,127 @@ export class PhaseExecutorService {
       (record.selfImprovementKind === "baseline-quality-gate" ||
         record.baselineQualityGateSource === "merge-quality-gate-baseline")
     );
+  }
+
+  /**
+   * Run merger + rebase --continue rounds until the retry-path rebase completes or the task fails.
+   * @returns false if merge_conflict was reported via handleTaskFailure (caller should return).
+   */
+  private async resolveRetryRebaseConflictsWithMerger(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    wtPath: string,
+    baseBranch: string,
+    branchName: string,
+    initialConflict: RebaseConflictError,
+    settings: ProjectSettings
+  ): Promise<boolean> {
+    const mergerConfig = settings.simpleComplexityAgent as AgentConfig;
+    const mergerTestCommand = resolveTestCommand(settings) || undefined;
+    const mergerQualityGates = getMergeQualityGateCommands(settings.toolchainProfile);
+
+    let rebaseConflict: RebaseConflictError | null = initialConflict;
+    let round = 0;
+
+    while (rebaseConflict) {
+      round += 1;
+      const conflictedFiles = rebaseConflict.conflictedFiles;
+      if (round > MAX_RETRY_PATH_REBASE_MERGER_ROUNDS) {
+        await this.host.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
+        await this.host.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
+        await this.callbacks.handleTaskFailure(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          `Rebase onto ${baseBranch} before coding retry: unresolved after ${MAX_RETRY_PATH_REBASE_MERGER_ROUNDS} merger rounds (conflicts: ${conflictedFiles.join(", ")})`,
+          null,
+          "merge_conflict"
+        );
+        return false;
+      }
+
+      log.info("Retry-path rebase conflict, invoking merger agent", {
+        taskId: task.id,
+        branchName,
+        conflictedFiles,
+        round,
+      });
+      await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
+      if (round === 1) {
+        await this.host.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
+      }
+
+      const resolved = await this.host.runMergerAgentAndWait({
+        projectId,
+        cwd: wtPath,
+        config: mergerConfig,
+        phase: "rebase_before_merge",
+        taskId: task.id,
+        branchName,
+        conflictedFiles,
+        testCommand: mergerTestCommand,
+        mergeQualityGates: mergerQualityGates,
+        baseBranch,
+      });
+      if (!resolved) {
+        await this.host.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await this.callbacks.handleTaskFailure(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          `Rebase onto ${baseBranch} before coding retry: merger could not resolve conflicts (${conflictedFiles.join(", ")})`,
+          null,
+          "merge_conflict"
+        );
+        return false;
+      }
+
+      void eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "merge.resolved",
+          data: {
+            stage: "rebase_before_merge",
+            branchName,
+            conflictedFiles,
+            resolvedBy: "merger",
+            round,
+            context: "coding_retry",
+          },
+        })
+        .catch(() => {});
+
+      try {
+        await this.host.branchManager.rebaseContinue(wtPath);
+        rebaseConflict = null;
+      } catch (continueErr) {
+        if (continueErr instanceof RebaseConflictError) {
+          rebaseConflict = continueErr;
+        } else {
+          const cf = await this.host.branchManager.getConflictedFiles(wtPath);
+          if (cf.length > 0) {
+            rebaseConflict = new RebaseConflictError(cf);
+          } else {
+            await this.host.branchManager.rebaseAbort(wtPath).catch(() => {});
+            throw continueErr;
+          }
+        }
+      }
+    }
+
+    await this.host.taskStore.setConflictFiles(projectId, task.id, []);
+    await this.host.taskStore.setMergeStage(projectId, task.id, null);
+    log.info("Rebased existing branch onto base before retry (after merger)", {
+      taskId: task.id,
+      baseBranch,
+    });
+    return true;
   }
 
   private promptHasActionableQualityGateContext(promptContent: string): boolean {
@@ -235,23 +374,34 @@ export class PhaseExecutorService {
 
       if (retryContext?.useExistingBranch && !retryContext.structuredOutputRepairAttempted) {
         await this.host.branchManager.waitForGitReady(wtPath);
+        let rebaseConflict: RebaseConflictError | null = null;
         try {
           await this.host.branchManager.rebaseOntoMain(wtPath, baseBranch);
           log.info("Rebased existing branch onto base before retry", {
             taskId: task.id,
             baseBranch,
           });
-        } catch {
-          const conflictedFiles = await this.host.branchManager
-            .getConflictedFiles(wtPath)
-            .catch(() => []);
-          await this.host.branchManager.rebaseAbort(wtPath);
-          await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
-          await this.host.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
-          log.info("Rebase onto main had conflicts, agent will work from diverged state", {
-            taskId: task.id,
-            conflictedFiles,
-          });
+        } catch (e) {
+          if (e instanceof RebaseConflictError) {
+            rebaseConflict = e;
+          } else {
+            throw e;
+          }
+        }
+        if (rebaseConflict) {
+          const rebaseOk = await this.resolveRetryRebaseConflictsWithMerger(
+            projectId,
+            repoPath,
+            task,
+            wtPath,
+            baseBranch,
+            branchName,
+            rebaseConflict,
+            settings
+          );
+          if (!rebaseOk) {
+            return;
+          }
         }
       }
 

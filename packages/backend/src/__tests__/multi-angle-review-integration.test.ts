@@ -219,6 +219,7 @@ describe("Multi-angle review flow — integration", () => {
         syncMainWithOrigin: mockSyncMainWithOrigin,
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         rebaseOntoMain: vi.fn().mockResolvedValue(undefined),
+        rebaseContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         getConflictedFiles: vi.fn().mockResolvedValue([]),
         captureBranchDiff: vi.fn().mockResolvedValue(""),
@@ -240,6 +241,7 @@ describe("Multi-angle review flow — integration", () => {
       setCachedSummarizerContext: vi.fn(),
       buildReviewHistory: vi.fn().mockResolvedValue(""),
       onAgentStateChange: vi.fn().mockReturnValue(() => {}),
+      runMergerAgentAndWait: vi.fn().mockResolvedValue(true),
     };
 
     phaseExecutor = new PhaseExecutorService(mockHost, {

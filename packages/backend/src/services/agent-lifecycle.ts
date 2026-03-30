@@ -35,6 +35,8 @@ const RESULT_POLL_MS = (() => {
 })();
 /** Allow long-running shell/tool execution (e.g. npm test) to finish and report back before inactivity kills the agent. */
 const ACTIVE_TOOL_CALL_TIMEOUT_MS = 15 * 60 * 1000;
+/** Require at least this extra quiet period beyond inactivity timeout before marking suspended. */
+const SUSPEND_TRANSITION_DELAY_MS = 60 * 1000;
 const RECOVERY_TAIL_BYTES = 256 * 1024;
 const RESULT_TERMINAL_STATUSES = new Set(["success", "failed", "approved", "rejected"]);
 
@@ -609,12 +611,54 @@ export class AgentLifecycleManager {
         }
 
         if (elapsed > effectiveTimeout) {
+          if (hasActiveToolCalls) {
+            if (runState.lifecycleState === "suspended") {
+              const previousReason = runState.suspendReason;
+              runState.lifecycleState = "running";
+              runState.suspendedAtIso = undefined;
+              runState.suspendReason = undefined;
+              runState.suspendDeadlineMs = undefined;
+              const summary = "Agent is waiting on an active tool call";
+
+              if (params) {
+                eventLogService
+                  .append(params.repoPath, {
+                    timestamp: new Date().toISOString(),
+                    projectId: params.projectId,
+                    taskId,
+                    event: "agent.resumed",
+                    data: {
+                      attempt: params.attempt,
+                      phase: params.phase,
+                      reason: previousReason ?? "output_gap",
+                      summary,
+                    },
+                  })
+                  .catch(() => {});
+                broadcastToProject(params.projectId, {
+                  type: "agent.activity",
+                  taskId: params.taskId,
+                  phase: params.phase,
+                  activity: "resumed",
+                  summary,
+                });
+                void params.onStateChange?.();
+              }
+            }
+            return;
+          }
+
+          const suspendThresholdMs = effectiveTimeout + SUSPEND_TRANSITION_DELAY_MS;
+          if (elapsed <= suspendThresholdMs) {
+            return;
+          }
           const beyondSuspendGrace = elapsed > AGENT_SUSPEND_GRACE_MS;
           if (!beyondSuspendGrace && runState.lifecycleState !== "suspended" && params) {
             log.warn("Agent suspended due to inactivity", {
               taskId,
               elapsedMs: elapsed,
               effectiveTimeoutMs: effectiveTimeout,
+              suspendTransitionDelayMs: SUSPEND_TRANSITION_DELAY_MS,
               activeToolCallCount: runState.activeToolCallIds.size,
             });
             void this.markSuspended(params, runState, "output_gap");

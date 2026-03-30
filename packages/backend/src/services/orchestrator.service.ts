@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import type {
   GitMergeQueueSnapshot,
@@ -145,11 +146,17 @@ import type {
 
 /** Loop kicker interval: 60s — restarts idle orchestrator loop (distinct from 5-min WatchdogService health patrol). */
 const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
+const ORCHESTRATOR_LEASE_RENEW_MS = 15 * 1000;
+const ORCHESTRATOR_LEASE_STALE_MS = 45 * 1000;
+const ORCHESTRATOR_LEASE_DISABLED =
+  process.env.NODE_ENV === "test" || process.env.OPENSPRINT_DISABLE_ORCHESTRATOR_LEASE === "1";
 const CODING_RESULT_EXPECTED_SHAPE =
   'a JSON object like {"status":"success","summary":"..."} or {"status":"failed","summary":"...","open_questions":[{"id":"q1","text":"..."}]}';
 
 /** Auto-block a task after this many consecutive "success" results with an empty diff. */
 const MAX_CONSECUTIVE_EMPTY_DIFFS = 2;
+/** Matches git-commit-queue worktree_merge rebase resolution cap. */
+const MAX_PRE_VALIDATION_REBASE_MERGER_ROUNDS = 12;
 const REVIEW_RESULT_EXPECTED_SHAPE =
   'a JSON object like {"status":"approved","summary":"..."} or {"status":"rejected","summary":"...","issues":["..."],"notes":"..."}';
 
@@ -321,6 +328,8 @@ export class OrchestratorService {
   private dispatchService = new OrchestratorDispatchService(
     this as unknown as OrchestratorDispatchHost
   );
+  private readonly leaseInstanceId = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+  private leaderByProject = new Map<string, boolean>();
 
   private get projectService(): ProjectService {
     if (!this._projectService) this._projectService = new ProjectService();
@@ -388,6 +397,71 @@ export class OrchestratorService {
       dispatchPausedReason: null,
       dispatchBlockers: null,
     };
+  }
+
+  private isPidAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private getLeaseFilePath(): string {
+    return path.join(os.homedir(), ".opensprint", "runtime", "orchestrator-leases.json");
+  }
+
+  private async tryAcquireOrRenewLease(projectId: string): Promise<boolean> {
+    if (ORCHESTRATOR_LEASE_DISABLED) {
+      this.leaderByProject.set(projectId, true);
+      return true;
+    }
+
+    const leasePath = this.getLeaseFilePath();
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.parse(nowIso);
+    const nextLease = {
+      pid: process.pid,
+      instanceId: this.leaseInstanceId,
+      updatedAt: nowIso,
+    };
+
+    type LeaseFile = {
+      version: 1;
+      projects: Record<string, { pid: number; instanceId: string; updatedAt: string }>;
+    };
+
+    let leaseData: LeaseFile = { version: 1, projects: {} };
+    try {
+      const raw = await fs.readFile(leasePath, "utf-8");
+      const parsed = JSON.parse(raw) as Partial<LeaseFile>;
+      if (parsed && parsed.version === 1 && parsed.projects && typeof parsed.projects === "object") {
+        leaseData = { version: 1, projects: parsed.projects as LeaseFile["projects"] };
+      }
+    } catch {
+      // First writer wins.
+    }
+
+    const current = leaseData.projects[projectId];
+    if (
+      current &&
+      current.pid !== process.pid &&
+      Number.isFinite(Date.parse(current.updatedAt)) &&
+      nowMs - Date.parse(current.updatedAt) < ORCHESTRATOR_LEASE_STALE_MS &&
+      this.isPidAlive(current.pid)
+    ) {
+      this.leaderByProject.set(projectId, false);
+      return false;
+    }
+
+    leaseData.projects[projectId] = nextLease;
+    await fs.mkdir(path.dirname(leasePath), { recursive: true });
+    const tmpPath = `${leasePath}.tmp-${process.pid}-${Date.now()}`;
+    await fs.writeFile(tmpPath, JSON.stringify(leaseData, null, 2), "utf-8");
+    await fs.rename(tmpPath, leasePath);
+    this.leaderByProject.set(projectId, true);
+    return true;
   }
 
   /** Create a new AgentSlot for a task (optionally with assignee for recovery). */
@@ -1510,6 +1584,30 @@ export class OrchestratorService {
     const repoPath = await this.projectService.getRepoPath(projectId);
     this.repoPathCache.set(projectId, repoPath);
 
+    const ownsLease = await this.tryAcquireOrRenewLease(projectId);
+    if (!ownsLease) {
+      state.status.dispatchPausedReason = "another_orchestrator_instance";
+      if (!state.globalTimers.has("leaseRetry")) {
+        state.globalTimers.setInterval("leaseRetry", () => {
+          void this.tryAcquireOrRenewLease(projectId).then((acquired) => {
+            if (!acquired) return;
+            const currentState = this.getState(projectId);
+            currentState.status.dispatchPausedReason = null;
+            currentState.globalTimers.clear("leaseRetry");
+            this.nudge(projectId);
+          });
+        }, ORCHESTRATOR_LEASE_RENEW_MS);
+      }
+      return state.status;
+    }
+    state.status.dispatchPausedReason = null;
+    state.globalTimers.clear("leaseRetry");
+    if (!state.globalTimers.has("leaseRenew")) {
+      state.globalTimers.setInterval("leaseRenew", () => {
+        void this.tryAcquireOrRenewLease(projectId).catch(() => {});
+      }, ORCHESTRATOR_LEASE_RENEW_MS);
+    }
+
     // Restore counters from DB before recovery so recovery increment is not overwritten
     const counters = await this.loadCounters(repoPath);
     if (counters) {
@@ -1574,6 +1672,9 @@ export class OrchestratorService {
   }
 
   nudge(projectId: string): void {
+    if (!ORCHESTRATOR_LEASE_DISABLED && !this.leaderByProject.get(projectId)) {
+      return;
+    }
     const state = this.getState(projectId);
 
     const maxSlots = this.maxSlotsCache.get(projectId) ?? 1;
@@ -2112,6 +2213,10 @@ export class OrchestratorService {
         settings.simpleComplexityAgent;
       slot.activeAgentConfig = agentConfig;
       const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
+      // Commit any uncommitted work before measuring the branch diff. `captureBranchDiff` only
+      // sees commits (base...branch); without this, success + uncommitted edits looks like an
+      // empty diff and trips the consecutive-empty-diff circuit breaker incorrectly.
+      await this.branchManager.commitWip(wtPath, task.id);
       slot.phaseResult.codingDiff = await this.branchManager.captureBranchDiff(
         repoPath,
         branchName,
@@ -2456,27 +2561,124 @@ export class OrchestratorService {
     branchName: string
   ): Promise<boolean> {
     await this.branchManager.syncMainWithOrigin(repoPath, baseBranch);
+
+    let rebaseConflict: RebaseConflictError | null = null;
     try {
       await this.branchManager.rebaseOntoMain(wtPath, baseBranch);
-      return true;
     } catch (e) {
       if (e instanceof RebaseConflictError) {
-        await this.branchManager.rebaseAbort(wtPath).catch(() => {});
-        await this.taskStore.setConflictFiles(projectId, task.id, e.conflictedFiles);
-        await this.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
-        await this.failureHandler.handleTaskFailure(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          `Rebase onto ${baseBranch} failed before validation (conflicts: ${e.conflictedFiles.join(", ")})`,
-          null,
-          "merge_conflict"
-        );
-        return false;
+        rebaseConflict = e;
+      } else {
+        throw e;
       }
-      throw e;
     }
+
+    let ranMergerResolution = false;
+    if (rebaseConflict) {
+      ranMergerResolution = true;
+      const settings = await this.projectService.getSettings(projectId);
+      const mergerConfig = settings.simpleComplexityAgent as AgentConfig;
+      const mergerTestCommand = resolveTestCommand(settings) || undefined;
+      const mergerQualityGates = getMergeQualityGateCommands(settings.toolchainProfile);
+
+      let round = 0;
+      while (rebaseConflict) {
+        round += 1;
+        const conflictedFiles = rebaseConflict.conflictedFiles;
+        if (round > MAX_PRE_VALIDATION_REBASE_MERGER_ROUNDS) {
+          await this.branchManager.rebaseAbort(wtPath).catch(() => {});
+          await this.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
+          await this.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
+          await this.failureHandler.handleTaskFailure(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            `Rebase onto ${baseBranch} before validation: unresolved after ${MAX_PRE_VALIDATION_REBASE_MERGER_ROUNDS} merger rounds (conflicts: ${conflictedFiles.join(", ")})`,
+            null,
+            "merge_conflict"
+          );
+          return false;
+        }
+
+        log.info("Pre-validation rebase conflict, invoking merger agent", {
+          taskId: task.id,
+          branchName,
+          conflictedFiles,
+          round,
+        });
+        await this.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
+        if (round === 1) {
+          await this.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
+        }
+
+        const resolved = await this.runMergerAgentAndWait({
+          projectId,
+          cwd: wtPath,
+          config: mergerConfig,
+          phase: "rebase_before_merge",
+          taskId: task.id,
+          branchName,
+          conflictedFiles,
+          testCommand: mergerTestCommand,
+          mergeQualityGates: mergerQualityGates,
+          baseBranch,
+        });
+        if (!resolved) {
+          await this.branchManager.rebaseAbort(wtPath).catch(() => {});
+          await this.failureHandler.handleTaskFailure(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            `Rebase onto ${baseBranch} before validation: merger could not resolve conflicts (${conflictedFiles.join(", ")})`,
+            null,
+            "merge_conflict"
+          );
+          return false;
+        }
+
+        void eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "merge.resolved",
+            data: {
+              stage: "rebase_before_merge",
+              branchName,
+              conflictedFiles,
+              resolvedBy: "merger",
+              round,
+              context: "pre_validation",
+            },
+          })
+          .catch(() => {});
+
+        try {
+          await this.branchManager.rebaseContinue(wtPath);
+          rebaseConflict = null;
+        } catch (continueErr) {
+          if (continueErr instanceof RebaseConflictError) {
+            rebaseConflict = continueErr;
+          } else {
+            const cf = await this.branchManager.getConflictedFiles(wtPath);
+            if (cf.length > 0) {
+              rebaseConflict = new RebaseConflictError(cf);
+            } else {
+              await this.branchManager.rebaseAbort(wtPath).catch(() => {});
+              throw continueErr;
+            }
+          }
+        }
+      }
+    }
+
+    if (ranMergerResolution) {
+      await this.taskStore.setConflictFiles(projectId, task.id, []);
+      await this.taskStore.setMergeStage(projectId, task.id, null);
+    }
+    return true;
   }
 
   /**
@@ -2995,12 +3197,14 @@ export class OrchestratorService {
     let stableMalformedReads = 0;
     let lastReadFailure: "timeout" | "error" | null = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let timeoutHandle: NodeJS.Timeout | null = null;
       try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => reject(new Error("readResult timeout")), perAttemptTimeoutMs);
+        });
         const value = await Promise.race([
           this.readCodingResultWithRaw(wtPath, taskId),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("readResult timeout")), perAttemptTimeoutMs)
-          ),
+          timeoutPromise,
         ]);
         if (value.result) {
           return { ...value, readFailure: null };
@@ -3018,6 +3222,8 @@ export class OrchestratorService {
       } catch (err) {
         lastReadFailure = err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error";
         log.warn("readResult attempt failed", { taskId, attempt, err });
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
       }
 
       if (attempt < maxAttempts) {
@@ -3670,6 +3876,7 @@ export class OrchestratorService {
     conflictedFiles: string[];
     testCommand?: string;
     mergeQualityGates?: string[];
+    baseBranch?: string;
   }): Promise<boolean> {
     return agentService.runMergerAgentAndWait(options);
   }

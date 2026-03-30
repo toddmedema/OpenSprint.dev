@@ -874,7 +874,7 @@ describe("TaskDetailSidebar", () => {
     });
 
     expect(screen.getByTestId("live-agent-output")).toHaveTextContent(
-      "Agent suspended; waiting for reconnect or new output..."
+      "Agent suspended (no recent output); waiting for reconnect, new output, or active tool-call activity..."
     );
   });
 

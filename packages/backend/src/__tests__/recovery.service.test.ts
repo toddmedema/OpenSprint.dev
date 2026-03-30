@@ -654,6 +654,39 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     expect(result.cleaned).toContain("cleanup_intent:task-merged");
   });
 
+  it("does not replay cleanup intents for in-progress tasks", async () => {
+    mockListCleanupIntents.mockResolvedValue([
+      {
+        taskId: "task-in-progress",
+        branchName: "opensprint/task-in-progress",
+        worktreePath: "/tmp/wt-in-progress",
+        gitWorkingMode: "worktree",
+        worktreeKey: "task-in-progress",
+      },
+    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      {
+        id: "task-in-progress",
+        status: "in_progress",
+      } as never,
+    ]);
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+    expect(mockRemoveTaskWorktree).not.toHaveBeenCalledWith(
+      tmpDir,
+      "task-in-progress",
+      "/tmp/wt-in-progress"
+    );
+    expect(mockDeleteBranch).not.toHaveBeenCalledWith(tmpDir, "opensprint/task-in-progress");
+    expect(mockRemoveCleanupIntent).not.toHaveBeenCalledWith(
+      tmpDir,
+      "proj-1",
+      "task-in-progress"
+    );
+    expect(result.cleaned).not.toContain("cleanup_intent:task-in-progress");
+  });
+
   it("cleans stale inactive blocked/open worktrees after TTL", async () => {
     const staleUpdatedAt = new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString();
     mockListTaskWorktrees.mockResolvedValue([
@@ -730,6 +763,33 @@ describe("RecoveryService — stale heartbeat recovery", () => {
         "proj-1",
         "task-active",
         expect.any(Object)
+      );
+    });
+
+    it("does not reset tasks when heartbeat is fresh without PID", async () => {
+      vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([
+        {
+          id: "task-heartbeat-guard",
+          project_id: "proj-1",
+          title: "Heartbeat guard task",
+          status: "in_progress",
+          assignee: "Frodo",
+          updated_at: new Date().toISOString(),
+        } as never,
+      ]);
+      mockReadHeartbeat.mockResolvedValue({
+        processGroupLeaderPid: 0,
+        lastOutputTimestamp: Date.now(),
+        heartbeatTimestamp: Date.now(),
+      });
+
+      const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+      expect(result.requeued).not.toContain("task-heartbeat-guard");
+      expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+        "proj-1",
+        "task-heartbeat-guard",
+        expect.objectContaining({ status: "open" })
       );
     });
   });

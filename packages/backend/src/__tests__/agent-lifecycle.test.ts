@@ -7,6 +7,8 @@ import type { AgentRunState, AgentRunParams } from "../services/agent-lifecycle.
 import { TimerRegistry } from "../services/timer-registry.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, AGENT_SUSPEND_GRACE_MS } from "@opensprint/shared";
 
+const SUSPEND_TRANSITION_DELAY_MS = 60_000;
+
 const mockInvokeCodingAgent = vi.fn();
 const mockInvokeReviewAgent = vi.fn();
 const mockWriteHeartbeat = vi.fn().mockResolvedValue(undefined);
@@ -332,14 +334,9 @@ describe("AgentLifecycleManager", () => {
       vi.useRealTimers();
     });
 
-    it("suspends when a shell tool call stays silent past the extended window", async () => {
+    it("does not remain suspended while a tool call is active", async () => {
       vi.useFakeTimers();
-      const handle = {
-        kill: vi.fn(() => {
-          runState.activeProcess = null;
-        }),
-        pid: 9999,
-      };
+      const handle = { kill: vi.fn(), pid: 9999 };
       let capturedOnOutput: ((chunk: string) => void) | undefined;
 
       mockInvokeCodingAgent.mockImplementation(
@@ -355,15 +352,21 @@ describe("AgentLifecycleManager", () => {
       });
 
       await manager.run(baseParams, runState, timers);
+      runState.lifecycleState = "suspended";
+      runState.suspendReason = "output_gap";
+      runState.suspendedAtIso = new Date(Date.now() - 5_000).toISOString();
+      runState.suspendDeadlineMs = Date.now() + 60_000;
       capturedOnOutput?.(
         '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
       );
+      await Promise.resolve();
+      expect(runState.lifecycleState).toBe("running");
 
-      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 30_000);
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 5 * 60 * 1000);
       await Promise.resolve();
 
-      expect(runState.lifecycleState).toBe("suspended");
-      expect(runState.suspendReason).toBe("output_gap");
+      expect(runState.lifecycleState).toBe("running");
+      expect(runState.suspendReason).toBeUndefined();
       expect(runState.killedDueToTimeout).toBe(false);
       expect(handle.kill).not.toHaveBeenCalled();
 
@@ -379,13 +382,10 @@ describe("AgentLifecycleManager", () => {
         }),
         pid: 9999,
       };
-      let capturedOnOutput: ((chunk: string) => void) | undefined;
 
       mockInvokeCodingAgent.mockImplementation(
-        (_path: string, _config: unknown, options: { onOutput?: (chunk: string) => void }) => {
-          capturedOnOutput = options.onOutput;
-          return handle;
-        }
+        (_path: string, _config: unknown, _options: { onOutput?: (chunk: string) => void }) =>
+          handle
       );
 
       const killSpy = vi.spyOn(process, "kill").mockImplementation((pid: number, sig?: number) => {
@@ -394,11 +394,10 @@ describe("AgentLifecycleManager", () => {
       });
 
       await manager.run(baseParams, runState, timers);
-      capturedOnOutput?.(
-        '{"type":"tool_call","subtype":"started","call_id":"call-1","tool_call":{"shellToolCall":{"args":{"command":"npm test"}}}}\n'
-      );
 
-      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 30_000);
+      await vi.advanceTimersByTimeAsync(
+        AGENT_INACTIVITY_TIMEOUT_MS + SUSPEND_TRANSITION_DELAY_MS + 30_000
+      );
       expect(runState.lifecycleState).toBe("suspended");
 
       await vi.advanceTimersByTimeAsync(AGENT_SUSPEND_GRACE_MS + 30_000);
@@ -428,7 +427,9 @@ describe("AgentLifecycleManager", () => {
       });
 
       await manager.run(baseParams, runState, timers);
-      await vi.advanceTimersByTimeAsync(AGENT_INACTIVITY_TIMEOUT_MS + 30_000);
+      await vi.advanceTimersByTimeAsync(
+        AGENT_INACTIVITY_TIMEOUT_MS + SUSPEND_TRANSITION_DELAY_MS + 30_000
+      );
 
       expect(runState.lifecycleState).toBe("suspended");
 
