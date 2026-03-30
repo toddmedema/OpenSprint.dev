@@ -64,6 +64,7 @@ packages/frontend/.vite/
 .opensprint/sessions/
 .opensprint/orchestrator-state.json
 .opensprint/pending-commits.json
+.opensprint/runtime/
 .opensprint/merge-result.json
 packages/backend/.opensprint/
 
