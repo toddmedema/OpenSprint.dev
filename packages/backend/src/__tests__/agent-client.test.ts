@@ -1164,6 +1164,47 @@ describe("AgentClient", () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
+    it("derives workspace from task prompt path when cwd mismatches", async () => {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const os = await import("os");
+      const workspaceDir = path.join(os.tmpdir(), `agent-client-cwd-derived-${Date.now()}`);
+      await fs.mkdir(path.dirname(path.join(workspaceDir, ".opensprint/active/os-1/prompt.md")), {
+        recursive: true,
+      });
+      const taskFilePath = path.join(workspaceDir, ".opensprint/active/os-1/prompt.md");
+      await fs.writeFile(taskFilePath, "# Task\n\nImplement login", "utf-8");
+
+      const mockChild = {
+        killed: false,
+        kill: vi.fn(),
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(() => ({ on: vi.fn() })),
+      };
+      mockSpawn.mockReturnValue(mockChild);
+
+      const config: AgentConfig = { type: "cursor", model: "gpt-4", cliCommand: null };
+      const wrongCwd = path.join(path.dirname(workspaceDir), "different-project");
+
+      client.spawnWithTaskFile(config, taskFilePath, wrongCwd, vi.fn(), vi.fn());
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "agent",
+        expect.arrayContaining(["--workspace", workspaceDir]),
+        expect.objectContaining({ cwd: workspaceDir, detached: true })
+      );
+      expect(mockLogWarn).toHaveBeenCalledWith(
+        "Task prompt path workspace differs from requested cwd; using task workspace",
+        expect.objectContaining({
+          requestedCwd: path.resolve(wrongCwd),
+          derivedWorkspace: path.resolve(workspaceDir),
+        })
+      );
+
+      await fs.rm(workspaceDir, { recursive: true, force: true });
+    });
+
     it("should spawn Cursor task-file command through cmd.exe on Windows", async () => {
       Object.defineProperty(process, "platform", { value: "win32" });
       const originalComSpec = process.env.ComSpec;

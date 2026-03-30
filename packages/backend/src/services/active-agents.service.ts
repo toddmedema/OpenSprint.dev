@@ -24,6 +24,8 @@ export interface ActiveAgentEntry {
   name?: string;
   /** Feedback ID when Analyst is categorizing a specific feedback item; use for deep link to Evaluate page */
   feedbackId?: string;
+  /** Task ID for Execute deep links when `id` is a per-run token (e.g. merger). */
+  taskId?: string;
 }
 
 /**
@@ -49,6 +51,7 @@ export class ActiveAgentsService {
    * @param planId - Optional plan ID when agent is working in plan context (e.g. Planner for a specific plan)
    * @param name - Optional agent instance name (e.g. "Frodo"); shown in dropdown as "Coder (Frodo)" when present
    * @param feedbackId - Optional feedback ID when Analyst is categorizing a specific feedback item
+   * @param taskId - Optional task ID for Execute navigation when `id` is not the task (e.g. merger run id)
    */
   register(
     id: string,
@@ -60,7 +63,8 @@ export class ActiveAgentsService {
     branchName?: string,
     planId?: string,
     name?: string,
-    feedbackId?: string
+    feedbackId?: string,
+    taskId?: string
   ): void {
     const index = this.nextIndexByRole.get(role) ?? 0;
     this.nextIndexByRole.set(role, index + 1);
@@ -76,6 +80,7 @@ export class ActiveAgentsService {
       planId,
       name: assignedName,
       feedbackId,
+      taskId,
     });
   }
 
@@ -131,6 +136,7 @@ export class ActiveAgentsService {
       ...(e.planId != null && { planId: e.planId }),
       ...(e.name != null && e.name.trim() !== "" && { name: e.name.trim() }),
       ...(e.feedbackId != null && { feedbackId: e.feedbackId }),
+      ...(e.taskId != null && e.taskId.trim() !== "" && { taskId: e.taskId.trim() }),
     }));
   }
 }

@@ -32,7 +32,10 @@ import { databaseRuntime } from "./services/database-runtime.service.js";
 import { openBrowser } from "./utils/open-browser.js";
 import { appendCrashLog } from "./utils/crash-log.js";
 import { appendRuntimeTrace } from "./utils/runtime-trace.js";
-import { startBackendDeathSentinel } from "./utils/backend-death-sentinel.js";
+import {
+  startBackendDeathSentinel,
+  startLaunchdBackendWitness,
+} from "./utils/backend-death-sentinel.js";
 
 // Electron launches backend with ELECTRON_RUN_AS_NODE=1 so process.execPath can run JS.
 // Clear it immediately so backend child processes (agent CLIs) are not forced into Node mode.
@@ -190,6 +193,11 @@ server.listen(port, "127.0.0.1", () => {
     desktop: process.env.OPENSPRINT_DESKTOP ?? null,
   });
   startBackendDeathSentinel({
+    sessionId: runtimeSessionId,
+    backendPid: process.pid,
+    parentPid: process.ppid,
+  });
+  startLaunchdBackendWitness({
     sessionId: runtimeSessionId,
     backendPid: process.pid,
     parentPid: process.ppid,

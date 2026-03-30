@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatRelativeReceived } from "../utils/formatRelativeReceived";
 
 const TICK_MS = 10_000;
 
 /** Re-computes a short relative label periodically while `iso` is set. */
 export function useRelativeReceivedLabel(iso: string | undefined | null): string | null {
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!iso) return;
@@ -13,9 +13,7 @@ export function useRelativeReceivedLabel(iso: string | undefined | null): string
     return () => window.clearInterval(id);
   }, [iso]);
 
-  return useMemo(() => {
-    if (!iso) return null;
-    const label = formatRelativeReceived(iso, Date.now());
-    return label || null;
-  }, [iso, tick]);
+  if (!iso) return null;
+  const label = formatRelativeReceived(iso, Date.now());
+  return label || null;
 }

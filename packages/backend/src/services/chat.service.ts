@@ -503,6 +503,7 @@ export class ChatService {
         undefined,
         undefined,
         undefined,
+        undefined,
         undefined
       );
       try {

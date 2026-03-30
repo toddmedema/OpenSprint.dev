@@ -17,7 +17,11 @@ import { UptimeDisplay } from "./UptimeDisplay";
 import { api } from "../api/client";
 import { ACTIVE_AGENTS_POLL_INTERVAL_MS, AGENT_DROPDOWN_ICON_SIZE } from "../lib/constants";
 import { getDropdownPositionRightAligned } from "../lib/dropdownViewport";
-import { getAgentIconSrc, getPhaseForAgentNavigation } from "../lib/agentUtils";
+import {
+  getAgentIconSrc,
+  getExecuteTaskIdForNavigation,
+  getPhaseForAgentNavigation,
+} from "../lib/agentUtils";
 import { getKillAgentConfirmDisabled } from "../lib/killAgentConfirmStorage";
 import { KillAgentConfirmDialog } from "./KillAgentConfirmDialog";
 
@@ -215,8 +219,12 @@ export function GlobalActiveAgentsList() {
       } else if (agent.planId && phase === "plan") {
         navigate(getProjectPhasePath(projectId, "plan", { plan: agent.planId }));
       } else if (phase === "execute") {
-        const selectedTaskId = agent.taskId ?? agent.id;
-        navigate(getProjectPhasePath(projectId, "execute", { task: selectedTaskId }));
+        const selectedTaskId = getExecuteTaskIdForNavigation(agent);
+        if (selectedTaskId) {
+          navigate(getProjectPhasePath(projectId, "execute", { task: selectedTaskId }));
+        } else {
+          navigate(getProjectPhasePath(projectId, "execute"));
+        }
       } else {
         navigate(getProjectPhasePath(projectId, phase));
       }

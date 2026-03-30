@@ -36,6 +36,9 @@ vi.mock("../services/agent.service.js", () => ({
         role: string;
         label: string;
         branchName?: string;
+        planId?: string;
+        feedbackId?: string;
+        taskId?: string;
       };
       [key: string]: unknown;
     }) {
@@ -48,7 +51,11 @@ vi.mock("../services/agent.service.js", () => ({
           tracking.role,
           tracking.label,
           new Date().toISOString(),
-          tracking.branchName
+          tracking.branchName,
+          tracking.planId,
+          undefined,
+          tracking.feedbackId,
+          tracking.taskId
         );
       }
       try {
@@ -2080,6 +2087,10 @@ describe.skipIf(!feedbackServicePostgresOk)("FeedbackService", () => {
         "analyst",
         "Feedback categorization",
         expect.any(String),
+        undefined,
+        undefined,
+        undefined,
+        item.id,
         undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);

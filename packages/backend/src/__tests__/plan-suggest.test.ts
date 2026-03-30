@@ -233,6 +233,7 @@ describe.skipIf(!planSuggestPostgresOk)("Plan suggestPlans (POST /plans/suggest)
         undefined,
         undefined,
         undefined,
+        undefined,
         undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);

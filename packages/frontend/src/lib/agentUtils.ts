@@ -32,6 +32,15 @@ export function getPhaseForAgentNavigation(agent: ActiveAgent): ProjectPhase {
   return "execute";
 }
 
+/**
+ * Task id for deep-linking to Execute. Merger uses a per-run `id`; use `taskId` when present and never treat the merger run id as a task.
+ */
+export function getExecuteTaskIdForNavigation(agent: ActiveAgent): string | undefined {
+  if (agent.taskId && agent.taskId.trim() !== "") return agent.taskId.trim();
+  if (agent.role === "merger") return undefined;
+  return agent.id;
+}
+
 export function getAgentIconSrc(agent: ActiveAgent): string {
   const role = agent.role;
   if (role && role in AGENT_ROLE_LABELS) {

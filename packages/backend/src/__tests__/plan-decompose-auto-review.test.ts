@@ -347,6 +347,7 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
         undefined,
         undefined,
         undefined,
+        undefined,
         undefined
       );
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
@@ -386,6 +387,7 @@ describe.skipIf(!planDecomposePostgresOk)("Plan decompose with auto-review", () 
           "planner",
           "Feature decomposition",
           expect.any(String),
+          undefined,
           undefined,
           undefined,
           undefined,

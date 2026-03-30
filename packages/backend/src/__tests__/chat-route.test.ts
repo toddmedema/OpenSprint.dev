@@ -70,7 +70,17 @@ vi.mock("../services/agent.service.js", () => ({
   agentService: {
     invokePlanningAgent: async (options: Record<string, unknown>) => {
       const tracking = options.tracking as
-        | { id: string; projectId: string; phase: string; role: string; label: string }
+        | {
+            id: string;
+            projectId: string;
+            phase: string;
+            role: string;
+            label: string;
+            branchName?: string;
+            planId?: string;
+            feedbackId?: string;
+            taskId?: string;
+          }
         | undefined;
       if (tracking) {
         mockRegister(
@@ -79,7 +89,12 @@ vi.mock("../services/agent.service.js", () => ({
           tracking.phase,
           tracking.role as import("@opensprint/shared").AgentRole,
           tracking.label,
-          new Date().toISOString()
+          new Date().toISOString(),
+          tracking.branchName,
+          tracking.planId,
+          undefined,
+          tracking.feedbackId,
+          tracking.taskId
         );
       }
       try {
@@ -800,7 +815,12 @@ A simple marketing site for Open Sprint.
         "sketch",
         "dreamer",
         "Sketch chat",
-        expect.any(String)
+        expect.any(String),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
@@ -823,7 +843,12 @@ A simple marketing site for Open Sprint.
         "plan",
         "dreamer",
         "Plan chat - Auth Plan",
-        expect.any(String)
+        expect.any(String),
+        undefined,
+        "auth-plan",
+        undefined,
+        undefined,
+        undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);
       expect(mockUnregister).toHaveBeenCalledWith(mockRegister.mock.calls[0][0]);
@@ -890,6 +915,7 @@ A simple marketing site for Open Sprint.
         "analyst",
         "Processing reply",
         expect.any(String),
+        undefined,
         undefined,
         undefined,
         undefined,

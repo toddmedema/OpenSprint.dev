@@ -71,6 +71,8 @@ export interface AgentTrackingInfo {
   planId?: string;
   /** Feedback ID when Analyst is categorizing a specific feedback item */
   feedbackId?: string;
+  /** Owning task for Execute deep links when `id` is a per-run token (e.g. merger). */
+  taskId?: string;
 }
 
 /** Options for invokePlanningAgent */
@@ -340,7 +342,8 @@ export class AgentService {
           tracking.branchName,
           tracking.planId,
           undefined,
-          tracking.feedbackId
+          tracking.feedbackId,
+          tracking.taskId
         );
       }
       try {
@@ -441,7 +444,8 @@ export class AgentService {
         tracking.branchName,
         tracking.planId,
         undefined,
-        tracking.feedbackId
+        tracking.feedbackId,
+        tracking.taskId
       );
     }
 
@@ -813,6 +817,7 @@ ${repairSection}## Your Task
    */
   async runMergerAgentAndWait(options: RunMergerAgentOptions): Promise<boolean> {
     const runId = `merger-${options.projectId}-${options.taskId || "push"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const mergerTaskId = options.taskId.trim() !== "" ? options.taskId : undefined;
     const startedAt = new Date().toISOString();
     const outputChunks: string[] = [];
     try {
@@ -859,6 +864,7 @@ ${repairSection}## Your Task
                 role: "merger",
                 label: `Merger conflict resolution${params?.trackingLabelSuffix ?? ""}`,
                 branchName: options.branchName,
+                taskId: mergerTaskId,
               },
             });
           });

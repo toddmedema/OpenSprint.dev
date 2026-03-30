@@ -1058,6 +1058,36 @@ type LocalOpenAIProviderRuntime = {
  */
 export class AgentClient {
   /**
+   * Derive the workspace root from a task prompt path:
+   *   <workspace>/.opensprint/active/<task>/.../prompt.md
+   * When derivation succeeds and differs from requested cwd, prefer the derived path.
+   */
+  private resolveWorkspaceCwd(cwd: string, taskFilePath: string): string {
+    const marker = `${path.sep}.opensprint${path.sep}active${path.sep}`;
+    const resolvedCwd = path.resolve(cwd);
+    const resolvedTaskFile = path.resolve(taskFilePath);
+    const markerIdx = resolvedTaskFile.indexOf(marker);
+    if (markerIdx === -1) {
+      return resolvedCwd;
+    }
+
+    const derived = resolvedTaskFile.slice(0, markerIdx);
+    if (!derived) {
+      return resolvedCwd;
+    }
+
+    if (derived !== resolvedCwd) {
+      log.warn("Task prompt path workspace differs from requested cwd; using task workspace", {
+        requestedCwd: resolvedCwd,
+        derivedWorkspace: derived,
+        taskFilePath: resolvedTaskFile,
+      });
+      return derived;
+    }
+    return resolvedCwd;
+  }
+
+  /**
    * Invoke an agent and get a response.
    */
   async invoke(options: AgentInvokeOptions): Promise<AgentResponse> {
@@ -1110,11 +1140,12 @@ export class AgentClient {
     outputLogPath?: string,
     projectId?: string
   ): { kill: () => void; pid: number | null; pendingMessages: PendingMessageQueue | null } {
+    const workspaceCwd = this.resolveWorkspaceCwd(cwd, taskFilePath);
     if (config.type === "claude") {
       return this.spawnClaudeWithTaskFile(
         config,
         taskFilePath,
-        cwd,
+        workspaceCwd,
         onOutput,
         onExit,
         agentRole,
@@ -1126,7 +1157,7 @@ export class AgentClient {
       return this.spawnOpenAIWithTaskFile(
         config,
         taskFilePath,
-        cwd,
+        workspaceCwd,
         onOutput,
         onExit,
         agentRole,
@@ -1138,7 +1169,7 @@ export class AgentClient {
       return this.spawnGoogleWithTaskFile(
         config,
         taskFilePath,
-        cwd,
+        workspaceCwd,
         onOutput,
         onExit,
         agentRole,
@@ -1150,7 +1181,7 @@ export class AgentClient {
       return this.spawnLMStudioWithTaskFile(
         config,
         taskFilePath,
-        cwd,
+        workspaceCwd,
         onOutput,
         onExit,
         agentRole,
@@ -1162,7 +1193,7 @@ export class AgentClient {
       return this.spawnOllamaWithTaskFile(
         config,
         taskFilePath,
-        cwd,
+        workspaceCwd,
         onOutput,
         onExit,
         agentRole,
@@ -1175,7 +1206,7 @@ export class AgentClient {
         ...this.spawnCursorWithTaskFileAsync(
           config,
           taskFilePath,
-          cwd,
+          workspaceCwd,
           onOutput,
           onExit,
           agentRole,
@@ -1189,7 +1220,7 @@ export class AgentClient {
       ...this.doSpawnWithTaskFile(
         config,
         taskFilePath,
-        cwd,
+        workspaceCwd,
         onOutput,
         onExit,
         agentRole,

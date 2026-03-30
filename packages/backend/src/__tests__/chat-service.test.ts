@@ -75,6 +75,9 @@ vi.mock("../services/agent.service.js", () => ({
         role: string;
         label: string;
         branchName?: string;
+        planId?: string;
+        feedbackId?: string;
+        taskId?: string;
       };
       [key: string]: unknown;
     }) {
@@ -87,7 +90,11 @@ vi.mock("../services/agent.service.js", () => ({
           tracking.role,
           tracking.label,
           new Date().toISOString(),
-          tracking.branchName
+          tracking.branchName,
+          tracking.planId,
+          undefined,
+          tracking.feedbackId,
+          tracking.taskId
         );
       }
       try {
@@ -240,6 +247,10 @@ describeIfDb("ChatService - Plan phase agent registry", () => {
         "harmonizer",
         "Syncing PRD with Plan Execution",
         expect.any(String),
+        undefined,
+        "auth-plan",
+        undefined,
+        undefined,
         undefined
       );
       expect(mockUnregister).toHaveBeenCalledTimes(1);

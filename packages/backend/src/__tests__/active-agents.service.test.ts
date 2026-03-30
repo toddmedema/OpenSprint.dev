@@ -98,6 +98,30 @@ describe("ActiveAgentsService", () => {
       activeAgentsService.unregister("feedback-categorize-proj-1-fsi69v-123");
     });
 
+    it("includes taskId when provided (e.g. merger run id vs task)", () => {
+      activeAgentsService.register(
+        "merger-proj-1-os-99-1-ts-x",
+        "proj-1",
+        "execute",
+        "merger",
+        "Merger conflict resolution",
+        "2026-02-16T10:00:00.000Z",
+        "opensprint/os-99",
+        undefined,
+        undefined,
+        undefined,
+        "os-99.1"
+      );
+
+      const agents = activeAgentsService.list("proj-1");
+      expect(agents[0]).toMatchObject({
+        id: "merger-proj-1-os-99-1-ts-x",
+        role: "merger",
+        taskId: "os-99.1",
+      });
+      activeAgentsService.unregister("merger-proj-1-os-99-1-ts-x");
+    });
+
     it("overwrites existing agent with same id", () => {
       activeAgentsService.register(
         "task-1",

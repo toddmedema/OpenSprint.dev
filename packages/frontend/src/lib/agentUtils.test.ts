@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getPhaseForAgentNavigation, getAgentIconSrc, isPlanningAgent } from "./agentUtils";
+import {
+  getExecuteTaskIdForNavigation,
+  getPhaseForAgentNavigation,
+  getAgentIconSrc,
+  isPlanningAgent,
+} from "./agentUtils";
 
 describe("agentUtils", () => {
   describe("getPhaseForAgentNavigation", () => {
@@ -116,6 +121,45 @@ describe("agentUtils", () => {
           startedAt: "2026-01-01T00:00:00Z",
         })
       ).toBe("execute");
+    });
+  });
+
+  describe("getExecuteTaskIdForNavigation", () => {
+    it("returns taskId for merger when set", () => {
+      expect(
+        getExecuteTaskIdForNavigation({
+          id: "merger-proj-os-1-1-ts-x",
+          taskId: "os-af80.24",
+          phase: "execute",
+          role: "merger",
+          label: "Merger",
+          startedAt: "2026-01-01T00:00:00Z",
+        })
+      ).toBe("os-af80.24");
+    });
+
+    it("does not use merger runtime id when taskId is absent", () => {
+      expect(
+        getExecuteTaskIdForNavigation({
+          id: "merger-proj-os-1-1-ts-x",
+          phase: "execute",
+          role: "merger",
+          label: "Merger",
+          startedAt: "2026-01-01T00:00:00Z",
+        })
+      ).toBeUndefined();
+    });
+
+    it("falls back to id for coder", () => {
+      expect(
+        getExecuteTaskIdForNavigation({
+          id: "os-af80.24",
+          phase: "coding",
+          role: "coder",
+          label: "Coder",
+          startedAt: "2026-01-01T00:00:00Z",
+        })
+      ).toBe("os-af80.24");
     });
   });
 
