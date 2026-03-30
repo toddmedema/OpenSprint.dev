@@ -1309,4 +1309,154 @@ Test
     expect(prompt).toMatch(/behavior/i);
     expect(prompt).toMatch(/80.*90%|coverage.*target/i);
   });
+
+  it("buildProtectedPathPolicySection for coder includes all patterns and scope keywords", () => {
+    const section = assembler.buildProtectedPathPolicySection("coder");
+    expect(section).toContain("## Protected Path Policy");
+    expect(section).toContain("routes/integrations-");
+    expect(section).toContain("integration-store");
+    expect(section).toContain("token-encryption");
+    expect(section).toContain("routes/oauth");
+    expect(section).toContain("todoist-sync");
+    expect(section).toContain("must not");
+    expect(section).toContain("open_questions");
+  });
+
+  it("buildProtectedPathPolicySection for reviewer includes rejection guidance", () => {
+    const section = assembler.buildProtectedPathPolicySection("reviewer");
+    expect(section).toContain("## Protected Path Policy");
+    expect(section).toContain("flag and reject");
+    expect(section).toContain("Cite the specific protected pattern");
+  });
+
+  it("coding prompt includes Protected Path Policy section", async () => {
+    await fs.writeFile(path.join(repoPath, "SPEC.md"), "# Spec\n\nTest.", "utf-8");
+    const config = {
+      invocation_id: "test-ppp-1",
+      agent_role: "coder" as const,
+      taskId: "test-ppp-1",
+      repoPath,
+      branch: "opensprint/test-ppp-1",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "coding" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+    const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, {
+      taskId: config.taskId,
+      title: "Fix button styles",
+      description: "Update button colors",
+      planContent: "# Plan\n\nSome plan.",
+      prdExcerpt: "# Spec\n\nTest.",
+      dependencyOutputs: [],
+    });
+    const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+    expect(prompt).toContain("## Protected Path Policy");
+    expect(prompt).toContain("routes/integrations-");
+    expect(prompt).toContain("must not");
+  });
+
+  it("review prompt includes Protected Path Policy in checklist", async () => {
+    await fs.writeFile(path.join(repoPath, "SPEC.md"), "# Spec\n\nTest.", "utf-8");
+    const config = {
+      invocation_id: "test-ppp-2",
+      agent_role: "reviewer" as const,
+      taskId: "test-ppp-2",
+      repoPath,
+      branch: "opensprint/test-ppp-2",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+    const taskDir = await assembler.assembleTaskDirectory(repoPath, config.taskId, config, {
+      taskId: config.taskId,
+      title: "Fix button styles",
+      description: "Update button colors",
+      planContent: "# Plan\n\nSome plan.",
+      prdExcerpt: "# Spec\n\nTest.",
+      dependencyOutputs: [],
+    });
+    const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+    expect(prompt).toContain("Protected Path Policy");
+    expect(prompt).toContain("flag and reject");
+  });
+
+  it("code_quality angle review includes Protected Path Policy", () => {
+    const config = {
+      invocation_id: "test-ppp-3",
+      agent_role: "reviewer" as const,
+      taskId: "test-ppp-3",
+      repoPath,
+      branch: "opensprint/test-ppp-3",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+    const context = {
+      taskId: config.taskId,
+      title: "Fix layout",
+      description: "Adjust spacing",
+      planContent: "# Plan",
+      prdExcerpt: "# Spec",
+      dependencyOutputs: [] as Array<{ taskId: string; diff: string; summary: string }>,
+    };
+    const prompt = assembler.generateReviewPromptForAngle(config, context, "code_quality");
+    expect(prompt).toContain("## Protected Path Policy");
+    expect(prompt).toContain("flag and reject");
+  });
+
+  it("security angle review includes Protected Path Policy", () => {
+    const config = {
+      invocation_id: "test-ppp-4",
+      agent_role: "reviewer" as const,
+      taskId: "test-ppp-4",
+      repoPath,
+      branch: "opensprint/test-ppp-4",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+    const context = {
+      taskId: config.taskId,
+      title: "Fix layout",
+      description: "Adjust spacing",
+      planContent: "# Plan",
+      prdExcerpt: "# Spec",
+      dependencyOutputs: [] as Array<{ taskId: string; diff: string; summary: string }>,
+    };
+    const prompt = assembler.generateReviewPromptForAngle(config, context, "security");
+    expect(prompt).toContain("## Protected Path Policy");
+  });
+
+  it("performance angle review does NOT include Protected Path Policy", () => {
+    const config = {
+      invocation_id: "test-ppp-5",
+      agent_role: "reviewer" as const,
+      taskId: "test-ppp-5",
+      repoPath,
+      branch: "opensprint/test-ppp-5",
+      testCommand: "npm test",
+      attempt: 1,
+      phase: "review" as const,
+      previousFailure: null as string | null,
+      reviewFeedback: null as string | null,
+    };
+    const context = {
+      taskId: config.taskId,
+      title: "Fix layout",
+      description: "Adjust spacing",
+      planContent: "# Plan",
+      prdExcerpt: "# Spec",
+      dependencyOutputs: [] as Array<{ taskId: string; diff: string; summary: string }>,
+    };
+    const prompt = assembler.generateReviewPromptForAngle(config, context, "performance");
+    expect(prompt).not.toContain("## Protected Path Policy");
+  });
 });
