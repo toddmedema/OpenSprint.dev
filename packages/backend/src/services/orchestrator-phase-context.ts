@@ -41,6 +41,10 @@ export interface RetryFailureHistoryEntry {
   attempt: number;
   failureType: FailureType;
   summary: string;
+  /** Failure timestamp (ISO). Older entries may not include this. */
+  occurredAt?: string;
+  /** Stable signature for duplicate-failure suppression. */
+  signature?: string;
 }
 
 export interface RetryContext {
@@ -89,6 +93,8 @@ export interface AgentSlotLike {
   /** When true, general reviewer runs alongside angle-specific reviewers (multi-angle review). */
   includeGeneralReview?: boolean;
   retryContext?: RetryContext;
+  /** Agent config used for the currently running attempt (set before spawn). */
+  activeAgentConfig?: AgentConfig;
 }
 
 export type ReviewRetryTarget = "general" | ReviewAngle;

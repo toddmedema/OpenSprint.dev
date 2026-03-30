@@ -7,6 +7,7 @@ const outputDir = path.resolve(process.cwd(), process.argv[2] ?? "artifacts/test
 const summaryMarkdownPath = path.join(outputDir, "ci-summary.md");
 const summaryJsonPath = path.join(outputDir, "ci-summary.json");
 const affectedWorkspacesPath = path.join(outputDir, "affected-workspaces.json");
+const githubStepSummaryPath = process.env.GITHUB_STEP_SUMMARY?.trim() || "";
 
 function trimText(value, max = 320) {
   const normalized = String(value ?? "")
@@ -126,6 +127,12 @@ function buildMarkdown({ generatedAt, affectedWorkspaces, workspaces, parseError
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+async function writeGitHubStepSummary(markdown) {
+  if (!githubStepSummaryPath) return;
+  await fs.mkdir(path.dirname(githubStepSummaryPath), { recursive: true });
+  await fs.appendFile(githubStepSummaryPath, `${markdown}\n`, "utf8");
+}
+
 async function readAffectedWorkspaces() {
   try {
     const raw = JSON.parse(await fs.readFile(affectedWorkspacesPath, "utf8"));
@@ -170,9 +177,11 @@ async function main() {
     workspaces,
     parseErrors,
   };
+  const markdown = buildMarkdown(summary);
 
   await fs.writeFile(summaryJsonPath, JSON.stringify(summary, null, 2), "utf8");
-  await fs.writeFile(summaryMarkdownPath, buildMarkdown(summary), "utf8");
+  await fs.writeFile(summaryMarkdownPath, markdown, "utf8");
+  await writeGitHubStepSummary(markdown);
 }
 
 await main();

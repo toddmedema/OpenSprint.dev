@@ -1321,6 +1321,48 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
+  it("persists configured agent timeouts in project settings payload", async () => {
+    mockGetSettings.mockResolvedValueOnce({
+      ...mockSettings,
+      simpleComplexityAgent: {
+        type: "claude" as const,
+        model: "claude-3-5-sonnet",
+        cliCommand: null,
+        timeoutMs: 300000,
+      },
+      complexComplexityAgent: {
+        type: "claude" as const,
+        model: "claude-3-5-sonnet",
+        cliCommand: null,
+        timeoutMs: null,
+      },
+    });
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} onSaved={onSaved} />);
+    await waitForModalReady();
+
+    const agentConfigTab = screen.getByRole("button", { name: "Agent Config" });
+    await userEvent.click(agentConfigTab);
+
+    await screen.findByText("Task Complexity");
+    const section = screen.getByTestId("task-complexity-section");
+    const firstSelect = within(section).getAllByRole("combobox")[0];
+    fireEvent.blur(firstSelect);
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({
+          simpleComplexityAgent: expect.objectContaining({
+            timeoutMs: 300000,
+          }),
+          complexComplexityAgent: expect.objectContaining({
+            timeoutMs: null,
+          }),
+        })
+      )
+    );
+  });
+
   it("Workflow tab shows parallelism slider defaulting to 1", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();

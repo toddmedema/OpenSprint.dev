@@ -241,6 +241,8 @@ export interface AgentSlot {
   /** Display name for this slot (e.g. "Frodo", "Boromir"); set at start_task or enter_review. */
   assignee?: string;
   retryContext?: RetryContext;
+  /** Agent config used for this active attempt; keeps start/end attempt stats aligned. */
+  activeAgentConfig?: AgentConfig;
 }
 
 interface OrchestratorState {
@@ -384,6 +386,7 @@ export class OrchestratorService {
       mergeValidationStatus: "healthy",
       mergeValidationFailureSummary: null,
       dispatchPausedReason: null,
+      dispatchBlockers: null,
     };
   }
 
@@ -462,6 +465,7 @@ export class OrchestratorService {
       mergeValidationStatus: state.status.mergeValidationStatus ?? "healthy",
       mergeValidationFailureSummary: state.status.mergeValidationFailureSummary ?? null,
       dispatchPausedReason: state.status.dispatchPausedReason ?? null,
+      dispatchBlockers: state.status.dispatchBlockers ?? null,
       ...(overrides?.pendingFeedbackCategorizations && {
         pendingFeedbackCategorizations: overrides.pendingFeedbackCategorizations,
       }),
@@ -818,6 +822,10 @@ export class OrchestratorService {
     }
 
     for (const reviewSlot of state.slots.values()) {
+      if (buildReviewAgentId(reviewSlot.taskId, "general") === agentId) {
+        this.killProcessIfActive(reviewSlot.agent);
+        return true;
+      }
       if (!reviewSlot.reviewAgents || reviewSlot.reviewAgents.size === 0) continue;
       for (const [angle, reviewAgent] of reviewSlot.reviewAgents.entries()) {
         if (buildReviewAgentId(reviewSlot.taskId, angle) !== agentId) continue;
@@ -1022,6 +1030,7 @@ export class OrchestratorService {
       );
       slot.worktreePath = assignment.worktreePath;
       slot.retryContext = assignment.retryContext;
+      slot.activeAgentConfig = assignment.agentConfig as AgentConfig;
       slot.agent.startedAt = assignment.createdAt;
       await this.hydrateRecoveredOutputLog(slot.agent, assignment.promptPath);
       this.transition(projectId, {
@@ -1107,6 +1116,7 @@ export class OrchestratorService {
       );
       slot.worktreePath = assignment.worktreePath;
       slot.retryContext = assignment.retryContext;
+      slot.activeAgentConfig = assignment.agentConfig as AgentConfig;
       slot.agent.startedAt = assignment.createdAt;
       await this.hydrateRecoveredOutputLog(slot.agent, assignment.promptPath);
       state.slots.set(task.id, slot);
@@ -1204,6 +1214,7 @@ export class OrchestratorService {
       this.getRecoveredWorktreeKey(assignment)
     );
     slot.worktreePath = assignment.worktreePath;
+    slot.activeAgentConfig = assignment.agentConfig as AgentConfig;
     slot.agent.startedAt = assignment.createdAt;
 
     broadcastToProject(projectId, {
@@ -1357,6 +1368,7 @@ export class OrchestratorService {
     );
     slot.worktreePath = assignment.worktreePath;
     slot.agent.startedAt = assignment.createdAt;
+    slot.activeAgentConfig = assignment.agentConfig as AgentConfig;
     state.slots.set(task.id, slot);
     this.transition(projectId, {
       to: "enter_review",
@@ -2026,35 +2038,15 @@ export class OrchestratorService {
     }
     const wtPath = slot.worktreePath ?? repoPath;
 
-    const readResultWithTimeout = async (): Promise<{
+    const readResultWithRetries = async (): Promise<{
       raw: string | null;
       result: CodingAgentResult | null;
       readFailure: "timeout" | "error" | null;
     }> => {
-      const timeoutMs = 15_000;
-      return (await Promise.race([
-        this.readCodingResultWithRaw(wtPath, task.id).then((value) => ({
-          ...value,
-          readFailure: null,
-        })),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("readResult timeout")), timeoutMs)
-        ),
-      ]).catch((err) => {
-        log.warn("readResult failed or timed out", { taskId: task.id, err });
-        return {
-          raw: null,
-          result: null,
-          readFailure: err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error",
-        };
-      })) as {
-        raw: string | null;
-        result: CodingAgentResult | null;
-        readFailure: "timeout" | "error" | null;
-      };
+      return this.readCodingResultWithRetries(wtPath, task.id);
     };
 
-    const { raw: rawResult, result: parsedResult, readFailure } = await readResultWithTimeout();
+    const { raw: rawResult, result: parsedResult, readFailure } = await readResultWithRetries();
     let result = parsedResult;
 
     if (!result) {
@@ -2113,6 +2105,12 @@ export class OrchestratorService {
 
     if (result.status === "success") {
       const settings = await this.projectService.getSettings(projectId);
+      const assignment = await this.readAssignmentForRun(wtPath, task.id);
+      const agentConfig =
+        (assignment?.agentConfig as AgentConfig | undefined) ??
+        slot.activeAgentConfig ??
+        settings.simpleComplexityAgent;
+      slot.activeAgentConfig = agentConfig;
       const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
       slot.phaseResult.codingDiff = await this.branchManager.captureBranchDiff(
         repoPath,
@@ -2120,6 +2118,19 @@ export class OrchestratorService {
         baseBranch
       );
       slot.phaseResult.codingSummary = result.summary ?? "";
+      agentIdentityService
+        .recordAttempt(repoPath, {
+          taskId: task.id,
+          agentId: buildAgentAttemptId(agentConfig, "coder"),
+          role: "coder",
+          model: agentConfig.model ?? "unknown",
+          attempt: slot.attempt,
+          startedAt: slot.agent.startedAt ?? new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          outcome: "success",
+          durationMs: Math.max(0, Date.now() - new Date(slot.agent.startedAt ?? Date.now()).getTime()),
+        })
+        .catch((err) => log.warn("Failed to record coder run for Agent Log (success)", { err }));
 
       const diffIsEmpty = !slot.phaseResult.codingDiff.trim();
       if (diffIsEmpty) {
@@ -2340,8 +2351,13 @@ export class OrchestratorService {
           },
         });
         void maybeAutoRespond(projectId, notification);
+        const assignment = await this.readAssignmentForRun(wtPath, task.id);
         const settings = await this.projectService.getSettings(projectId);
-        const agentConfig = settings.simpleComplexityAgent;
+        const agentConfig =
+          (assignment?.agentConfig as AgentConfig | undefined) ??
+          slot.activeAgentConfig ??
+          settings.simpleComplexityAgent;
+        slot.activeAgentConfig = agentConfig;
         agentIdentityService
           .recordAttempt(repoPath, {
             taskId: task.id,
@@ -2365,8 +2381,8 @@ export class OrchestratorService {
           status: "blocked",
           block_reason: OPEN_QUESTION_BLOCK_REASON,
         });
-        const wtPath = slot.worktreePath ?? repoPath;
-        await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
+        const wtPathForCleanup = slot.worktreePath ?? repoPath;
+        await heartbeatService.deleteHeartbeat(wtPathForCleanup, task.id).catch(() => {});
         if (slot.worktreePath && slot.worktreePath !== repoPath) {
           try {
             await this.branchManager.removeTaskWorktree(
@@ -2965,6 +2981,52 @@ export class OrchestratorService {
     };
   }
 
+  private async readCodingResultWithRetries(
+    wtPath: string,
+    taskId: string
+  ): Promise<{
+    raw: string | null;
+    result: CodingAgentResult | null;
+    readFailure: "timeout" | "error" | null;
+  }> {
+    const maxAttempts = 6;
+    const perAttemptTimeoutMs = 8_000;
+    let lastRaw: string | null = null;
+    let stableMalformedReads = 0;
+    let lastReadFailure: "timeout" | "error" | null = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const value = await Promise.race([
+          this.readCodingResultWithRaw(wtPath, taskId),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("readResult timeout")), perAttemptTimeoutMs)
+          ),
+        ]);
+        if (value.result) {
+          return { ...value, readFailure: null };
+        }
+        if (value.raw != null && value.raw === lastRaw) {
+          stableMalformedReads += 1;
+        } else {
+          stableMalformedReads = value.raw != null ? 1 : 0;
+          lastRaw = value.raw;
+        }
+        if (stableMalformedReads >= 2 && value.raw != null) {
+          // Two identical malformed reads likely means write is complete but schema is invalid.
+          return { raw: value.raw, result: null, readFailure: null };
+        }
+      } catch (err) {
+        lastReadFailure = err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error";
+        log.warn("readResult attempt failed", { taskId, attempt, err });
+      }
+
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+      }
+    }
+    return { raw: lastRaw, result: null, readFailure: lastReadFailure };
+  }
+
   private async readReviewResult(
     wtPath: string,
     taskId: string,
@@ -3131,8 +3193,13 @@ export class OrchestratorService {
     if (slot.phaseCoordinator) {
       if (status === "approved") {
         const runAgent = reviewAgentState?.agent ?? slot.agent;
+        const assignment = await this.readAssignmentForRun(wtPath, task.id, angle);
         const settings = await this.projectService.getSettings(projectId);
-        const agentConfig = settings.simpleComplexityAgent;
+        const agentConfig =
+          (assignment?.agentConfig as AgentConfig | undefined) ??
+          slot.activeAgentConfig ??
+          settings.simpleComplexityAgent;
+        slot.activeAgentConfig = agentConfig;
         agentIdentityService
           .recordAttempt(repoPath, {
             taskId: task.id,
@@ -3182,8 +3249,13 @@ export class OrchestratorService {
 
     // Non-coordinated path (reviewMode="never" doesn't reach here, but defensive)
     if (result && result.status === "approved") {
+      const assignment = await this.readAssignmentForRun(wtPath, task.id);
       const settings = await this.projectService.getSettings(projectId);
-      const agentConfig = settings.simpleComplexityAgent;
+      const agentConfig =
+        (assignment?.agentConfig as AgentConfig | undefined) ??
+        slot.activeAgentConfig ??
+        settings.simpleComplexityAgent;
+      slot.activeAgentConfig = agentConfig;
       agentIdentityService
         .recordAttempt(repoPath, {
           taskId: task.id,

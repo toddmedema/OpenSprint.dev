@@ -382,6 +382,13 @@ export interface OrchestratorStatus {
   mergeValidationFailureSummary?: string | null;
   /** Short reason for why dispatch is paused, if any. */
   dispatchPausedReason?: string | null;
+  /** Runtime counts describing why tasks were not dispatchable in the latest loop pass. */
+  dispatchBlockers?: {
+    slotsFull: number;
+    providerBackoff: number;
+    providerExhausted: number;
+    worktreeConflict: number;
+  } | null;
   /** True when paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;
   /** Feedback items awaiting categorization */

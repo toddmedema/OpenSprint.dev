@@ -154,6 +154,12 @@ export interface ExecuteStatusEvent {
   mergeValidationStatus?: MergeValidationRuntimeStatus;
   mergeValidationFailureSummary?: string | null;
   dispatchPausedReason?: string | null;
+  dispatchBlockers?: {
+    slotsFull: number;
+    providerBackoff: number;
+    providerExhausted: number;
+    worktreeConflict: number;
+  } | null;
   /** True when orchestrator is paused waiting for HIL approval (PRD §6.5) */
   awaitingApproval?: boolean;
   /** Feedback items awaiting categorization */

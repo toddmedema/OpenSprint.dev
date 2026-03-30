@@ -41,6 +41,18 @@ const SLOT_RECOVERY_GRACE_MS = (() => {
   const parsed = Number(rawValue);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30_000;
 })();
+const HEARTBEAT_WITHOUT_PID_MAX_AGE_MS = (() => {
+  const rawValue = process.env.OPENSPRINT_HEARTBEAT_WITHOUT_PID_MAX_AGE_MS;
+  if (rawValue == null || rawValue.trim() === "") return 15 * 60 * 1000;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 15 * 60 * 1000;
+})();
+const RECOVERABLE_HEARTBEAT_GAP_MAX_MS = (() => {
+  const rawValue = process.env.OPENSPRINT_RECOVERABLE_HEARTBEAT_GAP_MAX_MS;
+  if (rawValue == null || rawValue.trim() === "") return 15 * 60 * 1000;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 15 * 60 * 1000;
+})();
 
 export interface RecoveryResult {
   reattached: string[];
@@ -370,6 +382,7 @@ export class RecoveryService {
       try {
         const task = await this.taskStore.show(projectId, taskId);
         if (task.status === "in_progress") {
+          const staleForMs = Math.max(0, Date.now() - heartbeat.lastOutputTimestamp);
           const pidAlive =
             typeof heartbeat.processGroupLeaderPid === "number" &&
             heartbeat.processGroupLeaderPid > 0 &&
@@ -397,6 +410,7 @@ export class RecoveryService {
           if (
             pidAlive &&
             !exceededSuspendGrace &&
+            staleForMs <= RECOVERABLE_HEARTBEAT_GAP_MAX_MS &&
             assignment &&
             host.handleRecoverableHeartbeatGap
           ) {
@@ -417,6 +431,8 @@ export class RecoveryService {
               taskId,
               processGroupLeaderPid: heartbeat.processGroupLeaderPid,
               exceededSuspendGrace,
+              staleForMs,
+              maxRecoverableGapMs: RECOVERABLE_HEARTBEAT_GAP_MAX_MS,
               hasAssignment: Boolean(assignment),
             });
             await terminateProcessGroup(heartbeat.processGroupLeaderPid, 2000);
@@ -646,6 +662,7 @@ export class RecoveryService {
       const heartbeat = assignment.worktreePath
         ? await heartbeatService.readHeartbeat(assignment.worktreePath, taskId)
         : null;
+      const assignmentAgeMsSafe = Number.isFinite(assignmentAgeMs) && assignmentAgeMs >= 0 ? assignmentAgeMs : null;
       const pidAlive =
         heartbeat != null &&
         typeof heartbeat.processGroupLeaderPid === "number" &&
@@ -655,14 +672,25 @@ export class RecoveryService {
         heartbeat != null &&
         Number.isFinite(heartbeat.lastOutputTimestamp) &&
         Date.now() - heartbeat.lastOutputTimestamp <= HEARTBEAT_STALE_MS;
+      const heartbeatIsFresh =
+        heartbeat != null &&
+        Number.isFinite(heartbeat.heartbeatTimestamp) &&
+        Date.now() - heartbeat.heartbeatTimestamp <= HEARTBEAT_STALE_MS;
 
       // Some agent backends do not expose a stable local process-group PID and report 0/undefined.
-      // If heartbeat output is still fresh, treat the slot as active and avoid watchdog reset loops.
-      if (!pidAlive && heartbeatHasRecentOutput) {
+      // If heartbeat output is still fresh (or heartbeat itself is fresh), treat the slot as active
+      // and avoid watchdog reset loops for long-running/silent turns.
+      const withinNoPidGuardAge =
+        assignmentAgeMsSafe == null || assignmentAgeMsSafe <= HEARTBEAT_WITHOUT_PID_MAX_AGE_MS;
+      if (!pidAlive && (heartbeatHasRecentOutput || heartbeatIsFresh) && withinNoPidGuardAge) {
         log.info("Skipping slot recovery due to guard", {
           projectId,
           taskId,
-          guard: "recent_heartbeat_without_pid",
+          guard: heartbeatHasRecentOutput
+            ? "recent_output_without_pid"
+            : "fresh_heartbeat_without_pid",
+          assignmentAgeMs: assignmentAgeMsSafe,
+          maxGuardAgeMs: HEARTBEAT_WITHOUT_PID_MAX_AGE_MS,
         });
         continue;
       }

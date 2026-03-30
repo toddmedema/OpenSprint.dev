@@ -81,6 +81,7 @@ const mockDeleteBranch = vi.fn();
 const mockRevertAndReturnToMain = vi.fn();
 const mockGetSettings = vi.fn();
 const mockExecuteCodingPhase = vi.fn();
+const mockRemoveLabel = vi.fn();
 
 describe("FailureHandlerService", () => {
   let handler: FailureHandlerService;
@@ -131,6 +132,7 @@ describe("FailureHandlerService", () => {
     mockDeleteBranch.mockResolvedValue(undefined);
     mockRevertAndReturnToMain.mockResolvedValue(undefined);
     mockExecuteCodingPhase.mockResolvedValue(undefined);
+    mockRemoveLabel.mockResolvedValue(undefined);
     mockGetSettings.mockResolvedValue({
       simpleComplexityAgent: { type: "cursor", model: null },
       complexComplexityAgent: { type: "cursor", model: null },
@@ -145,6 +147,7 @@ describe("FailureHandlerService", () => {
       taskStore: {
         comment: vi.fn().mockResolvedValue(undefined),
         update: vi.fn().mockResolvedValue(undefined),
+        removeLabel: mockRemoveLabel,
         sync: vi.fn().mockResolvedValue(undefined),
         setCumulativeAttempts: vi.fn().mockResolvedValue(undefined),
       },
@@ -401,6 +404,141 @@ describe("FailureHandlerService", () => {
         })
       );
       expect(mockHost.executeCodingPhase).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("runaway retry circuit breaker", () => {
+    it("blocks after repeated no_result failures with the same signature", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.attempt = 3;
+      slot.retryContext = {
+        failureHistory: [
+          {
+            attempt: 1,
+            failureType: "no_result",
+            summary: "same failure",
+            occurredAt: new Date(Date.now() - 60_000).toISOString(),
+            signature: "no_result|same",
+          },
+          {
+            attempt: 2,
+            failureType: "no_result",
+            summary: "same failure",
+            occurredAt: new Date(Date.now() - 30_000).toISOString(),
+            signature: "no_result|same",
+          },
+        ],
+      };
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "same failure",
+        null,
+        "no_result"
+      );
+
+      expect(mockHost.executeCodingPhase).not.toHaveBeenCalled();
+      expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "blocked",
+          block_reason: "Repeated execution failures",
+        })
+      );
+    });
+
+    it("blocks after repeated merge_quality_gate failures", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.attempt = 3;
+      slot.retryContext = {
+        failureHistory: [
+          {
+            attempt: 1,
+            failureType: "merge_quality_gate",
+            summary: "lint failed",
+            occurredAt: new Date(Date.now() - 40_000).toISOString(),
+            signature: "merge_quality_gate|lint",
+          },
+          {
+            attempt: 2,
+            failureType: "merge_quality_gate",
+            summary: "lint failed",
+            occurredAt: new Date(Date.now() - 20_000).toISOString(),
+            signature: "merge_quality_gate|lint",
+          },
+        ],
+      };
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Quality gate failed (pnpm lint)",
+        null,
+        "merge_quality_gate"
+      );
+
+      expect(mockHost.executeCodingPhase).not.toHaveBeenCalled();
+      expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "blocked",
+          block_reason: "Repeated execution failures",
+        })
+      );
+    });
+
+    it("blocks when too many failures happen within a short window", async () => {
+      const now = Date.now();
+      const slot = makeSlot("/tmp/worktree");
+      slot.attempt = 6;
+      slot.retryContext = {
+        failureHistory: [1, 2, 3, 4, 5].map((attempt) => ({
+          attempt,
+          failureType: "coding_failure" as const,
+          summary: `failure ${attempt}`,
+          occurredAt: new Date(now - attempt * 60_000).toISOString(),
+          signature: `coding_failure|${attempt}`,
+        })),
+      };
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "still failing",
+        null,
+        "coding_failure"
+      );
+
+      expect(mockHost.executeCodingPhase).not.toHaveBeenCalled();
+      expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "blocked",
+          block_reason: "Runaway retry circuit breaker",
+        })
+      );
     });
   });
 
@@ -781,6 +919,8 @@ describe("FailureHandlerService", () => {
         slots: new Map([[taskId, slot]]),
         status: { totalFailed: 0, queueDepth: 0 },
       });
+      const task = makeTask() as ReturnType<typeof makeTask> & { labels?: string[] };
+      task.labels = ["merge_stage:rebase_before_merge", "attempts:2"];
       mockHost.taskStore = {
         ...mockHost.taskStore,
         update: mockUpdate,
@@ -791,7 +931,7 @@ describe("FailureHandlerService", () => {
       await handler.handleTaskFailure(
         projectId,
         repoPath,
-        makeTask(),
+        task,
         branchName,
         "The coding agent stopped without reporting whether the task succeeded or failed.",
         null,
@@ -821,6 +961,7 @@ describe("FailureHandlerService", () => {
         taskId,
         expect.objectContaining({ status: "blocked" })
       );
+      expect(mockRemoveLabel).toHaveBeenCalledWith(projectId, taskId, "merge_stage:rebase_before_merge");
       expect(mockHost.nudge).toHaveBeenCalledWith(projectId);
     });
 
@@ -1011,11 +1152,13 @@ describe("FailureHandlerService", () => {
         ...mockHost.taskStore,
         update: mockUpdate,
       };
+      const task = makeTask() as ReturnType<typeof makeTask> & { labels?: string[] };
+      task.labels = ["merge_stage:quality_gate", "attempts:3"];
 
       await handler.handleTaskFailure(
         projectId,
         repoPath,
-        makeTask(),
+        task,
         branchName,
         "Review rejected",
         null,
@@ -1040,6 +1183,7 @@ describe("FailureHandlerService", () => {
           }),
         })
       );
+      expect(mockRemoveLabel).toHaveBeenCalledWith(projectId, taskId, "merge_stage:quality_gate");
     });
 
     it("bumps task complexity by 2 on demotion (capped at 10)", async () => {

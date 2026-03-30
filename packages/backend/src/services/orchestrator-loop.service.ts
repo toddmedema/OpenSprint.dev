@@ -51,6 +51,7 @@ export interface LoopState {
     queueDepth: number;
     baselineStatus?: OrchestratorStatus["baselineStatus"];
     dispatchPausedReason?: string | null;
+    dispatchBlockers?: OrchestratorStatus["dispatchBlockers"];
   };
 }
 
@@ -155,6 +156,7 @@ export class OrchestratorLoopService {
       mergeValidationStatus: status.mergeValidationStatus,
       mergeValidationFailureSummary: status.mergeValidationFailureSummary ?? null,
       dispatchPausedReason: status.dispatchPausedReason ?? null,
+      dispatchBlockers: status.dispatchBlockers ?? null,
       selfImprovementRunInProgress: status.selfImprovementRunInProgress,
       selfImprovementRunMode: status.selfImprovementRunMode,
       gitMergeQueue: status.gitMergeQueue,
@@ -231,6 +233,7 @@ export class OrchestratorLoopService {
       readyTasks = readyTasks.filter((t) => !t.assignee || isAgentAssignee(t.assignee));
 
       state.status.queueDepth = readyTasks.length;
+      state.status.dispatchBlockers = null;
 
       if (state.status.baselineStatus === "failing") {
         const taskStore = this.host.getTaskStore();
@@ -294,7 +297,17 @@ export class OrchestratorLoopService {
       }
 
       const slotsAvailable = maxSlots - state.slots.size;
+      const dispatchBlockers: NonNullable<OrchestratorStatus["dispatchBlockers"]> = {
+        slotsFull: 0,
+        providerBackoff: 0,
+        providerExhausted: 0,
+        worktreeConflict: 0,
+      };
       if (readyTasks.length === 0 || slotsAvailable <= 0) {
+        if (slotsAvailable <= 0 && readyTasks.length > 0) {
+          dispatchBlockers.slotsFull = readyTasks.length;
+        }
+        state.status.dispatchBlockers = dispatchBlockers;
         log.info("No ready tasks or no slots available, going idle", {
           projectId,
           readyTasks: readyTasks.length,
@@ -359,9 +372,11 @@ export class OrchestratorLoopService {
       const mergeStrategy = settings.mergeStrategy ?? "per_task";
       const worktreeKeysPlanned = this.collectActiveWorktreeKeys(state);
       const epicAwareDispatch: SchedulerResult[] = [];
+      let skippedForWorktreeConflict = 0;
       for (const st of dispatchableTasks) {
         const key = this.dispatchWorktreeKey(st.task, mergeStrategy, allIssues);
         if (worktreeKeysPlanned.has(key)) {
+          skippedForWorktreeConflict += 1;
           log.info("Skipping task: shared epic/worktree branch already active", {
             projectId,
             taskId: st.task.id,
@@ -373,6 +388,11 @@ export class OrchestratorLoopService {
         epicAwareDispatch.push(st);
       }
       dispatchableTasks = epicAwareDispatch;
+      dispatchBlockers.providerExhausted = skippedForProviderExhaustion;
+      dispatchBlockers.providerBackoff = skippedForProviderBackoff;
+      dispatchBlockers.worktreeConflict = skippedForWorktreeConflict;
+      dispatchBlockers.slotsFull = Math.max(0, readyTasks.length - slotsAvailable);
+      state.status.dispatchBlockers = dispatchBlockers;
 
       const maxNewTasksThisPass = Math.min(
         slotsAvailable,
@@ -427,6 +447,8 @@ export class OrchestratorLoopService {
           dispatchedTaskIds.add(selectedTask.task.id);
         } catch (error) {
           if (error instanceof WorktreeBranchInUseError) {
+            dispatchBlockers.worktreeConflict += 1;
+            state.status.dispatchBlockers = dispatchBlockers;
             const deferredTask = selectedTask.task;
             log.warn(
               "Worktree branch in use by active agent; deferring dispatch (not a task failure)",

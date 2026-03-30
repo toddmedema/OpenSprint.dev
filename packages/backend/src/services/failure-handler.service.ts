@@ -6,7 +6,7 @@
  * Delegates retry execution back to the host via callbacks.
  */
 
-import type { ServerEvent, TestResults } from "@opensprint/shared";
+import type { AgentConfig, ServerEvent, TestResults } from "@opensprint/shared";
 import {
   AGENT_INACTIVITY_TIMEOUT_MS,
   BACKOFF_FAILURE_THRESHOLD,
@@ -58,7 +58,15 @@ const RETRY_CONTEXT_TEST_OUTPUT_LIMIT = 2500;
 const RETRY_CONTEXT_TEST_FAILURES_LIMIT = 2000;
 const RETRY_CONTEXT_DIFF_LIMIT = 6000;
 const FAILURE_HISTORY_SUMMARY_LIMIT = 200;
-const FAILURE_HISTORY_MAX_ENTRIES = 4;
+const FAILURE_HISTORY_MAX_ENTRIES = 12;
+const FAILURE_RETRY_CAPS: Partial<Record<FailureType, number>> = {
+  no_result: 3,
+  merge_quality_gate: 3,
+  environment_setup: 1,
+};
+const RUNAWAY_WINDOW_MS = 2 * 60 * 60 * 1000;
+const RUNAWAY_MAX_ATTEMPTS_PER_WINDOW = 6;
+const RUNAWAY_MAX_REPEAT_SIGNATURE = 3;
 const FAILURE_DIAGNOSTIC_OUTPUT_LIMIT = 1800;
 const FAILURE_DIAGNOSTIC_LINE_LIMIT = 300;
 const FAILURE_DIAGNOSTIC_REASON_PATTERNS: RegExp[] = [
@@ -111,6 +119,7 @@ export interface FailureHandlerHost {
   taskStore: {
     comment(projectId: string, taskId: string, text: string): Promise<void>;
     update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<void>;
+    removeLabel?(projectId: string, taskId: string, label: string): Promise<void>;
     sync(repoPath: string): Promise<void>;
     setCumulativeAttempts(
       projectId: string,
@@ -181,9 +190,17 @@ export interface FailureSlot {
   agent: { outputLog: string[]; startedAt: string; killedDueToTimeout: boolean };
   /** Set when slot was created from dispatch (retry context from prior failure). */
   retryContext?: RetryContext;
+  /** Agent config used for current active attempt; avoids stat key mismatches on completion. */
+  activeAgentConfig?: AgentConfig;
 }
 
 type FailurePolicyDecision = "requeue_infra" | "requeue" | "demote" | "block" | "reopen";
+
+type RunawayPolicyDecision = {
+  shouldBlock: boolean;
+  nextActionOverride?: string;
+  blockReason?: string;
+};
 
 export class FailureHandlerService {
   constructor(private host: FailureHandlerHost) {}
@@ -208,6 +225,87 @@ export class FailureHandlerService {
       return `Blocked after ${params.cumulativeAttempts} failed attempts`;
     }
     return `Demoted to priority ${params.currentPriority + 1}`;
+  }
+
+  private buildFailureSignature(params: {
+    failureType: FailureType;
+    reason: string;
+    diagnostic: FailureDiagnosticDetail | null;
+    noResultReasonCode?: NoResultReasonCode;
+  }): string {
+    const reasonLine = this.firstActionableReasonLine(params.reason)?.toLowerCase() ?? "";
+    const command = params.diagnostic?.command?.toLowerCase() ?? "";
+    const firstError = params.diagnostic?.firstErrorLine?.toLowerCase() ?? "";
+    const output = params.diagnostic?.outputSnippet?.toLowerCase() ?? "";
+    const noResultCode = params.noResultReasonCode ?? "";
+    const normalizedOutput = output.slice(0, 240);
+    return [
+      params.failureType,
+      command,
+      firstError,
+      reasonLine,
+      normalizedOutput,
+      noResultCode,
+    ].join("|");
+  }
+
+  private evaluateRunawayFailurePolicy(params: {
+    failureType: FailureType;
+    failureHistory: RetryFailureHistoryEntry[];
+    nowIso: string;
+  }): RunawayPolicyDecision {
+    const cap = FAILURE_RETRY_CAPS[params.failureType];
+    if (cap != null && cap > 0) {
+      let consecutive = 0;
+      for (let i = params.failureHistory.length - 1; i >= 0; i -= 1) {
+        const entry = params.failureHistory[i];
+        if (!entry || entry.failureType !== params.failureType) break;
+        consecutive += 1;
+      }
+      if (consecutive >= cap) {
+        return {
+          shouldBlock: true,
+          nextActionOverride: `Blocked after ${consecutive} consecutive ${params.failureType} failures`,
+          blockReason: "Repeated execution failures",
+        };
+      }
+    }
+
+    const nowMs = Date.parse(params.nowIso);
+    if (Number.isFinite(nowMs)) {
+      const inWindow = params.failureHistory.filter((entry) => {
+        if (!entry?.occurredAt) return false;
+        const occurredMs = Date.parse(entry.occurredAt);
+        if (!Number.isFinite(occurredMs)) return false;
+        return nowMs - occurredMs <= RUNAWAY_WINDOW_MS;
+      });
+      if (inWindow.length >= RUNAWAY_MAX_ATTEMPTS_PER_WINDOW) {
+        return {
+          shouldBlock: true,
+          nextActionOverride: `Blocked after ${inWindow.length} failed attempts in ${Math.round(RUNAWAY_WINDOW_MS / 3600000)}h`,
+          blockReason: "Runaway retry circuit breaker",
+        };
+      }
+    }
+
+    let repeatedSignatureCount = 0;
+    const newestSignature = params.failureHistory.at(-1)?.signature;
+    if (newestSignature) {
+      for (let i = params.failureHistory.length - 1; i >= 0; i -= 1) {
+        const entry = params.failureHistory[i];
+        if (!entry || entry.signature !== newestSignature) break;
+        repeatedSignatureCount += 1;
+      }
+    }
+    if (repeatedSignatureCount >= RUNAWAY_MAX_REPEAT_SIGNATURE) {
+      return {
+        shouldBlock: true,
+        nextActionOverride: `Blocked after ${repeatedSignatureCount} repeated identical failure signatures`,
+        blockReason: "Repeated identical failure",
+      };
+    }
+
+    return { shouldBlock: false };
   }
 
   private enrichNoResultReason(reason: string, outputLog: string[]): string {
@@ -294,6 +392,8 @@ export class FailureHandlerService {
       attempt: number;
       failureType: FailureType;
       summary: string;
+      occurredAt: string;
+      signature: string;
     };
     existingFailureHistory?: RetryFailureHistoryEntry[];
   }): RetryContext {
@@ -347,6 +447,8 @@ export class FailureHandlerService {
         failureType: params.failureHistoryAppend.failureType,
         summary:
           summary || params.failureHistoryAppend.summary.slice(0, FAILURE_HISTORY_SUMMARY_LIMIT),
+        occurredAt: params.failureHistoryAppend.occurredAt,
+        signature: params.failureHistoryAppend.signature,
       };
       context.failureHistory = [...prev, nextEntry].slice(-FAILURE_HISTORY_MAX_ENTRIES);
     }
@@ -524,9 +626,12 @@ export class FailureHandlerService {
     args: {
       cumulativeAttempts: number;
       phase: string;
+      failureType: FailureType;
       summary: string;
       nextAction: string;
       failureDiagnosticDetail: FailureDiagnosticDetail | null;
+      requeueCountForFailureType: number;
+      repeatedFailureSignatureCount: number;
     }
   ): void {
     const d = args.failureDiagnosticDetail;
@@ -535,8 +640,11 @@ export class FailureHandlerService {
       taskId,
       cumulativeAttempts: args.cumulativeAttempts,
       phase: args.phase,
+      failureType: args.failureType,
       summary: args.summary,
       nextAction: args.nextAction,
+      requeueCountForFailureType: args.requeueCountForFailureType,
+      repeatedFailureSignatureCount: args.repeatedFailureSignatureCount,
       qualityGateDetail: d,
       failedGateCommand: d?.command ?? null,
       failedGateReason: d?.reason ?? null,
@@ -617,7 +725,7 @@ export class FailureHandlerService {
       effectiveReason
     );
     const failSettings = await this.host.projectService.getSettings(projectId);
-    const agentConfig = failSettings.simpleComplexityAgent;
+    const agentConfig = slot.activeAgentConfig ?? failSettings.simpleComplexityAgent;
     const agentProvider = getProviderForAgentType(
       agentConfig.type as import("@opensprint/shared").AgentType
     );
@@ -648,6 +756,8 @@ export class FailureHandlerService {
       providerOutageBackoff = markProviderOutageBackoff(projectId, agentProvider, effectiveReason);
       nextAction = `Pause dispatching (rate limit / quota) until ${providerOutageBackoff.until}`;
     }
+    let requeueCountForFailureType = 0;
+    let repeatedFailureSignatureCount = 0;
     const commonFailureContext = {
       attemptDurationMs,
       noResultReasonCode: options?.noResultReasonCode ?? null,
@@ -800,6 +910,13 @@ export class FailureHandlerService {
           validationCommand: slot.phaseResult.validationCommand,
         })
       : undefined;
+    const failureOccurredAt = new Date().toISOString();
+    const failureSignature = this.buildFailureSignature({
+      failureType,
+      reason: effectiveReason,
+      diagnostic: failureDiagnosticDetail,
+      noResultReasonCode: options?.noResultReasonCode,
+    });
     const persistedRetryContext = this.buildPersistedRetryContext({
       failureType,
       previousFailure: effectiveReason,
@@ -812,9 +929,21 @@ export class FailureHandlerService {
         attempt: cumulativeAttempts,
         failureType,
         summary: effectiveReason,
+        occurredAt: failureOccurredAt,
+        signature: failureSignature,
       },
       existingFailureHistory: slot.retryContext?.failureHistory,
     });
+    const retryFailureHistory = persistedRetryContext.failureHistory ?? [];
+    requeueCountForFailureType = retryFailureHistory.filter(
+      (entry) => entry.failureType === failureType
+    ).length;
+    repeatedFailureSignatureCount = 0;
+    for (let i = retryFailureHistory.length - 1; i >= 0; i -= 1) {
+      const entry = retryFailureHistory[i];
+      if (!entry || entry.signature !== failureSignature) break;
+      repeatedFailureSignatureCount += 1;
+    }
 
     const preserveBranch = failureType === "test_failure" || failureType === "review_rejection";
 
@@ -884,6 +1013,7 @@ export class FailureHandlerService {
             [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
           },
         });
+        await this.clearMergeQueueLabels(projectId, task);
       } catch (err) {
         log.warn("Failed to reopen task after API-blocked no_result failure", { err });
       }
@@ -981,6 +1111,56 @@ export class FailureHandlerService {
       return;
     }
 
+    const runawayPolicy = this.evaluateRunawayFailurePolicy({
+      failureType,
+      failureHistory: persistedRetryContext.failureHistory ?? [],
+      nowIso: failureOccurredAt,
+    });
+    if (runawayPolicy.shouldBlock) {
+      await this.host.taskStore.setCumulativeAttempts(projectId, task.id, cumulativeAttempts, {
+        currentLabels: (task.labels ?? []) as string[],
+      });
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+        baseBranch,
+        deleteBranch: true,
+      });
+      await this.host.deleteAssignment(repoPath, task.id);
+      await this.blockTask(
+        projectId,
+        repoPath,
+        task,
+        cumulativeAttempts,
+        effectiveReason,
+        failureType,
+        slot.phase,
+        agentConfig.model ?? null,
+        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+        persistedRetryContext,
+        failureDiagnosticDetail,
+        {
+          blockReason: runawayPolicy.blockReason,
+          nextAction: runawayPolicy.nextActionOverride ?? "Blocked pending investigation",
+          diagnostics: commonFailureContext,
+        }
+      );
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.runaway_detected",
+          data: {
+            attempt: cumulativeAttempts,
+            phase: slot.phase,
+            failureType,
+            reason: runawayPolicy.nextActionOverride ?? "runaway_retry_pattern",
+            signature: failureSignature,
+          },
+        })
+        .catch(() => {});
+      return;
+    }
+
     if (isInfraFailure && slot.infraRetries < MAX_INFRA_RETRIES) {
       const retrySummary = buildTaskLastExecutionSummary({
         attempt: cumulativeAttempts,
@@ -1011,6 +1191,8 @@ export class FailureHandlerService {
             nextAction,
             policyDecision: "requeue_infra" as FailurePolicyDecision,
             ...commonFailureContext,
+            requeueCountForFailureType,
+            repeatedFailureSignatureCount,
             ...this.failureDiagnosticFields(failureDiagnosticDetail),
           },
         })
@@ -1018,9 +1200,12 @@ export class FailureHandlerService {
       this.broadcastTaskRequeuedWs(projectId, task.id, {
         cumulativeAttempts,
         phase: slot.phase,
+        failureType,
         summary: retrySummary.summary,
         nextAction,
         failureDiagnosticDetail,
+        requeueCountForFailureType,
+        repeatedFailureSignatureCount,
       });
       slot.infraRetries += 1;
       slot.attempt = cumulativeAttempts + 1;
@@ -1091,6 +1276,8 @@ export class FailureHandlerService {
             nextAction,
             policyDecision: "requeue" as FailurePolicyDecision,
             ...commonFailureContext,
+            requeueCountForFailureType,
+            repeatedFailureSignatureCount,
             ...this.failureDiagnosticFields(failureDiagnosticDetail),
           },
         })
@@ -1098,9 +1285,12 @@ export class FailureHandlerService {
       this.broadcastTaskRequeuedWs(projectId, task.id, {
         cumulativeAttempts,
         phase: slot.phase,
+        failureType,
         summary: retrySummary.summary,
         nextAction,
         failureDiagnosticDetail,
+        requeueCountForFailureType,
+        repeatedFailureSignatureCount,
       });
       if (!preserveBranch) {
         await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
@@ -1188,6 +1378,7 @@ export class FailureHandlerService {
               ...this.failureDiagnosticFields(failureDiagnosticDetail),
             },
           });
+          await this.clearMergeQueueLabels(projectId, task);
         } catch {
           // Task may already be in the right state
         }
@@ -1224,6 +1415,20 @@ export class FailureHandlerService {
 
         this.host.nudge(projectId);
       }
+    }
+  }
+
+  private async clearMergeQueueLabels(projectId: string, task: StoredTask): Promise<void> {
+    if (!this.host.taskStore.removeLabel) return;
+    const labels = ((task.labels ?? []) as string[]).filter((label) => typeof label === "string");
+    const labelsToRemove = labels.filter(
+      (label) =>
+        label.startsWith("merge_stage:") ||
+        label.startsWith("conflict_files:") ||
+        label.startsWith("actual_files:")
+    );
+    for (const label of labelsToRemove) {
+      await this.host.taskStore.removeLabel(projectId, task.id, label);
     }
   }
 

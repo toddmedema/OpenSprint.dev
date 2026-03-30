@@ -407,6 +407,7 @@ export class PhaseExecutorService {
       }
 
       const agentId = buildAgentAttemptId(agentConfig, "coder");
+      slot.activeAgentConfig = agentConfig;
       try {
         await agentIdentityService.recordAttemptStarted(repoPath, {
           taskId: task.id,
@@ -578,6 +579,7 @@ export class PhaseExecutorService {
         this.host.taskStore
       );
       const agentConfig = getAgentForComplexity(settings, complexity);
+      slot.activeAgentConfig = agentConfig;
 
       // Pre-flight: ensure API key available before spawning review agent
       const provider = getProviderForAgentType(agentConfig.type);

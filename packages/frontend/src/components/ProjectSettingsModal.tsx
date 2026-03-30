@@ -419,6 +419,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                     type: effSimple.type,
                     model: effSimple.model || null,
                     cliCommand: effSimple.cliCommand || null,
+                    timeoutMs: normalizeAgentTimeoutMs(effSimple.timeoutMs),
                     ...((effSimple.type === "lmstudio" || effSimple.type === "ollama") && {
                       baseUrl:
                         effSimple.baseUrl ||
@@ -433,6 +434,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                     type: effComplex.type,
                     model: effComplex.model || null,
                     cliCommand: effComplex.cliCommand || null,
+                    timeoutMs: normalizeAgentTimeoutMs(effComplex.timeoutMs),
                     ...((effComplex.type === "lmstudio" || effComplex.type === "ollama") && {
                       baseUrl:
                         effComplex.baseUrl ||

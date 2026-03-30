@@ -238,6 +238,40 @@ describe("TestRunner", () => {
       expect(result.executedCommand).toBe("nonexistent-command");
     });
 
+    it("treats non-zero exit as failure even when Vitest JSON reports zero failed tests", async () => {
+      mockSpawn.mockImplementation((_cmd: string, args: string[]) => {
+        const command = args[1] ?? "";
+        const outputFileMatch = command.match(/--outputFile=(\S+)/);
+        const outputFile = outputFileMatch?.[1];
+        const report = {
+          numPassedTests: 2,
+          numFailedTests: 0,
+          numPendingTests: 0,
+          numTotalTests: 2,
+          testResults: [
+            {
+              name: "sample.test.ts",
+              assertionResults: [
+                { fullName: "a", status: "passed", duration: 1 },
+                { fullName: "b", status: "passed", duration: 1 },
+              ],
+            },
+          ],
+        };
+        fsSync.writeFileSync(outputFile!, JSON.stringify(report), "utf-8");
+        return createMockChild("", "Coverage threshold not met", 1);
+      });
+
+      const result = await runner.runTestsWithOutput(
+        "/tmp/repo",
+        "node ./node_modules/vitest/vitest.mjs run"
+      );
+
+      expect(result.failed).toBe(1);
+      expect(result.details.some((detail) => detail.status === "failed")).toBe(true);
+      expect(result.rawOutput).toContain("Coverage threshold not met");
+    });
+
     it("surfaces timed out test commands as timeout failures instead of warning-only output", async () => {
       const hangingChild = createHangingMockChild(
         "The CJS build of Vite's Node API is deprecated."

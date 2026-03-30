@@ -3119,6 +3119,57 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(generalEntry!.name).toBe("General");
     });
 
+    it("killAgent handles synthetic general review agent IDs", async () => {
+      const { task } = setupSingleTaskFlow("task-kill-general-review");
+      mockTaskStoreReady.mockResolvedValueOnce([task]);
+      mockTaskStoreListAll.mockResolvedValue([task]);
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const state = (
+        orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id) as {
+        taskId: string;
+        phase: "coding" | "review";
+        includeGeneralReview?: boolean;
+        agent: {
+          activeProcess: { kill: () => void } | null;
+        };
+        reviewAgents?: Map<
+          string,
+          {
+            angle: string;
+            agent: { startedAt: string; activeProcess: null };
+            timers: { clearAll: () => void };
+          }
+        >;
+      };
+      expect(slot).toBeTruthy();
+      slot.phase = "review";
+      slot.includeGeneralReview = true;
+      const killGeneral = vi.fn();
+      slot.agent.activeProcess = { kill: killGeneral };
+      slot.reviewAgents = new Map([
+        [
+          "security",
+          {
+            angle: "security",
+            agent: { startedAt: "2026-02-20T10:00:00.000Z", activeProcess: null },
+            timers: { clearAll: vi.fn() },
+          },
+        ],
+      ]);
+
+      const killed = await orchestrator.killAgent(projectId, `${task.id}--review--general`);
+      expect(killed).toBe(true);
+      expect(killGeneral).toHaveBeenCalledTimes(1);
+      expect(slot.agent.activeProcess).toBeNull();
+    });
+
     it("single general reviewer (no angles) has name General so UI shows Reviewer (General) without duplication", async () => {
       const { task } = setupSingleTaskFlow("task-single-general");
       mockTaskStoreReady.mockResolvedValueOnce([task]);
