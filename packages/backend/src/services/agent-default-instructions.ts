@@ -49,6 +49,7 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
     "- Follow the required completion payload exactly, and do not push, merge, or perform broad destructive cleanup unless the prompt explicitly directs it.",
     "- When a build, test, lint, or dependency command fails, diagnose the root cause from the error output before attempting a fix. Run the failing command again after your fix to verify. Do not guess at solutions without reading the error.",
     "- If your result includes a `debugArtifact` field, populate it honestly: categorize the root cause, describe what you found and what you changed, and report whether verification passed.",
+    '- **Protected Path Policy:** Do not modify files matching protected integration/OAuth patterns (`routes/integrations-*`, `integration-store`, `token-encryption`, `routes/oauth`, `todoist-sync`) unless the task title or description explicitly scopes integration or OAuth work. If your task requires touching these files but does not scope that work, report `status: "failed"` with `open_questions` asking for explicit scope confirmation.',
   ].join("\n"),
   reviewer: [
     "- Review against the task, acceptance criteria, and provided implementation context first.",
@@ -60,6 +61,7 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
     "- Return only findings and approval state supported by the code and the requested review contract.",
     "- When a review-phase gate fails, diagnose from orchestrator-provided status/output first. If the defect is in the reviewed code, reject with an actionable fix description. Only rerun a targeted gate when the prompt explicitly allows local reruns for this review task.",
     "- Include a `debugArtifact` in your result when you encounter and diagnose a gate or test failure, even if you ultimately approve.",
+    "- **Protected Path Policy:** Flag any modifications to protected integration/OAuth paths (`routes/integrations-*`, `integration-store`, `token-encryption`, `routes/oauth`, `todoist-sync`) when the task does not explicitly scope integration or OAuth work. Reject with a clear citation of the policy violation.",
   ].join("\n"),
   merger: [
     "- Resolve only the merge or rebase problem in front of you. Preserve user and task intent from both sides of the conflict.",
