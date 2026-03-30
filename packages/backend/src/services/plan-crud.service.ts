@@ -20,10 +20,7 @@ import {
   ensureDependenciesSection,
   normalizePlanMarkdownContent,
 } from "./plan/planner-normalize.js";
-import {
-  buildDependencyEdgesCore,
-  type PlanInfo,
-} from "./plan/plan-dependency-graph.js";
+import { buildDependencyEdgesCore, type PlanInfo } from "./plan/plan-dependency-graph.js";
 import {
   ensurePlanHasAtLeastOneVersion as ensurePlanHasAtLeastOneVersionFn,
   createVersionOnUpdate,
@@ -152,7 +149,9 @@ export class PlanCrudService {
    * Resolve last plan task-generation version from metadata.
    * Supports camelCase and snake_case for compatibility.
    */
-  private static getLastTaskGenerationVersion(metadata: Record<string, unknown>): number | undefined {
+  private static getLastTaskGenerationVersion(
+    metadata: Record<string, unknown>
+  ): number | undefined {
     const raw =
       metadata.lastTaskGenerationVersionNumber ?? metadata.last_task_generation_version_number;
     return typeof raw === "number" && raw >= 1 ? raw : undefined;
@@ -268,8 +267,9 @@ export class PlanCrudService {
       : (await this.buildDependencyEdgesFromProject(projectId)).filter((e) => e.to === planId)
           .length;
 
-    const lastTaskGenerationVersionNumber =
-      PlanCrudService.getLastTaskGenerationVersion(row.metadata);
+    const lastTaskGenerationVersionNumber = PlanCrudService.getLastTaskGenerationVersion(
+      row.metadata
+    );
     const hasGeneratedPlanTasksForCurrentVersion =
       lastTaskGenerationVersionNumber != null && lastTaskGenerationVersionNumber === currentVersion;
 
@@ -309,9 +309,7 @@ export class PlanCrudService {
    * Build plansMap (planId → { parentPlanId }) and childPlanIdsMap from all plan rows.
    * Used by getPlan and listPlans to compute depth/childPlanIds without extra queries.
    */
-  private async buildHierarchyMaps(
-    projectId: string
-  ): Promise<{
+  private async buildHierarchyMaps(projectId: string): Promise<{
     plansMap: Map<string, { parentPlanId?: string }>;
     childPlanIdsMap: Map<string, string[]>;
   }> {
@@ -320,8 +318,7 @@ export class PlanCrudService {
     for (const pid of planIds) {
       const row = await this.taskStore.planGet(projectId, pid);
       if (!row) continue;
-      const parentPlanId =
-        row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
+      const parentPlanId = row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
       plansMap.set(pid, { parentPlanId: parentPlanId || undefined });
     }
     const treeEntries = Array.from(plansMap.entries()).map(([planId, v]) => ({
@@ -332,7 +329,10 @@ export class PlanCrudService {
     const childPlanIdsMap = new Map<string, string[]>();
     for (const [parentKey, children] of tree) {
       if (parentKey) {
-        childPlanIdsMap.set(parentKey, children.map((c) => c.planId));
+        childPlanIdsMap.set(
+          parentKey,
+          children.map((c) => c.planId)
+        );
       }
     }
     return { plansMap, childPlanIdsMap };
@@ -593,7 +593,8 @@ export class PlanCrudService {
     const epicId = (row.metadata?.epicId as string) ?? "";
     const currentVersion = row.current_version_number ?? 1;
     const isCurrentVersionExecuted =
-      row.last_executed_version_number != null && row.last_executed_version_number === currentVersion;
+      row.last_executed_version_number != null &&
+      row.last_executed_version_number === currentVersion;
     const { total: taskCount } = epicId
       ? await this.countTasks(projectId, epicId, currentVersion)
       : { total: 0 };
@@ -605,22 +606,21 @@ export class PlanCrudService {
     const normalizedContent = normalizePlanMarkdownContent(body.content);
 
     const shouldCreateNewVersion = taskCount > 0 || isCurrentVersionExecuted;
-    const nextVersion =
-      shouldCreateNewVersion
-        ? await createVersionOnUpdate(
-            projectId,
-            planId,
-            versioningRow,
-            normalizedContent,
-            this.taskStore
-          )
-        : await updateCurrentVersionInPlace(
-            projectId,
-            planId,
-            versioningRow,
-            normalizedContent,
-            this.taskStore
-          );
+    const nextVersion = shouldCreateNewVersion
+      ? await createVersionOnUpdate(
+          projectId,
+          planId,
+          versioningRow,
+          normalizedContent,
+          this.taskStore
+        )
+      : await updateCurrentVersionInPlace(
+          projectId,
+          planId,
+          versioningRow,
+          normalizedContent,
+          this.taskStore
+        );
 
     await this.taskStore.planUpdateContent(projectId, planId, normalizedContent, nextVersion);
 

@@ -31,7 +31,10 @@ describe("runPlannerWithRepoGuard", () => {
     mockShellExec.mockImplementation(async (command: string) => {
       if (command === "git rev-parse HEAD") {
         snapshotCount += 1;
-        const head = snapshotCount <= 1 ? "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" : "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const head =
+          snapshotCount <= 1
+            ? "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            : "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         return { stdout: `${head}\n` };
       }
       if (command === "git branch --show-current") return { stdout: "main\n" };
@@ -55,7 +58,8 @@ describe("runPlannerWithRepoGuard", () => {
   it("fails when the branch changes during planner execution", async () => {
     let snapshotCount = 0;
     mockShellExec.mockImplementation(async (command: string) => {
-      if (command === "git rev-parse HEAD") return { stdout: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" };
+      if (command === "git rev-parse HEAD")
+        return { stdout: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" };
       if (command === "git branch --show-current") {
         snapshotCount += 1;
         return { stdout: snapshotCount <= 1 ? "main\n" : "feature\n" };

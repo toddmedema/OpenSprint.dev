@@ -146,7 +146,7 @@ describe("BranchManager", () => {
       expect(branchOut.trim()).toBe("opensprint/task-xyz");
     });
 
-    it("should return false when only excluded runtime paths exist (e.g. .opensprint/active)", async () => {
+    it("should return false when only excluded runtime paths exist (e.g. .opensprint/active and .opensprint/runtime)", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
       await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
@@ -159,6 +159,12 @@ describe("BranchManager", () => {
       await fs.writeFile(
         path.join(hbDir, "heartbeat.json"),
         JSON.stringify({ processGroupLeaderPid: 1, lastOutputTimestamp: 0, heartbeatTimestamp: 0 })
+      );
+      const runtimeDir = path.join(repoPath, ".opensprint", "runtime");
+      await fs.mkdir(runtimeDir, { recursive: true });
+      await fs.writeFile(
+        path.join(runtimeDir, "worktree-cleanup-intents.json"),
+        JSON.stringify({ version: 1, projects: {} }, null, 2)
       );
 
       const result = await branchManager.commitWip(repoPath, "task-runtime-only");
@@ -869,13 +875,15 @@ describe("BranchManager", () => {
       const validateSpy = vi
         .spyOn(branchManagerAny, "validateDisposableWorktreePath")
         .mockResolvedValue(wtPath);
-      const gitExecSpy = vi.spyOn(branchManagerAny, "gitExec").mockImplementation(async (_repo, args) => {
-        const gitArgs = args as string[];
-        if (gitArgs[0] === "worktree" && gitArgs[1] === "remove") {
-          throw new Error("simulated remove failure");
-        }
-        return { stdout: "", stderr: "" };
-      });
+      const gitExecSpy = vi
+        .spyOn(branchManagerAny, "gitExec")
+        .mockImplementation(async (_repo, args) => {
+          const gitArgs = args as string[];
+          if (gitArgs[0] === "worktree" && gitArgs[1] === "remove") {
+            throw new Error("simulated remove failure");
+          }
+          return { stdout: "", stderr: "" };
+        });
       const escalationSpy = vi
         .spyOn(branchManagerAny, "removeWorktreePathWithEscalation")
         .mockResolvedValue(true);

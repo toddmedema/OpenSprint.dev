@@ -69,9 +69,7 @@ export function AgentProviderCliBanner({
               ? "Hide Install Instructions"
               : "Show Install Instructions"}
         </button>
-        {error && (
-          <p className="text-sm mt-2 text-theme-error-text">{error}</p>
-        )}
+        {error && <p className="text-sm mt-2 text-theme-error-text">{error}</p>}
         {showInstructions && instructions && (
           <div className="mt-3 space-y-2" data-testid="cursor-cli-install-instructions">
             <p className="text-sm text-theme-warning-text">

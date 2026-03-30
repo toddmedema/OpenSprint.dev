@@ -2418,7 +2418,9 @@ describe("PlanService createWithRetry usage", () => {
     row!.current_version_number = 1;
     row!.last_executed_version_number = 1;
 
-    await planService.updatePlan(projectId, planId, { content: "# Executed Current Plan\n\nEdited." });
+    await planService.updatePlan(projectId, planId, {
+      content: "# Executed Current Plan\n\nEdited.",
+    });
 
     const versions = await mockListPlanVersions(projectId, planId);
     const numbers = versions.map((v) => v.version_number).sort((a, b) => a - b);

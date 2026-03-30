@@ -332,9 +332,7 @@ export interface OrchestratorDispatchHost {
     listAll(projectId: string): Promise<StoredTask[]>;
   };
   getProjectService(): {
-    getSettings(
-      projectId: string
-    ): Promise<{
+    getSettings(projectId: string): Promise<{
       mergeStrategy?: string;
       worktreeBaseBranch?: string;
       gitWorkingMode?: "worktree" | "branches";

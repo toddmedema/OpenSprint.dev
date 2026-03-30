@@ -7,24 +7,24 @@ describe("getManualChunkForModuleId", () => {
   });
 
   it("groups mermaid package into vendor-mermaid", () => {
-    expect(
-      getManualChunkForModuleId("/repo/node_modules/mermaid/dist/mermaid.core.mjs")
-    ).toBe("vendor-mermaid");
+    expect(getManualChunkForModuleId("/repo/node_modules/mermaid/dist/mermaid.core.mjs")).toBe(
+      "vendor-mermaid"
+    );
   });
 
   it("groups @mermaid-js/parser into vendor-mermaid", () => {
-    expect(
-      getManualChunkForModuleId("/repo/node_modules/@mermaid-js/parser/dist/index.js")
-    ).toBe("vendor-mermaid");
+    expect(getManualChunkForModuleId("/repo/node_modules/@mermaid-js/parser/dist/index.js")).toBe(
+      "vendor-mermaid"
+    );
   });
 
   it("groups cytoscape and diagram helpers used by mermaid into vendor-mermaid", () => {
     expect(getManualChunkForModuleId("/repo/node_modules/cytoscape/dist/cytoscape.esm.mjs")).toBe(
       "vendor-mermaid"
     );
-    expect(getManualChunkForModuleId("/repo/node_modules/dagre-d3-es/dist/dagre-d3-es.esm.js")).toBe(
-      "vendor-mermaid"
-    );
+    expect(
+      getManualChunkForModuleId("/repo/node_modules/dagre-d3-es/dist/dagre-d3-es.esm.js")
+    ).toBe("vendor-mermaid");
     expect(getManualChunkForModuleId("/repo/node_modules/d3-sankey/dist/d3-sankey.js")).toBe(
       "vendor-mermaid"
     );
@@ -44,9 +44,9 @@ describe("getManualChunkForModuleId", () => {
   });
 
   it("normalizes Windows path separators", () => {
-    expect(
-      getManualChunkForModuleId(String.raw`C:\repo\node_modules\d3\src\index.js`)
-    ).toBe("vendor-d3");
+    expect(getManualChunkForModuleId(String.raw`C:\repo\node_modules\d3\src\index.js`)).toBe(
+      "vendor-d3"
+    );
   });
 
   it("still assigns vendor-react for react", () => {

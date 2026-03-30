@@ -44,9 +44,13 @@ vi.mock("../services/task-store.service.js", () => ({
       return mockInsertSelfImprovementRunHistory(record);
     },
     listSelfImprovementRunHistory: vi.fn().mockImplementation(async () => historyStore),
-    runWrite: vi.fn().mockImplementation(async (fn: (client: { execute: () => Promise<void> }) => Promise<void>) => {
-      await fn({ execute: vi.fn().mockResolvedValue(undefined) });
-    }),
+    runWrite: vi
+      .fn()
+      .mockImplementation(
+        async (fn: (client: { execute: () => Promise<void> }) => Promise<void>) => {
+          await fn({ execute: vi.fn().mockResolvedValue(undefined) });
+        }
+      ),
   },
 }));
 
@@ -75,32 +79,46 @@ vi.mock("../services/context-assembler.js", () => ({
   })),
 }));
 
-const mockUpdateSettingsInStore = vi.fn().mockImplementation(
-  async (_id: string, _current: unknown, updater: (s: Record<string, unknown>) => Record<string, unknown>) => {
-    if (typeof updater === "function") {
-      const currentSettings = typeof _current === "object" && _current ? (_current as Record<string, unknown>) : {};
-      const updated = updater(currentSettings);
-      // Reflect pending candidate back to getSettings for subsequent calls
-      if (updated.selfImprovementPendingCandidateId !== undefined) {
-        const prevSettings = await mockGetSettings("proj-1");
-        mockGetSettings.mockResolvedValue({
-          ...prevSettings,
-          selfImprovementPendingCandidateId: updated.selfImprovementPendingCandidateId || undefined,
-          selfImprovementActiveBehaviorVersionId: updated.selfImprovementActiveBehaviorVersionId,
-          selfImprovementBehaviorVersions: updated.selfImprovementBehaviorVersions ?? prevSettings?.selfImprovementBehaviorVersions,
-          selfImprovementBehaviorHistory: updated.selfImprovementBehaviorHistory ?? prevSettings?.selfImprovementBehaviorHistory,
-          selfImprovementPendingReplaySampleSize: updated.selfImprovementPendingReplaySampleSize,
-          selfImprovementPendingBaselineMetrics: updated.selfImprovementPendingBaselineMetrics,
-          selfImprovementPendingCandidateMetrics: updated.selfImprovementPendingCandidateMetrics,
-        });
+const mockUpdateSettingsInStore = vi
+  .fn()
+  .mockImplementation(
+    async (
+      _id: string,
+      _current: unknown,
+      updater: (s: Record<string, unknown>) => Record<string, unknown>
+    ) => {
+      if (typeof updater === "function") {
+        const currentSettings =
+          typeof _current === "object" && _current ? (_current as Record<string, unknown>) : {};
+        const updated = updater(currentSettings);
+        // Reflect pending candidate back to getSettings for subsequent calls
+        if (updated.selfImprovementPendingCandidateId !== undefined) {
+          const prevSettings = await mockGetSettings("proj-1");
+          mockGetSettings.mockResolvedValue({
+            ...prevSettings,
+            selfImprovementPendingCandidateId:
+              updated.selfImprovementPendingCandidateId || undefined,
+            selfImprovementActiveBehaviorVersionId: updated.selfImprovementActiveBehaviorVersionId,
+            selfImprovementBehaviorVersions:
+              updated.selfImprovementBehaviorVersions ??
+              prevSettings?.selfImprovementBehaviorVersions,
+            selfImprovementBehaviorHistory:
+              updated.selfImprovementBehaviorHistory ??
+              prevSettings?.selfImprovementBehaviorHistory,
+            selfImprovementPendingReplaySampleSize: updated.selfImprovementPendingReplaySampleSize,
+            selfImprovementPendingBaselineMetrics: updated.selfImprovementPendingBaselineMetrics,
+            selfImprovementPendingCandidateMetrics: updated.selfImprovementPendingCandidateMetrics,
+          });
+        }
       }
     }
-  }
-);
+  );
 
 vi.mock("../services/settings-store.service.js", () => ({
   updateSettingsInStore: (...args: unknown[]) => mockUpdateSettingsInStore(...args),
-  getSettingsFromStore: vi.fn().mockImplementation((_id: string, defaults: unknown) => Promise.resolve(defaults)),
+  getSettingsFromStore: vi
+    .fn()
+    .mockImplementation((_id: string, defaults: unknown) => Promise.resolve(defaults)),
 }));
 
 vi.mock("../services/agent-instructions.service.js", () => ({
@@ -142,7 +160,8 @@ vi.mock("../services/notification.service.js", () => ({
       resolvedAt: null,
       kind: "agent_failed",
     }),
-    createSelfImprovementApproval: (...args: unknown[]) => mockCreateSelfImprovementApproval(...args),
+    createSelfImprovementApproval: (...args: unknown[]) =>
+      mockCreateSelfImprovementApproval(...args),
     resolveSelfImprovementApprovalNotifications: (...args: unknown[]) =>
       mockResolveSelfImprovementApprovalNotifications(...args),
   },
@@ -159,7 +178,8 @@ vi.mock("../services/agent.service.js", () => ({
 
 vi.mock("../services/structured-agent-output.service.js", () => ({
   invokeStructuredPlanningAgent: vi.fn().mockImplementation(async (options) => {
-    const content = '[{"title":"Add tests","description":"Unit tests","priority":1,"complexity":3}]';
+    const content =
+      '[{"title":"Add tests","description":"Unit tests","priority":1,"complexity":3}]';
     const parsed = options.contract?.parse?.(content) ?? null;
     return {
       ok: true,
@@ -209,8 +229,20 @@ vi.mock("../services/experiment-replay.service.js", () => ({
   ExperimentReplayService: vi.fn().mockImplementation(() => ({
     runReplay: vi.fn().mockResolvedValue({
       sessions: [],
-      baselineMetrics: { taskSuccessRate: 0.8, retryRate: 0, reviewPassRate: 1, avgLatencyMs: 100, avgCostUsd: 0.01 },
-      candidateMetrics: { taskSuccessRate: 0.8, retryRate: 0, reviewPassRate: 1, avgLatencyMs: 100, avgCostUsd: 0.01 },
+      baselineMetrics: {
+        taskSuccessRate: 0.8,
+        retryRate: 0,
+        reviewPassRate: 1,
+        avgLatencyMs: 100,
+        avgCostUsd: 0.01,
+      },
+      candidateMetrics: {
+        taskSuccessRate: 0.8,
+        retryRate: 0,
+        reviewPassRate: 1,
+        avgLatencyMs: 100,
+        avgCostUsd: 0.01,
+      },
       sampleSize: 2,
     }),
   })),
@@ -274,9 +306,8 @@ describe("Run now: audit-only vs audit+experiments and approval flow", () => {
   });
 
   it("records experiment outcome when experiments enabled and experiment pipeline runs (or skips with no replay data)", async () => {
-    const { mineReplayGradeExecuteSessionIds } = await import(
-      "../services/self-improvement-experiment.service.js"
-    );
+    const { mineReplayGradeExecuteSessionIds } =
+      await import("../services/self-improvement-experiment.service.js");
     (mineReplayGradeExecuteSessionIds as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 
     mockGetSettings.mockResolvedValue({ ...baseSettings, runAgentEnhancementExperiments: true });

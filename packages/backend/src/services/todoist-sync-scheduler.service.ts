@@ -42,7 +42,7 @@ function buildSyncService(): TodoistSyncService {
 }
 
 export async function runTodoistSyncTick(
-  syncService?: TodoistSyncService,
+  syncService?: TodoistSyncService
 ): Promise<{ connectionId: string; imported: number; errors: number }[]> {
   if (tickInProgress) {
     log.debug("Skipping tick — previous sync still running");

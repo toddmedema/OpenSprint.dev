@@ -358,8 +358,7 @@ describe("SelfImprovementService", () => {
           source: "self-improvement",
           selfImprovementKind: "baseline-quality-gate",
           baselineBaseBranch: "main",
-          baselineFailureFingerprint:
-            "npm run test|stderr | baseline failure|baseline",
+          baselineFailureFingerprint: "npm run test|stderr | baseline failure|baseline",
           updated_at: recentlyClosedAt,
         } as never,
       ]);
@@ -381,8 +380,7 @@ describe("SelfImprovementService", () => {
           status: "open",
           assignee: "",
           extra: expect.objectContaining({
-            baselineFailureFingerprint:
-              "npm run test|stderr | baseline failure|baseline",
+            baselineFailureFingerprint: "npm run test|stderr | baseline failure|baseline",
           }),
         })
       );
@@ -392,9 +390,7 @@ describe("SelfImprovementService", () => {
     it("serializes concurrent baseline task upserts per project+branch", async () => {
       const { taskStore } = await import("../services/task-store.service.js");
       vi.mocked(taskStore.listAll).mockResolvedValue([]);
-      let resolveCreate:
-        | ((value: { id: string; title: string }) => void)
-        | null = null;
+      let resolveCreate: ((value: { id: string; title: string }) => void) | null = null;
       const createBlocked = new Promise<{ id: string; title: string }>((resolve) => {
         resolveCreate = resolve;
       });

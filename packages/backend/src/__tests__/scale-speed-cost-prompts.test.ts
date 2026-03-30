@@ -1,17 +1,12 @@
 import { describe, it, expect } from "vitest";
-import {
-  DREAM_SYSTEM_PROMPT,
-  PLAN_REFINEMENT_SYSTEM_PROMPT,
-} from "../services/chat.service.js";
+import { DREAM_SYSTEM_PROMPT, PLAN_REFINEMENT_SYSTEM_PROMPT } from "../services/chat.service.js";
 import { DECOMPOSE_SYSTEM_PROMPT } from "../services/plan/plan-prompts.js";
 import { GENERATE_PLAN_SYSTEM_PROMPT } from "../services/plan-decompose-generate.service.js";
 
 describe("scale/speed/cost prompt content", () => {
   describe("DREAM_SYSTEM_PROMPT", () => {
     it("contains the scale/speed/cost discovery heading", () => {
-      expect(DREAM_SYSTEM_PROMPT).toContain(
-        "Scale, speed, and cost discovery",
-      );
+      expect(DREAM_SYSTEM_PROMPT).toContain("Scale, speed, and cost discovery");
     });
 
     it("references scale expectations", () => {
@@ -43,7 +38,7 @@ describe("scale/speed/cost prompt content", () => {
 
     it("ties constraints to Technical Approach changes", () => {
       expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toMatch(
-        /Technical Approach.*scale.*speed.*cost|scale.*speed.*cost.*Technical Approach/is,
+        /Technical Approach.*scale.*speed.*cost|scale.*speed.*cost.*Technical Approach/is
       );
     });
   });
@@ -64,9 +59,7 @@ describe("scale/speed/cost prompt content", () => {
 
   describe("GENERATE_PLAN_SYSTEM_PROMPT", () => {
     it("contains the scale/speed/cost awareness heading", () => {
-      expect(GENERATE_PLAN_SYSTEM_PROMPT).toContain(
-        "Scale, speed, and cost awareness",
-      );
+      expect(GENERATE_PLAN_SYSTEM_PROMPT).toContain("Scale, speed, and cost awareness");
     });
 
     it("references scale, speed, and cost individually", () => {
@@ -77,7 +70,7 @@ describe("scale/speed/cost prompt content", () => {
 
     it("instructs Assumptions note when constraints are absent", () => {
       expect(GENERATE_PLAN_SYSTEM_PROMPT).toContain(
-        "No scale, speed, or cost constraints were specified; sensible defaults are assumed",
+        "No scale, speed, or cost constraints were specified; sensible defaults are assumed"
       );
     });
 

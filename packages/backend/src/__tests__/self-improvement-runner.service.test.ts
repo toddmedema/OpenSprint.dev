@@ -122,7 +122,10 @@ vi.mock("../services/behavior-version-store.service.js", () => ({
 }));
 
 vi.mock("../services/self-improvement-failure-collector.service.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../services/self-improvement-failure-collector.service.js")>();
+  const actual =
+    await importOriginal<
+      typeof import("../services/self-improvement-failure-collector.service.js")
+    >();
   return {
     ...actual,
     collectFailuresSince: vi.fn().mockResolvedValue([]),
@@ -1746,7 +1749,8 @@ describe("failure root-cause analysis prompt integration", () => {
     const { updateSettingsInStore } = await import("../services/settings-store.service.js");
     vi.mocked(taskStore.create).mockResolvedValue({ id: "os-1", title: "Task" } as never);
     vi.mocked(agentService.invokePlanningAgent).mockResolvedValue({
-      content: '[{"title":"[Root Cause] Fix flaky test setup","description":"**Root cause:** Missing test fixture.\\n**Affected area:** src/tests/\\n**Remediation steps:** 1. Add fixture. 2. Update imports.\\n**Acceptance criteria:** Tests pass without retry.","priority":0,"complexity":3}]',
+      content:
+        '[{"title":"[Root Cause] Fix flaky test setup","description":"**Root cause:** Missing test fixture.\\n**Affected area:** src/tests/\\n**Remediation steps:** 1. Add fixture. 2. Update imports.\\n**Acceptance criteria:** Tests pass without retry.","priority":0,"complexity":3}]',
     } as never);
     vi.mocked(updateSettingsInStore).mockResolvedValue(undefined);
   });
@@ -1756,9 +1760,8 @@ describe("failure root-cause analysis prompt integration", () => {
   });
 
   it("includes failure root-cause analysis instructions in system prompt when failures exist", async () => {
-    const { collectFailuresSince } = await import(
-      "../services/self-improvement-failure-collector.service.js"
-    );
+    const { collectFailuresSince } =
+      await import("../services/self-improvement-failure-collector.service.js");
     vi.mocked(collectFailuresSince).mockResolvedValue([
       {
         taskId: "os-fail-1",
@@ -1793,9 +1796,8 @@ describe("failure root-cause analysis prompt integration", () => {
   });
 
   it("omits failure root-cause analysis instructions when no failures exist", async () => {
-    const { collectFailuresSince } = await import(
-      "../services/self-improvement-failure-collector.service.js"
-    );
+    const { collectFailuresSince } =
+      await import("../services/self-improvement-failure-collector.service.js");
     vi.mocked(collectFailuresSince).mockResolvedValue([]);
 
     const { agentService } = await import("../services/agent.service.js");
@@ -1815,9 +1817,8 @@ describe("failure root-cause analysis prompt integration", () => {
   });
 
   it("creates root-cause fix tasks with structured description from agent output", async () => {
-    const { collectFailuresSince } = await import(
-      "../services/self-improvement-failure-collector.service.js"
-    );
+    const { collectFailuresSince } =
+      await import("../services/self-improvement-failure-collector.service.js");
     vi.mocked(collectFailuresSince).mockResolvedValue([
       {
         taskId: "os-fail-1",
@@ -1840,14 +1841,13 @@ describe("failure root-cause analysis prompt integration", () => {
         description: expect.stringContaining("Root cause:"),
         priority: 0,
         complexity: 3,
-      }),
+      })
     );
   });
 
   it("includes failure stats in user prompt for mixed failure dispositions", async () => {
-    const { collectFailuresSince } = await import(
-      "../services/self-improvement-failure-collector.service.js"
-    );
+    const { collectFailuresSince } =
+      await import("../services/self-improvement-failure-collector.service.js");
     vi.mocked(collectFailuresSince).mockResolvedValue([
       {
         taskId: "os-a",

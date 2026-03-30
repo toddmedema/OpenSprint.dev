@@ -83,7 +83,9 @@ describe("RenderedDiffView", () => {
       const rendered = screen.getByTestId("diff-view-rendered");
       const addedWords = rendered.querySelectorAll('[data-diff-word="added"]');
       expect(addedWords.length).toBeGreaterThan(0);
-      const addedText = Array.from(addedWords).map((el) => el.textContent).join("");
+      const addedText = Array.from(addedWords)
+        .map((el) => el.textContent)
+        .join("");
       expect(addedText).toContain("universe");
     });
 
@@ -94,7 +96,9 @@ describe("RenderedDiffView", () => {
       const rendered = screen.getByTestId("diff-view-rendered");
       const removedWords = rendered.querySelectorAll('[data-diff-word="removed"]');
       expect(removedWords.length).toBeGreaterThan(0);
-      const removedText = Array.from(removedWords).map((el) => el.textContent).join("");
+      const removedText = Array.from(removedWords)
+        .map((el) => el.textContent)
+        .join("");
       expect(removedText).toContain("world");
     });
 
@@ -295,7 +299,7 @@ describe("RenderedDiffView", () => {
           fromContent="# Title"
           toContent="# Title\n\nNew."
           onParseError={onParseError}
-        />,
+        />
       );
       expect(onParseError).not.toHaveBeenCalled();
     });
@@ -331,12 +335,7 @@ describe("RenderedDiffView", () => {
     });
 
     it("does not show Show more for small diffs", () => {
-      render(
-        <RenderedDiffView
-          fromContent="# Title"
-          toContent="# Title\n\nNew paragraph."
-        />,
-      );
+      render(<RenderedDiffView fromContent="# Title" toContent="# Title\n\nNew paragraph." />);
       expect(screen.queryByTestId("diff-view-rendered-show-more")).not.toBeInTheDocument();
     });
   });

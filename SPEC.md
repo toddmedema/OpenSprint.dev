@@ -161,14 +161,14 @@ The statement that **no new REST endpoints are required for quality-gate diagnos
 
 - **`POST .../plans/:planId/plan-tasks`:** Existing endpoint; behavior expands to **orchestrate** sub-plan creation + nested task generation when the complexity gate triggers a split. For leaf-sized plans, behavior is unchanged (one epic, one batch of tasks). Returns task/sub-plan creation results.
 - **`GET /api/projects/:projectId/plans/:planId/hierarchy`:** Returns `{ planId, epicId, depth, parentPlanId?, children: [{ planId, epicId, depth, taskCount, status, children }] }` tree for UI rendering without N+1 calls.
-- **`POST .../plans/:planId/split-subplans`** *(optional, if split is separated from task gen):* Idempotent split suggestion application; returns created child plan IDs and their epic IDs.
+- **`POST .../plans/:planId/split-subplans`** _(optional, if split is separated from task gen):_ Idempotent split suggestion application; returns created child plan IDs and their epic IDs.
 - **Plan list/detail payloads** include **`parentPlanId`** and **`depth`** so clients can render trees or filter by hierarchy level.
 - **Errors:** **`400`** with machine-readable code when depth limit (4) exceeded or task batch over cap (15) after repair attempts; **`409`** if split would orphan plan versions. Aligns with existing `AppError` patterns.
 
 **Execute inspect and chat endpoints:**
 
 - **`GET` / `PUT /api/global-settings`:** Include **`preferredEditor`** (`vscode` | `cursor` | `auto`); validate on write.
-- **`POST /api/projects/:projectId/tasks/:taskId/open-editor`:** Returns `{ worktreePath, editor, opened }` when the task is actively executing and the path exists; **404** if task/worktree missing, **409** if not in an executable in-progress state. *(Exact path prefix must match the product's `/api` routing convention.)*
+- **`POST /api/projects/:projectId/tasks/:taskId/open-editor`:** Returns `{ worktreePath, editor, opened }` when the task is actively executing and the path exists; **404** if task/worktree missing, **409** if not in an executable in-progress state. _(Exact path prefix must match the product's `/api` routing convention.)_
 - **`GET .../tasks/:taskId/chat-history`:** Query `attempt` (optional); response `{ messages[], attempt, chatSupported }`.
 - **`GET .../tasks/:taskId/chat-support`:** Response `{ supported, backend, reason | null }` for gating the Chat tab.
 
@@ -193,25 +193,25 @@ The statement that **no new REST endpoints are required for quality-gate diagnos
 
 ## Non-Functional Requirements
 
-| Category | Requirement |
-| -------- | ----------- |
-| Usability | Plan tree UI shows **nested rows** with expand/collapse, per-node status, task count per epic, and a cap indicator (**~15 max per batch**); split action is disabled at max depth with an explanatory tooltip; new child plans show a **Generate tasks** CTA. |
-| Usability | Execute **Output** and **Chat** share familiar Sketch/Plan chat patterns (bubbles, keyboard shortcuts, draft persistence, clear disabled states for non-running tasks and CLI backends). |
-| Usability | PRD diff UIs reuse one **DiffView**: **Rendered** default, **Raw** toggle, keyboard-accessible controls, and non-color-only cues (strikethrough, labels/ARIA) for additions and deletions. |
-| Usability | Integration settings surface clear connection status, **Sync Now** manual trigger, and actionable error/reconnect states; **Import existing open tasks** toggle prevents surprise mass imports on first connect. |
-| Reliability | Planner output exceeding **15 tasks** per node is **repaired** (merge/drop prompt) or hard-rejected; circular `depends_on_plans` edges are validated as a DAG before persistence. |
-| Reliability | Partial sub-plan tree failures (some child plans created, task generation fails on one node) leave consistent statuses and allow **per-node retry** without data loss; `plan.updated` WebSocket events fire per successful node. |
-| Reliability | User chat messages are **queued at turn boundaries**; **bounded** pending queue prevents unbounded memory; if the agent finishes before delivery, persisted history reflects **undelivered** user messages per product rules. |
-| Reliability | PRD diff responses remain consistent if the client toggles modes; large SPEC files may use pagination, caps, or virtualization to protect responsiveness. |
-| Reliability | Todoist sync is **idempotent**: `UNIQUE(project_id, provider, external_item_id)` prevents duplicate feedback; `pending_delete` ledger status with retry ensures no data loss when Todoist delete fails; crashes between insert and delete are reconciled on next cycle. |
-| Compatibility | **Open in Editor** degrades gracefully: missing CLI → install guidance + **copy path**; **branches** mode warns about **shared checkout**; multiple browser tabs deduplicate by **message id**. |
-| Compatibility | PRD **rendered** diff falls back to **raw** when markdown parsing fails; structural markdown changes may appear as block remove+add rather than cross-type word diff. |
-| Compatibility | Todoist integration detects **token revocation** (401/403) and transitions to `needs_reconnect` with a user-facing reconnect prompt; **rate-limit** (429) responses trigger backoff without data loss. |
-| Security / privacy | Chat content is stored **locally** under `.opensprint/active/<taskId>/` (JSONL) alongside assignment artifacts—treat as sensitive project data in backups and retention policies. |
-| Security / privacy | SPEC snapshots and proposal text used for diffs are **project-local** data; apply the same backup and access controls as SPEC.md and `.opensprint` metadata. |
-| Security / privacy | Todoist OAuth tokens are stored **encrypted at rest** in `integration_connections`; never logged or returned to API clients. Imported task content (titles, descriptions) may contain PII—apply the same retention and access controls as other feedback data. |
-| Theming / accessibility | Diff highlight colors respect **light/dark/system** themes with sufficient contrast; screen readers should be able to perceive added vs removed text. |
-| Theming / accessibility | Plan tree supports **keyboard navigation** (arrow keys for expand/collapse/focus), visible focus indicators, and non-color-only status cues for sub-plan states. |
+| Category                | Requirement                                                                                                                                                                                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Usability               | Plan tree UI shows **nested rows** with expand/collapse, per-node status, task count per epic, and a cap indicator (**~15 max per batch**); split action is disabled at max depth with an explanatory tooltip; new child plans show a **Generate tasks** CTA.           |
+| Usability               | Execute **Output** and **Chat** share familiar Sketch/Plan chat patterns (bubbles, keyboard shortcuts, draft persistence, clear disabled states for non-running tasks and CLI backends).                                                                                |
+| Usability               | PRD diff UIs reuse one **DiffView**: **Rendered** default, **Raw** toggle, keyboard-accessible controls, and non-color-only cues (strikethrough, labels/ARIA) for additions and deletions.                                                                              |
+| Usability               | Integration settings surface clear connection status, **Sync Now** manual trigger, and actionable error/reconnect states; **Import existing open tasks** toggle prevents surprise mass imports on first connect.                                                        |
+| Reliability             | Planner output exceeding **15 tasks** per node is **repaired** (merge/drop prompt) or hard-rejected; circular `depends_on_plans` edges are validated as a DAG before persistence.                                                                                       |
+| Reliability             | Partial sub-plan tree failures (some child plans created, task generation fails on one node) leave consistent statuses and allow **per-node retry** without data loss; `plan.updated` WebSocket events fire per successful node.                                        |
+| Reliability             | User chat messages are **queued at turn boundaries**; **bounded** pending queue prevents unbounded memory; if the agent finishes before delivery, persisted history reflects **undelivered** user messages per product rules.                                           |
+| Reliability             | PRD diff responses remain consistent if the client toggles modes; large SPEC files may use pagination, caps, or virtualization to protect responsiveness.                                                                                                               |
+| Reliability             | Todoist sync is **idempotent**: `UNIQUE(project_id, provider, external_item_id)` prevents duplicate feedback; `pending_delete` ledger status with retry ensures no data loss when Todoist delete fails; crashes between insert and delete are reconciled on next cycle. |
+| Compatibility           | **Open in Editor** degrades gracefully: missing CLI → install guidance + **copy path**; **branches** mode warns about **shared checkout**; multiple browser tabs deduplicate by **message id**.                                                                         |
+| Compatibility           | PRD **rendered** diff falls back to **raw** when markdown parsing fails; structural markdown changes may appear as block remove+add rather than cross-type word diff.                                                                                                   |
+| Compatibility           | Todoist integration detects **token revocation** (401/403) and transitions to `needs_reconnect` with a user-facing reconnect prompt; **rate-limit** (429) responses trigger backoff without data loss.                                                                  |
+| Security / privacy      | Chat content is stored **locally** under `.opensprint/active/<taskId>/` (JSONL) alongside assignment artifacts—treat as sensitive project data in backups and retention policies.                                                                                       |
+| Security / privacy      | SPEC snapshots and proposal text used for diffs are **project-local** data; apply the same backup and access controls as SPEC.md and `.opensprint` metadata.                                                                                                            |
+| Security / privacy      | Todoist OAuth tokens are stored **encrypted at rest** in `integration_connections`; never logged or returned to API clients. Imported task content (titles, descriptions) may contain PII—apply the same retention and access controls as other feedback data.          |
+| Theming / accessibility | Diff highlight colors respect **light/dark/system** themes with sufficient contrast; screen readers should be able to perceive added vs removed text.                                                                                                                   |
+| Theming / accessibility | Plan tree supports **keyboard navigation** (arrow keys for expand/collapse/focus), visible focus indicators, and non-color-only status cues for sub-plan states.                                                                                                        |
 
 ## Open Questions
 

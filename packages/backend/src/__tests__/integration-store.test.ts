@@ -23,15 +23,11 @@ vi.mock("../services/task-store.service.js", () => ({
     getDb: vi.fn().mockImplementation(async () => mockDb),
     runWrite: vi
       .fn()
-      .mockImplementation(async (fn: (c: DbClient) => Promise<unknown>) =>
-        fn(mockDb),
-      ),
+      .mockImplementation(async (fn: (c: DbClient) => Promise<unknown>) => fn(mockDb)),
   },
 }));
 
-const { IntegrationStoreService } = await import(
-  "../services/integration-store.service.js"
-);
+const { IntegrationStoreService } = await import("../services/integration-store.service.js");
 
 let store: InstanceType<typeof IntegrationStoreService>;
 
@@ -103,7 +99,7 @@ describe("IntegrationStoreService — integration_connections", () => {
       expect(result.status).toBe("active");
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("INSERT INTO integration_connections"),
-        expect.any(Array),
+        expect.any(Array)
       );
     });
 
@@ -126,7 +122,7 @@ describe("IntegrationStoreService — integration_connections", () => {
       expect(result.id).toBe("conn-1");
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("UPDATE integration_connections"),
-        expect.any(Array),
+        expect.any(Array)
       );
     });
 
@@ -140,7 +136,7 @@ describe("IntegrationStoreService — integration_connections", () => {
           project_id: "proj-1",
           provider: "todoist",
           access_token_enc: "token",
-        }),
+        })
       ).rejects.toThrow("Failed to upsert");
     });
   });
@@ -154,7 +150,7 @@ describe("IntegrationStoreService — integration_connections", () => {
       expect(result).toBeNull();
       expect(queryOneFn).toHaveBeenCalledWith(
         expect.stringContaining("FROM integration_connections"),
-        ["proj-1", "todoist"],
+        ["proj-1", "todoist"]
       );
     });
 
@@ -191,10 +187,7 @@ describe("IntegrationStoreService — integration_connections", () => {
       expect(result).toHaveLength(2);
       expect(result[0].status).toBe("active");
       expect(result[1].status).toBe("active");
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("status = $1"),
-        ["active"],
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("status = $1"), ["active"]);
     });
 
     it("filters by provider when specified", async () => {
@@ -203,10 +196,10 @@ describe("IntegrationStoreService — integration_connections", () => {
       const result = await store.getActiveConnections("todoist");
 
       expect(result).toHaveLength(1);
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("provider = $2"),
-        ["active", "todoist"],
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("provider = $2"), [
+        "active",
+        "todoist",
+      ]);
     });
 
     it("returns empty array when no active connections exist", async () => {
@@ -220,15 +213,11 @@ describe("IntegrationStoreService — integration_connections", () => {
 
   describe("updateConnectionStatus", () => {
     it("changes status and sets lastError", async () => {
-      await store.updateConnectionStatus(
-        "conn-1",
-        "needs_reconnect",
-        "Token revoked",
-      );
+      await store.updateConnectionStatus("conn-1", "needs_reconnect", "Token revoked");
 
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("UPDATE integration_connections SET status"),
-        ["needs_reconnect", "Token revoked", expect.any(String), "conn-1"],
+        ["needs_reconnect", "Token revoked", expect.any(String), "conn-1"]
       );
     });
 
@@ -237,7 +226,7 @@ describe("IntegrationStoreService — integration_connections", () => {
 
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("UPDATE integration_connections SET status"),
-        ["active", null, expect.any(String), "conn-1"],
+        ["active", null, expect.any(String), "conn-1"]
       );
     });
 
@@ -246,7 +235,7 @@ describe("IntegrationStoreService — integration_connections", () => {
 
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("UPDATE integration_connections SET status"),
-        ["active", null, expect.any(String), "conn-1"],
+        ["active", null, expect.any(String), "conn-1"]
       );
     });
   });
@@ -256,20 +245,24 @@ describe("IntegrationStoreService — integration_connections", () => {
       const syncAt = "2025-06-01T12:00:00.000Z";
       await store.updateLastSync("conn-1", syncAt);
 
-      expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("last_sync_at"),
-        [syncAt, null, expect.any(String), "conn-1"],
-      );
+      expect(executeFn).toHaveBeenCalledWith(expect.stringContaining("last_sync_at"), [
+        syncAt,
+        null,
+        expect.any(String),
+        "conn-1",
+      ]);
     });
 
     it("updates last_sync_at and optionally sets last_error", async () => {
       const syncAt = "2025-06-01T12:00:00.000Z";
       await store.updateLastSync("conn-1", syncAt, "Rate limited");
 
-      expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("last_sync_at"),
-        [syncAt, "Rate limited", expect.any(String), "conn-1"],
-      );
+      expect(executeFn).toHaveBeenCalledWith(expect.stringContaining("last_sync_at"), [
+        syncAt,
+        "Rate limited",
+        expect.any(String),
+        "conn-1",
+      ]);
     });
   });
 
@@ -279,7 +272,7 @@ describe("IntegrationStoreService — integration_connections", () => {
 
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM integration_connections"),
-        ["proj-1", "todoist"],
+        ["proj-1", "todoist"]
       );
     });
 
@@ -301,35 +294,19 @@ describe("IntegrationStoreService — integration_import_ledger", () => {
     it("inserts and returns true when no prior record", async () => {
       queryOneFn.mockResolvedValueOnce(undefined); // no existing
 
-      const result = await store.recordImport(
-        "proj-1",
-        "todoist",
-        "ext-1",
-        "fb-1",
-      );
+      const result = await store.recordImport("proj-1", "todoist", "ext-1", "fb-1");
 
       expect(result).toBe(true);
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("INSERT INTO integration_import_ledger"),
-        expect.arrayContaining([
-          "proj-1",
-          "todoist",
-          "ext-1",
-          "fb-1",
-          "pending_delete",
-        ]),
+        expect.arrayContaining(["proj-1", "todoist", "ext-1", "fb-1", "pending_delete"])
       );
     });
 
     it("returns false for duplicate (projectId, provider, externalItemId)", async () => {
       queryOneFn.mockResolvedValueOnce({ id: 1 }); // already exists
 
-      const result = await store.recordImport(
-        "proj-1",
-        "todoist",
-        "ext-1",
-        "fb-1",
-      );
+      const result = await store.recordImport("proj-1", "todoist", "ext-1", "fb-1");
 
       expect(result).toBe(false);
       expect(executeFn).not.toHaveBeenCalled();
@@ -348,10 +325,10 @@ describe("IntegrationStoreService — integration_import_ledger", () => {
       expect(result).toHaveLength(2);
       expect(result[0].import_status).toBe("pending_delete");
       expect(result[1].import_status).toBe("failed_delete");
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("pending_delete"),
-        ["proj-1", "todoist"],
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("pending_delete"), [
+        "proj-1",
+        "todoist",
+      ]);
     });
 
     it("respects limit parameter", async () => {
@@ -359,10 +336,11 @@ describe("IntegrationStoreService — integration_import_ledger", () => {
 
       await store.getPendingDeletes("proj-1", "todoist", 5);
 
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("LIMIT $3"),
-        ["proj-1", "todoist", 5],
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("LIMIT $3"), [
+        "proj-1",
+        "todoist",
+        5,
+      ]);
     });
 
     it("orders by created_at ascending", async () => {
@@ -372,7 +350,7 @@ describe("IntegrationStoreService — integration_import_ledger", () => {
 
       expect(queryFn).toHaveBeenCalledWith(
         expect.stringContaining("ORDER BY created_at ASC"),
-        expect.any(Array),
+        expect.any(Array)
       );
     });
 
@@ -389,10 +367,11 @@ describe("IntegrationStoreService — integration_import_ledger", () => {
     it("updates import_status to completed", async () => {
       await store.markCompleted("42");
 
-      expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("import_status = $1"),
-        ["completed", expect.any(String), "42"],
-      );
+      expect(executeFn).toHaveBeenCalledWith(expect.stringContaining("import_status = $1"), [
+        "completed",
+        expect.any(String),
+        "42",
+      ]);
     });
   });
 
@@ -404,12 +383,7 @@ describe("IntegrationStoreService — integration_import_ledger", () => {
       expect(call[0]).toContain("import_status = $1");
       expect(call[0]).toContain("last_error = $2");
       expect(call[0]).toContain("retry_count = retry_count + 1");
-      expect(call[1]).toEqual([
-        "failed_delete",
-        "API timeout",
-        expect.any(String),
-        "42",
-      ]);
+      expect(call[1]).toEqual(["failed_delete", "API timeout", expect.any(String), "42"]);
     });
   });
 

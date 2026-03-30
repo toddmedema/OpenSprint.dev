@@ -198,7 +198,12 @@ describe("parseSubPlanDecompositionResponse", () => {
       strategy: "tasks",
       tasks: [
         { title: "Create DB schema", description: "Add tables", priority: 1, depends_on: [] },
-        { title: "Add API routes", description: "REST routes", priority: 2, depends_on: ["Create DB schema"] },
+        {
+          title: "Add API routes",
+          description: "REST routes",
+          priority: 2,
+          depends_on: ["Create DB schema"],
+        },
       ],
     });
     const result = parseSubPlanDecompositionResponse(json);
@@ -214,7 +219,12 @@ describe("parseSubPlanDecompositionResponse", () => {
   it("infers sub_plans strategy when no explicit strategy field", () => {
     const json = JSON.stringify({
       sub_plans: [
-        { title: "Plan A", overview: "First plan", content: "# A\nDo stuff.", depends_on_plans: [] },
+        {
+          title: "Plan A",
+          overview: "First plan",
+          content: "# A\nDo stuff.",
+          depends_on_plans: [],
+        },
       ],
     });
     const result = parseSubPlanDecompositionResponse(json);
@@ -224,9 +234,7 @@ describe("parseSubPlanDecompositionResponse", () => {
 
   it("infers tasks strategy when no explicit strategy field", () => {
     const json = JSON.stringify({
-      tasks: [
-        { title: "Task 1", description: "Do it", priority: 1, depends_on: [] },
-      ],
+      tasks: [{ title: "Task 1", description: "Do it", priority: 1, depends_on: [] }],
     });
     const result = parseSubPlanDecompositionResponse(json);
     expect(result).not.toBeNull();
@@ -256,9 +264,7 @@ describe("parseSubPlanDecompositionResponse", () => {
   it("returns null when sub-plan is missing required fields", () => {
     const json = JSON.stringify({
       strategy: "sub_plans",
-      sub_plans: [
-        { title: "Missing overview and content" },
-      ],
+      sub_plans: [{ title: "Missing overview and content" }],
     });
     expect(parseSubPlanDecompositionResponse(json)).toBeNull();
   });

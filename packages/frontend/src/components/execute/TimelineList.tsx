@@ -92,7 +92,11 @@ function getMergeQueueRetrySuffix(task: Task): string | null {
 function getTimelineRightLabel(
   task: Task,
   epicName: string
-): { text: string; title: string; testId: "task-row-epic-name" | "task-row-merge-description" } | null {
+): {
+  text: string;
+  title: string;
+  testId: "task-row-epic-name" | "task-row-merge-description";
+} | null {
   if (task.kanbanColumn === "waiting_to_merge") {
     const description = getMergeQueueDescription(task);
     const retrySuffix = getMergeQueueRetrySuffix(task);
@@ -338,7 +342,9 @@ export function TimelineList({
     estimateSize: (index) => {
       const row = flatTimelineItems[index];
       if (!row) return ESTIMATED_TIMELINE_ROW_HEIGHT;
-      return row.kind === "header" ? ESTIMATED_SECTION_HEADER_HEIGHT : ESTIMATED_TIMELINE_ROW_HEIGHT;
+      return row.kind === "header"
+        ? ESTIMATED_SECTION_HEADER_HEIGHT
+        : ESTIMATED_TIMELINE_ROW_HEIGHT;
     },
     overscan: 6,
   });
@@ -430,9 +436,7 @@ export function TimelineList({
               >
                 {item.kind === "header" ? (
                   <div data-testid={`timeline-section-${item.sectionKey}`}>
-                    <div
-                      className="-mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] min-h-[44px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]"
-                    >
+                    <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] min-h-[44px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]">
                       <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
                         {item.label}
                       </h3>

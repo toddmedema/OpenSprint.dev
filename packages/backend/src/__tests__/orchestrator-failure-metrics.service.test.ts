@@ -62,45 +62,50 @@ describe("orchestrator-failure-metrics.service", () => {
   });
 
   it("derives language-agnostic signature buckets for environment and quality-gate failures", () => {
-    const summary = rollupOrchestratorEvents("p2", "2025-01-01T00:00:00.000Z", "2025-01-31T00:00:00.000Z", [
-      {
-        timestamp: "2025-01-05T00:00:00.000Z",
-        projectId: "p2",
-        taskId: "a",
-        event: "merge.failed",
-        data: {
-          failureType: "environment_setup",
-          mergeStage: "quality_gate",
-          qualityGateCategory: "environment_setup",
-          qualityGateFirstErrorLine: "Validation workspace package.json is missing",
+    const summary = rollupOrchestratorEvents(
+      "p2",
+      "2025-01-01T00:00:00.000Z",
+      "2025-01-31T00:00:00.000Z",
+      [
+        {
+          timestamp: "2025-01-05T00:00:00.000Z",
+          projectId: "p2",
+          taskId: "a",
+          event: "merge.failed",
+          data: {
+            failureType: "environment_setup",
+            mergeStage: "quality_gate",
+            qualityGateCategory: "environment_setup",
+            qualityGateFirstErrorLine: "Validation workspace package.json is missing",
+          },
         },
-      },
-      {
-        timestamp: "2025-01-06T00:00:00.000Z",
-        projectId: "p2",
-        taskId: "b",
-        event: "task.requeued",
-        data: {
-          failureType: "environment_setup",
-          mergeStage: "quality_gate",
-          qualityGateCategory: "environment_setup",
-          qualityGateClassificationConfidence: "low",
-          failedGateReason: "Cannot resolve project for repo path /tmp/repo",
+        {
+          timestamp: "2025-01-06T00:00:00.000Z",
+          projectId: "p2",
+          taskId: "b",
+          event: "task.requeued",
+          data: {
+            failureType: "environment_setup",
+            mergeStage: "quality_gate",
+            qualityGateCategory: "environment_setup",
+            qualityGateClassificationConfidence: "low",
+            failedGateReason: "Cannot resolve project for repo path /tmp/repo",
+          },
         },
-      },
-      {
-        timestamp: "2025-01-07T00:00:00.000Z",
-        projectId: "p2",
-        taskId: "c",
-        event: "merge.failed",
-        data: {
-          failureType: "merge_quality_gate",
-          mergeStage: "quality_gate",
-          qualityGateCategory: "quality_gate",
-          failedGateReason: "AssertionError: expected 401 to be 200",
+        {
+          timestamp: "2025-01-07T00:00:00.000Z",
+          projectId: "p2",
+          taskId: "c",
+          event: "merge.failed",
+          data: {
+            failureType: "merge_quality_gate",
+            mergeStage: "quality_gate",
+            qualityGateCategory: "quality_gate",
+            failedGateReason: "AssertionError: expected 401 to be 200",
+          },
         },
-      },
-    ] as OrchestratorEvent[]);
+      ] as OrchestratorEvent[]
+    );
 
     expect(summary.totalEventsMatched).toBe(3);
     expect(summary.buckets).toEqual(
@@ -116,6 +121,62 @@ describe("orchestrator-failure-metrics.service", () => {
         expect.objectContaining({
           signatureBucket: "deterministic_code_regression",
           qualityGateCategory: "quality_gate",
+        }),
+      ])
+    );
+  });
+
+  it("rolls up policy, no-result, and recovery signatures", () => {
+    const summary = rollupOrchestratorEvents(
+      "p3",
+      "2025-01-01T00:00:00.000Z",
+      "2025-01-31T00:00:00.000Z",
+      [
+        {
+          timestamp: "2025-01-05T00:00:00.000Z",
+          projectId: "p3",
+          taskId: "a",
+          event: "task.requeued",
+          data: {
+            failureType: "no_result",
+            noResultReasonCode: "result_invalid_json",
+            policyDecision: "requeue",
+          },
+        },
+        {
+          timestamp: "2025-01-06T00:00:00.000Z",
+          projectId: "p3",
+          taskId: "b",
+          event: "task.blocked",
+          data: {
+            failureType: "timeout",
+            policyDecision: "block",
+          },
+        },
+        {
+          timestamp: "2025-01-07T00:00:00.000Z",
+          projectId: "p3",
+          taskId: "c",
+          event: "recovery.stale_heartbeat",
+          data: { staleSec: 600 },
+        },
+      ] as OrchestratorEvent[]
+    );
+
+    expect(summary.totalEventsMatched).toBe(3);
+    expect(summary.buckets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "task.requeued",
+          signatureBucket: "no_result:result_invalid_json",
+        }),
+        expect.objectContaining({
+          event: "task.blocked",
+          signatureBucket: "policy:block",
+        }),
+        expect.objectContaining({
+          event: "recovery.stale_heartbeat",
+          signatureBucket: "recovery_stale_heartbeat",
         }),
       ])
     );

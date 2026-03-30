@@ -37,7 +37,9 @@ async function isCliAvailable(cmd: string): Promise<boolean> {
  * Resolve the effective editor to use given the user's preference and what CLIs are available.
  * "auto" probes for `cursor` first, then `code`.
  */
-async function resolveEditor(preferred: PreferredEditor | undefined): Promise<PreferredEditor | "none"> {
+async function resolveEditor(
+  preferred: PreferredEditor | undefined
+): Promise<PreferredEditor | "none"> {
   const pref = preferred ?? "auto";
 
   if (pref === "cursor") {

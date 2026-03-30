@@ -10,7 +10,8 @@ export function getRunInstructions(
   template?: ScaffoldTemplate
 ): string[] {
   const quotedPath = quotePath(repoPath);
-  const cdCmd = runtime.platform === "win32" && !runtime.isWsl ? `pushd ${quotedPath}` : `cd ${quotedPath}`;
+  const cdCmd =
+    runtime.platform === "win32" && !runtime.isWsl ? `pushd ${quotedPath}` : `cd ${quotedPath}`;
 
   if (template === "empty") {
     return [cdCmd];

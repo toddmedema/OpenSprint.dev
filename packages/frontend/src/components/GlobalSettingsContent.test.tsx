@@ -781,7 +781,9 @@ describe("GlobalSettingsContent", () => {
       expect(mockInstallCursorCli).toHaveBeenCalledTimes(1);
     });
     await waitFor(() => {
-      expect(screen.getAllByTestId("cursor-cli-install-instructions").length).toBeGreaterThanOrEqual(1);
+      expect(
+        screen.getAllByTestId("cursor-cli-install-instructions").length
+      ).toBeGreaterThanOrEqual(1);
     });
   });
 });

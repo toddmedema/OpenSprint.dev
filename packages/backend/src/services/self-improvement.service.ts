@@ -297,7 +297,10 @@ export class SelfImprovementService {
       const settings = await this.projectService.getSettings(projectId);
       const mergeQualityGateCommands = getMergeQualityGateCommands(settings.toolchainProfile);
       const title = this.buildBaselineQualityGateTaskTitle(input.baseBranch);
-      const description = this.buildBaselineQualityGateTaskDescription(input, mergeQualityGateCommands);
+      const description = this.buildBaselineQualityGateTaskDescription(
+        input,
+        mergeQualityGateCommands
+      );
       const reason = truncateText(input.reason, BASELINE_QUALITY_GATE_REASON_LIMIT);
       const outputSnippet = truncateText(input.outputSnippet, BASELINE_QUALITY_GATE_OUTPUT_LIMIT);
       const fingerprint = buildBaselineFailureFingerprint(input);
@@ -324,7 +327,8 @@ export class SelfImprovementService {
         if (status === "closed") return false;
         const source = (task as { source?: unknown }).source;
         const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
-        const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
+        const sourceId = (task as { baselineQualityGateSource?: unknown })
+          .baselineQualityGateSource;
         const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
         return (
           source === "self-improvement" &&
@@ -350,11 +354,11 @@ export class SelfImprovementService {
         if (status !== "closed") return false;
         const source = (task as { source?: unknown }).source;
         const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
-        const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
+        const sourceId = (task as { baselineQualityGateSource?: unknown })
+          .baselineQualityGateSource;
         const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
-        const existingFingerprint = (
-          task as { baselineFailureFingerprint?: unknown }
-        ).baselineFailureFingerprint;
+        const existingFingerprint = (task as { baselineFailureFingerprint?: unknown })
+          .baselineFailureFingerprint;
         if (
           source !== "self-improvement" ||
           (kind !== "baseline-quality-gate" && sourceId !== BASELINE_QUALITY_GATE_TASK_SOURCE) ||

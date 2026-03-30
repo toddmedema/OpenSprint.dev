@@ -42,8 +42,7 @@ export function ProjectView() {
   const selectedPlanIdFromStore = useAppSelector((state) => state.plan.selectedPlanId);
   const selectedTaskIdFromStore = useAppSelector((state) => state.execute.selectedTaskId);
   const previousPhaseRef = useRef<ProjectPhase | null>(null);
-  const enteringExecutePhase =
-    currentPhase === "execute" && previousPhaseRef.current !== "execute";
+  const enteringExecutePhase = currentPhase === "execute" && previousPhaseRef.current !== "execute";
   const selectedPlanId = detailParams.plan ?? selectedPlanIdFromStore ?? null;
   const selectedTaskId =
     detailParams.task ??

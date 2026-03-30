@@ -13,8 +13,13 @@ const MAX_BUCKETS = 80;
 const ROLLUP_EVENT_NAMES = new Set([
   "task.failed",
   "task.requeued",
+  "task.blocked",
   "merge.failed",
   "task.dispatch_deferred",
+  "agent.suspended",
+  "recovery.stale_heartbeat",
+  "recovery.agent_assignee_no_process_reset",
+  "recovery.in_progress_without_assignee_reset",
 ]);
 
 function asString(v: unknown): string | null {
@@ -71,8 +76,21 @@ function parseData(data: Record<string, unknown> | undefined): {
     .filter((value): value is string => value != null)
     .join("\n")
     .toLowerCase();
+  const noResultReasonCode = asString(data.noResultReasonCode);
+  const apiErrorKind = asString(data.apiErrorKind);
+  const policyDecision = asString(data.policyDecision);
+  const toolStatus = asString(data.toolStatus);
   let signatureBucket: string | null = null;
-  if (qualityGateCategory === "environment_setup") {
+  if (noResultReasonCode) {
+    signatureBucket = `no_result:${noResultReasonCode}`;
+  } else if (apiErrorKind) {
+    signatureBucket = `provider_api:${apiErrorKind}`;
+  } else if (policyDecision) {
+    signatureBucket = `policy:${policyDecision}`;
+  } else if (toolStatus) {
+    signatureBucket = `tool:${toolStatus}`;
+  }
+  if (!signatureBucket && qualityGateCategory === "environment_setup") {
     if (
       /\b(package\.json|package-lock\.json|lockfile|node_modules|worktree|rev-parse|not a git repository|needed a single revision)\b/i.test(
         detailText
@@ -88,9 +106,9 @@ function parseData(data: Record<string, unknown> | undefined): {
     } else {
       signatureBucket = "environment_setup_other";
     }
-  } else if (qualityGateCategory === "quality_gate") {
+  } else if (!signatureBucket && qualityGateCategory === "quality_gate") {
     signatureBucket = "deterministic_code_regression";
-  } else if (asString(data.failureType) === "merge_quality_gate") {
+  } else if (!signatureBucket && asString(data.failureType) === "merge_quality_gate") {
     signatureBucket = "quality_gate_unclassified";
   }
 
@@ -118,6 +136,9 @@ export function rollupOrchestratorEvents(
     if (!ROLLUP_EVENT_NAMES.has(ev.event)) continue;
     totalMatched += 1;
     const parsed = parseData(ev.data);
+    if (!parsed.signatureBucket && ev.event.startsWith("recovery.")) {
+      parsed.signatureBucket = ev.event.replace(/\./g, "_");
+    }
     const key = bucketKey({ event: ev.event, ...parsed });
     const existing = tallies.get(key);
     if (existing) {

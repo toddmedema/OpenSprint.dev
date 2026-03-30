@@ -91,7 +91,9 @@ describe("PlanDetailContent", () => {
     const { container } = render(
       <PlanDetailContent plan={planWithTwoSections} onContentSave={onContentSave} />
     );
-    const overviewSection = container.querySelector('[data-sidebar-section-id="plan-body-section-0"]');
+    const overviewSection = container.querySelector(
+      '[data-sidebar-section-id="plan-body-section-0"]'
+    );
     const risksSection = container.querySelector('[data-sidebar-section-id="plan-body-section-1"]');
     expect(overviewSection).toBeInTheDocument();
     expect(overviewSection).toHaveAttribute("data-sidebar-section-title", "Overview");

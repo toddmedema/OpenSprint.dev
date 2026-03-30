@@ -67,12 +67,12 @@ describe("computeMarkdownBlockDiff", () => {
       const { blocks } = computeMarkdownBlockDiff(from, to);
       const mod = blocks.find((b) => b.status === "modified");
       expect(mod).toBeDefined();
-      const removedText = mod!.wordDiff!
-        .filter((p) => p.removed)
+      const removedText = mod!
+        .wordDiff!.filter((p) => p.removed)
         .map((p) => p.value)
         .join("");
-      const addedText = mod!.wordDiff!
-        .filter((p) => p.added)
+      const addedText = mod!
+        .wordDiff!.filter((p) => p.added)
         .map((p) => p.value)
         .join("");
       expect(removedText).toContain("world");
@@ -128,7 +128,10 @@ describe("computeMarkdownBlockDiff", () => {
       expect(mod).toBeDefined();
       expect(mod!.nodeType).toBe("list");
       expect(mod!.wordDiff).toBeDefined();
-      const addedText = mod!.wordDiff!.filter((p) => p.added).map((p) => p.value).join("");
+      const addedText = mod!
+        .wordDiff!.filter((p) => p.added)
+        .map((p) => p.value)
+        .join("");
       expect(addedText).toContain("gamma");
     });
   });

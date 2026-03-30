@@ -21,7 +21,10 @@ interface AgentsRouterDeps {
   orchestratorService: Pick<OrchestratorService, "getActiveAgents" | "killAgent">;
   agentInstructionsService: Pick<
     AgentInstructionsService,
-    "getGeneralInstructions" | "setGeneralInstructions" | "getRoleInstructions" | "setRoleInstructions"
+    | "getGeneralInstructions"
+    | "setGeneralInstructions"
+    | "getRoleInstructions"
+    | "setRoleInstructions"
   >;
 }
 

@@ -349,7 +349,8 @@ export function TaskDetailHeader({
             </div>
             <div className="px-5 py-4">
               <p className="text-sm text-theme-text">
-                This will destroy all in-progress work and worktrees for this task and restart it from scratch. This action cannot be undone.
+                This will destroy all in-progress work and worktrees for this task and restart it
+                from scratch. This action cannot be undone.
               </p>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-theme-border bg-theme-bg rounded-b-xl">

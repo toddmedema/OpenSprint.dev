@@ -187,7 +187,9 @@ function ArchivedSessionViewInner({
   );
 }
 
-export const ArchivedSessionView = React.memo(ArchivedSessionViewInner) as React.NamedExoticComponent<{
+export const ArchivedSessionView = React.memo(
+  ArchivedSessionViewInner
+) as React.NamedExoticComponent<{
   sessions: AgentSession[];
   scrollResetKey?: string;
 }>;

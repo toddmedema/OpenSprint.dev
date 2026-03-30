@@ -96,7 +96,8 @@ function PlanListRow({
     !isPlannerInFlight &&
     !isPlannerStale &&
     (hasGeneratedTasksForCurrentVersion ||
-      (autoExecutePlans && (planTasksPlanIds.includes(planId) || !hasGeneratedTasksForCurrentVersion)));
+      (autoExecutePlans &&
+        (planTasksPlanIds.includes(planId) || !hasGeneratedTasksForCurrentVersion)));
   const showMarkComplete = plan.status === "in_review" && onMarkComplete;
   const showReship =
     plan.status === "complete" &&
@@ -209,7 +210,8 @@ function PlanListRow({
               className="shrink-0 text-xs font-medium text-brand-600 hover:bg-theme-info-bg px-2 py-1 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               data-testid="plan-list-execute"
             >
-              {isExecuting || (autoExecutePlans && !hasGeneratedTasksForCurrentVersion && isPlanningTasks)
+              {isExecuting ||
+              (autoExecutePlans && !hasGeneratedTasksForCurrentVersion && isPlanningTasks)
                 ? !hasGeneratedTasksForCurrentVersion && isPlanningTasks
                   ? "Generating tasks…"
                   : "Executing…"

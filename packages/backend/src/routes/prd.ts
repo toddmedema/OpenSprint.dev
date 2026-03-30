@@ -31,7 +31,12 @@ type SectionParams = { projectId: string; section: string };
 interface PrdRouterDeps {
   prdService: Pick<
     PrdService,
-    "getPrd" | "getHistory" | "getSnapshot" | "listSnapshotVersions" | "getSection" | "updateSection"
+    | "getPrd"
+    | "getHistory"
+    | "getSnapshot"
+    | "listSnapshotVersions"
+    | "getSection"
+    | "updateSection"
   >;
   chatService: Pick<ChatService, "addDirectEditMessage">;
 }

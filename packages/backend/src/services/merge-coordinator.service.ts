@@ -641,8 +641,10 @@ export class MergeCoordinatorService {
     const qualityGateCwd = qualityGateFailure?.cwd?.trim() || null;
     const qualityGateExitCode = qualityGateFailure?.exitCode ?? null;
     const qualityGateSignal = qualityGateFailure?.signal?.trim() || null;
-    const qualityGateClassificationConfidence = qualityGateFailure?.classificationConfidence ?? null;
-    const qualityGateClassificationReason = qualityGateFailure?.classificationReason?.trim() || null;
+    const qualityGateClassificationConfidence =
+      qualityGateFailure?.classificationConfidence ?? null;
+    const qualityGateClassificationReason =
+      qualityGateFailure?.classificationReason?.trim() || null;
     const hasDetail =
       failedGateCommand != null ||
       failedGateReason != null ||
@@ -930,7 +932,10 @@ export class MergeCoordinatorService {
       consecutiveFailures,
     });
     const pauseMultiplier = Math.max(1, 2 ** (consecutiveFailures - 1));
-    const pauseMs = Math.min(BASELINE_QUALITY_GATE_PAUSE_MS * pauseMultiplier, BASELINE_QUALITY_GATE_PAUSE_MAX_MS);
+    const pauseMs = Math.min(
+      BASELINE_QUALITY_GATE_PAUSE_MS * pauseMultiplier,
+      BASELINE_QUALITY_GATE_PAUSE_MAX_MS
+    );
     return {
       pausedUntilIso: new Date(now + pauseMs).toISOString(),
       pauseMs,
@@ -966,8 +971,7 @@ export class MergeCoordinatorService {
       .baselineFailureFingerprint;
     const observedAtRaw = (openRemediation as { baselineFailureObservedAt?: unknown })
       .baselineFailureObservedAt;
-    const observedAtMs =
-      typeof observedAtRaw === "string" ? Date.parse(observedAtRaw) : Number.NaN;
+    const observedAtMs = typeof observedAtRaw === "string" ? Date.parse(observedAtRaw) : Number.NaN;
     if (
       existingFingerprint === fingerprint &&
       Number.isFinite(observedAtMs) &&
@@ -1634,6 +1638,7 @@ export class MergeCoordinatorService {
           conflictedFiles: [],
           attempt,
           resolvedBy: "requeued",
+          policyDecision: "requeue",
           scopeConfidence: this.getScopeConfidence(task),
           summary: requeuedSummary.summary,
           nextAction,
@@ -1670,6 +1675,7 @@ export class MergeCoordinatorService {
           attempt,
           phase: "merge",
           failureType: retryContext.failureType ?? null,
+          policyDecision: "requeue",
           mergeStage: "quality_gate",
           conflictedFiles: [],
           summary: requeuedSummary.summary,
@@ -2040,87 +2046,215 @@ export class MergeCoordinatorService {
     }
     this.inFlightMergeFlows.add(mergeFlowKey);
     try {
-    this.traceMergeLifecycle(
-      "flow_start",
-      projectId,
-      task.id,
-      { branchName, repoPath },
-      { attempt: slot?.attempt, mirrorToCrashLog: true }
-    );
-    if (!slot) {
-      log.warn("performMergeAndDone: no slot found for task", { taskId: task.id });
       this.traceMergeLifecycle(
-        "missing_slot",
+        "flow_start",
         projectId,
         task.id,
-        { branchName },
-        { mirrorToCrashLog: true }
+        { branchName, repoPath },
+        { attempt: slot?.attempt, mirrorToCrashLog: true }
       );
-      try {
-        await this.host.taskStore.update(projectId, task.id, {
-          status: "open",
-          assignee: "",
-        });
-      } catch (err) {
-        log.warn("performMergeAndDone: failed to requeue task after missing slot", {
-          taskId: task.id,
-          err,
-        });
+      if (!slot) {
+        log.warn("performMergeAndDone: no slot found for task", { taskId: task.id });
+        this.traceMergeLifecycle(
+          "missing_slot",
+          projectId,
+          task.id,
+          { branchName },
+          { mirrorToCrashLog: true }
+        );
+        try {
+          await this.host.taskStore.update(projectId, task.id, {
+            status: "open",
+            assignee: "",
+          });
+        } catch (err) {
+          log.warn("performMergeAndDone: failed to requeue task after missing slot", {
+            taskId: task.id,
+            err,
+          });
+        }
+        await broadcastAuthoritativeTaskUpdated(broadcastToProject, projectId, task.id);
+        this.host.nudge(projectId);
+        return;
       }
-      await broadcastAuthoritativeTaskUpdated(broadcastToProject, projectId, task.id);
-      this.host.nudge(projectId);
-      return;
-    }
-    const wtPath = slot.worktreePath ?? repoPath;
+      const wtPath = slot.worktreePath ?? repoPath;
 
-    // 1. Prepare: commit any WIP, then wait for any in-flight push to finish
-    await this.host.branchManager.waitForGitReady(wtPath);
-    await this.host.branchManager.commitWip(wtPath, task.id);
-    await this.waitForPushComplete(projectId);
-    const settings = await this.host.projectService.getSettings(projectId);
-    const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
-    const mergeStrategy = settings.mergeStrategy ?? "per_task";
-    const allIssuesForEpic = await this.host.taskStore.listAll(projectId);
-    const epicId = resolveEpicId(task.id, allIssuesForEpic);
+      // 1. Prepare: commit any WIP, then wait for any in-flight push to finish
+      await this.host.branchManager.waitForGitReady(wtPath);
+      await this.host.branchManager.commitWip(wtPath, task.id);
+      await this.waitForPushComplete(projectId);
+      const settings = await this.host.projectService.getSettings(projectId);
+      const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
+      const mergeStrategy = settings.mergeStrategy ?? "per_task";
+      const allIssuesForEpic = await this.host.taskStore.listAll(projectId);
+      const epicId = resolveEpicId(task.id, allIssuesForEpic);
 
-    const isPerEpicIntermediate = mergeStrategy === "per_epic" && epicId != null;
+      const isPerEpicIntermediate = mergeStrategy === "per_epic" && epicId != null;
 
-    if (isPerEpicIntermediate) {
-      // per_epic + epic task: do not merge to main; close task, record, archive, release slot
-      await this.closeTaskRecordAndReleaseSlot(
-        projectId,
-        repoPath,
-        task,
-        branchName,
-        baseBranch,
-        wtPath,
-        slot,
-        settings
-      );
-      this.host.nudge(projectId);
+      if (isPerEpicIntermediate) {
+        // per_epic + epic task: do not merge to main; close task, record, archive, release slot
+        await this.closeTaskRecordAndReleaseSlot(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          baseBranch,
+          wtPath,
+          slot,
+          settings
+        );
+        this.host.nudge(projectId);
 
-      // Check if all implementation tasks in epic are closed; if not, return (next task uses same epic worktree)
-      const freshIssues = await this.host.taskStore.listAll(projectId);
-      const implTasks = this.getEpicImplementationTasks(freshIssues, epicId);
-      const allImplClosed =
-        implTasks.length > 0 && implTasks.every((i) => (i.status as string) === "closed");
+        // Check if all implementation tasks in epic are closed; if not, return (next task uses same epic worktree)
+        const freshIssues = await this.host.taskStore.listAll(projectId);
+        const implTasks = this.getEpicImplementationTasks(freshIssues, epicId);
+        const allImplClosed =
+          implTasks.length > 0 && implTasks.every((i) => (i.status as string) === "closed");
 
-      if (!allImplClosed) {
+        if (!allImplClosed) {
+          return;
+        }
+
+        // Last task in epic: merge epic branch to main, then push and cleanup via postCompletionAsync
+        try {
+          this.traceMergeLifecycle(
+            "attempt_start",
+            projectId,
+            task.id,
+            {
+              mode: "per_epic_final_merge",
+              branchName,
+              baseBranch,
+              wtPath,
+            },
+            { attempt: slot.attempt, mirrorToCrashLog: true }
+          );
+          if (
+            await this.deferMergeValidationWhileDegraded(projectId, repoPath, task, slot, wtPath)
+          ) {
+            return;
+          }
+          if (!this.isBaselineQualityGateRemediationTask(task, baseBranch)) {
+            const baselineFailure = await this.getBaselineQualityGateFailure(
+              projectId,
+              repoPath,
+              baseBranch,
+              { source: "merge_precheck" }
+            );
+            if (baselineFailure) {
+              await this.createBaselineQualityGateRemediationTask(
+                repoPath,
+                projectId,
+                baseBranch,
+                baselineFailure
+              );
+              await this.pauseMergeForBaselineQualityGateFailure(
+                projectId,
+                repoPath,
+                task,
+                baseBranch,
+                baselineFailure,
+                wtPath
+              );
+              await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+              this.host.nudge(projectId);
+              return;
+            }
+          } else {
+            log.info("Skipping baseline-on-main precheck for baseline remediation task", {
+              taskId: task.id,
+              baseBranch,
+            });
+          }
+          await this.ensureMergeQualityGates({
+            projectId,
+            repoPath,
+            worktreePath: wtPath,
+            taskId: task.id,
+            branchName,
+            baseBranch,
+            validationWorkspace: "task_worktree",
+            toolchainProfile: settings.toolchainProfile,
+          });
+          this.traceMergeLifecycle(
+            "quality_gates_passed",
+            projectId,
+            task.id,
+            { mode: "per_epic_final_merge", branchName, baseBranch, wtPath },
+            { attempt: slot.attempt }
+          );
+          await gitCommitQueue.drain();
+          this.traceMergeLifecycle(
+            "queue_merge_begin",
+            projectId,
+            task.id,
+            { mode: "per_epic_final_merge", branchName, baseBranch },
+            { attempt: slot.attempt }
+          );
+          await gitCommitQueue.enqueueAndWait({
+            type: "worktree_merge",
+            repoPath,
+            worktreePath: wtPath,
+            branchName,
+            taskId: task.id,
+            taskTitle: task.title || task.id,
+            baseBranch,
+            qualityGateProfile: DETERMINISTIC_MERGE_GATE_PROFILE,
+          });
+          this.traceMergeLifecycle(
+            "queue_merge_succeeded",
+            projectId,
+            task.id,
+            { mode: "per_epic_final_merge", branchName, baseBranch },
+            { attempt: slot.attempt, mirrorToCrashLog: true }
+          );
+          await this.markMergeValidationHealthy(projectId, repoPath);
+          await this.reconcileDependenciesAfterMerge(repoPath, task.id);
+          this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
+        } catch (mergeErr) {
+          log.warn("Merge epic to main failed", { taskId: task.id, branchName, mergeErr });
+          this.traceMergeLifecycle(
+            "attempt_failed",
+            projectId,
+            task.id,
+            {
+              mode: "per_epic_final_merge",
+              branchName,
+              baseBranch,
+              err:
+                mergeErr instanceof Error
+                  ? { name: mergeErr.name, message: mergeErr.message, stack: mergeErr.stack }
+                  : String(mergeErr),
+            },
+            { attempt: slot.attempt, mirrorToCrashLog: true }
+          );
+          await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
+          return;
+        }
+
+        await this.registerPendingCleanup(projectId, repoPath, {
+          taskId: task.id,
+          branchName,
+          worktreePath: wtPath,
+          gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
+          worktreeKey: slot.worktreeKey,
+        });
+        this.host.nudge(projectId);
+        this.postCompletionAsync(projectId, repoPath, task.id, { mergedToMain: true }).catch(
+          (err) => {
+            log.warn("Post-completion async work failed", { taskId: task.id, err });
+          }
+        );
         return;
       }
 
-      // Last task in epic: merge epic branch to main, then push and cleanup via postCompletionAsync
+      // 2. Attempt merge inside the serialized queue. Rebase now happens there.
       try {
         this.traceMergeLifecycle(
           "attempt_start",
           projectId,
           task.id,
-          {
-            mode: "per_epic_final_merge",
-            branchName,
-            baseBranch,
-            wtPath,
-          },
+          { mode: "per_task_merge", branchName, baseBranch, wtPath },
           { attempt: slot.attempt, mirrorToCrashLog: true }
         );
         if (await this.deferMergeValidationWhileDegraded(projectId, repoPath, task, slot, wtPath)) {
@@ -2172,7 +2306,7 @@ export class MergeCoordinatorService {
           "quality_gates_passed",
           projectId,
           task.id,
-          { mode: "per_epic_final_merge", branchName, baseBranch, wtPath },
+          { mode: "per_task_merge", branchName, baseBranch, wtPath },
           { attempt: slot.attempt }
         );
         await gitCommitQueue.drain();
@@ -2180,7 +2314,7 @@ export class MergeCoordinatorService {
           "queue_merge_begin",
           projectId,
           task.id,
-          { mode: "per_epic_final_merge", branchName, baseBranch },
+          { mode: "per_task_merge", branchName, baseBranch },
           { attempt: slot.attempt }
         );
         await gitCommitQueue.enqueueAndWait({
@@ -2197,20 +2331,20 @@ export class MergeCoordinatorService {
           "queue_merge_succeeded",
           projectId,
           task.id,
-          { mode: "per_epic_final_merge", branchName, baseBranch },
+          { mode: "per_task_merge", branchName, baseBranch },
           { attempt: slot.attempt, mirrorToCrashLog: true }
         );
         await this.markMergeValidationHealthy(projectId, repoPath);
         await this.reconcileDependenciesAfterMerge(repoPath, task.id);
         this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
       } catch (mergeErr) {
-        log.warn("Merge epic to main failed", { taskId: task.id, branchName, mergeErr });
+        log.warn("Merge to main failed", { taskId: task.id, branchName, mergeErr });
         this.traceMergeLifecycle(
           "attempt_failed",
           projectId,
           task.id,
           {
-            mode: "per_epic_final_merge",
+            mode: "per_task_merge",
             branchName,
             baseBranch,
             err:
@@ -2224,6 +2358,7 @@ export class MergeCoordinatorService {
         return;
       }
 
+      // 4. Merge succeeded — close task, record, archive, release slot; then register cleanup and post-completion
       await this.registerPendingCleanup(projectId, repoPath, {
         taskId: task.id,
         branchName,
@@ -2231,157 +2366,32 @@ export class MergeCoordinatorService {
         gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
         worktreeKey: slot.worktreeKey,
       });
+      await this.closeTaskRecordAndReleaseSlot(
+        projectId,
+        repoPath,
+        task,
+        branchName,
+        baseBranch,
+        wtPath,
+        slot,
+        settings
+      );
+      this.traceMergeLifecycle(
+        "flow_complete",
+        projectId,
+        task.id,
+        { branchName, baseBranch },
+        { attempt: slot.attempt, mirrorToCrashLog: true }
+      );
+
+      // 5. Async push + post-completion
       this.host.nudge(projectId);
+
       this.postCompletionAsync(projectId, repoPath, task.id, { mergedToMain: true }).catch(
         (err) => {
           log.warn("Post-completion async work failed", { taskId: task.id, err });
         }
       );
-      return;
-    }
-
-    // 2. Attempt merge inside the serialized queue. Rebase now happens there.
-    try {
-      this.traceMergeLifecycle(
-        "attempt_start",
-        projectId,
-        task.id,
-        { mode: "per_task_merge", branchName, baseBranch, wtPath },
-        { attempt: slot.attempt, mirrorToCrashLog: true }
-      );
-      if (await this.deferMergeValidationWhileDegraded(projectId, repoPath, task, slot, wtPath)) {
-        return;
-      }
-      if (!this.isBaselineQualityGateRemediationTask(task, baseBranch)) {
-        const baselineFailure = await this.getBaselineQualityGateFailure(
-          projectId,
-          repoPath,
-          baseBranch,
-          { source: "merge_precheck" }
-        );
-        if (baselineFailure) {
-          await this.createBaselineQualityGateRemediationTask(
-            repoPath,
-            projectId,
-            baseBranch,
-            baselineFailure
-          );
-          await this.pauseMergeForBaselineQualityGateFailure(
-            projectId,
-            repoPath,
-            task,
-            baseBranch,
-            baselineFailure,
-            wtPath
-          );
-          await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
-          this.host.nudge(projectId);
-          return;
-        }
-      } else {
-        log.info("Skipping baseline-on-main precheck for baseline remediation task", {
-          taskId: task.id,
-          baseBranch,
-        });
-      }
-      await this.ensureMergeQualityGates({
-        projectId,
-        repoPath,
-        worktreePath: wtPath,
-        taskId: task.id,
-        branchName,
-        baseBranch,
-        validationWorkspace: "task_worktree",
-        toolchainProfile: settings.toolchainProfile,
-      });
-      this.traceMergeLifecycle(
-        "quality_gates_passed",
-        projectId,
-        task.id,
-        { mode: "per_task_merge", branchName, baseBranch, wtPath },
-        { attempt: slot.attempt }
-      );
-      await gitCommitQueue.drain();
-      this.traceMergeLifecycle(
-        "queue_merge_begin",
-        projectId,
-        task.id,
-        { mode: "per_task_merge", branchName, baseBranch },
-        { attempt: slot.attempt }
-      );
-      await gitCommitQueue.enqueueAndWait({
-        type: "worktree_merge",
-        repoPath,
-        worktreePath: wtPath,
-        branchName,
-        taskId: task.id,
-        taskTitle: task.title || task.id,
-        baseBranch,
-        qualityGateProfile: DETERMINISTIC_MERGE_GATE_PROFILE,
-      });
-      this.traceMergeLifecycle(
-        "queue_merge_succeeded",
-        projectId,
-        task.id,
-        { mode: "per_task_merge", branchName, baseBranch },
-        { attempt: slot.attempt, mirrorToCrashLog: true }
-      );
-      await this.markMergeValidationHealthy(projectId, repoPath);
-      await this.reconcileDependenciesAfterMerge(repoPath, task.id);
-      this.invalidateBaselineCacheAfterMerge(projectId, baseBranch);
-    } catch (mergeErr) {
-      log.warn("Merge to main failed", { taskId: task.id, branchName, mergeErr });
-      this.traceMergeLifecycle(
-        "attempt_failed",
-        projectId,
-        task.id,
-        {
-          mode: "per_task_merge",
-          branchName,
-          baseBranch,
-          err:
-            mergeErr instanceof Error
-              ? { name: mergeErr.name, message: mergeErr.message, stack: mergeErr.stack }
-              : String(mergeErr),
-        },
-        { attempt: slot.attempt, mirrorToCrashLog: true }
-      );
-      await this.requeueTaskAfterMergeFailure(projectId, repoPath, task, mergeErr as Error);
-      return;
-    }
-
-    // 4. Merge succeeded — close task, record, archive, release slot; then register cleanup and post-completion
-    await this.registerPendingCleanup(projectId, repoPath, {
-      taskId: task.id,
-      branchName,
-      worktreePath: wtPath,
-      gitWorkingMode: settings.gitWorkingMode === "branches" ? "branches" : "worktree",
-      worktreeKey: slot.worktreeKey,
-    });
-    await this.closeTaskRecordAndReleaseSlot(
-      projectId,
-      repoPath,
-      task,
-      branchName,
-      baseBranch,
-      wtPath,
-      slot,
-      settings
-    );
-    this.traceMergeLifecycle(
-      "flow_complete",
-      projectId,
-      task.id,
-      { branchName, baseBranch },
-      { attempt: slot.attempt, mirrorToCrashLog: true }
-    );
-
-    // 5. Async push + post-completion
-    this.host.nudge(projectId);
-
-    this.postCompletionAsync(projectId, repoPath, task.id, { mergedToMain: true }).catch((err) => {
-      log.warn("Post-completion async work failed", { taskId: task.id, err });
-    });
     } finally {
       this.inFlightMergeFlows.delete(mergeFlowKey);
     }
@@ -2608,6 +2618,7 @@ export class MergeCoordinatorService {
               conflictedFiles,
               attempt: cumulativeAttempts,
               resolvedBy: "blocked",
+              policyDecision: "block",
               blockReason: mergeBlockReason,
               scopeConfidence,
               summary: blockedSummary.summary,
@@ -2659,6 +2670,7 @@ export class MergeCoordinatorService {
               attempt: cumulativeAttempts,
               phase: "merge",
               failureType: mergeFailureType,
+              policyDecision: "block",
               blockReason: mergeBlockReason,
               mergeStage: normalizedStage,
               conflictedFiles,
@@ -2748,6 +2760,7 @@ export class MergeCoordinatorService {
             conflictedFiles,
             attempt: cumulativeAttempts,
             resolvedBy: "requeued",
+            policyDecision: "requeue",
             scopeConfidence,
             summary: requeuedSummary.summary,
             qualityGateCategory: qualityGateFailureDetails?.category ?? null,
@@ -2795,6 +2808,7 @@ export class MergeCoordinatorService {
             attempt: cumulativeAttempts,
             phase: "merge",
             failureType: mergeFailureType,
+            policyDecision: "requeue",
             mergeStage: normalizedStage,
             conflictedFiles,
             summary: requeuedSummary.summary,

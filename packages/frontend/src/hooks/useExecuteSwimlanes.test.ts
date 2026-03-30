@@ -359,6 +359,5 @@ describe("useExecuteSwimlanes", () => {
       expect(result.current.planningSwimlanes[0].tasks).toHaveLength(1);
       expect(result.current.planningSwimlanes[0].tasks[0].id).toBe("epic-a.1");
     });
-
   });
 });

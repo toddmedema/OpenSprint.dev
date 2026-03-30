@@ -23,6 +23,18 @@ interface StructuredAssistantMessageEvent {
   text: string;
 }
 
+export type NoResultReasonCode =
+  | "result_missing"
+  | "result_empty"
+  | "result_invalid_json"
+  | "result_missing_status"
+  | "result_non_terminal_status"
+  | "result_shape_invalid"
+  | "result_read_timeout"
+  | "result_read_error";
+
+const TERMINAL_RESULT_STATUSES = new Set(["success", "failed", "approved", "rejected"]);
+
 /** True if the string has meaningful alphanumeric content (not just punctuation/whitespace). */
 export function isMeaningfulNoResultFragment(fragment: string): boolean {
   return /[A-Za-z0-9]/.test(fragment.replace(/[^A-Za-z0-9]+/g, ""));
@@ -474,4 +486,38 @@ export function buildReviewNoResultFailureReason(reviewOutcome: ReviewOutcome): 
   });
   if (details.length === 1) return details[0]!;
   return `Review agents failed to produce valid results: ${details.join("; ")}`;
+}
+
+/**
+ * Classify why result.json did not produce a valid terminal coding/review result.
+ * This keeps no_result failures queryable instead of free-form string matching.
+ */
+export function classifyNoResultReasonCode(params: {
+  rawResult: string | null;
+  readFailure?: "timeout" | "error" | null;
+}): NoResultReasonCode {
+  if (params.readFailure === "timeout") return "result_read_timeout";
+  if (params.readFailure === "error") return "result_read_error";
+  if (params.rawResult == null) return "result_missing";
+
+  const trimmed = params.rawResult.trim();
+  if (!trimmed) return "result_empty";
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return "result_invalid_json";
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return "result_shape_invalid";
+  }
+  const status =
+    typeof (parsed as { status?: unknown }).status === "string"
+      ? ((parsed as { status: string }).status || "").toLowerCase().trim()
+      : "";
+  if (!status) return "result_missing_status";
+  if (!TERMINAL_RESULT_STATUSES.has(status)) return "result_non_terminal_status";
+  // If terminal status is present but parser still rejected, shape is invalid for contract.
+  return "result_shape_invalid";
 }

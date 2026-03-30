@@ -613,7 +613,9 @@ describe("RecoveryService — stale heartbeat recovery", () => {
 
   it("cleans stale inactive blocked/open worktrees after TTL", async () => {
     const staleUpdatedAt = new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString();
-    mockListTaskWorktrees.mockResolvedValue([{ taskId: "task-blocked", worktreePath: "/tmp/wt-blocked" }]);
+    mockListTaskWorktrees.mockResolvedValue([
+      { taskId: "task-blocked", worktreePath: "/tmp/wt-blocked" },
+    ]);
     vi.mocked(taskStore.listAll).mockResolvedValue([
       { id: "task-blocked", status: "blocked", updated_at: staleUpdatedAt } as never,
     ]);

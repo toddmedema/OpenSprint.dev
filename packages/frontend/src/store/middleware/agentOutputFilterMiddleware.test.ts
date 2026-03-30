@@ -72,8 +72,12 @@ describe("agentOutputFilterMiddleware", () => {
     store.dispatch(setSelectedTaskId("task-1"));
 
     // NDJSON chunks go through the filter and land in the middleware batch buffer
-    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"hello "}\n' }));
-    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"world"}\n' }));
+    store.dispatch(
+      appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"hello "}\n' })
+    );
+    store.dispatch(
+      appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"world"}\n' })
+    );
 
     // Chunks are still in the middleware buffer, not yet in the store
     expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
@@ -122,7 +126,9 @@ describe("agentOutputFilterMiddleware", () => {
     const store = createStore();
     store.dispatch(setSelectedTaskId("task-1"));
 
-    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"old"}\n' }));
+    store.dispatch(
+      appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"old"}\n' })
+    );
     store.dispatch(
       setAgentOutputBackfill({
         taskId: "task-1",
@@ -131,7 +137,9 @@ describe("agentOutputFilterMiddleware", () => {
     );
 
     // New chunk arrives after backfill
-    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":" plus new"}\n' }));
+    store.dispatch(
+      appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":" plus new"}\n' })
+    );
     vi.advanceTimersByTime(500);
 
     expect(store.getState().execute.agentOutput["task-1"]).toEqual(["old content", " plus new"]);

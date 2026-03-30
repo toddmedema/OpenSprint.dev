@@ -27,8 +27,18 @@ describe("getPlanGenerationState", () => {
 
   it("returns 'ready' when agents exist but none are planners for the plan", () => {
     const agents: ActiveAgent[] = [
-      makeAgent({ id: "a1", role: "coder", planId: "plan-1", startedAt: new Date(NOW - 1000).toISOString() }),
-      makeAgent({ id: "a2", role: "planner", planId: "plan-other", startedAt: new Date(NOW - 1000).toISOString() }),
+      makeAgent({
+        id: "a1",
+        role: "coder",
+        planId: "plan-1",
+        startedAt: new Date(NOW - 1000).toISOString(),
+      }),
+      makeAgent({
+        id: "a2",
+        role: "planner",
+        planId: "plan-other",
+        startedAt: new Date(NOW - 1000).toISOString(),
+      }),
     ];
     expect(getPlanGenerationState("plan-1", agents, NOW)).toBe("ready");
   });
@@ -72,7 +82,11 @@ describe("getPlanGenerationState", () => {
 
   it("only considers planner role, not other roles with matching planId", () => {
     const agents: ActiveAgent[] = [
-      makeAgent({ role: "auditor", planId: "plan-1", startedAt: new Date(NOW - 1000).toISOString() }),
+      makeAgent({
+        role: "auditor",
+        planId: "plan-1",
+        startedAt: new Date(NOW - 1000).toISOString(),
+      }),
     ];
     expect(getPlanGenerationState("plan-1", agents, NOW)).toBe("ready");
   });
@@ -94,9 +108,7 @@ describe("getActivePlannerPlanIds", () => {
   });
 
   it("excludes agents without planId", () => {
-    const agents: ActiveAgent[] = [
-      makeAgent({ id: "a1", startedAt: new Date().toISOString() }),
-    ];
+    const agents: ActiveAgent[] = [makeAgent({ id: "a1", startedAt: new Date().toISOString() })];
     expect(getActivePlannerPlanIds(agents)).toEqual(new Set());
   });
 });
@@ -111,7 +123,11 @@ describe("getStalePlannerPlanIds", () => {
 
   it("returns plan IDs of planners running >= 5 minutes", () => {
     const agents: ActiveAgent[] = [
-      makeAgent({ id: "a1", planId: "plan-1", startedAt: new Date(NOW - PLAN_STALE_THRESHOLD_MS).toISOString() }),
+      makeAgent({
+        id: "a1",
+        planId: "plan-1",
+        startedAt: new Date(NOW - PLAN_STALE_THRESHOLD_MS).toISOString(),
+      }),
       makeAgent({ id: "a2", planId: "plan-2", startedAt: new Date(NOW - 60_000).toISOString() }),
     ];
     expect(getStalePlannerPlanIds(agents, NOW)).toEqual(new Set(["plan-1"]));

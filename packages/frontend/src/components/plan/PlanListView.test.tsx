@@ -157,7 +157,10 @@ describe("PlanListView", () => {
   });
 
   it("hides task counts for planning rows and shows them otherwise", () => {
-    const plans = [makePlan("planning-feature", "planning", 2, false), makePlan("building-feature", "building", 2)];
+    const plans = [
+      makePlan("planning-feature", "planning", 2, false),
+      makePlan("building-feature", "building", 2),
+    ];
     render(
       <PlanListView
         plans={plans}

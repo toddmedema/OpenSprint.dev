@@ -18,9 +18,7 @@ describe("schema", () => {
     );
     expect(statements.some((s) => s.includes("plan_versions"))).toBe(true);
     expect(statements.some((s) => s.includes("current_version_number"))).toBe(true);
-    expect(
-      statements.every((s) => /^(CREATE|ALTER)\b/i.test(s.trim()))
-    ).toBe(true);
+    expect(statements.every((s) => /^(CREATE|ALTER)\b/i.test(s.trim()))).toBe(true);
   });
 
   it("runSchema succeeds for SQLite (mock client)", async () => {
@@ -172,9 +170,7 @@ describe("schema", () => {
       expect(statements.some((s) => s.includes("integration_connections"))).toBe(true);
       expect(statements.some((s) => s.includes("integration_import_ledger"))).toBe(true);
       expect(
-        statements.some((s) =>
-          s.includes("idx_integration_import_ledger_project_provider_status")
-        )
+        statements.some((s) => s.includes("idx_integration_import_ledger_project_provider_status"))
       ).toBe(true);
     }
   });
@@ -184,7 +180,9 @@ describe("schema", () => {
     const plansMatch = sql.match(/CREATE TABLE IF NOT EXISTS plans\s*\([^;]+\)/);
     expect(plansMatch?.[0]).toContain("parent_plan_id");
     expect(sql).toContain("ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id TEXT");
-    expect(sql).toContain("CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id)");
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id)"
+    );
   });
 
   it("SQLite schema includes parent_plan_id column and index on plans", () => {
@@ -192,7 +190,9 @@ describe("schema", () => {
     const plansMatch = sql.match(/CREATE TABLE IF NOT EXISTS plans\s*\([^;]+\)/);
     expect(plansMatch?.[0]).toContain("parent_plan_id");
     expect(sql).toContain("ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id TEXT");
-    expect(sql).toContain("CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id)");
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS idx_plans_parent ON plans(project_id, parent_plan_id)"
+    );
   });
 
   it("runSchema emits parent_plan_id ALTER and index for both dialects", async () => {
@@ -216,18 +216,16 @@ describe("schema", () => {
         const parentAlterIdx = statements.findIndex((s) =>
           s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id")
         );
-        expect(
-          statements.some((s) => s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id"))
-        ).toBe(true);
+        expect(statements.some((s) => s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id"))).toBe(
+          true
+        );
         expect(parentAlterIdx).toBeLessThan(parentIndexIdx);
       } else {
         const parentAlterIdx = statements.findIndex((s) =>
           s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id")
         );
         expect(
-          statements.some((s) =>
-            s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id")
-          )
+          statements.some((s) => s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id"))
         ).toBe(true);
         expect(parentAlterIdx).toBeLessThan(parentIndexIdx);
       }

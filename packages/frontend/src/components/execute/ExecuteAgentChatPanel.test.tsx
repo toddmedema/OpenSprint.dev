@@ -109,9 +109,7 @@ describe("ExecuteAgentChatPanel", () => {
         />
       );
 
-      expect(
-        screen.getByText("Claude CLI does not support live chat")
-      ).toBeInTheDocument();
+      expect(screen.getByText("Claude CLI does not support live chat")).toBeInTheDocument();
     });
 
     it("disables send button when chatSupported is false", () => {
@@ -131,9 +129,7 @@ describe("ExecuteAgentChatPanel", () => {
     it("shows disabled placeholder when chatSupported is false", () => {
       render(<ExecuteAgentChatPanel {...defaultProps} chatSupported={false} />);
 
-      expect(
-        screen.getByPlaceholderText("Chat unavailable with CLI backend")
-      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Chat unavailable with CLI backend")).toBeInTheDocument();
     });
   });
 
@@ -142,9 +138,7 @@ describe("ExecuteAgentChatPanel", () => {
       render(<ExecuteAgentChatPanel {...defaultProps} agentRunning={false} />);
 
       expect(screen.getByTestId("chat-not-running-notice")).toBeInTheDocument();
-      expect(
-        screen.getByText(/The agent is not currently running/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/The agent is not currently running/)).toBeInTheDocument();
     });
 
     it("does not show not-running notice when chatSupported is false", () => {
@@ -262,9 +256,7 @@ describe("ExecuteAgentChatPanel", () => {
   describe("draft persistence", () => {
     it("restores draft from localStorage on mount", () => {
       localStorage.setItem("test-draft-key", JSON.stringify("Saved draft"));
-      render(
-        <ExecuteAgentChatPanel {...defaultProps} draftStorageKey="test-draft-key" />
-      );
+      render(<ExecuteAgentChatPanel {...defaultProps} draftStorageKey="test-draft-key" />);
 
       const input = screen.getByRole("textbox", { name: "Execute chat message" });
       expect(input).toHaveValue("Saved draft");
@@ -275,11 +267,7 @@ describe("ExecuteAgentChatPanel", () => {
       const onSend = vi.fn().mockReturnValue(undefined);
       localStorage.setItem("test-draft-key", JSON.stringify("Draft"));
       render(
-        <ExecuteAgentChatPanel
-          {...defaultProps}
-          onSend={onSend}
-          draftStorageKey="test-draft-key"
-        />
+        <ExecuteAgentChatPanel {...defaultProps} onSend={onSend} draftStorageKey="test-draft-key" />
       );
 
       const input = screen.getByRole("textbox", { name: "Execute chat message" });
@@ -296,11 +284,7 @@ describe("ExecuteAgentChatPanel", () => {
       const user = userEvent.setup();
       const onSend = vi.fn().mockReturnValue(false);
       render(
-        <ExecuteAgentChatPanel
-          {...defaultProps}
-          onSend={onSend}
-          draftStorageKey="test-draft-key"
-        />
+        <ExecuteAgentChatPanel {...defaultProps} onSend={onSend} draftStorageKey="test-draft-key" />
       );
 
       const input = screen.getByRole("textbox", { name: "Execute chat message" });
@@ -353,7 +337,11 @@ describe("ExecuteAgentChatPanel", () => {
         { role: "assistant" as const, content: "Another reply!", timestamp: "" },
       ];
       rerender(
-        <ExecuteAgentChatPanel {...defaultProps} messages={withNewMessage} scrollResetKey="task-1" />
+        <ExecuteAgentChatPanel
+          {...defaultProps}
+          messages={withNewMessage}
+          scrollResetKey="task-1"
+        />
       );
 
       await new Promise((r) => requestAnimationFrame(r));
@@ -382,9 +370,7 @@ describe("ExecuteAgentChatPanel", () => {
     });
 
     it("scrolls to bottom on task switch (scrollResetKey change)", async () => {
-      const messages: ExecuteChatMessage[] = [
-        { role: "user", content: "Hello", timestamp: "" },
-      ];
+      const messages: ExecuteChatMessage[] = [{ role: "user", content: "Hello", timestamp: "" }];
       const { rerender } = render(
         <ExecuteAgentChatPanel {...defaultProps} messages={messages} scrollResetKey="task-1" />
       );
@@ -406,9 +392,7 @@ describe("ExecuteAgentChatPanel", () => {
     });
 
     it("scrolls to bottom when scrollTriggerKey changes", async () => {
-      const messages: ExecuteChatMessage[] = [
-        { role: "user", content: "Hello", timestamp: "" },
-      ];
+      const messages: ExecuteChatMessage[] = [{ role: "user", content: "Hello", timestamp: "" }];
       const { rerender } = render(
         <ExecuteAgentChatPanel
           {...defaultProps}
@@ -457,9 +441,7 @@ describe("ExecuteAgentChatPanel", () => {
 
   it("applies dark mode classes when html has data-theme=dark", () => {
     document.documentElement.setAttribute("data-theme", "dark");
-    const messages: ExecuteChatMessage[] = [
-      { role: "assistant", content: "Hello", timestamp: "" },
-    ];
+    const messages: ExecuteChatMessage[] = [{ role: "assistant", content: "Hello", timestamp: "" }];
     render(<ExecuteAgentChatPanel {...defaultProps} messages={messages} />);
 
     const panel = screen.getByTestId("execute-agent-chat-panel");

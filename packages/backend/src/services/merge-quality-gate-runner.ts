@@ -17,10 +17,7 @@ import {
   type MergeQualityGateProfile,
 } from "./merge-quality-gates.js";
 import type { ToolchainProfile } from "@opensprint/shared";
-import {
-  isNodeDependencyStrategy,
-  resolveToolchainProfile,
-} from "./toolchain-profile.service.js";
+import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
 
 const log = createLogger("merge-quality-gate-runner");
 const QUALITY_GATE_FAILURE_OUTPUT_LIMIT = 4000;
@@ -179,14 +176,11 @@ async function runDependencyHealthCheck(
     spec = { command: "npm", args };
   }
   try {
-    const result = await runCommand(
-      spec,
-      {
-        cwd: workspacePath,
-        timeout: QUALITY_GATE_PRECHECK_TIMEOUT_MS,
-        ...(spec.command === "npm" ? { env: NPM_INCLUDE_DEV_ENV } : {}),
-      }
-    );
+    const result = await runCommand(spec, {
+      cwd: workspacePath,
+      timeout: QUALITY_GATE_PRECHECK_TIMEOUT_MS,
+      ...(spec.command === "npm" ? { env: NPM_INCLUDE_DEV_ENV } : {}),
+    });
     const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
     return { healthy: true, command, output };
   } catch (err) {
@@ -494,8 +488,7 @@ function extractCommandFailure(
       typeof commandErr.signal === "string" || commandErr.signal == null
         ? (commandErr.signal ?? null)
         : String(commandErr.signal),
-    classificationConfidence:
-      params.category != null ? "high" : classification.confidence,
+    classificationConfidence: params.category != null ? "high" : classification.confidence,
     classificationReason:
       params.category != null
         ? `category forced by ${params.category} precheck`
@@ -544,7 +537,8 @@ async function prepareGateCommand(
 
   const spec = parseCommandSpec(command);
   const npmGate = spec.command === "npm";
-  const shouldRunNodePrechecks = npmGate && isNodeDependencyStrategy(resolvedProfile.dependencyStrategy);
+  const shouldRunNodePrechecks =
+    npmGate && isNodeDependencyStrategy(resolvedProfile.dependencyStrategy);
   let packageScripts = new Set<string>();
   if (shouldRunNodePrechecks) {
     const packageJsonPath = path.join(cwd, "package.json");
@@ -820,7 +814,9 @@ async function repairQualityGateEnvironment(
     if (repoNodeModulesHealthy) {
       commands.push("repo node_modules already healthy (skip npm ci)");
       npmCiSucceeded = true;
-      outputParts.push(`[repo check] node_modules already present and non-empty at ${options.repoPath}`);
+      outputParts.push(
+        `[repo check] node_modules already present and non-empty at ${options.repoPath}`
+      );
     } else {
       commands.push("npm ci (repo root)");
       try {
@@ -857,9 +853,7 @@ async function repairQualityGateEnvironment(
       outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
     }
 
-    const nodeModulesUsable = await isNodeModulesUsable(
-      path.join(worktreePath, "node_modules")
-    );
+    const nodeModulesUsable = await isNodeModulesUsable(path.join(worktreePath, "node_modules"));
 
     if (!nodeModulesUsable) {
       commands.push("npm ci (worktree fallback)");
@@ -881,7 +875,9 @@ async function repairQualityGateEnvironment(
         if (await isNodeModulesUsable(path.join(options.repoPath, "node_modules"))) {
           try {
             await deps.symlinkNodeModules(options.repoPath, worktreePath);
-            outputParts.push(`[re-symlink] Re-linked node_modules from host after worktree install`);
+            outputParts.push(
+              `[re-symlink] Re-linked node_modules from host after worktree install`
+            );
           } catch {
             // Worktree already has its own node_modules — non-critical
           }
@@ -1085,15 +1081,10 @@ export async function runMergeQualityGates(
         return initialFailure;
       }
 
-      const autoRepair = await repairQualityGateEnvironment(
-        options,
-        validationWorkspace,
-        command,
-        {
-          runCommand,
-          symlinkNodeModules,
-        }
-      );
+      const autoRepair = await repairQualityGateEnvironment(options, validationWorkspace, command, {
+        runCommand,
+        symlinkNodeModules,
+      });
       const retryPreparedOrFailure = await prepareGateCommand(
         { ...options, worktreePath: autoRepair.worktreePath },
         command,
@@ -1162,15 +1153,10 @@ export async function runMergeQualityGates(
       return initialFailure;
     }
 
-    const autoRepair = await repairQualityGateEnvironment(
-      options,
-      validationWorkspace,
-      command,
-      {
-        runCommand,
-        symlinkNodeModules,
-      }
-    );
+    const autoRepair = await repairQualityGateEnvironment(options, validationWorkspace, command, {
+      runCommand,
+      symlinkNodeModules,
+    });
     const retryPreparedOrFailure = await prepareGateCommand(
       { ...options, worktreePath: autoRepair.worktreePath },
       command,

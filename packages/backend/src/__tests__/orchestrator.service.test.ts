@@ -1271,9 +1271,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
       const state = (
         orchestrator as unknown as {
-          getState: (
-            id: string
-          ) => {
+          getState: (id: string) => {
             slots: Map<
               string,
               {
@@ -1292,7 +1290,9 @@ describe("OrchestratorService (slot-based model)", () => {
                     };
                   }
                 >;
-                phaseCoordinator?: { setReviewOutcome: (result: unknown, angle?: string) => Promise<void> };
+                phaseCoordinator?: {
+                  setReviewOutcome: (result: unknown, angle?: string) => Promise<void>;
+                };
               }
             >;
           };
@@ -1788,11 +1788,7 @@ describe("OrchestratorService (slot-based model)", () => {
           autoRepairAttempted: true,
           autoRepairSucceeded: false,
         });
-        expect(getExecutedCommands()).toEqual([
-          "npm run lint",
-          "npm ci",
-          "npm run lint",
-        ]);
+        expect(getExecutedCommands()).toEqual(["npm run lint", "npm ci", "npm run lint"]);
         expect(mockSymlinkNodeModules).toHaveBeenCalledTimes(1);
       } finally {
         process.env.NODE_ENV = previousNodeEnv;
@@ -1839,11 +1835,7 @@ describe("OrchestratorService (slot-based model)", () => {
         });
         expect(failure?.autoRepairOutput).toContain("added 1 package");
         expect(failure?.autoRepairOutput).toContain("[symlinkNodeModules] EPERM: symlink failed");
-        expect(getExecutedCommands()).toEqual([
-          "npm run lint",
-          "npm ci",
-          "npm run lint",
-        ]);
+        expect(getExecutedCommands()).toEqual(["npm run lint", "npm ci", "npm run lint"]);
         expect(mockSymlinkNodeModules).toHaveBeenCalledTimes(1);
       } finally {
         process.env.NODE_ENV = previousNodeEnv;

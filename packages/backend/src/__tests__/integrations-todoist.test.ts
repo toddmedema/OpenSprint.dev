@@ -16,7 +16,7 @@ vi.mock("../services/todoist-api-client.service.js", () => {
     override name = "TodoistAuthError" as const;
     constructor(
       message: string,
-      public readonly httpStatusCode: number,
+      public readonly httpStatusCode: number
     ) {
       super(message);
     }
@@ -26,7 +26,7 @@ vi.mock("../services/todoist-api-client.service.js", () => {
     override name = "TodoistRateLimitError" as const;
     constructor(
       message: string,
-      public readonly retryAfter: number,
+      public readonly retryAfter: number
     ) {
       super(message);
     }
@@ -34,7 +34,9 @@ vi.mock("../services/todoist-api-client.service.js", () => {
 
   return {
     generateOAuthState: vi.fn().mockReturnValue("mock-state-abc"),
-    buildAuthorizationUrl: vi.fn().mockReturnValue("https://todoist.example/authorize?state=mock-state-abc"),
+    buildAuthorizationUrl: vi
+      .fn()
+      .mockReturnValue("https://todoist.example/authorize?state=mock-state-abc"),
     exchangeCodeForToken: vi.fn().mockResolvedValue({
       accessToken: "tok-real-123",
       tokenType: "Bearer",
@@ -43,7 +45,8 @@ vi.mock("../services/todoist-api-client.service.js", () => {
     getTodoistOAuthConfig: vi.fn().mockReturnValue({
       clientId: "test-client-id",
       clientSecret: "test-client-secret",
-      redirectUri: "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
+      redirectUri:
+        "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
     }),
     TodoistApiClient: vi.fn().mockImplementation(() => ({
       getProjects: vi.fn().mockResolvedValue([{ id: "p1", name: "Inbox" }]),
@@ -57,9 +60,9 @@ const mockedService = await import("../services/todoist-api-client.service.js");
 
 function seedTodoistServiceMocks(): void {
   vi.mocked(mockedService.generateOAuthState).mockReturnValue("mock-state-abc");
-  vi
-    .mocked(mockedService.buildAuthorizationUrl)
-    .mockReturnValue("https://todoist.example/authorize?state=mock-state-abc");
+  vi.mocked(mockedService.buildAuthorizationUrl).mockReturnValue(
+    "https://todoist.example/authorize?state=mock-state-abc"
+  );
   vi.mocked(mockedService.exchangeCodeForToken).mockResolvedValue({
     accessToken: "tok-real-123",
     tokenType: "Bearer",
@@ -68,8 +71,7 @@ function seedTodoistServiceMocks(): void {
   vi.mocked(mockedService.getTodoistOAuthConfig).mockReturnValue({
     clientId: "test-client-id",
     clientSecret: "test-client-secret",
-    redirectUri:
-      "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
+    redirectUri: "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
   });
   vi.mocked(mockedService.TodoistApiClient).mockImplementation(() => ({
     getProjects: vi.fn().mockResolvedValue([{ id: "p1", name: "Inbox" }]),
@@ -79,10 +81,7 @@ function seedTodoistServiceMocks(): void {
 function createTestApp(deps: TodoistIntegrationRouterDeps) {
   const app = express();
   app.use(express.json());
-  app.use(
-    "/api/v1/projects/:projectId/integrations/todoist",
-    createTodoistIntegrationRouter(deps),
-  );
+  app.use("/api/v1/projects/:projectId/integrations/todoist", createTodoistIntegrationRouter(deps));
   app.use(errorHandler);
   return app;
 }
@@ -150,13 +149,13 @@ describe("Todoist OAuth Routes", () => {
         .expect(200);
 
       expect(res.body.data.authorizationUrl).toBe(
-        "https://todoist.example/authorize?state=mock-state-abc",
+        "https://todoist.example/authorize?state=mock-state-abc"
       );
       expect(mockedService.generateOAuthState).toHaveBeenCalled();
       expect(mockedService.buildAuthorizationUrl).toHaveBeenCalledWith(
         "test-client-id",
         ["data:read_write", "data:delete"],
-        "mock-state-abc",
+        "mock-state-abc"
       );
       expect(oauthStateStore.size).toBe(1);
     });
@@ -208,7 +207,7 @@ describe("Todoist OAuth Routes", () => {
       expect(mockedService.exchangeCodeForToken).toHaveBeenCalledWith(
         "test-client-id",
         "test-client-secret",
-        "auth-code-123",
+        "auth-code-123"
       );
 
       expect(deps.tokenEncryption.encryptToken).toHaveBeenCalledWith("tok-real-123");
@@ -220,7 +219,7 @@ describe("Todoist OAuth Routes", () => {
           access_token_enc: "encrypted-token-abc",
           status: "active",
           scopes: "data:read_write,data:delete",
-        }),
+        })
       );
 
       expect(oauthStateStore.size).toBe(0);
@@ -357,7 +356,9 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps({
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -391,7 +392,9 @@ describe("Todoist OAuth Routes", () => {
             last_sync_at: null,
             last_error: null,
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -414,7 +417,9 @@ describe("Todoist OAuth Routes", () => {
             last_error: "Something went wrong",
             status: "needs_reconnect",
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -430,7 +435,9 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps({
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -464,7 +471,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             status: "needs_reconnect",
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -480,7 +489,9 @@ describe("Todoist OAuth Routes", () => {
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -489,9 +500,7 @@ describe("Todoist OAuth Routes", () => {
         .expect(200);
 
       expect(res.body.data.projects).toEqual([{ id: "p1", name: "Inbox" }]);
-      expect(deps.tokenEncryption.decryptToken).toHaveBeenCalledWith(
-        "encrypted-token-abc",
-      );
+      expect(deps.tokenEncryption.decryptToken).toHaveBeenCalledWith("encrypted-token-abc");
     });
 
     it("returns 401 and marks needs_reconnect on TodoistAuthError", async () => {
@@ -499,10 +508,8 @@ describe("Todoist OAuth Routes", () => {
       vi.mocked(mockedService.TodoistApiClient).mockImplementationOnce(
         () =>
           ({
-            getProjects: vi
-              .fn()
-              .mockRejectedValue(new TodoistAuthError("bad token", 401)),
-          }) as ReturnType<typeof mockedService.TodoistApiClient>,
+            getProjects: vi.fn().mockRejectedValue(new TodoistAuthError("bad token", 401)),
+          }) as ReturnType<typeof mockedService.TodoistApiClient>
       );
 
       const deps = makeDeps({
@@ -510,7 +517,9 @@ describe("Todoist OAuth Routes", () => {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           updateConnectionStatus: vi.fn().mockResolvedValue(undefined),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -522,7 +531,7 @@ describe("Todoist OAuth Routes", () => {
       expect(deps.integrationStore.updateConnectionStatus).toHaveBeenCalledWith(
         "conn-1",
         "needs_reconnect",
-        "bad token",
+        "bad token"
       );
     });
 
@@ -531,19 +540,17 @@ describe("Todoist OAuth Routes", () => {
       vi.mocked(mockedService.TodoistApiClient).mockImplementationOnce(
         () =>
           ({
-            getProjects: vi
-              .fn()
-              .mockRejectedValue(
-                new TodoistRateLimitError("rate limited", 30),
-              ),
-          }) as ReturnType<typeof mockedService.TodoistApiClient>,
+            getProjects: vi.fn().mockRejectedValue(new TodoistRateLimitError("rate limited", 30)),
+          }) as ReturnType<typeof mockedService.TodoistApiClient>
       );
 
       const deps = makeDeps({
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -561,7 +568,9 @@ describe("Todoist OAuth Routes", () => {
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue(null),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -577,12 +586,16 @@ describe("Todoist OAuth Routes", () => {
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
         tokenEncryption: {
           decryptToken: vi.fn().mockImplementation(() => {
             throw new Error("decryption failed");
           }),
-        } as Partial<TodoistIntegrationRouterDeps["tokenEncryption"]> as TodoistIntegrationRouterDeps["tokenEncryption"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["tokenEncryption"]
+        > as TodoistIntegrationRouterDeps["tokenEncryption"],
       });
       const app = createTestApp(deps);
 
@@ -611,7 +624,9 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps({
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -627,7 +642,9 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps({
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -644,7 +661,9 @@ describe("Todoist OAuth Routes", () => {
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -663,7 +682,9 @@ describe("Todoist OAuth Routes", () => {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           updateSelectedResource: vi.fn().mockResolvedValue(undefined),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -679,7 +700,7 @@ describe("Todoist OAuth Routes", () => {
       expect(deps.integrationStore.updateSelectedResource).toHaveBeenCalledWith(
         "conn-1",
         "p1",
-        "Inbox",
+        "Inbox"
       );
     });
 
@@ -688,7 +709,9 @@ describe("Todoist OAuth Routes", () => {
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue(null),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -705,12 +728,16 @@ describe("Todoist OAuth Routes", () => {
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
         tokenEncryption: {
           decryptToken: vi.fn().mockImplementation(() => {
             throw new Error("decryption failed");
           }),
-        } as Partial<TodoistIntegrationRouterDeps["tokenEncryption"]> as TodoistIntegrationRouterDeps["tokenEncryption"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["tokenEncryption"]
+        > as TodoistIntegrationRouterDeps["tokenEncryption"],
       });
       const app = createTestApp(deps);
 
@@ -727,10 +754,8 @@ describe("Todoist OAuth Routes", () => {
       vi.mocked(mockedService.TodoistApiClient).mockImplementationOnce(
         () =>
           ({
-            getProjects: vi
-              .fn()
-              .mockRejectedValue(new TodoistAuthError("bad token", 401)),
-          }) as ReturnType<typeof mockedService.TodoistApiClient>,
+            getProjects: vi.fn().mockRejectedValue(new TodoistAuthError("bad token", 401)),
+          }) as ReturnType<typeof mockedService.TodoistApiClient>
       );
 
       const deps = makeDeps({
@@ -738,7 +763,9 @@ describe("Todoist OAuth Routes", () => {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           updateConnectionStatus: vi.fn().mockResolvedValue(undefined),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -751,7 +778,7 @@ describe("Todoist OAuth Routes", () => {
       expect(deps.integrationStore.updateConnectionStatus).toHaveBeenCalledWith(
         "conn-1",
         "needs_reconnect",
-        "bad token",
+        "bad token"
       );
     });
 
@@ -760,19 +787,17 @@ describe("Todoist OAuth Routes", () => {
       vi.mocked(mockedService.TodoistApiClient).mockImplementationOnce(
         () =>
           ({
-            getProjects: vi
-              .fn()
-              .mockRejectedValue(
-                new TodoistRateLimitError("rate limited", 45),
-              ),
-          }) as ReturnType<typeof mockedService.TodoistApiClient>,
+            getProjects: vi.fn().mockRejectedValue(new TodoistRateLimitError("rate limited", 45)),
+          }) as ReturnType<typeof mockedService.TodoistApiClient>
       );
 
       const deps = makeDeps({
         integrationStore: {
           getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -806,7 +831,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             status: "needs_reconnect",
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -825,7 +852,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             last_sync_at: recentSync,
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -844,7 +873,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             last_sync_at: oldSync,
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -863,7 +894,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             last_sync_at: null,
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -881,7 +914,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             last_sync_at: null,
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
         todoistSyncService: {
           runSync: vi.fn().mockResolvedValue({ imported: 5, errors: 2 }),
         },
@@ -902,7 +937,9 @@ describe("Todoist OAuth Routes", () => {
             ...DEFAULT_CONNECTION,
             last_sync_at: null,
           }),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       deps.todoistSyncService = undefined;
       const app = createTestApp(deps);
@@ -934,7 +971,9 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue([]),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -943,10 +982,7 @@ describe("Todoist OAuth Routes", () => {
         .expect(200);
 
       expect(res.body.data).toEqual({ disconnected: true });
-      expect(deps.integrationStore.deleteConnection).toHaveBeenCalledWith(
-        "proj-1",
-        "todoist",
-      );
+      expect(deps.integrationStore.deleteConnection).toHaveBeenCalledWith("proj-1", "todoist");
     });
 
     it("revokes token before deleting connection", async () => {
@@ -956,24 +992,24 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue([]),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
-      await request(app)
-        .delete("/api/v1/projects/proj-1/integrations/todoist")
-        .expect(200);
+      await request(app).delete("/api/v1/projects/proj-1/integrations/todoist").expect(200);
 
       expect(mockedService.revokeAccessToken).toHaveBeenCalledWith(
         "test-client-id",
         "test-client-secret",
-        "decrypted-access-token",
+        "decrypted-access-token"
       );
     });
 
     it("proceeds with disconnect even when token revocation fails", async () => {
       vi.mocked(mockedService.revokeAccessToken).mockRejectedValueOnce(
-        new Error("revocation failed"),
+        new Error("revocation failed")
       );
 
       const deps = makeDeps({
@@ -982,7 +1018,9 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue([]),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -1001,12 +1039,16 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue([]),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
         tokenEncryption: {
           decryptToken: vi.fn().mockImplementation(() => {
             throw new Error("decryption failed");
           }),
-        } as Partial<TodoistIntegrationRouterDeps["tokenEncryption"]> as TodoistIntegrationRouterDeps["tokenEncryption"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["tokenEncryption"]
+        > as TodoistIntegrationRouterDeps["tokenEncryption"],
       });
       const app = createTestApp(deps);
 
@@ -1020,9 +1062,42 @@ describe("Todoist OAuth Routes", () => {
 
     it("includes pending deletes warning when there are pending deletes", async () => {
       const pendingEntries = [
-        { id: "1", project_id: "proj-1", provider: "todoist", external_item_id: "t1", feedback_id: "f1", import_status: "pending_delete", last_error: null, retry_count: 0, created_at: "", updated_at: "" },
-        { id: "2", project_id: "proj-1", provider: "todoist", external_item_id: "t2", feedback_id: "f2", import_status: "pending_delete", last_error: null, retry_count: 0, created_at: "", updated_at: "" },
-        { id: "3", project_id: "proj-1", provider: "todoist", external_item_id: "t3", feedback_id: "f3", import_status: "failed_delete", last_error: "err", retry_count: 1, created_at: "", updated_at: "" },
+        {
+          id: "1",
+          project_id: "proj-1",
+          provider: "todoist",
+          external_item_id: "t1",
+          feedback_id: "f1",
+          import_status: "pending_delete",
+          last_error: null,
+          retry_count: 0,
+          created_at: "",
+          updated_at: "",
+        },
+        {
+          id: "2",
+          project_id: "proj-1",
+          provider: "todoist",
+          external_item_id: "t2",
+          feedback_id: "f2",
+          import_status: "pending_delete",
+          last_error: null,
+          retry_count: 0,
+          created_at: "",
+          updated_at: "",
+        },
+        {
+          id: "3",
+          project_id: "proj-1",
+          provider: "todoist",
+          external_item_id: "t3",
+          feedback_id: "f3",
+          import_status: "failed_delete",
+          last_error: "err",
+          retry_count: 1,
+          created_at: "",
+          updated_at: "",
+        },
       ];
 
       const deps = makeDeps({
@@ -1031,7 +1106,9 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue(pendingEntries),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -1052,7 +1129,9 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue(null),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue([]),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 
@@ -1076,7 +1155,9 @@ describe("Todoist OAuth Routes", () => {
           getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
           deleteConnection: vi.fn().mockResolvedValue(undefined),
           getPendingDeletes: vi.fn().mockResolvedValue([]),
-        } as Partial<TodoistIntegrationRouterDeps["integrationStore"]> as TodoistIntegrationRouterDeps["integrationStore"],
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
       });
       const app = createTestApp(deps);
 

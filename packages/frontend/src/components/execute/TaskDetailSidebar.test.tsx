@@ -572,9 +572,7 @@ describe("TaskDetailSidebar", () => {
     await user.click(screen.getByTestId("sidebar-actions-menu-trigger"));
     await user.click(screen.getByTestId("sidebar-force-retry-btn"));
     expect(screen.getByTestId("sidebar-force-retry-dialog")).toBeInTheDocument();
-    expect(
-      screen.getByText(/destroy all in-progress work and worktrees/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/destroy all in-progress work and worktrees/i)).toBeInTheDocument();
 
     await user.click(screen.getByTestId("sidebar-force-retry-cancel-btn"));
     expect(screen.queryByTestId("sidebar-force-retry-dialog")).not.toBeInTheDocument();

@@ -553,12 +553,7 @@ describe("BuildEpicCard", () => {
         createMockTask({ id: "epic-1.1", title: "Active Task", kanbanColumn: "in_progress" }),
       ];
       renderWithStore(
-        <BuildEpicCard
-          epicId="epic-1"
-          epicTitle="Auth"
-          tasks={tasks}
-          onTaskSelect={vi.fn()}
-        />
+        <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
       );
       expect(screen.queryByTestId("open-editor-btn-epic-1.1")).not.toBeInTheDocument();
     });

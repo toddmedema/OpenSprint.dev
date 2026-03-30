@@ -150,7 +150,10 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
 
   if (!d3Module) {
     return (
-      <div data-testid="help-analytics-chart" className="text-theme-muted text-sm py-12 text-center">
+      <div
+        data-testid="help-analytics-chart"
+        className="text-theme-muted text-sm py-12 text-center"
+      >
         Loading chart…
       </div>
     );

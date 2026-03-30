@@ -2081,7 +2081,12 @@ describe("AgentClient", () => {
         "proj-123"
       );
 
-      await vi.waitFor(() => { expect(mockSpawn).toHaveBeenCalled(); }, { timeout: 2000 });
+      await vi.waitFor(
+        () => {
+          expect(mockSpawn).toHaveBeenCalled();
+        },
+        { timeout: 2000 }
+      );
       await fs.writeFile(
         outputLogPath,
         '{"type":"text","text":"We should handle rate limits gracefully in this feature."}\n',
@@ -2133,7 +2138,12 @@ describe("AgentClient", () => {
         "proj-123"
       );
 
-      await vi.waitFor(() => { expect(mockSpawn).toHaveBeenCalled(); }, { timeout: 2000 });
+      await vi.waitFor(
+        () => {
+          expect(mockSpawn).toHaveBeenCalled();
+        },
+        { timeout: 2000 }
+      );
       await fs.writeFile(
         outputLogPath,
         "S: We should handle API rate limits gracefully and add retry headers.\n",
@@ -2185,7 +2195,12 @@ describe("AgentClient", () => {
         "proj-123"
       );
 
-      await vi.waitFor(() => { expect(mockSpawn).toHaveBeenCalled(); }, { timeout: 2000 });
+      await vi.waitFor(
+        () => {
+          expect(mockSpawn).toHaveBeenCalled();
+        },
+        { timeout: 2000 }
+      );
       await fs.writeFile(outputLogPath, "Error: Invalid API key\n", "utf-8");
       mockChild.emitClose(1);
 
@@ -2236,7 +2251,12 @@ describe("AgentClient", () => {
         "proj-123"
       );
 
-      await vi.waitFor(() => { expect(mockSpawn).toHaveBeenCalled(); }, { timeout: 2000 });
+      await vi.waitFor(
+        () => {
+          expect(mockSpawn).toHaveBeenCalled();
+        },
+        { timeout: 2000 }
+      );
       await fs.writeFile(
         outputLogPath,
         "Error: Password not found for account 'cursor-user' and service 'cursor-access-token'\n",
@@ -2292,7 +2312,12 @@ describe("AgentClient", () => {
         "proj-123"
       );
 
-      await vi.waitFor(() => { expect(mockSpawn).toHaveBeenCalled(); }, { timeout: 2000 });
+      await vi.waitFor(
+        () => {
+          expect(mockSpawn).toHaveBeenCalled();
+        },
+        { timeout: 2000 }
+      );
       await fs.writeFile(outputLogPath, "S: Unauthorized: invalid api key\n", "utf-8");
       mockChild.emitClose(1);
 
@@ -2530,7 +2555,10 @@ describe("AgentClient", () => {
         await fs.writeFile(path.join(brokenVersionDir, "cursor-agent"), "#!/bin/sh\necho broken\n");
         await fs.writeFile(fallbackLauncherPath, "#!/bin/sh\necho fallback\n");
         await fs.symlink(path.join(brokenVersionDir, "cursor-agent"), path.join(binDir, "agent"));
-        await fs.symlink(path.join(brokenVersionDir, "cursor-agent"), path.join(binDir, "cursor-agent"));
+        await fs.symlink(
+          path.join(brokenVersionDir, "cursor-agent"),
+          path.join(binDir, "cursor-agent")
+        );
 
         mockGetNextKey.mockResolvedValue({ key: "cursor-key-1", keyId: "k1", source: "global" });
 

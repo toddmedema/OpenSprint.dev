@@ -1326,6 +1326,14 @@ export class AgentClient {
           }
           transientRetryCount += 1;
           const retryReason = buildCursorTransientRetryReason(combinedOutput);
+          log.warn("Cursor startup retry scheduled", {
+            projectId,
+            provider: "cursor",
+            retryCount: transientRetryCount,
+            retryLimit: CURSOR_TRANSIENT_RETRY_LIMIT,
+            retryReason,
+            backoffMs: CURSOR_TRANSIENT_RETRY_BACKOFF_MS * transientRetryCount,
+          });
           onOutput(
             `[Agent error: ${retryReason}. Retrying Cursor startup (${transientRetryCount}/${CURSOR_TRANSIENT_RETRY_LIMIT}).]\n`
           );
@@ -1335,12 +1343,24 @@ export class AgentClient {
 
         const offlineMessage = await getOfflineFailureMessage(combinedOutput);
         if (offlineMessage) {
+          log.warn("Cursor provider/network connectivity failure", {
+            projectId,
+            provider: "cursor",
+            connectivity: "offline",
+          });
           onOutput(`[Agent error: ${offlineMessage}]\n`);
           return Promise.resolve(exitOnce(1));
         }
 
         const apiErrorKind = toCursorRotatableApiErrorKind(apiErrorOutput);
         if (apiErrorKind && keyId !== ENV_FALLBACK_KEY_ID) {
+          log.warn("Cursor API key rotation attempt", {
+            projectId,
+            provider: "cursor",
+            apiErrorKind,
+            keyId,
+            keySource: source,
+          });
           lastApiErrorKind = apiErrorKind;
           if (apiErrorKind === "rate_limit") {
             await recordLimitHit(projectId, "CURSOR_API_KEY", keyId, source);
@@ -1350,6 +1370,11 @@ export class AgentClient {
           const next = await getNextKey(projectId, "CURSOR_API_KEY");
           if (next) return trySpawn();
           markExhausted(projectId, "CURSOR_API_KEY");
+          log.error("Cursor keys exhausted after API failure", {
+            projectId,
+            provider: "cursor",
+            apiErrorKind,
+          });
           await notifyProviderBlocked(projectId, "CURSOR_API_KEY", apiErrorKind);
         }
         return Promise.resolve(exitOnce(code));

@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { OPENSPRINT_DIR, OPENSPRINT_PATHS } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 import { waitForGitReady as waitForGitReadyUtil } from "../utils/git-lock.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
@@ -25,6 +25,7 @@ const RUNTIME_EXCLUDE_FOR_WIP = [
   OPENSPRINT_PATHS.pendingCommits,
   `${OPENSPRINT_PATHS.sessions}/`,
   `${OPENSPRINT_PATHS.active}/`,
+  `${OPENSPRINT_DIR}/runtime/`,
 ];
 /**
  * Keep dependency installs out of automated WIP commits.
@@ -99,8 +100,7 @@ export interface CreateTaskWorktreeOptions {
 const NPM_HEALTH_CHECK_TIMEOUT_MS = 30_000;
 const NPM_REPAIR_TIMEOUT_MS = 10 * 60 * 1000;
 const DEPENDENCY_HEALTH_CHECK_COMMAND = "npm ls --depth=0 --include=dev";
-const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND =
-  "npm ls --depth=0 --workspaces --include=dev";
+const DEPENDENCY_HEALTH_CHECK_WORKSPACES_COMMAND = "npm ls --depth=0 --workspaces --include=dev";
 const DEPENDENCY_REPAIR_COMMAND = "npm ci";
 const WORKTREE_RM_RETRYABLE_CODES = new Set(["ENOTEMPTY", "EBUSY"]);
 const WORKTREE_RM_MAX_ATTEMPTS = 3;
@@ -264,11 +264,9 @@ export class BranchManager {
     if (!status) return null;
 
     const message = `opensprint-auto-stash:${reason}:${Date.now()}`;
-    await this.gitExec(
-      repoPath,
-      ["stash", "push", "--include-untracked", "--message", message],
-      { timeout: 30_000 }
-    ).catch((err) => {
+    await this.gitExec(repoPath, ["stash", "push", "--include-untracked", "--message", message], {
+      timeout: 30_000,
+    }).catch((err) => {
       log.warn("Failed to create auto-stash for repo-root operation", {
         repoPath,
         reason,
@@ -360,7 +358,10 @@ export class BranchManager {
         const { stdout: lsOut } = await this.gitExec(repoPath, ["ls-files", ".opensprint/"], {
           timeout: 10_000,
         }).catch(() => ({ stdout: "" }));
-        for (const file of lsOut.split("\n").map((l) => l.trim()).filter(Boolean)) {
+        for (const file of lsOut
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)) {
           await this.gitExec(
             repoPath,
             ["update-index", "--no-assume-unchanged", "--no-skip-worktree", "--", file],
@@ -599,11 +600,9 @@ export class BranchManager {
     branchName: string,
     baseBranch: string = "main"
   ): Promise<string> {
-    const { stdout } = await this.gitExec(
-      repoPath,
-      ["diff", `${baseBranch}...${branchName}`],
-      { maxStdoutBytes: DIFF_MAX_BUFFER_BYTES }
-    );
+    const { stdout } = await this.gitExec(repoPath, ["diff", `${baseBranch}...${branchName}`], {
+      maxStdoutBytes: DIFF_MAX_BUFFER_BYTES,
+    });
     return stdout;
   }
 
@@ -689,9 +688,13 @@ export class BranchManager {
    */
   private async squashLocalCommits(repoPath: string, base: string): Promise<void> {
     try {
-      const { stdout: countStr } = await this.gitExec(repoPath, ["rev-list", "--count", `${base}..HEAD`], {
-        timeout: 5000,
-      });
+      const { stdout: countStr } = await this.gitExec(
+        repoPath,
+        ["rev-list", "--count", `${base}..HEAD`],
+        {
+          timeout: 5000,
+        }
+      );
       const localCount = parseInt(countStr.trim(), 10);
       if (localCount <= 1) return;
 
@@ -802,10 +805,12 @@ export class BranchManager {
       return;
     }
     const noHooksPush = getGitNoHooksPath();
-    await this.gitExec(
-      repoPath,
-      [...gitNoHooksConfigPrefix(noHooksPush), "push", "origin", baseBranch]
-    );
+    await this.gitExec(repoPath, [
+      ...gitNoHooksConfigPrefix(noHooksPush),
+      "push",
+      "origin",
+      baseBranch,
+    ]);
   }
 
   /**
@@ -1093,11 +1098,9 @@ export class BranchManager {
     baseBranch: string = "main"
   ): Promise<string> {
     try {
-      const { stdout } = await this.gitExec(
-        repoPath,
-        ["diff", `${baseBranch}...${branchName}`],
-        { maxStdoutBytes: DIFF_MAX_BUFFER_BYTES }
-      );
+      const { stdout } = await this.gitExec(repoPath, ["diff", `${baseBranch}...${branchName}`], {
+        maxStdoutBytes: DIFF_MAX_BUFFER_BYTES,
+      });
       return stdout;
     } catch {
       return "";
@@ -1571,7 +1574,11 @@ export class BranchManager {
           ...(spec.command === "npm" ? { env: { ...process.env, ...NPM_INCLUDE_DEV_ENV } } : {}),
         }
       );
-      const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim().slice(0, 4000);
+      const output = [result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n")
+        .trim()
+        .slice(0, 4000);
       return { healthy: true, output };
     } catch (err) {
       const output = getErrorText(err).trim().slice(0, 4000);
@@ -1592,9 +1599,7 @@ export class BranchManager {
       attempts.push(command);
       try {
         const env =
-          parsedSpec.command === "npm"
-            ? { ...process.env, ...NPM_INCLUDE_DEV_ENV }
-            : undefined;
+          parsedSpec.command === "npm" ? { ...process.env, ...NPM_INCLUDE_DEV_ENV } : undefined;
         const result = await runCommand(
           { command: parsedSpec.command, args: parsedSpec.args },
           { cwd: repoPath, timeout: NPM_REPAIR_TIMEOUT_MS, ...(env ? { env } : {}) }
@@ -1653,7 +1658,9 @@ export class BranchManager {
       const changed = stdout.trim().split("\n").filter(Boolean);
       if (changed.length === 0) {
         needsReconcile = false;
-        log.info("No dependency files changed in merge, skipping dependency reconcile", { repoPath });
+        log.info("No dependency files changed in merge, skipping dependency reconcile", {
+          repoPath,
+        });
       } else {
         log.info("Dependency files changed in merge, running dependency reconcile", {
           repoPath,
@@ -1885,7 +1892,12 @@ export class BranchManager {
   ): Promise<boolean> {
     let safePath: string;
     try {
-      safePath = await this.validateDisposableWorktreePath(repoPath, worktreeKey, candidatePath, reason);
+      safePath = await this.validateDisposableWorktreePath(
+        repoPath,
+        worktreeKey,
+        candidatePath,
+        reason
+      );
     } catch (err) {
       log.error("Refusing unsafe worktree cleanup target", {
         taskId: worktreeKey,
@@ -1923,7 +1935,10 @@ export class BranchManager {
     });
     try {
       if (process.platform !== "win32") {
-        await runCommand({ command: "rm", args: ["-rf", safePath] }, { cwd: repoPath, timeout: 15_000 });
+        await runCommand(
+          { command: "rm", args: ["-rf", safePath] },
+          { cwd: repoPath, timeout: 15_000 }
+        );
       }
     } catch (rmErr) {
       log.warn("Shell rm -rf failed", {
@@ -1945,7 +1960,10 @@ export class BranchManager {
       await fs.rename(safePath, stalePath);
       await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
       (process.platform !== "win32"
-        ? runCommand({ command: "rm", args: ["-rf", stalePath] }, { cwd: repoPath, timeout: 30_000 })
+        ? runCommand(
+            { command: "rm", args: ["-rf", stalePath] },
+            { cwd: repoPath, timeout: 30_000 }
+          )
         : Promise.resolve()
       ).catch(() => fs.rm(stalePath, { recursive: true, force: true }).catch(() => {}));
     } catch (renameErr) {
@@ -2189,6 +2207,7 @@ export class BranchManager {
         ".opensprint/pending-commits.json",
         ".opensprint/sessions",
         ".opensprint/active",
+        ".opensprint/runtime",
       ],
       { timeout: 10_000 }
     ).catch(() => {});
@@ -2196,6 +2215,7 @@ export class BranchManager {
       path.join(repoPath, ".opensprint", "pending-commits.json"),
       path.join(repoPath, ".opensprint", "sessions"),
       path.join(repoPath, ".opensprint", "active"),
+      path.join(repoPath, ".opensprint", "runtime"),
     ];
     for (const runtimePath of runtimePaths) {
       try {

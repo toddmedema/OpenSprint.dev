@@ -483,13 +483,8 @@ describe("useAutoScroll", () => {
     it("works with string triggerKeys", () => {
       const mockEl = makeMockEl();
       const { result, rerender } = renderHook(
-        ({
-          contentLength,
-          triggerKey,
-        }: {
-          contentLength: number;
-          triggerKey: string;
-        }) => useAutoScroll({ contentLength, resetKey: "task-1", triggerKey }),
+        ({ contentLength, triggerKey }: { contentLength: number; triggerKey: string }) =>
+          useAutoScroll({ contentLength, resetKey: "task-1", triggerKey }),
         { initialProps: { contentLength: 0, triggerKey: "tab-output" } }
       );
 
@@ -514,13 +509,8 @@ describe("useAutoScroll", () => {
     it("does not interfere with content-length auto-scroll", () => {
       const mockEl = makeMockEl();
       const { result, rerender } = renderHook(
-        ({
-          contentLength,
-          triggerKey,
-        }: {
-          contentLength: number;
-          triggerKey: number;
-        }) => useAutoScroll({ contentLength, resetKey: "task-1", triggerKey }),
+        ({ contentLength, triggerKey }: { contentLength: number; triggerKey: number }) =>
+          useAutoScroll({ contentLength, resetKey: "task-1", triggerKey }),
         { initialProps: { contentLength: 0, triggerKey: 0 } }
       );
 

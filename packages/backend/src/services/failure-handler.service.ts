@@ -42,6 +42,7 @@ import { buildTestFailureRetrySummary } from "./orchestrator-test-status.js";
 import {
   isMeaningfulNoResultFragment,
   extractNoResultReasonFromOutput,
+  type NoResultReasonCode,
 } from "./no-result-reason.service.js";
 
 const log = createLogger("failure-handler");
@@ -181,6 +182,8 @@ export interface FailureSlot {
   /** Set when slot was created from dispatch (retry context from prior failure). */
   retryContext?: RetryContext;
 }
+
+type FailurePolicyDecision = "requeue_infra" | "requeue" | "demote" | "block" | "reopen";
 
 export class FailureHandlerService {
   constructor(private host: FailureHandlerHost) {}
@@ -551,7 +554,10 @@ export class FailureHandlerService {
     testResults?: TestResults | null,
     failureType: FailureType = "coding_failure",
     reviewFeedback?: string,
-    options?: { reviewScope?: string }
+    options?: {
+      reviewScope?: string;
+      noResultReasonCode?: NoResultReasonCode;
+    }
   ): Promise<void> {
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
@@ -594,6 +600,10 @@ export class FailureHandlerService {
       slot,
       testResults,
     });
+    const startedAtMs = Date.parse(slot.agent.startedAt ?? "");
+    const attemptDurationMs = Number.isFinite(startedAtMs)
+      ? Math.max(0, Date.now() - startedAtMs)
+      : null;
 
     log.error(`Task ${task.id} failed [${failureType}] (attempt ${cumulativeAttempts})`, {
       reason: effectiveReason,
@@ -638,6 +648,15 @@ export class FailureHandlerService {
       providerOutageBackoff = markProviderOutageBackoff(projectId, agentProvider, effectiveReason);
       nextAction = `Pause dispatching (rate limit / quota) until ${providerOutageBackoff.until}`;
     }
+    const commonFailureContext = {
+      attemptDurationMs,
+      noResultReasonCode: options?.noResultReasonCode ?? null,
+      apiErrorKind: apiErrorKind ?? null,
+      offlineConnectivityFailure,
+      providerOutageUntil: providerOutageBackoff?.until ?? null,
+      providerOutageAttempts: providerOutageBackoff?.attempts ?? null,
+      provider: agentProvider ?? null,
+    };
     // Surface failures in the notification system only when not a review-phase failure, or when
     // we will block (review notifications are created in blockTask when retries exceed limit).
     if (slot.phase !== "review") {
@@ -719,6 +738,8 @@ export class FailureHandlerService {
           reason: effectiveReason.slice(0, 500),
           summary: failureSummary,
           nextAction,
+          policyDecision: null,
+          ...commonFailureContext,
           ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },
       })
@@ -866,6 +887,24 @@ export class FailureHandlerService {
       } catch (err) {
         log.warn("Failed to reopen task after API-blocked no_result failure", { err });
       }
+      eventLogService
+        .append(repoPath, {
+          timestamp: new Date().toISOString(),
+          projectId,
+          taskId: task.id,
+          event: "task.requeued",
+          data: {
+            attempt: cumulativeAttempts,
+            phase: slot.phase,
+            failureType,
+            model: agentConfig.model ?? null,
+            summary: retrySummary.summary,
+            nextAction,
+            policyDecision: "reopen" as FailurePolicyDecision,
+            ...commonFailureContext,
+          },
+        })
+        .catch(() => {});
       this.host.transition(projectId, { to: "fail", taskId: task.id });
       await this.host.persistCounters(projectId, repoPath);
       broadcastToProject(projectId, {
@@ -903,7 +942,9 @@ export class FailureHandlerService {
         slot.phase,
         agentConfig.model ?? null,
         slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
-        persistedRetryContext
+        persistedRetryContext,
+        undefined,
+        { diagnostics: commonFailureContext }
       );
       return;
     }
@@ -933,7 +974,9 @@ export class FailureHandlerService {
         slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
         persistedRetryContext,
         failureDiagnosticDetail,
-        remediationAction ? { nextAction: remediationAction } : undefined
+        remediationAction
+          ? { nextAction: remediationAction, diagnostics: commonFailureContext }
+          : { diagnostics: commonFailureContext }
       );
       return;
     }
@@ -966,6 +1009,8 @@ export class FailureHandlerService {
             model: agentConfig.model ?? null,
             summary: retrySummary.summary,
             nextAction,
+            policyDecision: "requeue_infra" as FailurePolicyDecision,
+            ...commonFailureContext,
             ...this.failureDiagnosticFields(failureDiagnosticDetail),
           },
         })
@@ -1044,6 +1089,8 @@ export class FailureHandlerService {
             model: agentConfig.model ?? null,
             summary: retrySummary.summary,
             nextAction,
+            policyDecision: "requeue" as FailurePolicyDecision,
+            ...commonFailureContext,
             ...this.failureDiagnosticFields(failureDiagnosticDetail),
           },
         })
@@ -1106,7 +1153,8 @@ export class FailureHandlerService {
           agentConfig.model ?? null,
           slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
           persistedRetryContext,
-          failureDiagnosticDetail
+          failureDiagnosticDetail,
+          { diagnostics: commonFailureContext }
         );
       } else {
         const newPriority = currentPriority + 1;
@@ -1156,6 +1204,8 @@ export class FailureHandlerService {
               model: agentConfig.model ?? null,
               summary: demoteSummary.summary,
               nextAction,
+              policyDecision: "demote" as FailurePolicyDecision,
+              ...commonFailureContext,
               ...this.failureDiagnosticFields(failureDiagnosticDetail),
             },
           })
@@ -1220,7 +1270,19 @@ export class FailureHandlerService {
     notificationContext?: { effectiveReason: string; apiErrorKind: AgentApiErrorKind | null },
     retryContext?: RetryContext,
     failureDiagnosticDetail?: FailureDiagnosticDetail | null,
-    options?: { blockReason?: string; nextAction?: string }
+    options?: {
+      blockReason?: string;
+      nextAction?: string;
+      diagnostics?: {
+        attemptDurationMs?: number | null;
+        noResultReasonCode?: NoResultReasonCode | null;
+        apiErrorKind?: AgentApiErrorKind | null;
+        offlineConnectivityFailure?: boolean;
+        providerOutageUntil?: string | null;
+        providerOutageAttempts?: number | null;
+        provider?: string | null;
+      };
+    }
   ): Promise<void> {
     const blockReason = options?.blockReason ?? "Coding Failure";
     const nextAction = options?.nextAction ?? "Blocked pending investigation";
@@ -1265,6 +1327,14 @@ export class FailureHandlerService {
           blockReason,
           summary: blockSummary.summary,
           nextAction,
+          policyDecision: "block" as FailurePolicyDecision,
+          attemptDurationMs: options?.diagnostics?.attemptDurationMs ?? null,
+          noResultReasonCode: options?.diagnostics?.noResultReasonCode ?? null,
+          apiErrorKind: options?.diagnostics?.apiErrorKind ?? null,
+          offlineConnectivityFailure: options?.diagnostics?.offlineConnectivityFailure ?? false,
+          providerOutageUntil: options?.diagnostics?.providerOutageUntil ?? null,
+          providerOutageAttempts: options?.diagnostics?.providerOutageAttempts ?? null,
+          provider: options?.diagnostics?.provider ?? null,
           ...this.failureDiagnosticFields(failureDiagnosticDetail ?? null),
         },
       })

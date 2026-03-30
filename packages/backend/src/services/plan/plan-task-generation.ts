@@ -4,8 +4,16 @@
  */
 import type { Plan, ProjectSettings } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
-import { normalizePlannerTask, findPlannerTaskArray, MAX_TASKS_PER_PLAN } from "./planner-normalize.js";
-import { TASK_GENERATION_SYSTEM_PROMPT, TASK_GENERATION_RETRY_PROMPT, buildTaskCountRepairPrompt } from "./plan-prompts.js";
+import {
+  normalizePlannerTask,
+  findPlannerTaskArray,
+  MAX_TASKS_PER_PLAN,
+} from "./planner-normalize.js";
+import {
+  TASK_GENERATION_SYSTEM_PROMPT,
+  TASK_GENERATION_RETRY_PROMPT,
+  buildTaskCountRepairPrompt,
+} from "./plan-prompts.js";
 import { runPlannerWithRepoGuard } from "./plan-repo-guard.js";
 import { buildAutonomyDescription } from "../autonomy-description.js";
 import { getCombinedInstructions } from "../agent-instructions.service.js";
@@ -91,8 +99,7 @@ export function parseTaskGenerationContent(
   if (result.rawTasks.length > MAX_TASKS_PER_PLAN) {
     return {
       ok: false,
-      parseFailureReason:
-        `task-count-exceeded: Planner returned ${result.rawTasks.length} tasks, max is ${MAX_TASKS_PER_PLAN}.`,
+      parseFailureReason: `task-count-exceeded: Planner returned ${result.rawTasks.length} tasks, max is ${MAX_TASKS_PER_PLAN}.`,
     };
   }
 

@@ -45,7 +45,12 @@ export class EventLogService {
         );
       });
     } catch (err) {
-      log.warn("Failed to append event", { err });
+      log.warn("Failed to append event", {
+        err,
+        event: event.event,
+        taskId: event.taskId,
+        dataSizeBytes: event.data ? JSON.stringify(event.data).length : 0,
+      });
     }
   }
 

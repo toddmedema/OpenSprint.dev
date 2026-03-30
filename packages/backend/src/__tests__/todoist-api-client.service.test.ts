@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TodoistRequestError } from "@doist/todoist-api-typescript";
 
 vi.mock("@doist/todoist-api-typescript", async () => {
-  const actual = await vi.importActual<
-    typeof import("@doist/todoist-api-typescript")
-  >("@doist/todoist-api-typescript");
+  const actual = await vi.importActual<typeof import("@doist/todoist-api-typescript")>(
+    "@doist/todoist-api-typescript"
+  );
   return {
     ...actual,
     TodoistApi: vi.fn(),
@@ -106,18 +106,14 @@ describe("TodoistApiClient", () => {
     });
 
     it("throws TodoistAuthError on 401", async () => {
-      mockApi.getProjects.mockRejectedValue(
-        new TodoistRequestError("Unauthorized", 401),
-      );
+      mockApi.getProjects.mockRejectedValue(new TodoistRequestError("Unauthorized", 401));
 
       const client = new TodoistApiClient("tok");
       await expect(client.getProjects()).rejects.toThrow(TodoistAuthError);
     });
 
     it("throws TodoistAuthError on 403", async () => {
-      mockApi.getProjects.mockRejectedValue(
-        new TodoistRequestError("Forbidden", 403),
-      );
+      mockApi.getProjects.mockRejectedValue(new TodoistRequestError("Forbidden", 403));
 
       const client = new TodoistApiClient("tok");
       const err = await client.getProjects().catch((e: unknown) => e);
@@ -127,7 +123,7 @@ describe("TodoistApiClient", () => {
 
     it("throws TodoistRateLimitError on 429 with retryAfter", async () => {
       mockApi.getProjects.mockRejectedValue(
-        new TodoistRequestError("Too Many Requests", 429, { retry_after: 30 }),
+        new TodoistRequestError("Too Many Requests", 429, { retry_after: 30 })
       );
 
       const client = new TodoistApiClient("tok");
@@ -137,9 +133,7 @@ describe("TodoistApiClient", () => {
     });
 
     it("defaults retryAfter to 60 when not in response", async () => {
-      mockApi.getProjects.mockRejectedValue(
-        new TodoistRequestError("Too Many Requests", 429),
-      );
+      mockApi.getProjects.mockRejectedValue(new TodoistRequestError("Too Many Requests", 429));
 
       const client = new TodoistApiClient("tok");
       const err = await client.getProjects().catch((e: unknown) => e);
@@ -148,14 +142,10 @@ describe("TodoistApiClient", () => {
     });
 
     it("wraps unknown SDK errors with context", async () => {
-      mockApi.getProjects.mockRejectedValue(
-        new TodoistRequestError("Server Error", 500),
-      );
+      mockApi.getProjects.mockRejectedValue(new TodoistRequestError("Server Error", 500));
 
       const client = new TodoistApiClient("tok");
-      await expect(client.getProjects()).rejects.toThrow(
-        /Todoist API error during getProjects/,
-      );
+      await expect(client.getProjects()).rejects.toThrow(/Todoist API error during getProjects/);
     });
 
     it("wraps non-TodoistRequestError errors", async () => {
@@ -163,7 +153,7 @@ describe("TodoistApiClient", () => {
 
       const client = new TodoistApiClient("tok");
       await expect(client.getProjects()).rejects.toThrow(
-        /Todoist request failed during getProjects.*ECONNRESET/,
+        /Todoist request failed during getProjects.*ECONNRESET/
       );
     });
   });
@@ -186,9 +176,7 @@ describe("TodoistApiClient", () => {
     it("paginates through multiple pages of tasks", async () => {
       mockApi.getTasks
         .mockResolvedValueOnce({
-          results: Array.from({ length: 200 }, (_, i) =>
-            makeTask(`t${i}`, `Task ${i}`),
-          ),
+          results: Array.from({ length: 200 }, (_, i) => makeTask(`t${i}`, `Task ${i}`)),
           nextCursor: "page2",
         })
         .mockResolvedValueOnce({
@@ -208,9 +196,7 @@ describe("TodoistApiClient", () => {
     });
 
     it("throws TodoistAuthError on 401", async () => {
-      mockApi.getTasks.mockRejectedValue(
-        new TodoistRequestError("Unauthorized", 401),
-      );
+      mockApi.getTasks.mockRejectedValue(new TodoistRequestError("Unauthorized", 401));
 
       const client = new TodoistApiClient("tok");
       await expect(client.getTasks("p1")).rejects.toThrow(TodoistAuthError);
@@ -218,7 +204,7 @@ describe("TodoistApiClient", () => {
 
     it("throws TodoistRateLimitError on 429", async () => {
       mockApi.getTasks.mockRejectedValue(
-        new TodoistRequestError("Rate limited", 429, { retry_after: 15 }),
+        new TodoistRequestError("Rate limited", 429, { retry_after: 15 })
       );
 
       const client = new TodoistApiClient("tok");
@@ -238,9 +224,7 @@ describe("TodoistApiClient", () => {
     });
 
     it("treats 404 as success (already deleted)", async () => {
-      mockApi.deleteTask.mockRejectedValue(
-        new TodoistRequestError("Not found", 404),
-      );
+      mockApi.deleteTask.mockRejectedValue(new TodoistRequestError("Not found", 404));
 
       const client = new TodoistApiClient("tok");
       const result = await client.deleteTask("t1");
@@ -249,9 +233,7 @@ describe("TodoistApiClient", () => {
     });
 
     it("throws TodoistAuthError on 401", async () => {
-      mockApi.deleteTask.mockRejectedValue(
-        new TodoistRequestError("Unauthorized", 401),
-      );
+      mockApi.deleteTask.mockRejectedValue(new TodoistRequestError("Unauthorized", 401));
 
       const client = new TodoistApiClient("tok");
       await expect(client.deleteTask("t1")).rejects.toThrow(TodoistAuthError);
@@ -259,7 +241,7 @@ describe("TodoistApiClient", () => {
 
     it("throws TodoistRateLimitError on 429", async () => {
       mockApi.deleteTask.mockRejectedValue(
-        new TodoistRequestError("Rate limited", 429, { retry_after: 5 }),
+        new TodoistRequestError("Rate limited", 429, { retry_after: 5 })
       );
 
       const client = new TodoistApiClient("tok");
@@ -269,14 +251,10 @@ describe("TodoistApiClient", () => {
     });
 
     it("wraps other HTTP errors with context", async () => {
-      mockApi.deleteTask.mockRejectedValue(
-        new TodoistRequestError("Internal Server Error", 500),
-      );
+      mockApi.deleteTask.mockRejectedValue(new TodoistRequestError("Internal Server Error", 500));
 
       const client = new TodoistApiClient("tok");
-      await expect(client.deleteTask("t1")).rejects.toThrow(
-        /Todoist API error during deleteTask/,
-      );
+      await expect(client.deleteTask("t1")).rejects.toThrow(/Todoist API error during deleteTask/);
     });
   });
 });
@@ -289,11 +267,7 @@ describe("OAuth helpers", () => {
   });
 
   it("buildAuthorizationUrl delegates to SDK getAuthorizationUrl", () => {
-    const url = buildAuthorizationUrl(
-      "client-id",
-      ["data:read_write", "data:delete"],
-      "state-123",
-    );
+    const url = buildAuthorizationUrl("client-id", ["data:read_write", "data:delete"], "state-123");
     expect(url).toBe("https://todoist.example/oauth");
     expect(mockGetAuthUrl).toHaveBeenCalledWith({
       clientId: "client-id",
@@ -313,21 +287,17 @@ describe("OAuth helpers", () => {
   });
 
   it("exchangeCodeForToken wraps SDK errors", async () => {
-    vi.mocked(mockGetAuthToken).mockRejectedValueOnce(
-      new TodoistRequestError("Bad code", 400),
+    vi.mocked(mockGetAuthToken).mockRejectedValueOnce(new TodoistRequestError("Bad code", 400));
+    await expect(exchangeCodeForToken("cid", "csecret", "bad-code")).rejects.toThrow(
+      /Todoist API error during exchangeCodeForToken/
     );
-    await expect(
-      exchangeCodeForToken("cid", "csecret", "bad-code"),
-    ).rejects.toThrow(/Todoist API error during exchangeCodeForToken/);
   });
 
   it("exchangeCodeForToken throws TodoistAuthError on 401", async () => {
-    vi.mocked(mockGetAuthToken).mockRejectedValueOnce(
-      new TodoistRequestError("Unauthorized", 401),
+    vi.mocked(mockGetAuthToken).mockRejectedValueOnce(new TodoistRequestError("Unauthorized", 401));
+    await expect(exchangeCodeForToken("cid", "csecret", "bad-code")).rejects.toThrow(
+      TodoistAuthError
     );
-    await expect(
-      exchangeCodeForToken("cid", "csecret", "bad-code"),
-    ).rejects.toThrow(TodoistAuthError);
   });
 
   it("revokeAccessToken delegates to SDK revokeToken", async () => {
@@ -341,12 +311,10 @@ describe("OAuth helpers", () => {
   });
 
   it("revokeAccessToken wraps SDK errors", async () => {
-    vi.mocked(mockRevokeToken).mockRejectedValueOnce(
-      new TodoistRequestError("Server error", 500),
+    vi.mocked(mockRevokeToken).mockRejectedValueOnce(new TodoistRequestError("Server error", 500));
+    await expect(revokeAccessToken("cid", "csecret", "tok-abc")).rejects.toThrow(
+      /Todoist API error during revokeAccessToken/
     );
-    await expect(
-      revokeAccessToken("cid", "csecret", "tok-abc"),
-    ).rejects.toThrow(/Todoist API error during revokeAccessToken/);
   });
 });
 

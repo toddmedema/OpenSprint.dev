@@ -120,6 +120,7 @@ import {
   extractNoResultReasonFromLogs,
   buildReviewNoResultFailureReason,
   synthesizeCodingResultFromOutput,
+  classifyNoResultReasonCode,
 } from "./no-result-reason.service.js";
 import {
   describeStructuredOutputProblem,
@@ -403,7 +404,9 @@ export class OrchestratorService {
         outputParseBuffer: "",
         activeToolCallIds: new Set<string>(),
         activeToolCallSummaries: new Map<string, string | null>(),
+        activeToolCallStartedAtMs: new Map<string, number>(),
         startedAt: new Date().toISOString(),
+        firstOutputAtIso: undefined,
         exitHandled: false,
         killedDueToTimeout: false,
         lifecycleState: "running",
@@ -2018,10 +2021,14 @@ export class OrchestratorService {
     const readResultWithTimeout = async (): Promise<{
       raw: string | null;
       result: CodingAgentResult | null;
+      readFailure: "timeout" | "error" | null;
     }> => {
       const timeoutMs = 15_000;
       return (await Promise.race([
-        this.readCodingResultWithRaw(wtPath, task.id),
+        this.readCodingResultWithRaw(wtPath, task.id).then((value) => ({
+          ...value,
+          readFailure: null,
+        })),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("readResult timeout")), timeoutMs)
         ),
@@ -2030,14 +2037,16 @@ export class OrchestratorService {
         return {
           raw: null,
           result: null,
+          readFailure: err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error",
         };
       })) as {
         raw: string | null;
         result: CodingAgentResult | null;
+        readFailure: "timeout" | "error" | null;
       };
     };
 
-    const { raw: rawResult, result: parsedResult } = await readResultWithTimeout();
+    const { raw: rawResult, result: parsedResult, readFailure } = await readResultWithTimeout();
     let result = parsedResult;
 
     if (!result) {
@@ -2072,6 +2081,10 @@ export class OrchestratorService {
         failureType === "no_result"
           ? await extractNoResultReasonFromLogs(wtPath, task.id, slot.agent.outputLog)
           : undefined;
+      const noResultReasonCode =
+        failureType === "no_result"
+          ? classifyNoResultReasonCode({ rawResult, readFailure })
+          : undefined;
       slot.agent.killedDueToTimeout = false;
       const noResultMessage =
         "The coding agent stopped without reporting whether the task succeeded or failed." +
@@ -2083,7 +2096,9 @@ export class OrchestratorService {
         branchName,
         noResultMessage,
         null,
-        failureType
+        failureType,
+        undefined,
+        { noResultReasonCode }
       );
       return;
     }
@@ -3049,6 +3064,10 @@ export class OrchestratorService {
         : exitCode === 143 || exitCode === 137
           ? "agent_crash"
           : "no_result";
+      const noResultReasonCode =
+        failureType === "no_result"
+          ? classifyNoResultReasonCode({ rawResult, readFailure: null })
+          : undefined;
       slot.agent.killedDueToTimeout = false;
       if (reviewAgentState) reviewAgentState.agent.killedDueToTimeout = false;
       await this.failureHandler.handleTaskFailure(
@@ -3062,7 +3081,7 @@ export class OrchestratorService {
         null,
         failureType,
         undefined,
-        { reviewScope: angle ?? "general" }
+        { reviewScope: angle ?? "general", noResultReasonCode }
       );
     }
   }

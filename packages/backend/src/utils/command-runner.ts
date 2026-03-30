@@ -149,10 +149,7 @@ export async function runCommand(
 
     const checkOutputLimit = () => {
       if (outputLimitExceeded || settled) return;
-      if (
-        maxStdoutBytes != null &&
-        Buffer.byteLength(stdout, "utf8") > maxStdoutBytes
-      ) {
+      if (maxStdoutBytes != null && Buffer.byteLength(stdout, "utf8") > maxStdoutBytes) {
         outputLimitExceeded = true;
         child.kill("SIGTERM");
         killTimer = setTimeout(() => {
@@ -160,10 +157,7 @@ export async function runCommand(
         }, KILL_GRACE_MS);
         return;
       }
-      if (
-        maxStderrBytes != null &&
-        Buffer.byteLength(stderr, "utf8") > maxStderrBytes
-      ) {
+      if (maxStderrBytes != null && Buffer.byteLength(stderr, "utf8") > maxStderrBytes) {
         outputLimitExceeded = true;
         child.kill("SIGTERM");
         killTimer = setTimeout(() => {

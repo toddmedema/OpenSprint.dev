@@ -2,10 +2,7 @@
 export type IntegrationProvider = "todoist";
 
 /** Connection health status for an integration. */
-export type IntegrationConnectionStatus =
-  | "active"
-  | "needs_reconnect"
-  | "disabled";
+export type IntegrationConnectionStatus = "active" | "needs_reconnect" | "disabled";
 
 /** Lifecycle status of an imported external item in the ledger. */
 export type ImportStatus = "importing" | "pending_delete" | "completed" | "failed_delete";

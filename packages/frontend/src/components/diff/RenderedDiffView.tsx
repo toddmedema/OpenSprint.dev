@@ -16,9 +16,18 @@ export interface RenderedDiffViewProps {
 export const INITIAL_BLOCK_CAP = 80;
 
 const STATUS_BADGE: Record<string, { label: string; className: string } | null> = {
-  added: { label: "+ Added", className: "bg-theme-success-bg text-theme-success-text border border-theme-success-border" },
-  removed: { label: "− Removed", className: "bg-theme-error-bg text-theme-error-text border border-theme-error-border" },
-  modified: { label: "~ Modified", className: "bg-theme-warning-bg text-theme-warning-text border border-theme-warning-border" },
+  added: {
+    label: "+ Added",
+    className: "bg-theme-success-bg text-theme-success-text border border-theme-success-border",
+  },
+  removed: {
+    label: "− Removed",
+    className: "bg-theme-error-bg text-theme-error-text border border-theme-error-border",
+  },
+  modified: {
+    label: "~ Modified",
+    className: "bg-theme-warning-bg text-theme-warning-text border border-theme-warning-border",
+  },
   unchanged: null,
 };
 
@@ -77,7 +86,10 @@ function BlockWrapper({
           aria-describedby={descriptionId}
         >
           {badge && (
-            <span className={`inline-block text-[10px] font-medium rounded px-1.5 py-0.5 mb-1 ${badge.className}`} id={descriptionId}>
+            <span
+              className={`inline-block text-[10px] font-medium rounded px-1.5 py-0.5 mb-1 ${badge.className}`}
+              id={descriptionId}
+            >
               {badge.label}
             </span>
           )}
@@ -94,7 +106,10 @@ function BlockWrapper({
           aria-describedby={descriptionId}
         >
           {badge && (
-            <span className={`inline-block text-[10px] font-medium rounded px-1.5 py-0.5 mb-1 no-underline ${badge.className}`} id={descriptionId}>
+            <span
+              className={`inline-block text-[10px] font-medium rounded px-1.5 py-0.5 mb-1 no-underline ${badge.className}`}
+              id={descriptionId}
+            >
               {badge.label}
             </span>
           )}
@@ -111,7 +126,10 @@ function BlockWrapper({
           aria-describedby={descriptionId}
         >
           {badge && (
-            <span className={`inline-block text-[10px] font-medium rounded px-1.5 py-0.5 mb-1 ${badge.className}`} id={descriptionId}>
+            <span
+              className={`inline-block text-[10px] font-medium rounded px-1.5 py-0.5 mb-1 ${badge.className}`}
+              id={descriptionId}
+            >
               {badge.label}
             </span>
           )}
@@ -140,11 +158,7 @@ function RenderBlock({ block, index }: { block: DiffBlock; index: number }) {
   );
 }
 
-export function RenderedDiffView({
-  fromContent,
-  toContent,
-  onParseError,
-}: RenderedDiffViewProps) {
+export function RenderedDiffView({ fromContent, toContent, onParseError }: RenderedDiffViewProps) {
   const [expanded, setExpanded] = useState(false);
 
   const result = useMemo(() => {
@@ -155,10 +169,7 @@ export function RenderedDiffView({
 
   if (result.parseError) {
     return (
-      <div
-        className="p-4 text-sm text-theme-muted"
-        data-testid="diff-view-parse-error"
-      >
+      <div className="p-4 text-sm text-theme-muted" data-testid="diff-view-parse-error">
         <span className="inline-block px-2 py-0.5 mb-2 rounded text-xs bg-theme-warning-bg text-theme-warning-text">
           Markdown parsing failed
         </span>
@@ -171,19 +182,14 @@ export function RenderedDiffView({
 
   if (result.blocks.length === 0 || !hasChanges) {
     return (
-      <div
-        className="p-4 text-sm text-theme-muted"
-        data-testid="diff-view-no-changes"
-      >
+      <div className="p-4 text-sm text-theme-muted" data-testid="diff-view-no-changes">
         No changes
       </div>
     );
   }
 
   const isCapped = result.blocks.length > INITIAL_BLOCK_CAP && !expanded;
-  const visibleBlocks = isCapped
-    ? result.blocks.slice(0, INITIAL_BLOCK_CAP)
-    : result.blocks;
+  const visibleBlocks = isCapped ? result.blocks.slice(0, INITIAL_BLOCK_CAP) : result.blocks;
   const hiddenCount = result.blocks.length - visibleBlocks.length;
 
   return (

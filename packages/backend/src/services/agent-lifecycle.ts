@@ -68,7 +68,11 @@ export interface AgentRunState {
   activeToolCallIds: Set<string>;
   /** Best-effort tool summaries keyed by call id (e.g. "npm test"). */
   activeToolCallSummaries: Map<string, string | null>;
+  /** Tool call start times for duration metrics. */
+  activeToolCallStartedAtMs: Map<string, number>;
   startedAt: string;
+  /** First filtered output timestamp for startup latency diagnostics. */
+  firstOutputAtIso?: string;
   exitHandled: boolean;
   killedDueToTimeout: boolean;
   lifecycleState: AgentRuntimeState;
@@ -146,9 +150,11 @@ export class AgentLifecycleManager {
     runState.outputParseBuffer = "";
     runState.activeToolCallIds.clear();
     runState.activeToolCallSummaries.clear();
+    runState.activeToolCallStartedAtMs.clear();
     runState.outputFilter = createAgentOutputFilter();
     this.setRunningState(runState, Date.now());
     runState.lastOutputAtIso = undefined;
+    runState.firstOutputAtIso = undefined;
 
     const outputLogPath =
       params.outputLogPath ??
@@ -200,6 +206,24 @@ export class AgentLifecycleManager {
           runState.exitHandled = true;
           runState.activeProcess = null;
           this.cleanupTimers(timers);
+          const startedAtMs = Date.parse(runState.startedAt ?? "");
+          const durationMs = Number.isFinite(startedAtMs)
+            ? Math.max(0, Date.now() - startedAtMs)
+            : null;
+          eventLogService
+            .append(params.repoPath, {
+              timestamp: new Date().toISOString(),
+              projectId: params.projectId,
+              taskId: params.taskId,
+              event: "agent.process_exited",
+              data: {
+                attempt: params.attempt,
+                phase: params.phase,
+                exitCode: code,
+                durationMs,
+              },
+            })
+            .catch(() => {});
           await heartbeatService.deleteHeartbeat(wtPath, taskId, params.heartbeatSubpath);
           try {
             await wrappedOnDone(code);
@@ -211,6 +235,7 @@ export class AgentLifecycleManager {
 
       this.startHeartbeat(runState, wtPath, taskId, timers, heartbeatSubpath);
       this.startResultMonitor(
+        params,
         promptPath,
         runState,
         wtPath,
@@ -258,6 +283,7 @@ export class AgentLifecycleManager {
     runState.outputParseBuffer = "";
     runState.activeToolCallIds.clear();
     runState.activeToolCallSummaries.clear();
+    runState.activeToolCallStartedAtMs.clear();
     runState.outputFilter = createAgentOutputFilter();
     runState.exitHandled = false;
     runState.killedDueToTimeout = false;
@@ -265,6 +291,7 @@ export class AgentLifecycleManager {
     runState.suspendedAtIso = undefined;
     runState.suspendReason = undefined;
     runState.suspendDeadlineMs = undefined;
+    runState.firstOutputAtIso = undefined;
 
     const outputLogPath = path.join(
       wtPath,
@@ -290,7 +317,15 @@ export class AgentLifecycleManager {
     };
 
     this.startHeartbeat(runState, wtPath, taskId, timers);
-    this.startResultMonitor(params.promptPath, runState, wtPath, taskId, timers, wrappedOnDone);
+    this.startResultMonitor(
+      params,
+      params.promptPath,
+      runState,
+      wtPath,
+      taskId,
+      timers,
+      wrappedOnDone
+    );
     this.startInactivityMonitor(
       runState,
       wtPath,
@@ -347,6 +382,7 @@ export class AgentLifecycleManager {
   }
 
   private startResultMonitor(
+    params: AgentRunParams,
     promptPath: string,
     runState: AgentRunState,
     wtPath: string,
@@ -379,6 +415,25 @@ export class AgentLifecycleManager {
               resultPath,
               status,
             });
+            const startedAtMs = Date.parse(runState.startedAt ?? "");
+            const durationMs = Number.isFinite(startedAtMs)
+              ? Math.max(0, Date.now() - startedAtMs)
+              : null;
+            eventLogService
+              .append(params.repoPath, {
+                timestamp: new Date().toISOString(),
+                projectId: params.projectId,
+                taskId: params.taskId,
+                event: "agent.result_detected",
+                data: {
+                  attempt: params.attempt,
+                  phase: params.phase,
+                  status,
+                  durationMs,
+                  resultPath,
+                },
+              })
+              .catch(() => {});
             try {
               activeProcess?.kill();
             } catch {
@@ -493,11 +548,7 @@ export class AgentLifecycleManager {
     // slots as dead before the first interval tick.
     writeHeartbeat();
 
-    timers.setInterval(
-      "heartbeat",
-      writeHeartbeat,
-      HEARTBEAT_INTERVAL_MS
-    );
+    timers.setInterval("heartbeat", writeHeartbeat, HEARTBEAT_INTERVAL_MS);
   }
 
   private startInactivityMonitor(
@@ -526,6 +577,21 @@ export class AgentLifecycleManager {
           if (runState.exitHandled) return;
           runState.exitHandled = true;
           log.warn("Agent process dead, recovering immediately", { taskId, pid: proc.pid });
+          if (params) {
+            eventLogService
+              .append(params.repoPath, {
+                timestamp: new Date().toISOString(),
+                projectId: params.projectId,
+                taskId,
+                event: "agent.process_dead",
+                data: {
+                  attempt: params.attempt,
+                  phase: params.phase,
+                  pid: proc.pid,
+                },
+              })
+              .catch(() => {});
+          }
           runState.activeProcess = null;
           this.cleanupTimers(timers);
           heartbeatService.deleteHeartbeat(wtPath, taskId, heartbeatSubpath).catch(() => {});
@@ -604,6 +670,26 @@ export class AgentLifecycleManager {
     runState: AgentRunState,
     atMs: number
   ): Promise<void> {
+    if (!runState.firstOutputAtIso) {
+      runState.firstOutputAtIso = new Date(atMs).toISOString();
+      const startedAtMs = Date.parse(runState.startedAt ?? "");
+      const startupDurationMs = Number.isFinite(startedAtMs)
+        ? Math.max(0, atMs - startedAtMs)
+        : null;
+      eventLogService
+        .append(params.repoPath, {
+          timestamp: runState.firstOutputAtIso,
+          projectId: params.projectId,
+          taskId: params.taskId,
+          event: "agent.first_output",
+          data: {
+            attempt: params.attempt,
+            phase: params.phase,
+            startupDurationMs,
+          },
+        })
+        .catch(() => {});
+    }
     const previousReason = runState.suspendReason;
     const wasSuspended = runState.lifecycleState === "suspended";
     this.setRunningState(runState, atMs);
@@ -680,6 +766,8 @@ export class AgentLifecycleManager {
             phase: params.phase,
             toolCallId: event.callId,
             summary,
+            toolStatus: event.toolStatus,
+            durationMs: event.durationMs,
           },
         })
         .catch(() => {});
@@ -689,6 +777,7 @@ export class AgentLifecycleManager {
         taskId: params.taskId,
         phase: params.phase,
         activity: event.kind === "started" ? "waiting_on_tool" : "tool_completed",
+        ...(event.kind === "completed" ? { toolStatus: event.toolStatus } : {}),
         ...(summary ? { summary } : {}),
       });
     }
@@ -709,6 +798,8 @@ interface ToolCallLifecycleEvent {
   kind: "started" | "completed";
   callId: string;
   summary: string | null;
+  toolStatus: "started" | "completed" | "failed" | "cancelled";
+  durationMs: number | null;
 }
 
 function updateToolCallState(state: AgentRunState, chunk: string): ToolCallLifecycleEvent[] {
@@ -735,7 +826,14 @@ function updateToolCallState(state: AgentRunState, chunk: string): ToolCallLifec
       if (parsed.subtype === "started") {
         state.activeToolCallIds.add(parsed.call_id);
         state.activeToolCallSummaries.set(parsed.call_id, summary);
-        toolEvents.push({ kind: "started", callId: parsed.call_id, summary });
+        state.activeToolCallStartedAtMs.set(parsed.call_id, Date.now());
+        toolEvents.push({
+          kind: "started",
+          callId: parsed.call_id,
+          summary,
+          toolStatus: "started",
+          durationMs: null,
+        });
       } else if (
         parsed.subtype === "completed" ||
         parsed.subtype === "failed" ||
@@ -743,8 +841,25 @@ function updateToolCallState(state: AgentRunState, chunk: string): ToolCallLifec
       ) {
         state.activeToolCallIds.delete(parsed.call_id);
         const knownSummary = summary ?? state.activeToolCallSummaries.get(parsed.call_id) ?? null;
+        const startedAtMs = state.activeToolCallStartedAtMs.get(parsed.call_id) ?? null;
+        const durationMs =
+          startedAtMs != null && Number.isFinite(startedAtMs)
+            ? Math.max(0, Date.now() - startedAtMs)
+            : null;
         state.activeToolCallSummaries.delete(parsed.call_id);
-        toolEvents.push({ kind: "completed", callId: parsed.call_id, summary: knownSummary });
+        state.activeToolCallStartedAtMs.delete(parsed.call_id);
+        toolEvents.push({
+          kind: "completed",
+          callId: parsed.call_id,
+          summary: knownSummary,
+          toolStatus:
+            parsed.subtype === "failed"
+              ? "failed"
+              : parsed.subtype === "cancelled"
+                ? "cancelled"
+                : "completed",
+          durationMs,
+        });
       }
     } catch {
       // Non-JSON or partial JSON lines are normal for non-Cursor agents; ignore.

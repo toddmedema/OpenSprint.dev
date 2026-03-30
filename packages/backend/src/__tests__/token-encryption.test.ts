@@ -49,9 +49,7 @@ describe("TokenEncryptionService", () => {
   });
 
   it("throws on truncated payload", () => {
-    expect(() => svc.decryptToken("dG9vLXNob3J0")).toThrow(
-      "payload too short"
-    );
+    expect(() => svc.decryptToken("dG9vLXNob3J0")).toThrow("payload too short");
   });
 
   it("respects INTEGRATION_ENCRYPTION_KEY env var", () => {
@@ -80,11 +78,8 @@ describe("TokenEncryptionService", () => {
   it("rejects INTEGRATION_ENCRYPTION_KEY with wrong length", () => {
     const original = process.env.INTEGRATION_ENCRYPTION_KEY;
     try {
-      process.env.INTEGRATION_ENCRYPTION_KEY =
-        Buffer.alloc(16).toString("base64");
-      expect(() => new TokenEncryptionService()).toThrow(
-        "must decode to 32 bytes"
-      );
+      process.env.INTEGRATION_ENCRYPTION_KEY = Buffer.alloc(16).toString("base64");
+      expect(() => new TokenEncryptionService()).toThrow("must decode to 32 bytes");
     } finally {
       if (original === undefined) {
         delete process.env.INTEGRATION_ENCRYPTION_KEY;

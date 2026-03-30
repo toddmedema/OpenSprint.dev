@@ -509,7 +509,10 @@ function TaskDetailSidebarInner({
           sectionNavId="execute-artifacts-section"
           sectionNavTitle={isDoneTask ? "Done Work Artifacts" : "Live agent output"}
         >
-          <div className="min-h-[200px] max-h-[500px] overflow-y-auto" data-testid="live-output-scroll-container">
+          <div
+            className="min-h-[200px] max-h-[500px] overflow-y-auto"
+            data-testid="live-output-scroll-container"
+          >
             <TaskDetailAgentOutput
               projectId={projectId}
               taskDetailLoading={taskDetailLoading}
@@ -539,7 +542,10 @@ function TaskDetailSidebarInner({
           sectionNavId="execute-chat-section"
           sectionNavTitle="Chat with agent"
         >
-          <div className="min-h-[200px] max-h-[500px] overflow-hidden" data-testid="chat-section-scroll-container">
+          <div
+            className="min-h-[200px] max-h-[500px] overflow-hidden"
+            data-testid="chat-section-scroll-container"
+          >
             <ExecuteAgentChatPanel
               messages={chatMessages}
               sending={chatSending}

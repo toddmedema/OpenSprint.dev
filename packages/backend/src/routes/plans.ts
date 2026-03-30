@@ -116,10 +116,7 @@ export function createPlansRouter(planService: PlanService): Router {
     validateParams(projectIdParamSchema),
     validateBody(planExecuteBatchBodySchema),
     wrapAsync(
-      async (
-        req: Request<ProjectParams, unknown, { items: PlanExecuteBatchItem[] }>,
-        res
-      ) => {
+      async (req: Request<ProjectParams, unknown, { items: PlanExecuteBatchItem[] }>, res) => {
         const result = await enqueuePlanExecuteBatch(
           planService,
           req.params.projectId,

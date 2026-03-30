@@ -464,7 +464,11 @@ describe("MergeCoordinatorService", () => {
 
     await coordinator.postCompletionAsync(projectId, repoPath, "os-abc.1");
 
-    expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, "epic_42", "/tmp/replay-worktree");
+    expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
+      repoPath,
+      "epic_42",
+      "/tmp/replay-worktree"
+    );
     expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, "opensprint/os-replay");
     expect(mockRemoveCleanupIntent).toHaveBeenCalledWith(repoPath, projectId, "os-replay");
   });
@@ -572,7 +576,12 @@ describe("MergeCoordinatorService", () => {
 
     const firstMerge = coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
     await Promise.resolve();
-    const duplicateMerge = coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+    const duplicateMerge = coordinator.performMergeAndDone(
+      projectId,
+      repoPath,
+      makeTask(),
+      branchName
+    );
 
     await duplicateMerge;
     expect(mockHost.branchManager.waitForGitReady).toHaveBeenCalledTimes(1);

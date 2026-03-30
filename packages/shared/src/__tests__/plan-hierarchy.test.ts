@@ -99,10 +99,7 @@ describe("buildPlanTree", () => {
   });
 
   it("groups root plans under empty string key", () => {
-    const plans = [
-      { planId: "a", parentPlanId: undefined },
-      { planId: "b" },
-    ];
+    const plans = [{ planId: "a", parentPlanId: undefined }, { planId: "b" }];
     const tree = buildPlanTree(plans);
     expect(tree.get("")).toHaveLength(2);
     expect(tree.get("")!.map((p) => p.planId)).toEqual(["a", "b"]);

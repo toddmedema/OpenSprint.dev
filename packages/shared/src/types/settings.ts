@@ -39,12 +39,7 @@ export function normalizeAgentTimeoutMs(raw: unknown): AgentTimeoutValue {
   if (raw === null) return null;
   if (typeof raw !== "number" || !Number.isFinite(raw)) return DEFAULT_AGENT_TIMEOUT_MS;
   const rounded = Math.round(raw);
-  if (
-    rounded === 300000 ||
-    rounded === 900000 ||
-    rounded === 1800000 ||
-    rounded === 3600000
-  ) {
+  if (rounded === 300000 || rounded === 900000 || rounded === 1800000 || rounded === 3600000) {
     return rounded as Exclude<AgentTimeoutValue, null>;
   }
   return DEFAULT_AGENT_TIMEOUT_MS;

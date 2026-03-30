@@ -121,10 +121,7 @@ const AgentDropdownItem = memo(function AgentDropdownItem({
           aria-hidden
         />
         <div className="min-w-0 flex-1">
-          <div
-            className="font-medium text-theme-text truncate"
-            title={agent.label || agent.id}
-          >
+          <div className="font-medium text-theme-text truncate" title={agent.label || agent.id}>
             {agent.label || agent.id}
           </div>
           <div className="text-theme-muted mt-0.5">
@@ -244,10 +241,13 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
     [navigate, projectId]
   );
 
-  const handleKillSuccess = useCallback((agentId: string) => {
-    setHiddenAgentIds((prev) => new Set(prev).add(agentId));
-    void queryClient.invalidateQueries({ queryKey: queryKeys.agents.active(projectId) });
-  }, [projectId, queryClient]);
+  const handleKillSuccess = useCallback(
+    (agentId: string) => {
+      setHiddenAgentIds((prev) => new Set(prev).add(agentId));
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.active(projectId) });
+    },
+    [projectId, queryClient]
+  );
 
   /** Sort agents by canonical README/PRD order for consistent icon display. */
   const visibleAgents =

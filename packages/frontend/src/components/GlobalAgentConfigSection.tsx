@@ -140,9 +140,7 @@ export function GlobalAgentConfigSection({
                 ? "Hide Install Instructions"
                 : "Show Install Instructions"}
           </button>
-          {cursorCliError && (
-            <p className="text-sm mt-2 text-theme-error-text">{cursorCliError}</p>
-          )}
+          {cursorCliError && <p className="text-sm mt-2 text-theme-error-text">{cursorCliError}</p>}
           {cursorCliShowInstructions && cursorCliInstructions && (
             <div className="mt-3 space-y-2" data-testid="cursor-cli-install-instructions">
               <p className="text-sm text-theme-warning-text">
@@ -157,12 +155,10 @@ export function GlobalAgentConfigSection({
                   className="btn btn-secondary text-xs px-2 py-1 shrink-0"
                   data-testid="copy-cursor-cli-cmd-btn"
                   onClick={() => {
-                    navigator.clipboard
-                      .writeText(cursorCliInstructions.manualCommand)
-                      .then(() => {
-                        setCursorCliCopied(true);
-                        setTimeout(() => setCursorCliCopied(false), 2000);
-                      });
+                    navigator.clipboard.writeText(cursorCliInstructions.manualCommand).then(() => {
+                      setCursorCliCopied(true);
+                      setTimeout(() => setCursorCliCopied(false), 2000);
+                    });
                   }}
                 >
                   {cursorCliCopied ? "Copied" : "Copy"}
@@ -397,7 +393,10 @@ export function GlobalAgentConfigSection({
                 className="input w-full"
                 value={timeoutToSelectValue(simpleAgent.timeoutMs)}
                 onChange={(e) =>
-                  onUpdateSimple({ timeoutMs: selectValueToTimeout(e.target.value) }, { immediate: false })
+                  onUpdateSimple(
+                    { timeoutMs: selectValueToTimeout(e.target.value) },
+                    { immediate: false }
+                  )
                 }
                 onBlur={scheduleSaveOnBlur}
               >

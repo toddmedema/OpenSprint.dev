@@ -19,7 +19,7 @@ describe("DiffView", () => {
     it("renders context rows correctly", () => {
       render(<DiffView diff={sampleDiff} defaultMode="raw" />);
       const items = within(screen.getByRole("textbox", { name: "Diff lines" })).getAllByRole(
-        "listitem",
+        "listitem"
       );
       const contextRow = items[0];
       expect(contextRow).toHaveAttribute("data-line-type", "context");
@@ -29,7 +29,7 @@ describe("DiffView", () => {
     it("renders add rows with + marker", () => {
       render(<DiffView diff={sampleDiff} defaultMode="raw" />);
       const items = within(screen.getByRole("textbox", { name: "Diff lines" })).getAllByRole(
-        "listitem",
+        "listitem"
       );
       const addRow = items[2];
       expect(addRow).toHaveAttribute("data-line-type", "add");
@@ -40,7 +40,7 @@ describe("DiffView", () => {
     it("renders remove rows with - marker", () => {
       render(<DiffView diff={sampleDiff} defaultMode="raw" />);
       const items = within(screen.getByRole("textbox", { name: "Diff lines" })).getAllByRole(
-        "listitem",
+        "listitem"
       );
       const removeRow = items[1];
       expect(removeRow).toHaveAttribute("data-line-type", "remove");
@@ -84,7 +84,7 @@ describe("DiffView", () => {
     it("applies correct aria labels for each line type", () => {
       render(<DiffView diff={sampleDiff} defaultMode="raw" />);
       const items = within(screen.getByRole("textbox", { name: "Diff lines" })).getAllByRole(
-        "listitem",
+        "listitem"
       );
       expect(items[0]).toHaveAttribute("aria-label", expect.stringContaining("Context line"));
       expect(items[1]).toHaveAttribute("aria-label", expect.stringContaining("Removed line"));
@@ -99,7 +99,7 @@ describe("DiffView", () => {
       };
       render(<DiffView diff={diff} defaultMode="raw" />);
       const item = within(screen.getByRole("textbox", { name: "Diff lines" })).getByRole(
-        "listitem",
+        "listitem"
       );
       const label = item.getAttribute("aria-label") ?? "";
       expect(label.endsWith("…")).toBe(true);
@@ -168,12 +168,9 @@ describe("DiffView", () => {
       render(<DiffView diff={sampleDiff} />);
       expect(screen.getByRole("radio", { name: "Rendered" })).toHaveAttribute(
         "aria-checked",
-        "true",
+        "true"
       );
-      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute(
-        "aria-checked",
-        "false",
-      );
+      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute("aria-checked", "false");
       expect(screen.getByTestId("diff-view-rendered-placeholder")).toBeInTheDocument();
     });
 
@@ -183,10 +180,7 @@ describe("DiffView", () => {
       await user.click(screen.getByRole("radio", { name: "Raw" }));
       expect(screen.getByTestId("diff-view-raw")).toBeInTheDocument();
       expect(screen.queryByTestId("diff-view-rendered-placeholder")).not.toBeInTheDocument();
-      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
+      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute("aria-checked", "true");
     });
 
     it("switches back to rendered on toggle", async () => {
@@ -213,10 +207,7 @@ describe("DiffView", () => {
     it("respects defaultMode prop", () => {
       render(<DiffView diff={sampleDiff} defaultMode="raw" />);
       expect(screen.getByTestId("diff-view-raw")).toBeInTheDocument();
-      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
+      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute("aria-checked", "true");
     });
 
     it("uses roving tabindex on toggle buttons", () => {
@@ -233,14 +224,11 @@ describe("DiffView", () => {
       const rendered = screen.getByRole("radio", { name: "Rendered" });
       rendered.focus();
       await user.keyboard("{ArrowRight}");
-      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
+      expect(screen.getByRole("radio", { name: "Raw" })).toHaveAttribute("aria-checked", "true");
       await user.keyboard("{ArrowLeft}");
       expect(screen.getByRole("radio", { name: "Rendered" })).toHaveAttribute(
         "aria-checked",
-        "true",
+        "true"
       );
     });
   });
@@ -283,19 +271,13 @@ describe("DiffView", () => {
       };
       render(<DiffView diff={diff} defaultMode="raw" />);
       const items = within(screen.getByRole("textbox", { name: "Diff lines" })).getAllByRole(
-        "listitem",
+        "listitem"
       );
       expect(items[0].textContent).toContain("\u00a0");
     });
 
     it("accepts fromContent and toContent props without error", () => {
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent="old content"
-          toContent="new content"
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent="old content" toContent="new content" />);
       expect(screen.getByTestId("diff-view")).toBeInTheDocument();
     });
   });
@@ -309,7 +291,7 @@ describe("DiffView", () => {
           fromContent="# Title\n\nOld paragraph."
           toContent="# Title\n\nNew paragraph."
           defaultMode="raw"
-        />,
+        />
       );
       await user.click(screen.getByRole("radio", { name: "Rendered" }));
       expect(screen.getByTestId("diff-view-rendered")).toBeInTheDocument();
@@ -329,7 +311,7 @@ describe("DiffView", () => {
           fromContent="# Title"
           toContent="# Title\n\nAdded."
           defaultMode="raw"
-        />,
+        />
       );
       await user.click(screen.getByRole("radio", { name: "Rendered" }));
       expect(screen.getByTestId("diff-view-rendered")).toBeInTheDocument();
@@ -343,7 +325,7 @@ describe("DiffView", () => {
           diff={sampleDiff}
           fromContent="# Title\n\nOld paragraph."
           toContent="# Title\n\nNew paragraph."
-        />,
+        />
       );
       expect(screen.getByTestId("diff-view-rendered")).toBeInTheDocument();
       expect(screen.queryByTestId("diff-view-raw")).not.toBeInTheDocument();
@@ -351,38 +333,20 @@ describe("DiffView", () => {
 
     it("shows no-changes in rendered mode for identical content", () => {
       const content = "# Title\n\nSame paragraph.";
-      render(
-        <DiffView
-          diff={{ lines: [] }}
-          fromContent={content}
-          toContent={content}
-        />,
-      );
+      render(<DiffView diff={{ lines: [] }} fromContent={content} toContent={content} />);
       expect(screen.getByTestId("diff-view-no-changes")).toHaveTextContent("No changes");
     });
   });
 
   describe("theme", () => {
     it("rendered diff container includes dark:prose-invert class", () => {
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent="# Title"
-          toContent="# Title\n\nNew."
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent="# Title" toContent="# Title\n\nNew." />);
       const rendered = screen.getByTestId("diff-view-rendered");
       expect(rendered.className).toContain("dark:prose-invert");
     });
 
     it("rendered diff container includes prose-execute-task class", () => {
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent="# Title"
-          toContent="# Title\n\nNew."
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent="# Title" toContent="# Title\n\nNew." />);
       const rendered = screen.getByTestId("diff-view-rendered");
       expect(rendered.className).toContain("prose-execute-task");
     });
@@ -405,7 +369,7 @@ describe("DiffView", () => {
           diff={sampleDiff}
           fromContent="# Title\n\nOld paragraph."
           toContent="# Title\n\nNew paragraph."
-        />,
+        />
       );
       const rendered = screen.getByTestId("diff-view-rendered");
       const modifiedBlocks = rendered.querySelectorAll('[data-diff-status="modified"]');
@@ -420,13 +384,7 @@ describe("DiffView", () => {
     it("changed blocks in rendered mode have status badge", () => {
       const from = "# Title";
       const to = "# Title\n\nNew paragraph.";
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent={from}
-          toContent={to}
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent={from} toContent={to} />);
       const rendered = screen.getByTestId("diff-view-rendered");
       const changedBlocks = rendered.querySelectorAll(
         '[data-diff-status="added"], [data-diff-status="modified"]'
@@ -439,13 +397,7 @@ describe("DiffView", () => {
     it("removal blocks in rendered mode have status badge", () => {
       const from = "# Title\n\nOld paragraph.";
       const to = "# Title";
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent={from}
-          toContent={to}
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent={from} toContent={to} />);
       const rendered = screen.getByTestId("diff-view-rendered");
       const changedBlocks = rendered.querySelectorAll(
         '[data-diff-status="removed"], [data-diff-status="modified"]'
@@ -456,13 +408,7 @@ describe("DiffView", () => {
     });
 
     it("ins elements have aria-label for screen readers", () => {
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent="Hello world."
-          toContent="Hello universe."
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent="Hello world." toContent="Hello universe." />);
       const rendered = screen.getByTestId("diff-view-rendered");
       const insElements = rendered.querySelectorAll("ins");
       if (insElements.length > 0) {
@@ -471,13 +417,7 @@ describe("DiffView", () => {
     });
 
     it("del elements have aria-label for screen readers", () => {
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent="Hello world."
-          toContent="Hello universe."
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent="Hello world." toContent="Hello universe." />);
       const rendered = screen.getByTestId("diff-view-rendered");
       const delElements = rendered.querySelectorAll("del");
       if (delElements.length > 0) {
@@ -486,13 +426,7 @@ describe("DiffView", () => {
     });
 
     it("ins elements use underline decoration (not color-only)", () => {
-      render(
-        <DiffView
-          diff={sampleDiff}
-          fromContent="Hello world."
-          toContent="Hello universe."
-        />,
-      );
+      render(<DiffView diff={sampleDiff} fromContent="Hello world." toContent="Hello universe." />);
       const rendered = screen.getByTestId("diff-view-rendered");
       const insElements = rendered.querySelectorAll("ins");
       if (insElements.length > 0) {

@@ -4,8 +4,7 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-const LOCALHOST_ORIGIN_RE =
-  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
 let sessionToken: string | null = null;
 
@@ -74,9 +73,7 @@ export function refererIsTrustedLocalhost(referer: string | undefined): boolean 
 /**
  * Returns true when the Authorization header carries a valid Bearer session token.
  */
-export function requestHasValidBearerToken(
-  authorization: string | undefined
-): boolean {
+export function requestHasValidBearerToken(authorization: string | undefined): boolean {
   const auth = authorization;
   if (auth?.startsWith("Bearer ")) {
     const token = auth.slice("Bearer ".length).trim();

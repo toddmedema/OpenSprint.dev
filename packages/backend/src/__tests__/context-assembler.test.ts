@@ -184,7 +184,9 @@ User authentication.
       "Run the smallest relevant non-watch verification for the workspaces you touch while iterating"
     );
     expect(prompt).toContain("add scoped build/typecheck and lint commands");
-    expect(prompt).toContain("Before writing `result.json`, run the project's configured merge quality gate commands");
+    expect(prompt).toContain(
+      "Before writing `result.json`, run the project's configured merge quality gate commands"
+    );
     expect(prompt).not.toContain("`npm run build`, `npm run lint`, `npm run test`");
     expect(prompt).toContain("**Dependencies:**");
     expect(prompt).toContain("package-manager install");

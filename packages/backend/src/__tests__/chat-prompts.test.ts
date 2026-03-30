@@ -1,14 +1,9 @@
 import { describe, it, expect } from "vitest";
-import {
-  DREAM_SYSTEM_PROMPT,
-  PLAN_REFINEMENT_SYSTEM_PROMPT,
-} from "../services/chat.service.js";
+import { DREAM_SYSTEM_PROMPT, PLAN_REFINEMENT_SYSTEM_PROMPT } from "../services/chat.service.js";
 
 describe("DREAM_SYSTEM_PROMPT — scale/speed/cost discovery", () => {
   it("contains the discovery header paragraph", () => {
-    expect(DREAM_SYSTEM_PROMPT).toContain(
-      "**Scale, speed, and cost discovery:**",
-    );
+    expect(DREAM_SYSTEM_PROMPT).toContain("**Scale, speed, and cost discovery:**");
   });
 
   it("lists all three constraint categories with examples", () => {
@@ -19,28 +14,26 @@ describe("DREAM_SYSTEM_PROMPT — scale/speed/cost discovery", () => {
 
   it("instructs the agent to ask the user when constraints are missing", () => {
     expect(DREAM_SYSTEM_PROMPT).toContain(
-      "Do you have any requirements around scale (e.g., expected users or data volume), speed (latency/throughput targets), or cost (budget or infrastructure constraints)?",
+      "Do you have any requirements around scale (e.g., expected users or data volume), speed (latency/throughput targets), or cost (budget or infrastructure constraints)?"
     );
-    expect(DREAM_SYSTEM_PROMPT).toContain(
-      "I'll proceed with sensible defaults",
-    );
+    expect(DREAM_SYSTEM_PROMPT).toContain("I'll proceed with sensible defaults");
   });
 
   it("instructs reflection in technical_architecture and non_functional_requirements", () => {
     expect(DREAM_SYSTEM_PROMPT).toContain(
-      "reflect it in technical_architecture and non_functional_requirements",
+      "reflect it in technical_architecture and non_functional_requirements"
     );
   });
 
   it("instructs noting in assumptions_and_constraints when user declines", () => {
     expect(DREAM_SYSTEM_PROMPT).toContain(
-      "note in assumptions_and_constraints that no scale/speed/cost requirements were specified and defaults are assumed",
+      "note in assumptions_and_constraints that no scale/speed/cost requirements were specified and defaults are assumed"
     );
   });
 
   it("places discovery before finalizing technical_architecture or non_functional_requirements", () => {
     expect(DREAM_SYSTEM_PROMPT).toContain(
-      "Before finalizing the technical_architecture or non_functional_requirements sections",
+      "Before finalizing the technical_architecture or non_functional_requirements sections"
     );
   });
 
@@ -57,21 +50,17 @@ describe("DREAM_SYSTEM_PROMPT — scale/speed/cost discovery", () => {
 describe("PLAN_REFINEMENT_SYSTEM_PROMPT — scale/speed/cost item", () => {
   it("includes numbered item 6 about scale/speed/cost", () => {
     expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toMatch(
-      /6\.\s+When suggesting changes to the Technical Approach/,
+      /6\.\s+When suggesting changes to the Technical Approach/
     );
   });
 
   it("references scale, speed, and cost constraints in item 6", () => {
-    const match = PLAN_REFINEMENT_SYSTEM_PROMPT.match(
-      /6\..*scale.*speed.*cost/is,
-    );
+    const match = PLAN_REFINEMENT_SYSTEM_PROMPT.match(/6\..*scale.*speed.*cost/is);
     expect(match).not.toBeNull();
   });
 
   it("connects constraints to recommendations", () => {
-    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain(
-      "reflect them in your recommendations",
-    );
+    expect(PLAN_REFINEMENT_SYSTEM_PROMPT).toContain("reflect them in your recommendations");
   });
 
   it("preserves existing numbered items 1-5", () => {

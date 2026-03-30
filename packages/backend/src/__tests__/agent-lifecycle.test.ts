@@ -84,7 +84,9 @@ describe("AgentLifecycleManager", () => {
       outputParseBuffer: "",
       activeToolCallIds: new Set<string>(),
       activeToolCallSummaries: new Map<string, string | null>(),
+      activeToolCallStartedAtMs: new Map<string, number>(),
       startedAt: "",
+      firstOutputAtIso: undefined,
       exitHandled: false,
       killedDueToTimeout: false,
       lifecycleState: "running",
@@ -461,9 +463,10 @@ describe("AgentLifecycleManager", () => {
       );
       capturedOnOutput?.('{"type":"tool_call","subtype":"completed","call_id":"call-1"}\n');
 
-      expect(mockAppendEvent).toHaveBeenNthCalledWith(
-        1,
-        "/tmp/repo",
+      const events = vi.mocked(mockAppendEvent).mock.calls.map(([, event]) => event);
+      const waitingEvent = events.find((event) => event.event === "agent.waiting_on_tool");
+      const completedEvent = events.find((event) => event.event === "agent.tool_completed");
+      expect(waitingEvent).toEqual(
         expect.objectContaining({
           taskId: "task-1",
           event: "agent.waiting_on_tool",
@@ -471,12 +474,11 @@ describe("AgentLifecycleManager", () => {
             attempt: 1,
             phase: "coding",
             summary: "npm test -- --runInBand",
+            toolStatus: "started",
           }),
         })
       );
-      expect(mockAppendEvent).toHaveBeenNthCalledWith(
-        2,
-        "/tmp/repo",
+      expect(completedEvent).toEqual(
         expect.objectContaining({
           taskId: "task-1",
           event: "agent.tool_completed",
@@ -484,6 +486,7 @@ describe("AgentLifecycleManager", () => {
             attempt: 1,
             phase: "coding",
             summary: "npm test -- --runInBand",
+            toolStatus: "completed",
           }),
         })
       );

@@ -1005,9 +1005,7 @@ describe("WorkflowSettingsContent", () => {
 
     it("does not render a review mode dropdown in the self-improvement section", () => {
       renderWorkflowContent();
-      expect(
-        screen.queryByTestId("self-improvement-review-mode-select")
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId("self-improvement-review-mode-select")).not.toBeInTheDocument();
     });
 
     it("shows 'Using code review angles' with Customize button when no explicit angles", () => {
@@ -1092,7 +1090,9 @@ describe("WorkflowSettingsContent", () => {
 
     it("renders the review angles multiselect container", () => {
       renderWorkflowContent();
-      expect(screen.getByTestId("self-improvement-reviewer-agents-multiselect")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("self-improvement-reviewer-agents-multiselect")
+      ).toBeInTheDocument();
     });
 
     it("has exactly one review-mode-select in the entire page (Code Review only, not SI)", () => {
@@ -1109,8 +1109,12 @@ describe("WorkflowSettingsContent", () => {
         selfImprovementIncludeGeneralReview: true,
       });
       const siSection = screen.getByTestId("self-improvement-section");
-      expect(siSection.querySelector("[data-testid='self-improvement-reviewer-agents-multiselect']")).toBeInTheDocument();
-      expect(siSection.querySelector("[data-testid='self-improvement-review-mode-select']")).not.toBeInTheDocument();
+      expect(
+        siSection.querySelector("[data-testid='self-improvement-reviewer-agents-multiselect']")
+      ).toBeInTheDocument();
+      expect(
+        siSection.querySelector("[data-testid='self-improvement-review-mode-select']")
+      ).not.toBeInTheDocument();
       expect(siSection.querySelector("[data-testid='review-mode-select']")).not.toBeInTheDocument();
     });
 

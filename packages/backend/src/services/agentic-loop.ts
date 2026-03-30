@@ -398,9 +398,7 @@ function drainPendingMessages(queue?: PendingMessageQueue): string {
   const pending = queue.drain();
   if (pending.length === 0) return "Continue.";
   if (pending.length === 1) return pending[0].message;
-  return pending
-    .map((p) => `[${p.timestamp.toISOString()}] ${p.message}`)
-    .join("\n---\n");
+  return pending.map((p) => `[${p.timestamp.toISOString()}] ${p.message}`).join("\n---\n");
 }
 
 /**

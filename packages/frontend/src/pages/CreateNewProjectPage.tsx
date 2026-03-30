@@ -566,12 +566,14 @@ export function CreateNewProjectPage() {
                       aria-hidden
                     />
                     <p className="text-theme-text font-medium">
-                      {template === "empty" ? "Setting up your project..." : "Building your project..."}
+                      {template === "empty"
+                        ? "Setting up your project..."
+                        : "Building your project..."}
                     </p>
                     {template !== "empty" && (
                       <p className="text-sm text-theme-muted mt-1">
-                        Creating scaffolding and installing dependencies. If an error is detected, an
-                        agent will attempt to fix it automatically.
+                        Creating scaffolding and installing dependencies. If an error is detected,
+                        an agent will attempt to fix it automatically.
                       </p>
                     )}
                   </div>

@@ -142,10 +142,7 @@ export function ExecuteAgentChatPanel({
         : undefined;
 
   return (
-    <div
-      className="flex flex-col h-full min-h-0"
-      data-testid="execute-agent-chat-panel"
-    >
+    <div className="flex flex-col h-full min-h-0" data-testid="execute-agent-chat-panel">
       {/* Unsupported notice */}
       {!chatSupported && (
         <div
@@ -163,7 +160,8 @@ export function ExecuteAgentChatPanel({
           className="mx-4 mb-3 px-3 py-2.5 bg-theme-surface-muted border border-theme-border-subtle rounded-lg text-xs text-theme-muted"
           data-testid="chat-not-running-notice"
         >
-          The agent is not currently running. Chat will be available when an agent is actively working on this task.
+          The agent is not currently running. Chat will be available when an agent is actively
+          working on this task.
         </div>
       )}
 

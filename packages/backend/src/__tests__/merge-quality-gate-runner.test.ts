@@ -413,8 +413,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         if (label === "npm ci") {
           throw makeCommandFailure(spec, options.cwd, {
             message: "npm ci failed",
-            stderr:
-              "npm ERR! code ENOLOCK\nnpm ERR! This command requires an existing lockfile.",
+            stderr: "npm ERR! code ENOLOCK\nnpm ERR! This command requires an existing lockfile.",
           });
         }
         if (label === "git checkout HEAD -- package.json") {
@@ -533,10 +532,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(failure).toBeNull();
     expect(symlinkNodeModules).not.toHaveBeenCalled();
     const commands = getExecutedCommands(runCommand);
-    expect(commands).toEqual([
-      "npm ls --depth=0 --include=dev",
-      "npm run build",
-    ]);
+    expect(commands).toEqual(["npm ls --depth=0 --include=dev", "npm run build"]);
   });
 
   it("marks ambiguous environment fingerprints with low confidence", async () => {
@@ -550,8 +546,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         if (label === "npm run build") {
           throw makeCommandFailure(spec, options.cwd, {
             message: "Command failed with exit code 1",
-            stderr:
-              "Error: Cannot find module '@app/shared' imported from src/server.ts",
+            stderr: "Error: Cannot find module '@app/shared' imported from src/server.ts",
           });
         }
         return makeCommandResult(spec, options.cwd);

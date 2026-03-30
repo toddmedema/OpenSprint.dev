@@ -248,10 +248,7 @@ export function createTasksRouter(taskService: TaskService): Router {
         attempt = attemptParam;
       } else {
         const allMessages = agentChatService.getHistory(projectId, taskId);
-        attempt =
-          allMessages.length > 0
-            ? Math.max(...allMessages.map((m) => m.attempt))
-            : 1;
+        attempt = allMessages.length > 0 ? Math.max(...allMessages.map((m) => m.attempt)) : 1;
         messages = allMessages.filter((m) => m.attempt === attempt);
       }
 

@@ -7,12 +7,7 @@
  *      in ~/.opensprint/encryption-salt
  */
 
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -74,10 +69,7 @@ export class TokenEncryptionService {
     const iv = randomBytes(IV_BYTES);
     const cipher = createCipheriv(ALGORITHM, this.key, iv);
 
-    const encrypted = Buffer.concat([
-      cipher.update(plaintext, "utf8"),
-      cipher.final(),
-    ]);
+    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
     const authTag = cipher.getAuthTag();
 
     const payload = Buffer.concat([iv, authTag, encrypted]);
@@ -101,10 +93,7 @@ export class TokenEncryptionService {
     const decipher = createDecipheriv(ALGORITHM, this.key, iv);
     decipher.setAuthTag(authTag);
 
-    const decrypted = Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final(),
-    ]);
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return decrypted.toString("utf8");
   }
 }

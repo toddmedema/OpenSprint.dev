@@ -30,7 +30,7 @@ const EDITOR_ORDER: ("vscode" | "cursor")[] = ["cursor", "vscode"];
 function tryCliOpen(
   command: string,
   folderPath: string,
-  execFile: OpenInEditorDeps["execFile"],
+  execFile: OpenInEditorDeps["execFile"]
 ): Promise<boolean> {
   return new Promise((resolve) => {
     execFile(command, [folderPath], { timeout: 10_000 }, (err) => {
@@ -42,7 +42,7 @@ function tryCliOpen(
 export async function openInEditor(
   folderPath: string,
   mode: EditorMode,
-  deps: OpenInEditorDeps,
+  deps: OpenInEditorDeps
 ): Promise<OpenInEditorResult> {
   if (!folderPath || !folderPath.trim()) {
     return { success: false, editor: mode, method: "cli", error: "Folder path is required." };
@@ -62,8 +62,7 @@ export async function openInEditor(
     };
   }
 
-  const editorsToTry: ("vscode" | "cursor")[] =
-    mode === "auto" ? EDITOR_ORDER : [mode];
+  const editorsToTry: ("vscode" | "cursor")[] = mode === "auto" ? EDITOR_ORDER : [mode];
 
   for (const editor of editorsToTry) {
     const command = CLI_COMMANDS[editor];

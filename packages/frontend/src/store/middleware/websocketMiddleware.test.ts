@@ -143,13 +143,16 @@ describe("websocketMiddleware", () => {
         replaceState: vi.fn(),
       },
       addEventListener:
-        (globalThis.window as { addEventListener?: ((event: string, handler: () => void) => void) } | undefined)
-          ?.addEventListener ??
+        (
+          globalThis.window as
+            | { addEventListener?: (event: string, handler: () => void) => void }
+            | undefined
+        )?.addEventListener ??
         ((event: string, handler: () => void) => {
           if (event === "focus") focusListeners.push(handler);
         }),
       dispatchEvent:
-        (globalThis.window as { dispatchEvent?: ((event: Event) => boolean) } | undefined)
+        (globalThis.window as { dispatchEvent?: (event: Event) => boolean } | undefined)
           ?.dispatchEvent ??
         ((event: Event) => {
           if (event.type === "focus") focusListeners.forEach((h) => h());
@@ -1231,9 +1234,7 @@ describe("websocketMiddleware", () => {
       await vi.waitFor(() => {
         const task = selectTasks(store.getState()).find((t) => t.id === "task-1");
         expect(task?.mergeGateState).toBe("candidate_fix_needed");
-        expect(task?.lastExecutionSummary).toBe(
-          "Merge paused: quality gates failing on main"
-        );
+        expect(task?.lastExecutionSummary).toBe("Merge paused: quality gates failing on main");
       });
     });
 
@@ -1762,277 +1763,277 @@ describe("websocketMiddleware", () => {
   });
 
   describe("agent.chat events", () => {
-      it("marks optimistic user message as delivered on agent.chat.received", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
+    it("marks optimistic user message as delivered on agent.chat.received", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
 
-        store.dispatch(
-          addOptimisticUserMessage({
-            taskId: "task-1",
-            tempId: "temp-123",
-            content: "Hello agent",
-          })
-        );
-
-        expect(selectChatSending(store.getState(), "task-1")).toBe(true);
-        const msgsBefore = selectChatMessages(store.getState(), "task-1");
-        expect(msgsBefore).toHaveLength(1);
-        expect(msgsBefore[0].delivered).toBe(false);
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.received",
+      store.dispatch(
+        addOptimisticUserMessage({
           taskId: "task-1",
-          messageId: "msg-server-1",
-          timestamp: "2025-01-01T00:00:00Z",
-        });
+          tempId: "temp-123",
+          content: "Hello agent",
+        })
+      );
 
-        await vi.waitFor(() => {
-          const msgs = selectChatMessages(store.getState(), "task-1");
-          expect(msgs[0].delivered).toBe(true);
-          expect(msgs[0].id).toBe("msg-server-1");
-        });
+      expect(selectChatSending(store.getState(), "task-1")).toBe(true);
+      const msgsBefore = selectChatMessages(store.getState(), "task-1");
+      expect(msgsBefore).toHaveLength(1);
+      expect(msgsBefore[0].delivered).toBe(false);
+
+      wsInstance!.simulateMessage({
+        type: "agent.chat.received",
+        taskId: "task-1",
+        messageId: "msg-server-1",
+        timestamp: "2025-01-01T00:00:00Z",
       });
 
-      it("dedupes agent.chat.received by messageId (ignores duplicate)", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
+      await vi.waitFor(() => {
+        const msgs = selectChatMessages(store.getState(), "task-1");
+        expect(msgs[0].delivered).toBe(true);
+        expect(msgs[0].id).toBe("msg-server-1");
+      });
+    });
 
-        store.dispatch(
-          addOptimisticUserMessage({
-            taskId: "task-1",
-            tempId: "temp-1",
-            content: "First message",
-          })
-        );
+    it("dedupes agent.chat.received by messageId (ignores duplicate)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
 
-        wsInstance!.simulateMessage({
-          type: "agent.chat.received",
+      store.dispatch(
+        addOptimisticUserMessage({
           taskId: "task-1",
-          messageId: "msg-1",
-          timestamp: "2025-01-01T00:00:00Z",
-        });
+          tempId: "temp-1",
+          content: "First message",
+        })
+      );
 
-        await vi.waitFor(() => {
-          expect(selectChatMessages(store.getState(), "task-1")[0].id).toBe("msg-1");
-        });
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.received",
-          taskId: "task-1",
-          messageId: "msg-1",
-          timestamp: "2025-01-01T00:00:00Z",
-        });
-
-        await vi.waitFor(() => {
-          expect(selectChatMessages(store.getState(), "task-1")).toHaveLength(1);
-        });
+      wsInstance!.simulateMessage({
+        type: "agent.chat.received",
+        taskId: "task-1",
+        messageId: "msg-1",
+        timestamp: "2025-01-01T00:00:00Z",
       });
 
-      it("adds assistant response and clears sending on agent.chat.response", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
-
-        store.dispatch(
-          addOptimisticUserMessage({
-            taskId: "task-1",
-            tempId: "temp-1",
-            content: "Hello",
-          })
-        );
-        expect(selectChatSending(store.getState(), "task-1")).toBe(true);
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.response",
-          taskId: "task-1",
-          messageId: "msg-1",
-          content: "Hi, I'm working on it!",
-        });
-
-        await vi.waitFor(() => {
-          const msgs = selectChatMessages(store.getState(), "task-1");
-          expect(msgs).toHaveLength(2);
-          expect(msgs[1].role).toBe("assistant");
-          expect(msgs[1].content).toBe("Hi, I'm working on it!");
-          expect(selectChatSending(store.getState(), "task-1")).toBe(false);
-        });
+      await vi.waitFor(() => {
+        expect(selectChatMessages(store.getState(), "task-1")[0].id).toBe("msg-1");
       });
 
-      it("dedupes agent.chat.response by messageId (no duplicate assistant message)", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.response",
-          taskId: "task-1",
-          messageId: "msg-1",
-          content: "First response",
-        });
-
-        await vi.waitFor(() => {
-          expect(selectChatMessages(store.getState(), "task-1")).toHaveLength(1);
-        });
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.response",
-          taskId: "task-1",
-          messageId: "msg-1",
-          content: "First response",
-        });
-
-        await vi.waitFor(() => {
-          expect(selectChatMessages(store.getState(), "task-1")).toHaveLength(1);
-        });
+      wsInstance!.simulateMessage({
+        type: "agent.chat.received",
+        taskId: "task-1",
+        messageId: "msg-1",
+        timestamp: "2025-01-01T00:00:00Z",
       });
 
-      it("sets chat unsupported on agent.chat.unsupported and clears sending", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
+      await vi.waitFor(() => {
+        expect(selectChatMessages(store.getState(), "task-1")).toHaveLength(1);
+      });
+    });
 
-        store.dispatch(
-          addOptimisticUserMessage({
-            taskId: "task-cli",
-            tempId: "temp-1",
-            content: "Hello",
-          })
-        );
+    it("adds assistant response and clears sending on agent.chat.response", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
 
-        wsInstance!.simulateMessage({
-          type: "agent.chat.unsupported",
+      store.dispatch(
+        addOptimisticUserMessage({
+          taskId: "task-1",
+          tempId: "temp-1",
+          content: "Hello",
+        })
+      );
+      expect(selectChatSending(store.getState(), "task-1")).toBe(true);
+
+      wsInstance!.simulateMessage({
+        type: "agent.chat.response",
+        taskId: "task-1",
+        messageId: "msg-1",
+        content: "Hi, I'm working on it!",
+      });
+
+      await vi.waitFor(() => {
+        const msgs = selectChatMessages(store.getState(), "task-1");
+        expect(msgs).toHaveLength(2);
+        expect(msgs[1].role).toBe("assistant");
+        expect(msgs[1].content).toBe("Hi, I'm working on it!");
+        expect(selectChatSending(store.getState(), "task-1")).toBe(false);
+      });
+    });
+
+    it("dedupes agent.chat.response by messageId (no duplicate assistant message)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      wsInstance!.simulateMessage({
+        type: "agent.chat.response",
+        taskId: "task-1",
+        messageId: "msg-1",
+        content: "First response",
+      });
+
+      await vi.waitFor(() => {
+        expect(selectChatMessages(store.getState(), "task-1")).toHaveLength(1);
+      });
+
+      wsInstance!.simulateMessage({
+        type: "agent.chat.response",
+        taskId: "task-1",
+        messageId: "msg-1",
+        content: "First response",
+      });
+
+      await vi.waitFor(() => {
+        expect(selectChatMessages(store.getState(), "task-1")).toHaveLength(1);
+      });
+    });
+
+    it("sets chat unsupported on agent.chat.unsupported and clears sending", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      store.dispatch(
+        addOptimisticUserMessage({
           taskId: "task-cli",
-          reason: "CLI backend does not support chat",
-        });
+          tempId: "temp-1",
+          content: "Hello",
+        })
+      );
 
-        await vi.waitFor(() => {
-          const support = selectChatSupport(store.getState(), "task-cli");
-          expect(support.supported).toBe(false);
-          expect(support.reason).toBe("CLI backend does not support chat");
-          expect(selectChatSending(store.getState(), "task-cli")).toBe(false);
-        });
+      wsInstance!.simulateMessage({
+        type: "agent.chat.unsupported",
+        taskId: "task-cli",
+        reason: "CLI backend does not support chat",
       });
 
-      it("resets chat sending on agent.completed (terminal event re-enables send)", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
+      await vi.waitFor(() => {
+        const support = selectChatSupport(store.getState(), "task-cli");
+        expect(support.supported).toBe(false);
+        expect(support.reason).toBe("CLI backend does not support chat");
+        expect(selectChatSending(store.getState(), "task-cli")).toBe(false);
+      });
+    });
 
-        store.dispatch(
-          addOptimisticUserMessage({
-            taskId: "task-1",
-            tempId: "temp-1",
-            content: "Are you done?",
-          })
-        );
-        expect(selectChatSending(store.getState(), "task-1")).toBe(true);
+    it("resets chat sending on agent.completed (terminal event re-enables send)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
 
-        wsInstance!.simulateMessage({
-          type: "agent.completed",
+      store.dispatch(
+        addOptimisticUserMessage({
           taskId: "task-1",
-          status: "done",
-          testResults: null,
-        });
+          tempId: "temp-1",
+          content: "Are you done?",
+        })
+      );
+      expect(selectChatSending(store.getState(), "task-1")).toBe(true);
 
-        await vi.waitFor(() => {
-          expect(selectChatSending(store.getState(), "task-1")).toBe(false);
-        });
+      wsInstance!.simulateMessage({
+        type: "agent.completed",
+        taskId: "task-1",
+        status: "done",
+        testResults: null,
       });
 
-      it("invalidates chat-history query on agent.chat.received", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
+      await vi.waitFor(() => {
+        expect(selectChatSending(store.getState(), "task-1")).toBe(false);
+      });
+    });
 
-        store.dispatch(
-          addOptimisticUserMessage({
-            taskId: "task-1",
-            tempId: "temp-1",
-            content: "Hello",
-          })
-        );
-        mockInvalidateQueries.mockClear();
+    it("invalidates chat-history query on agent.chat.received", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
 
-        wsInstance!.simulateMessage({
-          type: "agent.chat.received",
+      store.dispatch(
+        addOptimisticUserMessage({
           taskId: "task-1",
-          messageId: "msg-1",
-          timestamp: "2025-01-01T00:00:00Z",
-        });
+          tempId: "temp-1",
+          content: "Hello",
+        })
+      );
+      mockInvalidateQueries.mockClear();
 
-        await vi.waitFor(() => {
-          expect(mockInvalidateQueries).toHaveBeenCalledWith({
-            queryKey: queryKeys.tasks.chatHistory("proj-1", "task-1"),
-          });
-        });
+      wsInstance!.simulateMessage({
+        type: "agent.chat.received",
+        taskId: "task-1",
+        messageId: "msg-1",
+        timestamp: "2025-01-01T00:00:00Z",
       });
 
-      it("invalidates chat-history query on agent.chat.response", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
-
-        mockInvalidateQueries.mockClear();
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.response",
-          taskId: "task-1",
-          messageId: "msg-1",
-          content: "Agent response",
-        });
-
-        await vi.waitFor(() => {
-          expect(mockInvalidateQueries).toHaveBeenCalledWith({
-            queryKey: queryKeys.tasks.chatHistory("proj-1", "task-1"),
-          });
-        });
-      });
-
-      it("fetches chat history for non-sender tab on agent.chat.received (no pending optimistic)", async () => {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
-
-        const { api } = await import("../../api/client");
-        vi.mocked(api.tasks.chatHistory).mockResolvedValue({
-          messages: [
-            {
-              id: "msg-1",
-              role: "user",
-              content: "Hello from other tab",
-              timestamp: "2025-01-01T00:00:00Z",
-              attempt: 1,
-            },
-          ],
-          attempt: 1,
-          chatSupported: true,
-        } as never);
-
-        wsInstance!.simulateMessage({
-          type: "agent.chat.received",
-          taskId: "task-1",
-          messageId: "msg-1",
-          timestamp: "2025-01-01T00:00:00Z",
-        });
-
-        await vi.waitFor(() => {
-          expect(api.tasks.chatHistory).toHaveBeenCalledWith("proj-1", "task-1");
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.tasks.chatHistory("proj-1", "task-1"),
         });
       });
     });
 
-    describe("exponential backoff reconnection", () => {
+    it("invalidates chat-history query on agent.chat.response", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      mockInvalidateQueries.mockClear();
+
+      wsInstance!.simulateMessage({
+        type: "agent.chat.response",
+        taskId: "task-1",
+        messageId: "msg-1",
+        content: "Agent response",
+      });
+
+      await vi.waitFor(() => {
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.tasks.chatHistory("proj-1", "task-1"),
+        });
+      });
+    });
+
+    it("fetches chat history for non-sender tab on agent.chat.received (no pending optimistic)", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
+      const { api } = await import("../../api/client");
+      vi.mocked(api.tasks.chatHistory).mockResolvedValue({
+        messages: [
+          {
+            id: "msg-1",
+            role: "user",
+            content: "Hello from other tab",
+            timestamp: "2025-01-01T00:00:00Z",
+            attempt: 1,
+          },
+        ],
+        attempt: 1,
+        chatSupported: true,
+      } as never);
+
+      wsInstance!.simulateMessage({
+        type: "agent.chat.received",
+        taskId: "task-1",
+        messageId: "msg-1",
+        timestamp: "2025-01-01T00:00:00Z",
+      });
+
+      await vi.waitFor(() => {
+        expect(api.tasks.chatHistory).toHaveBeenCalledWith("proj-1", "task-1");
+      });
+    });
+  });
+
+  describe("exponential backoff reconnection", () => {
     it("schedules reconnect with exponential delay on unexpected close", async () => {
       vi.useFakeTimers();
       const store = createStore();
