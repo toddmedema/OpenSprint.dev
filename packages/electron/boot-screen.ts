@@ -3,6 +3,13 @@ import { DESKTOP_TOP_BAR_HEIGHT } from "./window-options";
 /** Height of the draggable top region on the loading page (matches main app top bar). */
 export const BOOT_DRAG_TOP_HEIGHT_PX = DESKTOP_TOP_BAR_HEIGHT;
 
+/** Inline SVG for the Open Sprint mark — same geometry/fills as `PhaseEmptyStateLogo` in the web app. */
+const BOOT_LOGO_SVG = `<svg class="boot-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" aria-hidden="true">
+      <polygon points="4,10 36,40 4,70" fill="#c7d2fe" />
+      <polygon points="22,10 54,40 22,70" fill="#818cf8" />
+      <polygon points="40,10 72,40 40,70" fill="#4f46e5" />
+    </svg>`;
+
 /**
  * Renders the boot/loading page HTML. On macOS (darwin), includes a top area
  * with -webkit-app-region: drag so the window can be moved while loading.
@@ -59,34 +66,49 @@ export function renderBootHtml(
         padding: 24px;
         overflow: hidden;
       }
-      .card {
+      .boot-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
         width: min(420px, 100%);
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        border-radius: 12px;
-        background: rgba(15, 23, 42, 0.75);
-        padding: 24px;
-        backdrop-filter: blur(3px);
+      }
+      .boot-logo {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 16px;
+        flex-shrink: 0;
+        animation: logo-pulse-slow 3.6s ease-in-out infinite;
+      }
+      @keyframes logo-pulse-slow {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
       }
       .title {
-        margin: 0 0 8px;
+        margin: 0 0 16px;
         font-size: 20px;
         font-weight: 600;
+        text-align: center;
       }
       .status {
         margin: 0;
         color: #cbd5e1;
         font-size: 14px;
         line-height: 1.4;
-        text-align: left;
+        text-align: center;
         word-break: break-word;
       }
       .boot-status-row {
-        margin-top: 16px;
+        margin-top: 0;
         display: flex;
         align-items: center;
-        justify-content: flex-start;
+        justify-content: center;
         gap: 10px;
-        text-align: left;
+        text-align: center;
       }
       .boot-status-row .spinner {
         flex-shrink: 0;
@@ -112,13 +134,14 @@ export function renderBootHtml(
   <body>
     ${isMac ? '<div class="boot-drag-top" aria-hidden="true"></div>' : ""}
     <main class="boot">
-      <section class="card">
+      <div class="boot-inner">
+        ${BOOT_LOGO_SVG}
         <h1 class="title">${appName}</h1>
         <div class="boot-status-row" role="status" aria-live="polite">
           <div class="spinner" aria-hidden="true"></div>
           <p class="status">${escaped}</p>
         </div>
-      </section>
+      </div>
     </main>
   </body>
 </html>`;

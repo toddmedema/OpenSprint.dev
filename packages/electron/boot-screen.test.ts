@@ -42,6 +42,25 @@ describe("renderBootHtml", () => {
     expect(html).toContain('<h1 class="title">My App</h1>');
   });
 
+  it("does not use a bordered card panel behind content", () => {
+    const html = renderBootHtml("Starting backend...", APP_NAME, "darwin");
+    expect(html).not.toContain('class="card"');
+    expect(html).not.toContain("backdrop-filter");
+    expect(html).toContain('class="boot-inner"');
+  });
+
+  it("renders pulsing Open Sprint logo SVG above the title (same fills as PhaseEmptyStateLogo)", () => {
+    const html = renderBootHtml("Starting backend...", APP_NAME, "linux");
+    const logoBeforeTitle = html.includes("boot-logo") && html.includes('<h1 class="title">');
+    expect(logoBeforeTitle).toBe(true);
+    expect(html.indexOf('class="boot-logo"')).toBeLessThan(html.indexOf('<h1 class="title">'));
+    expect(html).toContain('fill="#c7d2fe"');
+    expect(html).toContain('fill="#818cf8"');
+    expect(html).toContain('fill="#4f46e5"');
+    expect(html).toContain("@keyframes logo-pulse-slow");
+    expect(html).toContain("animation: logo-pulse-slow 3.6s ease-in-out infinite");
+  });
+
   it("shows a single status row with spinner left of the status text", () => {
     const html = renderBootHtml("Starting backend...", APP_NAME, "darwin");
     expect(html).toContain('class="boot-status-row"');
