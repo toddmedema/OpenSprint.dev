@@ -244,6 +244,13 @@ describe("parseSettings", () => {
     expect(parsed.complexComplexityAgent).toEqual(defaultParsed);
   });
 
+  it("defaults enforceMergeGatesOnCodingSuccess to true unless explicitly false", () => {
+    expect(parseSettings({}).enforceMergeGatesOnCodingSuccess).toBe(true);
+    expect(
+      parseSettings({ enforceMergeGatesOnCodingSuccess: false }).enforceMergeGatesOnCodingSuccess
+    ).toBe(false);
+  });
+
   it("should default gitWorkingMode to worktree when parseSettings receives empty object", () => {
     const parsed = parseSettings({});
     expect(parsed.gitWorkingMode).toBe("worktree");

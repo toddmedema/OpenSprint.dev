@@ -1,6 +1,7 @@
 import path from "path";
 import { OPENSPRINT_PATHS, type TestResults } from "@opensprint/shared";
 import type { FailureType, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
+import type { MergeGateVerificationArtifact } from "./merge-verification.service.js";
 
 export const ORCHESTRATOR_TEST_STATUS_FILE = "orchestrator-test-status.md";
 export const ORCHESTRATOR_TEST_STATUS_STATE_FILE = "orchestrator-test-status.json";
@@ -36,6 +37,8 @@ export type OrchestratorTestStatus =
       mergeQualityGates?: string[] | null;
       results?: TestResults | null;
       updatedAt?: string;
+      /** Persisted merge gate verification epoch for recovery / reviewer context. */
+      mergeGateArtifact?: MergeGateVerificationArtifact | null;
     }
   | {
       status: "failed";
@@ -57,6 +60,8 @@ export type OrchestratorTestStatus =
 export type PersistedOrchestratorTestStatus = OrchestratorTestStatus & {
   failureType?: FailureType;
   qualityGateDetail?: RetryQualityGateDetail | null;
+  /** Present when status is passed and merge gates recorded an artifact (recovery / reviewer context). */
+  mergeGateArtifact?: MergeGateVerificationArtifact | null;
 };
 
 export function getOrchestratorTestStatusPromptPath(taskId: string): string {
@@ -107,6 +112,12 @@ export function buildOrchestratorTestStatusContent(status: OrchestratorTestStatu
         mergeQualityGates.length > 0
           ? "\nAutomated validation has passed, including the configured merge quality gates.\n"
           : "\nAutomated validation has passed.\n";
+      if (status.mergeGateArtifact) {
+        const a = status.mergeGateArtifact;
+        content += `\n- Merge gate verification (task worktree): branch HEAD \`${a.taskBranchHead.slice(0, 12)}\`…, base tip \`${a.baseBranchTip.slice(0, 12)}\`…, recorded \`${a.passedAt}\`.\n`;
+        content +=
+          "The orchestrator already ran the configured merge gate commands for this commit and base; treat that as authoritative over ad-hoc local lint runs unless you have evidence the tree changed.\n";
+      }
       break;
     case "failed":
       content += buildResultsSummary(status.results);

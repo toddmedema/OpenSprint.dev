@@ -30,7 +30,7 @@ import {
 import { taskStore as taskStoreSingleton, type StoredTask } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { agentService, createProcessGroupHandle } from "./agent.service.js";
-import { BranchManager } from "./branch-manager.js";
+import { BranchManager, RebaseConflictError } from "./branch-manager.js";
 import { ContextAssembler } from "./context-assembler.js";
 import type { SessionManager } from "./session-manager.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
@@ -65,6 +65,11 @@ import {
   type MergeQualityGateRunOptions,
 } from "./merge-coordinator.service.js";
 import { runMergeQualityGates as runMergeQualityGatesShared } from "./merge-quality-gate-runner.js";
+import {
+  isTaskWorktreeMergeGateArtifactCurrent,
+  runMergeQualityGatesWithArtifact,
+  type MergeGateVerificationArtifact,
+} from "./merge-verification.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import {
   TaskPhaseCoordinator,
@@ -201,6 +206,8 @@ interface PhaseResult {
   testOutput: string;
   validationCommand?: string | null;
   qualityGateDetail?: RetryQualityGateDetail | null;
+  /** Last successful task_worktree merge gate run (for deduping merge-coordinator). */
+  mergeGateArtifactTaskWorktree?: MergeGateVerificationArtifact | null;
 }
 
 interface ReviewAgentSlotState {
@@ -423,6 +430,7 @@ export class OrchestratorService {
         testOutput: "",
         validationCommand: null,
         qualityGateDetail: null,
+        mergeGateArtifactTaskWorktree: null,
       },
       infraRetries: 0,
       timers: new TimerRegistry(),
@@ -2146,6 +2154,59 @@ export class OrchestratorService {
         }
       }
 
+      const okRebase = await this.ensureTaskWorktreeRebasedForGates(
+        projectId,
+        repoPath,
+        task,
+        wtPath,
+        baseBranch,
+        branchName
+      );
+      if (!okRebase) return;
+
+      if (settings.enforceMergeGatesOnCodingSuccess !== false) {
+        await this.branchManager.commitWip(wtPath, task.id);
+        const { failure: earlyGateFailure, artifact: earlyArtifact } =
+          await runMergeQualityGatesWithArtifact(
+            (opts) => this.runMergeQualityGates(opts),
+            this.branchManager,
+            {
+              projectId,
+              repoPath,
+              worktreePath: wtPath,
+              taskId: task.id,
+              branchName,
+              baseBranch,
+              validationWorkspace: "task_worktree",
+              qualityGateProfile: "deterministic",
+              toolchainProfile: settings.toolchainProfile,
+            }
+          );
+        if (earlyGateFailure) {
+          const detail = this.applyQualityGateFailure(slot.phaseResult, earlyGateFailure, wtPath);
+          await this.failureHandler.handleTaskFailure(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            this.formatQualityGateFailureReason(
+              detail,
+              earlyGateFailure.category === "environment_setup"
+                ? "environment_setup"
+                : "merge_quality_gate"
+            ),
+            null,
+            earlyGateFailure.category === "environment_setup"
+              ? "environment_setup"
+              : "merge_quality_gate"
+          );
+          return;
+        }
+        if (earlyArtifact) {
+          slot.phaseResult.mergeGateArtifactTaskWorktree = earlyArtifact;
+        }
+      }
+
       const testCommand = resolveTestCommand(settings) || undefined;
       let changedFiles: string[] = [];
       try {
@@ -2179,16 +2240,17 @@ export class OrchestratorService {
           return;
         }
         slot.phaseResult.testResults = scopedResult;
-        const qualityGateFailure = await this.runMergeQualityGates({
+        await this.branchManager.commitWip(wtPath, task.id);
+        const qualityGateFailure = await this.runTaskWorktreeMergeGatesMaybeDeduped(
           projectId,
           repoPath,
-          worktreePath: wtPath,
-          taskId: task.id,
+          task,
           branchName,
+          wtPath,
           baseBranch,
-          validationWorkspace: "task_worktree",
-          toolchainProfile: settings.toolchainProfile,
-        });
+          settings.toolchainProfile,
+          slot
+        );
         if (qualityGateFailure) {
           const detail = this.applyQualityGateFailure(slot.phaseResult, qualityGateFailure, wtPath);
           await this.failureHandler.handleTaskFailure(
@@ -2209,7 +2271,6 @@ export class OrchestratorService {
           );
           return;
         }
-        await this.branchManager.commitWip(wtPath, task.id);
         await this.clearRateLimitNotifications(projectId);
         await this.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
       } else {
@@ -2368,6 +2429,90 @@ export class OrchestratorService {
 
   private clearQualityGateDetail(phaseResult: PhaseResult): void {
     phaseResult.qualityGateDetail = null;
+  }
+
+  private async ensureTaskWorktreeRebasedForGates(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    wtPath: string,
+    baseBranch: string,
+    branchName: string
+  ): Promise<boolean> {
+    await this.branchManager.syncMainWithOrigin(repoPath, baseBranch);
+    try {
+      await this.branchManager.rebaseOntoMain(wtPath, baseBranch);
+      return true;
+    } catch (e) {
+      if (e instanceof RebaseConflictError) {
+        await this.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await this.taskStore.setConflictFiles(projectId, task.id, e.conflictedFiles);
+        await this.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
+        await this.failureHandler.handleTaskFailure(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          `Rebase onto ${baseBranch} failed before validation (conflicts: ${e.conflictedFiles.join(", ")})`,
+          null,
+          "merge_conflict"
+        );
+        return false;
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Run task_worktree merge gates unless a recorded artifact still matches HEAD + base tip.
+   */
+  private async runTaskWorktreeMergeGatesMaybeDeduped(
+    projectId: string,
+    repoPath: string,
+    task: StoredTask,
+    branchName: string,
+    wtPath: string,
+    baseBranch: string,
+    toolchainProfile: import("@opensprint/shared").ToolchainProfile | undefined,
+    slot: AgentSlot
+  ): Promise<MergeQualityGateFailure | null> {
+    const existing = slot.phaseResult.mergeGateArtifactTaskWorktree;
+    if (
+      existing &&
+      (await isTaskWorktreeMergeGateArtifactCurrent(this.branchManager, {
+        repoPath,
+        wtPath,
+        baseBranch,
+        artifact: existing,
+        toolchainProfile,
+        qualityGateProfile: "deterministic",
+      }))
+    ) {
+      log.info("merge_gate_skipped_duplicate", {
+        taskId: task.id,
+        stage: "orchestrator_task_worktree",
+      });
+      return null;
+    }
+    const { failure, artifact } = await runMergeQualityGatesWithArtifact(
+      (opts) => this.runMergeQualityGates(opts),
+      this.branchManager,
+      {
+        projectId,
+        repoPath,
+        worktreePath: wtPath,
+        taskId: task.id,
+        branchName,
+        baseBranch,
+        validationWorkspace: "task_worktree",
+        qualityGateProfile: "deterministic",
+        toolchainProfile,
+      }
+    );
+    if (artifact) {
+      slot.phaseResult.mergeGateArtifactTaskWorktree = artifact;
+    }
+    return failure;
   }
 
   private toQualityGateDetail(
@@ -2549,16 +2694,16 @@ export class OrchestratorService {
         } else {
           sl.phaseResult.testResults = scopedResult;
           await this.branchManager.commitWip(wtPath, task.id);
-          const qualityGateFailure = await this.runMergeQualityGates({
+          const qualityGateFailure = await this.runTaskWorktreeMergeGatesMaybeDeduped(
             projectId,
             repoPath,
-            worktreePath: wtPath,
-            taskId: task.id,
+            task,
             branchName,
+            wtPath,
             baseBranch,
-            validationWorkspace: "task_worktree",
-            toolchainProfile: settings.toolchainProfile,
-          });
+            settings.toolchainProfile,
+            sl
+          );
           if (qualityGateFailure) {
             const detail = this.applyQualityGateFailure(sl.phaseResult, qualityGateFailure, wtPath);
             await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
@@ -2589,6 +2734,7 @@ export class OrchestratorService {
             testCommand: validationCommand,
             mergeQualityGates,
             results: scopedResult,
+            mergeGateArtifact: sl.phaseResult.mergeGateArtifactTaskWorktree ?? undefined,
           });
           void coordinator.setTestOutcome({ status: "passed", results: scopedResult });
         }
@@ -2751,6 +2897,9 @@ export class OrchestratorService {
       phaseResult.testResults = outcome.results ?? null;
       phaseResult.testOutput = "";
       this.clearQualityGateDetail(phaseResult);
+      if (status.mergeGateArtifact) {
+        phaseResult.mergeGateArtifactTaskWorktree = status.mergeGateArtifact;
+      }
       return;
     }
 

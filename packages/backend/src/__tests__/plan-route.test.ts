@@ -1660,7 +1660,8 @@ Updated description for task two.`;
         mockPlanningAgentInvoke.mockResolvedValueOnce({
           content: JSON.stringify({
             title: "Feature With Attachment",
-            content: "# Feature With Attachment\n\n## Overview\n\nFeature using attachment context.",
+            content:
+              "# Feature With Attachment\n\n## Overview\n\nFeature using attachment context.",
             complexity: "low",
             mockups: [],
           }),

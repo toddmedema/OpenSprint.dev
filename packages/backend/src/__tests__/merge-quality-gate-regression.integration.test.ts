@@ -337,6 +337,11 @@ describe("Cross-service quality-gate regression integration", () => {
         mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        getGitRev: vi
+          .fn()
+          .mockImplementation(async (_cwd: string, ref: string) =>
+            ref === "HEAD" ? "headsha111" : "basesha222"
+          ),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
@@ -579,6 +584,11 @@ describe("Cross-service quality-gate regression integration", () => {
         mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        getGitRev: vi
+          .fn()
+          .mockImplementation(async (_cwd: string, ref: string) =>
+            ref === "HEAD" ? "headsha111" : "basesha222"
+          ),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
@@ -856,6 +866,11 @@ describe("Cross-service quality-gate regression integration", () => {
         mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        getGitRev: vi
+          .fn()
+          .mockImplementation(async (_cwd: string, ref: string) =>
+            ref === "HEAD" ? "headsha111" : "basesha222"
+          ),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
@@ -1038,6 +1053,11 @@ describe("Cross-service quality-gate regression integration", () => {
         mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        getGitRev: vi
+          .fn()
+          .mockImplementation(async (_cwd: string, ref: string) =>
+            ref === "HEAD" ? "headsha111" : "basesha222"
+          ),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
@@ -1216,6 +1236,11 @@ describe("Cross-service quality-gate regression integration", () => {
           mergeContinue: vi.fn().mockResolvedValue(undefined),
           rebaseAbort: vi.fn().mockResolvedValue(undefined),
           rebaseContinue: vi.fn().mockResolvedValue(undefined),
+          getGitRev: vi
+            .fn()
+            .mockImplementation(async (_cwd: string, ref: string) =>
+              ref === "HEAD" ? "headsha111" : "basesha222"
+            ),
         },
         runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
         runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
@@ -1376,6 +1401,11 @@ describe("Cross-service quality-gate regression integration", () => {
           mergeContinue: vi.fn().mockResolvedValue(undefined),
           rebaseAbort: vi.fn().mockResolvedValue(undefined),
           rebaseContinue: vi.fn().mockResolvedValue(undefined),
+          getGitRev: vi
+            .fn()
+            .mockImplementation(async (_cwd: string, ref: string) =>
+              ref === "HEAD" ? "headsha111" : "basesha222"
+            ),
         },
         runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
         runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),

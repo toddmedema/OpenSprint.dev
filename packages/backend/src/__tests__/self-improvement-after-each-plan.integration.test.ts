@@ -279,6 +279,8 @@ describe("after-each-plan self-improvement integration", () => {
         mergeContinue: vi.fn().mockResolvedValue(undefined),
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        reconcileDependenciesAfterMerge: vi.fn().mockResolvedValue(undefined),
+        getGitRev: vi.fn().mockResolvedValue("abc123"),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       sessionManager: {

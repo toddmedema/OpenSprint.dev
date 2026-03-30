@@ -22,10 +22,15 @@ const ACCEPT_STRING = Object.entries(PLAN_ATTACHMENT_ACCEPT)
   .flatMap(([mime, exts]) => [mime, ...exts])
   .join(",");
 
+function getFileExtension(fileName: string): string {
+  return fileName.lastIndexOf(".") >= 0
+    ? fileName.slice(fileName.lastIndexOf(".")).toLowerCase()
+    : "";
+}
+
 function isAcceptedFile(file: File): boolean {
   if (ACCEPTED_MIME_TYPES.includes(file.type)) return true;
-  const ext = file.name.lastIndexOf(".") >= 0 ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
-  return Object.values(PLAN_ATTACHMENT_ACCEPT).flat().includes(ext);
+  return Object.values(PLAN_ATTACHMENT_ACCEPT).flat().includes(getFileExtension(file.name));
 }
 
 function formatFileSize(bytes: number): string {
@@ -36,15 +41,22 @@ function formatFileSize(bytes: number): string {
 
 function readFileAsAttachment(file: File): Promise<PlanAttachment> {
   return new Promise((resolve, reject) => {
-    const isText = file.type === "text/markdown" || file.name.endsWith(".md");
+    const extension = getFileExtension(file.name);
+    const isText = file.type === "text/markdown" || extension === ".md";
     const reader = new FileReader();
     reader.onload = () => {
       if (isText) {
-        resolve({ name: file.name, mimeType: file.type || "text/markdown", textContent: reader.result as string, size: file.size });
+        resolve({
+          name: file.name,
+          mimeType: file.type || "text/markdown",
+          textContent: reader.result as string,
+          size: file.size,
+        });
       } else {
         const dataUrl = reader.result as string;
         const base64 = dataUrl.split(",")[1] ?? "";
-        const mimeType = file.type || (file.name.endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
+        const mimeType =
+          file.type || (extension === ".pdf" ? "application/pdf" : "application/octet-stream");
         resolve({ name: file.name, mimeType, base64, size: file.size });
       }
     };
@@ -83,49 +95,57 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
     setFeatureDescription(loadTextDraft(draftKey));
   }, [draftKey]);
 
-  const addFiles = useCallback(async (files: FileList | File[]) => {
-    setAttachError(null);
-    const incoming = Array.from(files);
-    const errors: string[] = [];
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      setAttachError(null);
+      const incoming = Array.from(files);
+      const errors: string[] = [];
 
-    const validFiles: File[] = [];
-    for (const f of incoming) {
-      if (!isAcceptedFile(f)) {
-        errors.push(`${f.name}: unsupported file type`);
-      } else if (f.size > PLAN_ATTACHMENT_MAX_SIZE) {
-        errors.push(`${f.name}: exceeds ${formatFileSize(PLAN_ATTACHMENT_MAX_SIZE)} limit`);
-      } else {
-        validFiles.push(f);
+      const validFiles: File[] = [];
+      for (const f of incoming) {
+        if (!isAcceptedFile(f)) {
+          errors.push(`${f.name}: unsupported file type`);
+        } else if (f.size > PLAN_ATTACHMENT_MAX_SIZE) {
+          errors.push(`${f.name}: exceeds ${formatFileSize(PLAN_ATTACHMENT_MAX_SIZE)} limit`);
+        } else {
+          validFiles.push(f);
+        }
       }
-    }
 
-    setAttachments((prev) => {
-      const remaining = PLAN_ATTACHMENT_MAX_COUNT - prev.length;
-      if (validFiles.length > remaining) {
-        errors.push(`Only ${PLAN_ATTACHMENT_MAX_COUNT} files allowed — ${validFiles.length - remaining} skipped`);
-      }
-      return prev; // updated below after async reads
-    });
-
-    const toProcess = validFiles.slice(0, Math.max(0, PLAN_ATTACHMENT_MAX_COUNT - attachments.length));
-    if (errors.length > 0) setAttachError(errors.join("; "));
-
-    const read: PlanAttachment[] = [];
-    for (const f of toProcess) {
-      try {
-        read.push(await readFileAsAttachment(f));
-      } catch {
-        setAttachError((prev) => [prev, `Failed to read ${f.name}`].filter(Boolean).join("; "));
-      }
-    }
-
-    if (read.length > 0) {
       setAttachments((prev) => {
-        const combined = [...prev, ...read];
-        return combined.slice(0, PLAN_ATTACHMENT_MAX_COUNT);
+        const remaining = PLAN_ATTACHMENT_MAX_COUNT - prev.length;
+        if (validFiles.length > remaining) {
+          errors.push(
+            `Only ${PLAN_ATTACHMENT_MAX_COUNT} files allowed — ${validFiles.length - remaining} skipped`
+          );
+        }
+        return prev; // updated below after async reads
       });
-    }
-  }, [attachments.length]);
+
+      const toProcess = validFiles.slice(
+        0,
+        Math.max(0, PLAN_ATTACHMENT_MAX_COUNT - attachments.length)
+      );
+      if (errors.length > 0) setAttachError(errors.join("; "));
+
+      const read: PlanAttachment[] = [];
+      for (const f of toProcess) {
+        try {
+          read.push(await readFileAsAttachment(f));
+        } catch {
+          setAttachError((prev) => [prev, `Failed to read ${f.name}`].filter(Boolean).join("; "));
+        }
+      }
+
+      if (read.length > 0) {
+        setAttachments((prev) => {
+          const combined = [...prev, ...read];
+          return combined.slice(0, PLAN_ATTACHMENT_MAX_COUNT);
+        });
+      }
+    },
+    [attachments.length]
+  );
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
@@ -162,13 +182,16 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
     e.preventDefault();
     setDragOver(false);
   }, []);
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files.length > 0) {
-      void addFiles(e.dataTransfer.files);
-    }
-  }, [addFiles]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      if (e.dataTransfer.files.length > 0) {
+        void addFiles(e.dataTransfer.files);
+      }
+    },
+    [addFiles]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -214,9 +237,16 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
           {attachments.length > 0 && (
             <ul className="mt-2 space-y-1" data-testid="attachment-list">
               {attachments.map((att, i) => (
-                <li key={`${att.name}-${i}`} className="flex items-center gap-2 text-xs text-theme-text-secondary bg-theme-bg rounded px-2 py-1">
-                  <span className="truncate flex-1" title={att.name}>{att.name}</span>
-                  <span className="shrink-0 text-theme-text-tertiary">{formatFileSize(att.size)}</span>
+                <li
+                  key={`${att.name}-${i}`}
+                  className="flex items-center gap-2 text-xs text-theme-text-secondary bg-theme-bg rounded px-2 py-1"
+                >
+                  <span className="truncate flex-1" title={att.name}>
+                    {att.name}
+                  </span>
+                  <span className="shrink-0 text-theme-text-tertiary">
+                    {formatFileSize(att.size)}
+                  </span>
                   <button
                     type="button"
                     className="shrink-0 text-theme-text-secondary hover:text-theme-error transition-colors"
@@ -224,7 +254,12 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
                     aria-label={`Remove ${att.name}`}
                     data-testid={`remove-attachment-${i}`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-3.5 h-3.5"
+                    >
                       <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
                     </svg>
                   </button>
@@ -233,10 +268,15 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             </ul>
           )}
           {attachError && (
-            <p className="mt-1 text-xs text-theme-error" data-testid="attach-error" role="alert">{attachError}</p>
+            <p className="mt-1 text-xs text-theme-error" data-testid="attach-error" role="alert">
+              {attachError}
+            </p>
           )}
           {dragOver && (
-            <div className="mt-2 border-2 border-dashed border-theme-primary rounded-lg p-4 text-center text-sm text-theme-text-secondary" data-testid="drop-zone">
+            <div
+              className="mt-2 border-2 border-dashed border-theme-primary rounded-lg p-4 text-center text-sm text-theme-text-secondary"
+              data-testid="drop-zone"
+            >
               Drop files here
             </div>
           )}
@@ -267,8 +307,17 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             aria-label="Attach files"
             data-testid="attach-files-button"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M11.986 3A2.743 2.743 0 0 0 10.05 3.8L4.05 9.8a1.243 1.243 0 0 0 1.757 1.757l4.5-4.5a.75.75 0 0 1 1.061 1.06l-4.5 4.5a2.743 2.743 0 1 1-3.879-3.878l6-6A4.243 4.243 0 0 1 15 8.744l-6 6a5.743 5.743 0 0 1-8.121-8.122l4.5-4.5a.75.75 0 0 1 1.06 1.061l-4.5 4.5a4.243 4.243 0 0 0 6 6l6-6A2.743 2.743 0 0 0 11.986 3Z" clipRule="evenodd" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              className="w-4 h-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M11.986 3A2.743 2.743 0 0 0 10.05 3.8L4.05 9.8a1.243 1.243 0 0 0 1.757 1.757l4.5-4.5a.75.75 0 0 1 1.061 1.06l-4.5 4.5a2.743 2.743 0 1 1-3.879-3.878l6-6A4.243 4.243 0 0 1 15 8.744l-6 6a5.743 5.743 0 0 1-8.121-8.122l4.5-4.5a.75.75 0 0 1 1.06 1.061l-4.5 4.5a4.243 4.243 0 0 0 6 6l6-6A2.743 2.743 0 0 0 11.986 3Z"
+                clipRule="evenodd"
+              />
             </svg>
             Attach
           </button>

@@ -43,6 +43,7 @@ import type { MergeQualityGateProfile } from "./merge-quality-gates.js";
 import type { RetryContext, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
 import { validationWorkspaceService } from "./validation-workspace.service.js";
 import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.js";
+import { isTaskWorktreeMergeGateArtifactCurrent } from "./merge-verification.service.js";
 
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
@@ -134,6 +135,9 @@ export interface MergeSlot {
     testResults: TestResults | null;
     testOutput: string;
     qualityGateDetail?: RetryQualityGateDetail | null;
+    mergeGateArtifactTaskWorktree?:
+      | import("./merge-verification.service.js").MergeGateVerificationArtifact
+      | null;
   };
   agent: { outputLog: string[]; startedAt: string };
 }
@@ -203,6 +207,7 @@ export interface MergeCoordinatorHost {
     rebaseAbort(repoPath: string): Promise<void>;
     rebaseContinue(repoPath: string): Promise<void>;
     reconcileDependenciesAfterMerge(repoPath: string): Promise<void>;
+    getGitRev(cwd: string, rev: string): Promise<string | null>;
   };
   runMergerAgentAndWait(options: {
     projectId: string;
@@ -795,9 +800,29 @@ export class MergeCoordinatorService {
 
   private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
     if (!this.host.runMergeQualityGates) return;
+    const profile = options.qualityGateProfile ?? DETERMINISTIC_MERGE_GATE_PROFILE;
+    const slot = this.host.getState(options.projectId).slots.get(options.taskId);
+    const artifact = slot?.phaseResult.mergeGateArtifactTaskWorktree;
+    if (artifact && options.validationWorkspace === "task_worktree") {
+      const stillCurrent = await isTaskWorktreeMergeGateArtifactCurrent(this.host.branchManager, {
+        repoPath: options.repoPath,
+        wtPath: options.worktreePath,
+        baseBranch: options.baseBranch,
+        artifact,
+        toolchainProfile: options.toolchainProfile,
+        qualityGateProfile: profile,
+      });
+      if (stillCurrent) {
+        log.info("merge_gate_skipped_duplicate", {
+          taskId: options.taskId,
+          stage: "merge_coordinator_task_worktree",
+        });
+        return;
+      }
+    }
     const failure = await this.host.runMergeQualityGates({
       ...options,
-      qualityGateProfile: options.qualityGateProfile ?? DETERMINISTIC_MERGE_GATE_PROFILE,
+      qualityGateProfile: profile,
     });
     if (!failure) return;
 

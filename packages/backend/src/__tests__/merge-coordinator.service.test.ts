@@ -4,6 +4,7 @@ import {
   type MergeCoordinatorHost,
   type MergeSlot,
 } from "../services/merge-coordinator.service.js";
+import { computeMergeGateCommandsFingerprint } from "../services/merge-verification.service.js";
 import type { StoredTask } from "../services/task-store.service.js";
 
 // Full mock to avoid loading task-store (which pulls in drizzle). resolveEpicId implemented inline.
@@ -62,6 +63,7 @@ vi.mock("../services/branch-manager.js", () => {
       rebaseAbort: vi.fn(),
       rebaseContinue: vi.fn(),
       getDiff: vi.fn(),
+      getGitRev: vi.fn(),
     })),
   };
 });
@@ -337,6 +339,11 @@ describe("MergeCoordinatorService", () => {
         rebaseAbort: vi.fn().mockResolvedValue(undefined),
         rebaseContinue: vi.fn().mockResolvedValue(undefined),
         reconcileDependenciesAfterMerge: vi.fn().mockResolvedValue(undefined),
+        getGitRev: vi.fn().mockImplementation(async (_cwd: string, ref: string) => {
+          if (ref === "HEAD") return "taskheadsha";
+          if (ref === "origin/main" || ref === "main") return "mainheadsha";
+          return "refsha";
+        }),
       },
       runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
       sessionManager: {
@@ -392,6 +399,27 @@ describe("MergeCoordinatorService", () => {
         })
       );
     });
+  });
+
+  it("skips task_worktree merge gates when stored artifact matches HEAD and base tip", async () => {
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+    const slot = makeSlot();
+    slot.phaseResult.mergeGateArtifactTaskWorktree = {
+      taskBranchHead: "taskheadsha",
+      baseBranchTip: "mainheadsha",
+      commandsFingerprint: computeMergeGateCommandsFingerprint(undefined, "deterministic"),
+      qualityGateProfile: "deterministic",
+      validationWorkspace: "task_worktree",
+      passedAt: new Date().toISOString(),
+    };
+    hostState.slots.set(taskId, slot);
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    const taskWorktreeGateCalls = mockHost.runMergeQualityGates!.mock.calls.filter(
+      ([opts]) => opts.validationWorkspace === "task_worktree" && opts.taskId === taskId
+    );
+    expect(taskWorktreeGateCalls).toHaveLength(0);
   });
 
   it("skips removeTaskWorktree when gitWorkingMode is branches", async () => {

@@ -2003,10 +2003,17 @@ describe("PlanService createWithRetry usage", () => {
     });
 
     await planService.generatePlanFromDescription(projectId, "Build feature from spec", [
-      { name: "spec.md", mimeType: "text/markdown", textContent: "# Spec\n\nBuild a sidebar.", size: 30 },
+      {
+        name: "spec.md",
+        mimeType: "text/markdown",
+        textContent: "# Spec\n\nBuild a sidebar.",
+        size: 30,
+      },
     ]);
 
-    const callArgs = mockInvokePlanningAgent.mock.calls[0][0] as { messages: Array<{ content: string }> };
+    const callArgs = mockInvokePlanningAgent.mock.calls[0][0] as {
+      messages: Array<{ content: string }>;
+    };
     const prompt = callArgs.messages[0].content;
     expect(prompt).toContain("User-Supplied Attachments");
     expect(prompt).toContain("spec.md");
@@ -2025,7 +2032,9 @@ describe("PlanService createWithRetry usage", () => {
 
     await planService.generatePlanFromDescription(projectId, "Simple feature");
 
-    const callArgs = mockInvokePlanningAgent.mock.calls[0][0] as { messages: Array<{ content: string }> };
+    const callArgs = mockInvokePlanningAgent.mock.calls[0][0] as {
+      messages: Array<{ content: string }>;
+    };
     const prompt = callArgs.messages[0].content;
     expect(prompt).not.toContain("User-Supplied Attachments");
   });

@@ -495,7 +495,12 @@ export function PlanPhase({
   const planQueueRef = useRef<string[]>([]);
   const processingQueueRef = useRef(false);
   const generateQueueRef = useRef<
-    Array<{ description: string; tempId: string; attachments?: PlanAttachment[]; resolve?: (ok: boolean) => void }>
+    Array<{
+      description: string;
+      tempId: string;
+      attachments?: PlanAttachment[];
+      resolve?: (ok: boolean) => void;
+    }>
   >([]);
   const processingGenerateRef = useRef(false);
 
@@ -584,9 +589,16 @@ export function PlanPhase({
     processingGenerateRef.current = true;
     try {
       while (generateQueueRef.current.length > 0) {
-        const { description, tempId, attachments: queueAttachments, resolve } = generateQueueRef.current[0];
+        const {
+          description,
+          tempId,
+          attachments: queueAttachments,
+          resolve,
+        } = generateQueueRef.current[0];
         generateQueueRef.current = generateQueueRef.current.slice(1);
-        const result = await dispatch(generatePlan({ projectId, description, tempId, attachments: queueAttachments }));
+        const result = await dispatch(
+          generatePlan({ projectId, description, tempId, attachments: queueAttachments })
+        );
         if (generatePlan.fulfilled.match(result)) {
           if (result.payload.status === "created") {
             resolve?.(true);

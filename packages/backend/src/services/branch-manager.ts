@@ -1009,6 +1009,17 @@ export class BranchManager {
     await waitForGitReadyUtil(repoPath);
   }
 
+  /** Resolve a git ref to a full commit SHA, or null if missing/invalid. */
+  async getGitRev(cwd: string, rev: string): Promise<string | null> {
+    try {
+      const { stdout } = await this.gitExec(cwd, ["rev-parse", rev], { timeout: 10_000 });
+      const s = stdout.trim();
+      return s.length > 0 ? s : null;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Update local base branch to match origin/<baseBranch> (fetch + reset --hard).
    * Call before merging a task branch so we never merge into a stale base

@@ -871,6 +871,12 @@ export interface ProjectSettings {
   selfImprovementLastCommitSha?: string;
   /** Next scheduled self-improvement run (daily/weekly). ISO 8601. Computed by backend; only present when frequency is daily or weekly. */
   nextRunAt?: string;
+  /**
+   * When true (default), after coding reports success the orchestrator rebases onto the latest base,
+   * commits WIP if needed, and runs configured merge quality gates before review/merge; failures reject
+   * the success path. Set false to rely on prompt-only gate guidance (legacy / tests).
+   */
+  enforceMergeGatesOnCodingSuccess?: boolean;
   /** When true, Plan phase supports single-step Execute (generate tasks and run); when false, two-step flow (Generate Tasks then Execute). Default: false. */
   autoExecutePlans?: boolean;
   /** When true, self-improvement runs execute the experiment/promote pipeline; when false, runs are audit-only. Default: false. */
@@ -1256,6 +1262,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     maxConcurrentCoders,
     ...(maxTotalConcurrentAgents != null && { maxTotalConcurrentAgents }),
     unknownScopeStrategy,
+    enforceMergeGatesOnCodingSuccess: r?.enforceMergeGatesOnCodingSuccess === false ? false : true,
     enableHumanTeammates,
     teamMembers: parseTeamMembers(r?.teamMembers),
     selfImprovementFrequency,

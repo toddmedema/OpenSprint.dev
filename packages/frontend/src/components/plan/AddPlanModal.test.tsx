@@ -114,7 +114,9 @@ describe("AddPlanModal", () => {
     it("renders the attach button between Cancel and Generate Plan", () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(false);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const attachBtn = screen.getByTestId("attach-files-button");
       expect(attachBtn).toBeInTheDocument();
@@ -133,7 +135,9 @@ describe("AddPlanModal", () => {
     it("attach button is keyboard-accessible", () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(false);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const attachBtn = screen.getByTestId("attach-files-button");
       expect(attachBtn.tagName).toBe("BUTTON");
@@ -143,7 +147,9 @@ describe("AddPlanModal", () => {
     it("shows no attachment list when no files are attached", () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(false);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       expect(screen.queryByTestId("attachment-list")).not.toBeInTheDocument();
     });
@@ -151,7 +157,9 @@ describe("AddPlanModal", () => {
     it("accepts a .md file and shows it in the attachment list", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const mdFile = makeFile("spec.md", "# My Spec\n\nDetails here", "text/markdown");
@@ -166,7 +174,9 @@ describe("AddPlanModal", () => {
     it("accepts image files (PNG, JPEG, WebP)", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const pngFile = makeFile("screenshot.png", "fake-png-data", "image/png");
@@ -180,7 +190,9 @@ describe("AddPlanModal", () => {
     it("rejects unsupported file types and shows error", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const txtFile = makeFile("notes.txt", "some text", "text/plain");
@@ -198,7 +210,9 @@ describe("AddPlanModal", () => {
     it("removes an attachment when remove button is clicked", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const mdFile = makeFile("spec.md", "# Spec", "text/markdown");
@@ -218,7 +232,9 @@ describe("AddPlanModal", () => {
     it("sends attachments to onGenerate when files are attached", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const mdFile = makeFile("design.md", "# Design\n\nContent", "text/markdown");
@@ -242,10 +258,45 @@ describe("AddPlanModal", () => {
       });
     });
 
+    it("treats uppercase .MD files as text attachments", async () => {
+      const onClose = vi.fn();
+      const onGenerate = vi.fn().mockResolvedValue(true);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
+
+      const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
+      const mdFile = makeFile("SPEC.MD", "# Uppercase markdown", "");
+      fireEvent.change(fileInput, { target: { files: [mdFile] } });
+
+      await waitFor(() => {
+        expect(screen.getByText("SPEC.MD")).toBeInTheDocument();
+      });
+
+      const input = screen.getByTestId("feature-description-input");
+      fireEvent.change(input, { target: { value: "Use spec" } });
+      fireEvent.click(screen.getByTestId("generate-plan-button"));
+
+      await waitFor(() => {
+        expect(onGenerate).toHaveBeenCalledTimes(1);
+      });
+
+      const [, attachments] = onGenerate.mock.calls[0];
+      expect(attachments).toHaveLength(1);
+      expect(attachments[0]).toMatchObject({
+        name: "SPEC.MD",
+        mimeType: "text/markdown",
+        textContent: "# Uppercase markdown",
+      });
+      expect(attachments[0].base64).toBeUndefined();
+    });
+
     it("shows error for oversized files", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const bigContent = "x".repeat(PLAN_ATTACHMENT_MAX_SIZE + 1);
@@ -261,7 +312,9 @@ describe("AddPlanModal", () => {
     it("enforces max attachment count", async () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(true);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const fileInput = screen.getByTestId("file-input") as HTMLInputElement;
       const files = Array.from({ length: PLAN_ATTACHMENT_MAX_COUNT + 2 }, (_, i) =>
@@ -278,7 +331,9 @@ describe("AddPlanModal", () => {
     it("shows drop zone indicator during drag over", () => {
       const onClose = vi.fn();
       const onGenerate = vi.fn().mockResolvedValue(false);
-      render(<AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />);
+      render(
+        <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+      );
 
       const dialog = screen.getByTestId("add-plan-modal");
       fireEvent.dragOver(dialog, { dataTransfer: { files: [] } });

@@ -305,6 +305,10 @@ vi.mock("../services/branch-manager.js", () => {
       mergeContinue: vi.fn().mockResolvedValue(undefined),
       mergeAbort: vi.fn().mockResolvedValue(undefined),
       commitWip: mockCommitWip,
+      getGitRev: vi.fn().mockImplementation(async (_cwd: string, ref: string) => {
+        if (ref === "HEAD") return "mockheadsha0000000000000000000000000001";
+        return "mockbasesha0000000000000000000000000002";
+      }),
       reconcileDependenciesAfterMerge: vi.fn().mockResolvedValue(undefined),
       getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
       getWorktreePath: vi

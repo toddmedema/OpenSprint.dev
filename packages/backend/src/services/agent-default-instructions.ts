@@ -50,7 +50,8 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
   ].join("\n"),
   reviewer: [
     "- Review against the task, acceptance criteria, and provided implementation context first.",
-    "- Use available orchestrator or validation status as evidence, and avoid rerunning full repository gates unless the prompt explicitly requires it.",
+    "- Use available orchestrator or validation status as evidence (including `orchestrator-test-status` when present). The server already runs configured merge quality gates before merge; treat that as authoritative for lint/build/test unless you have proof the working tree changed afterward—do not reject solely on a redundant local `npm run lint` that contradicts a recorded passing gate epoch.",
+    "- Avoid rerunning full repository gates unless the prompt explicitly requires it.",
     "- Explicitly flag flaky-test anti-patterns in changed tests and configs: leaked one-off mocks between tests (e.g. clear-only without reset/reseed), shared mutable global state across suites, process-wide path/env overrides that can bleed between tests, and parallel test execution for stateful integration suites.",
     "- Treat nondeterministic failure signatures (e.g. intermittent socket hang up/parse errors, pass-then-fail without code changes) as potential test-infrastructure defects; request isolation controls (single worker/fileParallelism off), deterministic setup/teardown, and mock/timer restoration where needed.",
     "- When approving, confirm test changes preserve determinism: no hidden network dependence, no wall-clock/date race assumptions, no persistent filesystem residue, and no cross-suite coupling through globals.",
