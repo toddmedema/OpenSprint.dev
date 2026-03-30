@@ -83,6 +83,10 @@ function buildBaselineFailureFingerprint(input: BaselineQualityGateTaskInput): s
  */
 export class SelfImprovementService {
   private projectService = new ProjectService();
+  private baselineTaskUpsertInFlight = new Map<
+    string,
+    Promise<{ taskId: string; created: boolean; action: BaselineRemediationTaskAction }>
+  >();
 
   private buildBaselineQualityGateTaskTitle(baseBranch: string): string {
     return `Restore baseline quality gates on ${baseBranch}`;
@@ -279,106 +283,131 @@ export class SelfImprovementService {
     projectId: string,
     input: BaselineQualityGateTaskInput
   ): Promise<{ taskId: string; created: boolean; action: BaselineRemediationTaskAction }> {
-    const settings = await this.projectService.getSettings(projectId);
-    const mergeQualityGateCommands = getMergeQualityGateCommands(settings.toolchainProfile);
-    const title = this.buildBaselineQualityGateTaskTitle(input.baseBranch);
-    const description = this.buildBaselineQualityGateTaskDescription(input, mergeQualityGateCommands);
-    const reason = truncateText(input.reason, BASELINE_QUALITY_GATE_REASON_LIMIT);
-    const outputSnippet = truncateText(input.outputSnippet, BASELINE_QUALITY_GATE_OUTPUT_LIMIT);
-    const fingerprint = buildBaselineFailureFingerprint(input);
-    const observedAtIso = new Date().toISOString();
-    const extra = {
-      source: "self-improvement",
-      selfImprovementKind: "baseline-quality-gate",
-      baselineQualityGateSource: BASELINE_QUALITY_GATE_TASK_SOURCE,
-      baselineBaseBranch: input.baseBranch,
-      failedGateCommand: input.command,
-      failedGateReason: reason,
-      failedGateOutputSnippet: outputSnippet,
-      firstErrorLine: input.firstErrorLine?.trim() || null,
-      worktreePath: input.worktreePath ?? null,
-      validationWorkspace: input.validationWorkspace ?? null,
-      baselineFailureFingerprint: fingerprint,
-      baselineFailureObservedAt: observedAtIso,
-      baselineQualityGateCommands: mergeQualityGateCommands,
-    };
-
-    const allTasks = await taskStore.listAll(projectId);
-    const existing = allTasks.find((task) => {
-      const status = (task.status as string) ?? "open";
-      if (status === "closed") return false;
-      const source = (task as { source?: unknown }).source;
-      const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
-      const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
-      const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
-      return (
-        source === "self-improvement" &&
-        (kind === "baseline-quality-gate" || sourceId === BASELINE_QUALITY_GATE_TASK_SOURCE) &&
-        baseBranch === input.baseBranch
-      );
-    });
-
-    if (existing) {
-      await taskStore.update(projectId, existing.id, {
-        title,
-        description,
-        priority: 0,
-        complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
-        extra,
-      });
-      return { taskId: existing.id, created: false, action: "updated" };
+    const lockKey = `${projectId}:${input.baseBranch}`;
+    const inFlight = this.baselineTaskUpsertInFlight.get(lockKey);
+    if (inFlight) {
+      return inFlight;
     }
 
-    const nowMs = Date.now();
-    const recentlyClosedMatch = allTasks.find((task) => {
-      const status = (task.status as string) ?? "open";
-      if (status !== "closed") return false;
-      const source = (task as { source?: unknown }).source;
-      const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
-      const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
-      const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
-      const existingFingerprint = (
-        task as { baselineFailureFingerprint?: unknown }
-      ).baselineFailureFingerprint;
-      if (
-        source !== "self-improvement" ||
-        (kind !== "baseline-quality-gate" && sourceId !== BASELINE_QUALITY_GATE_TASK_SOURCE) ||
-        baseBranch !== input.baseBranch ||
-        existingFingerprint !== fingerprint
-      ) {
-        return false;
+    const upsertPromise = (async (): Promise<{
+      taskId: string;
+      created: boolean;
+      action: BaselineRemediationTaskAction;
+    }> => {
+      const settings = await this.projectService.getSettings(projectId);
+      const mergeQualityGateCommands = getMergeQualityGateCommands(settings.toolchainProfile);
+      const title = this.buildBaselineQualityGateTaskTitle(input.baseBranch);
+      const description = this.buildBaselineQualityGateTaskDescription(input, mergeQualityGateCommands);
+      const reason = truncateText(input.reason, BASELINE_QUALITY_GATE_REASON_LIMIT);
+      const outputSnippet = truncateText(input.outputSnippet, BASELINE_QUALITY_GATE_OUTPUT_LIMIT);
+      const fingerprint = buildBaselineFailureFingerprint(input);
+      const observedAtIso = new Date().toISOString();
+      const extra = {
+        source: "self-improvement",
+        selfImprovementKind: "baseline-quality-gate",
+        baselineQualityGateSource: BASELINE_QUALITY_GATE_TASK_SOURCE,
+        baselineBaseBranch: input.baseBranch,
+        failedGateCommand: input.command,
+        failedGateReason: reason,
+        failedGateOutputSnippet: outputSnippet,
+        firstErrorLine: input.firstErrorLine?.trim() || null,
+        worktreePath: input.worktreePath ?? null,
+        validationWorkspace: input.validationWorkspace ?? null,
+        baselineFailureFingerprint: fingerprint,
+        baselineFailureObservedAt: observedAtIso,
+        baselineQualityGateCommands: mergeQualityGateCommands,
+      };
+
+      const allTasks = await taskStore.listAll(projectId);
+      const existing = allTasks.find((task) => {
+        const status = (task.status as string) ?? "open";
+        if (status === "closed") return false;
+        const source = (task as { source?: unknown }).source;
+        const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
+        const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
+        const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
+        return (
+          source === "self-improvement" &&
+          (kind === "baseline-quality-gate" || sourceId === BASELINE_QUALITY_GATE_TASK_SOURCE) &&
+          baseBranch === input.baseBranch
+        );
+      });
+
+      if (existing) {
+        await taskStore.update(projectId, existing.id, {
+          title,
+          description,
+          priority: 0,
+          complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
+          extra,
+        });
+        return { taskId: existing.id, created: false, action: "updated" };
       }
-      const updatedAtRaw = (task.updated_at as string | undefined) ?? "";
-      const updatedAtMs = Date.parse(updatedAtRaw);
-      return Number.isFinite(updatedAtMs) && nowMs - updatedAtMs <= BASELINE_QUALITY_GATE_REOPEN_WINDOW_MS;
-    });
-    if (recentlyClosedMatch) {
-      await taskStore.update(projectId, recentlyClosedMatch.id, {
-        status: "open",
-        assignee: "",
-        title,
-        description,
+
+      const nowMs = Date.now();
+      const recentlyClosedMatch = allTasks.find((task) => {
+        const status = (task.status as string) ?? "open";
+        if (status !== "closed") return false;
+        const source = (task as { source?: unknown }).source;
+        const kind = (task as { selfImprovementKind?: unknown }).selfImprovementKind;
+        const sourceId = (task as { baselineQualityGateSource?: unknown }).baselineQualityGateSource;
+        const baseBranch = (task as { baselineBaseBranch?: unknown }).baselineBaseBranch;
+        const existingFingerprint = (
+          task as { baselineFailureFingerprint?: unknown }
+        ).baselineFailureFingerprint;
+        if (
+          source !== "self-improvement" ||
+          (kind !== "baseline-quality-gate" && sourceId !== BASELINE_QUALITY_GATE_TASK_SOURCE) ||
+          baseBranch !== input.baseBranch ||
+          existingFingerprint !== fingerprint
+        ) {
+          return false;
+        }
+        const updatedAtRaw = (task.updated_at as string | undefined) ?? "";
+        const updatedAtMs = Date.parse(updatedAtRaw);
+        return (
+          Number.isFinite(updatedAtMs) &&
+          nowMs - updatedAtMs <= BASELINE_QUALITY_GATE_REOPEN_WINDOW_MS
+        );
+      });
+      if (recentlyClosedMatch) {
+        await taskStore.update(projectId, recentlyClosedMatch.id, {
+          status: "open",
+          assignee: "",
+          title,
+          description,
+          priority: 0,
+          complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
+          extra,
+        });
+        return { taskId: recentlyClosedMatch.id, created: false, action: "reopened" };
+      }
+
+      const created = await taskStore.create(projectId, title, {
+        type: "bug",
         priority: 0,
+        description,
         complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
         extra,
       });
-      return { taskId: recentlyClosedMatch.id, created: false, action: "reopened" };
-    }
+      log.info("Created self-improvement task for baseline quality-gate failure", {
+        projectId,
+        taskId: created.id,
+        baseBranch: input.baseBranch,
+        command: input.command,
+      });
+      return { taskId: created.id, created: true, action: "created" };
+    })();
 
-    const created = await taskStore.create(projectId, title, {
-      type: "bug",
-      priority: 0,
-      description,
-      complexity: BASELINE_QUALITY_GATE_TASK_COMPLEXITY,
-      extra,
-    });
-    log.info("Created self-improvement task for baseline quality-gate failure", {
-      projectId,
-      taskId: created.id,
-      baseBranch: input.baseBranch,
-      command: input.command,
-    });
-    return { taskId: created.id, created: true, action: "created" };
+    this.baselineTaskUpsertInFlight.set(lockKey, upsertPromise);
+    try {
+      return await upsertPromise;
+    } finally {
+      const active = this.baselineTaskUpsertInFlight.get(lockKey);
+      if (active === upsertPromise) {
+        this.baselineTaskUpsertInFlight.delete(lockKey);
+      }
+    }
   }
 
   /**

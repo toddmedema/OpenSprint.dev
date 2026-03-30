@@ -388,5 +388,40 @@ describe("SelfImprovementService", () => {
       );
       expect(taskStore.create).not.toHaveBeenCalled();
     });
+
+    it("serializes concurrent baseline task upserts per project+branch", async () => {
+      const { taskStore } = await import("../services/task-store.service.js");
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      let resolveCreate:
+        | ((value: { id: string; title: string }) => void)
+        | null = null;
+      const createBlocked = new Promise<{ id: string; title: string }>((resolve) => {
+        resolveCreate = resolve;
+      });
+      vi.mocked(taskStore.create).mockImplementation(() => createBlocked as never);
+
+      const input = {
+        baseBranch: "main" as const,
+        command: "npm run test",
+        reason: "Command failed: npm run test",
+        outputSnippet: "src/foo.test.ts:42: expected true to be false",
+        worktreePath: "/tmp/repo",
+      };
+      const firstCall = service.ensureBaselineQualityGateTask(projectId, input);
+      const secondCall = service.ensureBaselineQualityGateTask(projectId, input);
+
+      resolveCreate?.({ id: "os-remediate", title: "Restore baseline quality gates on main" });
+      const [firstResult, secondResult] = await Promise.all([firstCall, secondCall]);
+
+      expect(firstResult).toEqual({
+        taskId: "os-remediate",
+        created: true,
+        action: "created",
+      });
+      expect(secondResult).toEqual(firstResult);
+      expect(taskStore.listAll).toHaveBeenCalledTimes(1);
+      expect(taskStore.create).toHaveBeenCalledTimes(1);
+      expect(taskStore.update).not.toHaveBeenCalled();
+    });
   });
 });
