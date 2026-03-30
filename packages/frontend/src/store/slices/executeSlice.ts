@@ -84,6 +84,7 @@ export {
   selectTasks,
   selectTaskSummaries,
   selectSelectedTaskOutput,
+  selectAgentOutputLastReceivedAt,
   selectCompletionState,
   selectTaskSummariesForFeedback,
   selectTaskById,

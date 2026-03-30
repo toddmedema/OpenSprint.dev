@@ -82,6 +82,8 @@ export interface ExecuteState {
   gitMergeQueue: GitMergeQueueSnapshot | null;
   selectedTaskId: string | null;
   agentOutput: Record<string, string[]>;
+  /** ISO time keyed by taskId — last moment browser stored agent output (chunk or backfill). */
+  agentOutputLastReceivedAt: Record<string, string>;
   completionStateByTaskId: Record<
     string,
     {
@@ -123,6 +125,7 @@ export const initialExecuteState: ExecuteState = {
   gitMergeQueue: null,
   selectedTaskId: null,
   agentOutput: {},
+  agentOutputLastReceivedAt: {},
   completionStateByTaskId: {},
   archivedSessions: [],
   async: createInitialAsyncStates(EXECUTE_ASYNC_KEYS),

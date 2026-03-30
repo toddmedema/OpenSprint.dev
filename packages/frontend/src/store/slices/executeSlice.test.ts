@@ -144,6 +144,7 @@ describe("executeSlice", () => {
       expect(state.awaitingApproval).toBe(false);
       expect(state.selectedTaskId).toBeNull();
       expect(state.agentOutput).toEqual({});
+      expect(state.agentOutputLastReceivedAt).toEqual({});
       expect(state.completionStateByTaskId).toEqual({});
       expect(state.archivedSessions).toEqual([]);
       expect(state.async.tasks.loading).toBe(false);
@@ -180,6 +181,25 @@ describe("executeSlice", () => {
       expect(store.getState().execute.agentOutput["task-1"]).toEqual(["chunk1\nchunk2\n"]);
       store.dispatch(setSelectedTaskId(null));
       expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
+      expect(store.getState().execute.agentOutputLastReceivedAt["task-1"]).toBeUndefined();
+      vi.useRealTimers();
+    });
+
+    it("appendAgentOutput sets agentOutputLastReceivedAt when batched flush runs", () => {
+      vi.useFakeTimers({ now: new Date("2025-06-01T12:00:00.000Z") });
+      const store = createStore();
+      store.dispatch(setSelectedTaskId("task-1"));
+      store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "hi\n" }));
+      vi.advanceTimersByTime(200);
+      expect(store.getState().execute.agentOutputLastReceivedAt["task-1"]).toBe(
+        "2025-06-01T12:00:00.150Z"
+      );
+      vi.setSystemTime(new Date("2025-06-01T12:00:10.000Z"));
+      store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "there\n" }));
+      vi.advanceTimersByTime(200);
+      expect(store.getState().execute.agentOutputLastReceivedAt["task-1"]).toBe(
+        "2025-06-01T12:00:10.150Z"
+      );
       vi.useRealTimers();
     });
 

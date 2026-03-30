@@ -7,6 +7,11 @@ import { fetchArchivedSessions, fetchLiveOutputBackfill, ensureAsync } from "./e
 import { filterAgentOutput } from "../../utils/agentOutputFilter";
 import { createAsyncHandlers } from "../asyncHelpers";
 
+function touchAgentOutputLastReceived(state: ExecuteState, taskId: string): void {
+  if (!state.agentOutputLastReceivedAt) state.agentOutputLastReceivedAt = {};
+  state.agentOutputLastReceivedAt[taskId] = new Date().toISOString();
+}
+
 export const agentOutputReducers = {
   setSelectedTaskId(state: ExecuteState, action: PayloadAction<string | null>) {
     ensureAsync(state);
@@ -19,6 +24,9 @@ export const agentOutputReducers = {
     if (changed) state.async.taskDetail.error = null;
     if (next === null && prev && state.agentOutput[prev]) {
       delete state.agentOutput[prev];
+      if (state.agentOutputLastReceivedAt?.[prev]) {
+        delete state.agentOutputLastReceivedAt[prev];
+      }
     }
   },
   appendAgentOutput(state: ExecuteState, action: PayloadAction<{ taskId: string; chunk: string }>) {
@@ -29,6 +37,7 @@ export const agentOutputReducers = {
         state.agentOutput[taskId] = [];
       }
       state.agentOutput[taskId].push(chunk);
+      touchAgentOutputLastReceived(state, taskId);
       if (state.agentOutput[taskId].length > MAX_AGENT_OUTPUT) {
         state.agentOutput[taskId] = state.agentOutput[taskId].slice(-MAX_AGENT_OUTPUT);
       }
@@ -46,6 +55,7 @@ export const agentOutputReducers = {
     const { taskId, output } = action.payload;
     if (output.length > 0) {
       state.agentOutput[taskId] = [output];
+      touchAgentOutputLastReceived(state, taskId);
     }
   },
   setCompletionState(
@@ -85,5 +95,8 @@ export function addAgentOutputExtraReducers(builder: ActionReducerMapBuilder<Exe
     if (!state.agentOutput) state.agentOutput = {};
     const filtered = filterAgentOutput(action.payload.output ?? "");
     state.agentOutput[action.payload.taskId] = [filtered];
+    if (filtered.length > 0) {
+      touchAgentOutputLastReceived(state, action.payload.taskId);
+    }
   });
 }

@@ -25,6 +25,22 @@ import { ExecuteAgentChatPanel } from "./ExecuteAgentChatPanel";
 import type { ExecuteChatMessage } from "./ExecuteAgentChatPanel";
 import { SidebarSectionNav } from "../layout/SidebarSectionNav";
 
+/** Prefer the latest valid ISO timestamp (browser receive time vs orchestrator status). */
+function pickLatestIso(...candidates: Array<string | undefined>): string | undefined {
+  let best = -1;
+  let bestIso: string | undefined;
+  for (const iso of candidates) {
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (!Number.isFinite(t)) continue;
+    if (t > best) {
+      best = t;
+      bestIso = iso;
+    }
+  }
+  return bestIso;
+}
+
 /** Compare task data excluding priority. When only priority changed, skip sidebar re-render (TaskPriorityDropdown handles it via Redux). */
 function taskDataEqualExceptPriority(a: Task | null, b: Task | null): boolean {
   if (a === b) return true;
@@ -118,6 +134,8 @@ export interface TaskDetailSidebarProps {
   chatSupported?: boolean;
   /** Reason chat is unsupported (shown as notice). */
   chatUnsupportedReason?: string;
+  /** ISO time from Redux when the browser last stored output for the selected task. */
+  agentOutputLastReceivedAt?: string;
 }
 
 /** Build active agent label(s) for the selected task. Handles multi-angle review: shows each reviewer with angle (e.g. "Reviewer (Security), Reviewer (Performance)"). */
@@ -194,6 +212,7 @@ function areTaskDetailSidebarPropsEqual(
   if (prev.chatDraftStorageKey !== next.chatDraftStorageKey) return false;
   if (prev.chatSupported !== next.chatSupported) return false;
   if (prev.chatUnsupportedReason !== next.chatUnsupportedReason) return false;
+  if (prev.agentOutputLastReceivedAt !== next.agentOutputLastReceivedAt) return false;
   return true;
 }
 
@@ -231,6 +250,7 @@ function TaskDetailSidebarInner({
   chatDraftStorageKey,
   chatSupported = true,
   chatUnsupportedReason,
+  agentOutputLastReceivedAt,
 }: TaskDetailSidebarProps) {
   const { selectedTaskData, taskDetailLoading, taskDetailError } = taskDetail;
   const {
@@ -263,6 +283,11 @@ function TaskDetailSidebarInner({
   const activeTaskState = useMemo(
     () => activeTasks.find((task) => task.taskId === selectedTask) ?? null,
     [activeTasks, selectedTask]
+  );
+
+  const lastOutputReceivedAtIso = useMemo(
+    () => pickLatestIso(agentOutputLastReceivedAt, activeTaskState?.lastOutputAt) ?? null,
+    [agentOutputLastReceivedAt, activeTaskState?.lastOutputAt]
   );
 
   const liveOutputContent = useMemo(() => {
@@ -527,6 +552,7 @@ function TaskDetailSidebarInner({
               showJumpToBottom={showJumpToBottom}
               jumpToBottom={jumpToBottom}
               scrollResetKey={selectedTask}
+              lastOutputReceivedAtIso={!isDoneTask && wsConnected ? lastOutputReceivedAtIso : null}
             />
           </div>
         </CollapsibleSection>

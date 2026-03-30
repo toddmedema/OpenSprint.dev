@@ -9,6 +9,7 @@ import {
   selectTasks,
   selectTaskById,
   selectSelectedTaskOutput,
+  selectAgentOutputLastReceivedAt,
   selectCompletionState,
   sweepExpiredBaselineMergePauseTick,
 } from "../../store/slices/executeSlice";
@@ -166,6 +167,9 @@ export function ExecutePhase({
   );
   const selectedAgentOutput = useAppSelector((s) =>
     selectSelectedTaskOutput(s, effectiveSelectedTask)
+  );
+  const agentOutputLastReceivedAt = useAppSelector((s) =>
+    selectAgentOutputLastReceivedAt(s, effectiveSelectedTask)
   );
   const completionState = useAppSelector((s) => selectCompletionState(s, effectiveSelectedTask));
 
@@ -820,6 +824,7 @@ export function ExecutePhase({
                 : undefined
             }
             agentOutput={selectedAgentOutput}
+            agentOutputLastReceivedAt={agentOutputLastReceivedAt}
             completionState={completionState}
             diagnostics={diagnosticsQuery.data ?? null}
             diagnosticsLoading={diagnosticsQuery.isFetching}

@@ -53,6 +53,17 @@ export const selectSelectedTaskOutput = createSelector(
   }
 );
 
+export const selectAgentOutputLastReceivedAt = createSelector(
+  [
+    (state: ExecuteRootState) => state.execute?.agentOutputLastReceivedAt ?? {},
+    (_state: ExecuteRootState, taskId: string | null | undefined) => taskId ?? null,
+  ],
+  (byTask, taskId): string | undefined => {
+    if (!taskId) return undefined;
+    return byTask[taskId];
+  }
+);
+
 export const selectCompletionState = createSelector(
   [
     (state: ExecuteRootState) => state.execute?.completionStateByTaskId ?? {},

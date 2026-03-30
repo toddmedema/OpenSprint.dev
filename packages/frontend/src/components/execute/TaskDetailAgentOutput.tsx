@@ -5,6 +5,7 @@ import { ArchivedSessionView } from "./ArchivedSessionView";
 import { useAppDispatch } from "../../store";
 import { wsConnect } from "../../store/middleware/websocketMiddleware";
 import { getMessageBasedHint } from "../../store/listeners/notificationListener";
+import { useRelativeReceivedLabel } from "../../hooks/useRelativeReceivedLabel";
 
 export interface TaskDetailAgentOutputProps {
   projectId: string;
@@ -25,6 +26,24 @@ export interface TaskDetailAgentOutputProps {
   jumpToBottom: () => void;
   /** Key that triggers scroll-to-bottom reset in archived sessions (e.g. selected task ID). */
   scrollResetKey?: string;
+  /** ISO time of last agent output (browser or server); shown subtly when live streaming. */
+  lastOutputReceivedAtIso?: string | null;
+}
+
+function LiveOutputLastReceivedHint({ iso }: { iso: string }) {
+  const label = useRelativeReceivedLabel(iso);
+  if (!label) return null;
+  const title = Number.isFinite(Date.parse(iso)) ? new Date(iso).toLocaleString() : undefined;
+  return (
+    <div
+      className="pointer-events-none absolute bottom-2 right-3 z-[5] max-w-[min(100%,11rem)] text-right text-[10px] leading-tight text-theme-muted/85 tabular-nums"
+      data-testid="live-output-last-received"
+    >
+      <time dateTime={iso} title={title}>
+        Last received {label}
+      </time>
+    </div>
+  );
 }
 
 export function TaskDetailAgentOutput({
@@ -41,6 +60,7 @@ export function TaskDetailAgentOutput({
   showJumpToBottom,
   jumpToBottom,
   scrollResetKey,
+  lastOutputReceivedAtIso,
 }: TaskDetailAgentOutputProps) {
   const dispatch = useAppDispatch();
 
@@ -90,6 +110,9 @@ export function TaskDetailAgentOutput({
                 onScroll={onScroll}
                 data-testid="live-agent-output"
               />
+              {lastOutputReceivedAtIso ? (
+                <LiveOutputLastReceivedHint iso={lastOutputReceivedAtIso} />
+              ) : null}
               {showJumpToBottom && (
                 <button
                   type="button"
