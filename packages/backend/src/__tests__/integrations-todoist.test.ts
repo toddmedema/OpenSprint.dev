@@ -55,6 +55,27 @@ vi.mock("../services/todoist-api-client.service.js", () => {
 
 const mockedService = await import("../services/todoist-api-client.service.js");
 
+function seedTodoistServiceMocks(): void {
+  vi.mocked(mockedService.generateOAuthState).mockReturnValue("mock-state-abc");
+  vi
+    .mocked(mockedService.buildAuthorizationUrl)
+    .mockReturnValue("https://todoist.example/authorize?state=mock-state-abc");
+  vi.mocked(mockedService.exchangeCodeForToken).mockResolvedValue({
+    accessToken: "tok-real-123",
+    tokenType: "Bearer",
+  });
+  vi.mocked(mockedService.revokeAccessToken).mockResolvedValue(true);
+  vi.mocked(mockedService.getTodoistOAuthConfig).mockReturnValue({
+    clientId: "test-client-id",
+    clientSecret: "test-client-secret",
+    redirectUri:
+      "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
+  });
+  vi.mocked(mockedService.TodoistApiClient).mockImplementation(() => ({
+    getProjects: vi.fn().mockResolvedValue([{ id: "p1", name: "Inbox" }]),
+  }));
+}
+
 function createTestApp(deps: TodoistIntegrationRouterDeps) {
   const app = express();
   app.use(express.json());
@@ -109,7 +130,9 @@ function makeDeps(overrides?: Partial<TodoistIntegrationRouterDeps>): TodoistInt
 
 describe("Todoist OAuth Routes", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Reset all mock behavior so one-off implementations cannot leak between tests.
+    vi.resetAllMocks();
+    seedTodoistServiceMocks();
     oauthStateStore.destroy();
   });
 

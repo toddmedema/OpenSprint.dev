@@ -4,7 +4,6 @@ import {
   backendIntegrationInclude,
   backendResolveConfig,
   backendSsrConfig,
-  integrationWorkers,
 } from "./vitest.shared.js";
 
 export default defineProject({
@@ -15,8 +14,17 @@ export default defineProject({
     name: "backend-integration",
     include: backendIntegrationInclude,
     pool: "forks",
+    // Integration suites pin shared process-level test paths/state. Running files in parallel
+    // can cross-contaminate those globals and cause intermittent "socket hang up" failures.
+    fileParallelism: false,
     minWorkers: 1,
-    maxWorkers: integrationWorkers,
+    maxWorkers: 1,
+    isolate: true,
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     globalSetup: ["./src/__tests__/global-setup.ts"],
     globalTeardown: ["./src/__tests__/global-teardown.ts"],
   },
