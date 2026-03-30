@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useAutoScroll } from "../../hooks/useAutoScroll";
+import { useSidebarSectionRestore } from "../../hooks/useSidebarSectionRestore";
 import type {
   AgentSession,
   Notification,
@@ -340,6 +341,11 @@ function TaskDetailSidebarInner({
   );
   const sidebarScrollRef = React.useRef<HTMLDivElement>(null);
 
+  const { handleActiveSectionChange } = useSidebarSectionRestore({
+    scrollContainerRef: sidebarScrollRef,
+    selectedTask,
+  });
+
   const hasActions = isBlockedTask || (!isDoneTask && !isBlockedTask);
 
   const collapseAllSections = useCallback(() => {
@@ -439,6 +445,7 @@ function TaskDetailSidebarInner({
           scrollContainerRef={sidebarScrollRef}
           onCollapseAll={collapseAllSections}
           onExpandAll={expandAllSections}
+          onActiveSectionChange={handleActiveSectionChange}
         />
         <div className="pt-2 flex flex-col gap-3">
           <TaskDetailOpenQuestions

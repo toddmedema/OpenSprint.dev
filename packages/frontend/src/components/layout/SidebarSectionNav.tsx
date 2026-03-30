@@ -8,6 +8,8 @@ export interface SidebarSectionNavProps {
   sectionSelector?: string;
   onCollapseAll?: () => void;
   onExpandAll?: () => void;
+  /** Fires whenever the visually-active section changes (scroll/intersection driven). */
+  onActiveSectionChange?: (sectionId: string | null) => void;
 }
 
 interface SidebarSectionItem {
@@ -41,6 +43,7 @@ export function SidebarSectionNav({
   sectionSelector = "[data-sidebar-section-id]",
   onCollapseAll,
   onExpandAll,
+  onActiveSectionChange,
 }: SidebarSectionNavProps) {
   const [sections, setSections] = useState<SidebarSectionItem[]>([]);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
@@ -142,6 +145,10 @@ export function SidebarSectionNav({
       scrollEl.removeEventListener("scroll", onScroll);
     };
   }, [scrollContainerRef, sectionSelector, sections]);
+
+  useEffect(() => {
+    onActiveSectionChange?.(activeSectionId);
+  }, [activeSectionId, onActiveSectionChange]);
 
   const activeIndex = useMemo(() => {
     if (!activeSectionId) return -1;
