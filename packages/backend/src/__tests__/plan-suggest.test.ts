@@ -174,7 +174,9 @@ describe.skipIf(!planSuggestPostgresOk)("Plan suggestPlans (POST /plans/suggest)
 
   afterEach(async () => {
     process.env.HOME = originalHome;
-    await fs.rm(tempDir, { recursive: true, force: true });
+    if (tempDir) {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it(

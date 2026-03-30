@@ -3,6 +3,7 @@
  * Pure helpers for parsing and normalizing plan/task JSON.
  */
 import { clampTaskComplexity, PLAN_MARKDOWN_SECTIONS } from "@opensprint/shared";
+import { extractJsonFromAgentResponse } from "../../utils/json-extract.js";
 
 export const MAX_TASKS_PER_PLAN = 15;
 
@@ -300,6 +301,133 @@ export function normalizePlanSpec(spec: Record<string, unknown>): {
     mockups,
     tasks,
   };
+}
+
+/** Normalized sub-plan shape returned by the decomposition agent. */
+export interface NormalizedSubPlan {
+  title: string;
+  overview: string;
+  content: string;
+  dependsOnPlans: string[];
+}
+
+/**
+ * Normalize a single sub-plan object: validate required string fields and
+ * normalize `depends_on_plans` / `dependsOnPlans` via the existing helper.
+ * Returns null when any required field is missing or not a string.
+ */
+export function normalizeSubPlan(raw: Record<string, unknown>): NormalizedSubPlan | null {
+  const title = (raw.title as string | undefined) ?? (raw.plan_title as string | undefined);
+  const overview = (raw.overview as string | undefined) ?? (raw.summary as string | undefined);
+  const content = (raw.content as string | undefined) ?? (raw.body as string | undefined);
+
+  if (typeof title !== "string" || !title.trim()) return null;
+  if (typeof overview !== "string" || !overview.trim()) return null;
+  if (typeof content !== "string" || !content.trim()) return null;
+
+  return {
+    title: title.trim(),
+    overview: overview.trim(),
+    content: content.trim(),
+    dependsOnPlans: normalizeDependsOnPlans(raw),
+  };
+}
+
+/** First-found sub_plans / subPlans array with source path for diagnostics. */
+export interface ExtractedSubPlanArray {
+  key: "sub_plans" | "subPlans";
+  path: string;
+  value: unknown[];
+  count: number;
+}
+
+/**
+ * Recursively find a sub-plan array in planner JSON.
+ * Accepts keys `sub_plans` and `subPlans`, mirroring `findPlannerTaskArray`.
+ */
+export function findSubPlanArray(value: unknown, path = "$"): ExtractedSubPlanArray | null {
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const found = findSubPlanArray(value[i], `${path}[${i}]`);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+
+  if (Array.isArray(record.sub_plans)) {
+    return { key: "sub_plans", path: `${path}.sub_plans`, value: record.sub_plans, count: record.sub_plans.length };
+  }
+  if (Array.isArray(record.subPlans)) {
+    return { key: "subPlans", path: `${path}.subPlans`, value: record.subPlans, count: record.subPlans.length };
+  }
+
+  for (const [key, child] of Object.entries(record)) {
+    const found = findSubPlanArray(child, `${path}.${key}`);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+/** Discriminated union returned by `parseSubPlanDecompositionResponse`. */
+export type SubPlanDecompositionResult =
+  | { strategy: "tasks"; tasks: NormalizedPlannerTask[] }
+  | { strategy: "sub_plans"; subPlans: NormalizedSubPlan[] };
+
+/**
+ * Parse an agent response that may contain either a tasks-based or sub-plans-based
+ * decomposition. Extracts JSON via `extractJsonFromAgentResponse`, inspects
+ * `strategy` field and validates the payload shape.
+ *
+ * Returns null when the content cannot be parsed or fails validation.
+ */
+export function parseSubPlanDecompositionResponse(
+  content: string
+): SubPlanDecompositionResult | null {
+  const parsed = extractJsonFromAgentResponse<Record<string, unknown>>(content);
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const strategy = (parsed.strategy as string | undefined) ?? inferStrategy(parsed);
+
+  if (strategy === "tasks") {
+    const extracted = findPlannerTaskArray(parsed);
+    if (!extracted) return null;
+    const rawTasks = extracted.value.filter(
+      (t): t is Record<string, unknown> => t != null && typeof t === "object"
+    );
+    if (rawTasks.length === 0) return null;
+    const { valid } = validateTaskBatchSize(rawTasks);
+    if (!valid) return null;
+    const tasks = rawTasks.map((t) => normalizePlannerTask(t, rawTasks));
+    return { strategy: "tasks", tasks };
+  }
+
+  if (strategy === "sub_plans") {
+    const extracted = findSubPlanArray(parsed);
+    if (!extracted) return null;
+    const rawPlans = extracted.value.filter(
+      (p): p is Record<string, unknown> => p != null && typeof p === "object"
+    );
+    const subPlans: NormalizedSubPlan[] = [];
+    for (const raw of rawPlans) {
+      const normalized = normalizeSubPlan(raw);
+      if (!normalized) return null;
+      subPlans.push(normalized);
+    }
+    if (subPlans.length === 0) return null;
+    return { strategy: "sub_plans", subPlans };
+  }
+
+  return null;
+}
+
+function inferStrategy(parsed: Record<string, unknown>): "tasks" | "sub_plans" | undefined {
+  if (findSubPlanArray(parsed)) return "sub_plans";
+  if (findPlannerTaskArray(parsed)) return "tasks";
+  return undefined;
 }
 
 /**

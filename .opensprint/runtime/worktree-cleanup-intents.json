@@ -2,13 +2,13 @@
   "version": 1,
   "projects": {
     "7d57936e-9376-49b0-ac00-5377aab19555": {
-      "os-160e": {
-        "taskId": "os-160e",
-        "branchName": "opensprint/os-160e",
-        "worktreePath": "/var/folders/dn/rhc3py9d5fbc55x4zdccw28r0000gn/T/opensprint-worktrees/os-160e",
+      "os-fe8f.10": {
+        "taskId": "os-fe8f.10",
+        "branchName": "opensprint/os-fe8f.10",
+        "worktreePath": "/var/folders/dn/rhc3py9d5fbc55x4zdccw28r0000gn/T/opensprint-worktrees/os-fe8f.10",
         "gitWorkingMode": "worktree",
-        "worktreeKey": "os-160e",
-        "createdAt": "2026-03-30T00:23:45.724Z",
+        "worktreeKey": "os-fe8f.10",
+        "createdAt": "2026-03-30T01:05:12.995Z",
         "reason": "merge_success"
       }
     }
