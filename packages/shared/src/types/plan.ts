@@ -218,9 +218,42 @@ export interface AuditorRun {
   assessment: string | null;
 }
 
+/** Attachment sent with a plan-generation request. */
+export interface PlanAttachment {
+  /** Original file name (e.g. "design.png") */
+  name: string;
+  /** MIME type (e.g. "image/png", "text/markdown", "application/pdf") */
+  mimeType: string;
+  /** For text-based files (.md): the raw UTF-8 text content. */
+  textContent?: string;
+  /** For binary files (images, PDFs): base64-encoded data. */
+  base64?: string;
+  /** File size in bytes (used for client-side validation display). */
+  size: number;
+}
+
+/** Accepted MIME types for plan attachments. */
+export const PLAN_ATTACHMENT_ACCEPT: Record<string, string[]> = {
+  "image/png": [".png"],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/webp": [".webp"],
+  "text/markdown": [".md"],
+  "application/pdf": [".pdf"],
+};
+
+/** Flat list of accepted extensions. */
+export const PLAN_ATTACHMENT_EXTENSIONS: string[] = Object.values(PLAN_ATTACHMENT_ACCEPT).flat();
+
+/** Max single file size: 10 MB */
+export const PLAN_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+
+/** Max number of attachments per request. */
+export const PLAN_ATTACHMENT_MAX_COUNT = 10;
+
 /** Request body for POST /projects/:id/plans/generate — AI generates plan from freeform description */
 export interface GeneratePlanRequest {
   description: string;
+  attachments?: PlanAttachment[];
 }
 
 export interface GeneratePlanCreatedResult {

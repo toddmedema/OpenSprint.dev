@@ -55,10 +55,14 @@ export function createPlansRouter(planService: PlanService): Router {
     validateParams(projectIdParamSchema),
     validateBody(plansGenerateBodySchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
-      const { description } = req.body as { description: string };
+      const { description, attachments } = req.body as {
+        description: string;
+        attachments?: import("@opensprint/shared").PlanAttachment[];
+      };
       const result = await planService.generatePlanFromDescription(
         req.params.projectId,
-        description.trim()
+        description.trim(),
+        attachments
       );
       const body: ApiResponse<GeneratePlanResult> = { data: result };
       res.status(result.status === "created" ? 201 : 202).json(body);

@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/tool
 import type {
   GeneratePlanResult,
   Plan,
+  PlanAttachment,
   PlanDependencyGraph,
   PlanExecuteBatchItem,
   PlanStatusResponse,
@@ -118,12 +119,14 @@ export interface GeneratePlanArg {
   description: string;
   /** Optional tempId to match optimistic plan for replacement on fulfilled/rejected */
   tempId?: string;
+  /** Optional file attachments for additional planner context */
+  attachments?: PlanAttachment[];
 }
 
 export const generatePlan = createAsyncThunk(
   "plan/generate",
-  async ({ projectId, description }: GeneratePlanArg): Promise<GeneratePlanResult> => {
-    return api.plans.generate(projectId, { description });
+  async ({ projectId, description, attachments }: GeneratePlanArg): Promise<GeneratePlanResult> => {
+    return api.plans.generate(projectId, { description, attachments });
   }
 );
 
