@@ -1,15 +1,20 @@
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "./error-handler.js";
 import { ErrorCodes } from "./error-codes.js";
-import { requestHasLocalSessionCredential } from "../services/local-session-auth.service.js";
+import { requestIsAuthenticated } from "../services/local-session-auth.service.js";
 
 /**
- * Requires an Authorization: Bearer session token, or a localhost browser Origin / Referer.
- * Blocks naive curl/scripts with no such headers on sensitive local-only routes.
+ * Guards local-only API routes.
+ *
+ * - **Mutating methods** (POST/PUT/DELETE/PATCH) require a valid
+ *   `Authorization: Bearer <token>` to prevent CSRF from other localhost apps.
+ * - **Safe methods** (GET/HEAD/OPTIONS) accept either the bearer token or a
+ *   trusted localhost Origin / Referer.
  */
 export function requireLocalSessionAuth(req: Request, _res: Response, next: NextFunction): void {
   if (
-    requestHasLocalSessionCredential(
+    requestIsAuthenticated(
+      req.method,
       req.headers.authorization,
       req.headers.origin,
       req.headers.referer
@@ -22,7 +27,7 @@ export function requireLocalSessionAuth(req: Request, _res: Response, next: Next
     new AppError(
       403,
       ErrorCodes.LOCAL_SESSION_AUTH_REQUIRED,
-      "This endpoint requires a local browser session or Authorization: Bearer with the current server session token."
+      "This endpoint requires Authorization: Bearer with the current server session token."
     )
   );
 }

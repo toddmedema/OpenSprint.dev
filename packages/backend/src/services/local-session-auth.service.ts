@@ -71,10 +71,11 @@ export function refererIsTrustedLocalhost(referer: string | undefined): boolean 
   }
 }
 
-export function requestHasLocalSessionCredential(
-  authorization: string | undefined,
-  origin: string | undefined,
-  referer: string | undefined
+/**
+ * Returns true when the Authorization header carries a valid Bearer session token.
+ */
+export function requestHasValidBearerToken(
+  authorization: string | undefined
 ): boolean {
   const auth = authorization;
   if (auth?.startsWith("Bearer ")) {
@@ -87,7 +88,44 @@ export function requestHasLocalSessionCredential(
       return true;
     }
   }
+  return false;
+}
+
+/**
+ * Accepts a valid Bearer token **or** a trusted localhost Origin / Referer.
+ * Suitable for read-only (GET/HEAD/OPTIONS) requests where CSRF risk is low.
+ */
+export function requestHasLocalSessionCredential(
+  authorization: string | undefined,
+  origin: string | undefined,
+  referer: string | undefined
+): boolean {
+  if (requestHasValidBearerToken(authorization)) return true;
   if (originIsTrustedLocalhost(origin)) return true;
   if (refererIsTrustedLocalhost(referer)) return true;
   return false;
+}
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
+
+/**
+ * For the given HTTP method, decide whether the request is authenticated.
+ *
+ * - **Mutating methods** (POST, PUT, DELETE, PATCH): require a valid Bearer
+ *   token. A localhost Origin/Referer alone is not sufficient because another
+ *   app on localhost could forge cross-site requests that the browser would
+ *   send with a matching Origin header.
+ * - **Safe methods** (GET, HEAD, OPTIONS): accept Bearer **or** localhost
+ *   Origin/Referer (backward-compatible).
+ */
+export function requestIsAuthenticated(
+  method: string,
+  authorization: string | undefined,
+  origin: string | undefined,
+  referer: string | undefined
+): boolean {
+  if (MUTATING_METHODS.has(method.toUpperCase())) {
+    return requestHasValidBearerToken(authorization);
+  }
+  return requestHasLocalSessionCredential(authorization, origin, referer);
 }

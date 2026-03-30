@@ -591,13 +591,14 @@ describe("Global Settings API", () => {
       expect(res.body.error?.code).toBe("LOCAL_SESSION_AUTH_REQUIRED");
     });
 
-    it("accepts PUT /global-settings with localhost Origin", async () => {
+    it("rejects PUT /global-settings with only localhost Origin (CSRF protection)", async () => {
       const res = await request(app)
         .put(`${API_PREFIX}/global-settings`)
         .set("Origin", "http://127.0.0.1:5173")
         .send({ databaseUrl: "postgresql://u:p@127.0.0.1:5432/db" });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
+      expect(res.body.error?.code).toBe("LOCAL_SESSION_AUTH_REQUIRED");
     });
   });
 });
