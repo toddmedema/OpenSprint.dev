@@ -65,6 +65,30 @@ When a merge to main fails with **code conflicts** (after infra-only auto-resolv
 
 So: one merger attempt per merge failure; no infinite merger loop.
 
+## Protected Path Policy
+
+Certain file paths are **sensitive surfaces** (integration, OAuth, token handling) and must only be modified when the task explicitly scopes integration or OAuth work. Execute agents will refuse to modify these paths for non-integration tasks, and reviewers will flag violations.
+
+**Protected patterns:**
+
+| Pattern | Label |
+|---------|-------|
+| `routes/integrations-*` | Integration routes |
+| `integration-store` | Integration store service |
+| `token-encryption` | Token encryption service |
+| `routes/oauth` | OAuth routes |
+| `todoist-sync` | Todoist sync service |
+
+**Scope keywords that unlock protected paths:** integration, oauth, todoist, token-encrypt, api-key-stor, third-party-auth, external-service, connect(ion)-service.
+
+If a non-integration task genuinely needs to touch these files, the agent should report `status: "failed"` with `open_questions` asking for explicit scope confirmation.
+
+The policy is enforced in:
+
+- `packages/backend/src/services/protected-path-policy.ts` — path definitions and audit logic
+- `packages/backend/src/services/agent-default-instructions.ts` — coder and reviewer default instructions
+- `packages/backend/src/services/context-assembler.ts` — coding prompt (Protected Path Policy section) and review checklist
+
 ## Maintenance Notes
 
 - If you change the agent lifecycle or prompt contract, keep this file, the bootstrap contract in `packages/backend/src/services/project.service.ts`, and `packages/backend/docs/opensprint-help-context.md` in sync.

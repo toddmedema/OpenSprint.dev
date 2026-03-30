@@ -66,6 +66,10 @@ Schema is applied on init via `runSchema` in `packages/backend/src/db/schema.ts`
 
 - When the user (or planner agent) updates a plan's markdown: if the **current plan version has no tasks yet**, the backend **updates that version in place**. If the current version **already has one or more tasks**, the backend **creates a new plan version** for the update. The planner does not need to choose; the backend applies this rule on each save.
 
+### Protected Path Policy
+
+Certain file paths are sensitive surfaces (integration, OAuth, token handling) and must only be modified when the task explicitly scopes integration or OAuth work. Execute agents refuse to modify these paths for non-integration tasks, and reviewers flag violations. Protected patterns: `routes/integrations-*`, `integration-store`, `token-encryption`, `routes/oauth`, `todoist-sync`. Scope keywords that unlock: integration, oauth, todoist, token-encrypt, api-key-stor, third-party-auth, external-service, connect(ion)-service.
+
 ---
 
 ## Glossary (docs/glossary.md)
