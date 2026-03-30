@@ -1644,6 +1644,101 @@ Updated description for task two.`;
       );
       expect(matchingEpic).toBeUndefined();
     });
+
+    it(
+      "includes markdown attachment text content in the planner prompt",
+      { timeout: 15000 },
+      async () => {
+        mockPlanningAgentInvoke.mockResolvedValueOnce({
+          content: JSON.stringify({
+            title: "Feature With Attachment",
+            content: "# Feature With Attachment\n\n## Overview\n\nFeature using attachment context.",
+            complexity: "low",
+            mockups: [],
+          }),
+        });
+
+        const res = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+          .send({
+            description: "Build a feature based on attached spec",
+            attachments: [
+              {
+                name: "design.md",
+                mimeType: "text/markdown",
+                textContent: "# Design Doc\n\nUse a sidebar layout.",
+                size: 42,
+              },
+            ],
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.data.status).toBe("created");
+
+        const invokeArgs = mockPlanningAgentInvoke.mock.calls[0][0];
+        const prompt = invokeArgs.messages[0].content;
+        expect(prompt).toContain("User-Supplied Attachments");
+        expect(prompt).toContain("design.md");
+        expect(prompt).toContain("Use a sidebar layout.");
+      }
+    );
+
+    it(
+      "includes image attachment description in the planner prompt",
+      { timeout: 15000 },
+      async () => {
+        mockPlanningAgentInvoke.mockResolvedValueOnce({
+          content: JSON.stringify({
+            title: "Image Feature",
+            content: "# Image Feature\n\n## Overview\n\nBased on screenshot.",
+            complexity: "low",
+            mockups: [],
+          }),
+        });
+
+        const res = await request(app)
+          .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+          .send({
+            description: "Build this feature",
+            attachments: [
+              {
+                name: "screenshot.png",
+                mimeType: "image/png",
+                base64: "iVBORw0KGgoAAAANSUhEUg==",
+                size: 1024,
+              },
+            ],
+          });
+
+        expect(res.status).toBe(201);
+
+        const invokeArgs = mockPlanningAgentInvoke.mock.calls[0][0];
+        const prompt = invokeArgs.messages[0].content;
+        expect(prompt).toContain("User-Supplied Attachments");
+        expect(prompt).toContain("screenshot.png");
+        expect(prompt).toContain("image");
+      }
+    );
+
+    it("succeeds with no attachments field (backwards compatible)", async () => {
+      mockPlanningAgentInvoke.mockResolvedValueOnce({
+        content: JSON.stringify({
+          title: "No Attachments",
+          content: "# No Attachments\n\n## Overview\n\nBasic plan.",
+          complexity: "low",
+          mockups: [],
+        }),
+      });
+
+      const res = await request(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
+        .send({ description: "Simple feature" });
+
+      expect(res.status).toBe(201);
+      const invokeArgs = mockPlanningAgentInvoke.mock.calls[0][0];
+      const prompt = invokeArgs.messages[0].content;
+      expect(prompt).not.toContain("User-Supplied Attachments");
+    });
   });
 
   describe("POST /projects/:id/plans/suggest", () => {

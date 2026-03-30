@@ -11,11 +11,20 @@ export const planVersionParamsSchema = z.object({
   versionNumber: z.string().min(1),
 });
 
+const planAttachmentSchema = z.object({
+  name: z.string().min(1),
+  mimeType: z.string().min(1),
+  textContent: z.string().optional(),
+  base64: z.string().optional(),
+  size: z.number().nonnegative(),
+});
+
 export const plansGenerateBodySchema = z.object({
   description: z
     .string()
     .min(1, { message: "description is required" })
     .refine((s) => s.trim().length > 0, { message: "description is required" }),
+  attachments: z.array(planAttachmentSchema).max(10).optional(),
 });
 
 /** POST /plans — create plan; body is plan payload (title, content, etc.) */

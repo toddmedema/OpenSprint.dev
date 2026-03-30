@@ -1992,6 +1992,44 @@ describe("PlanService createWithRetry usage", () => {
     expect(callArgs.systemPrompt).toContain("factor them into the Technical Approach");
   });
 
+  it("generatePlanFromDescription includes attachment text content in prompt", async () => {
+    mockInvokePlanningAgent.mockResolvedValue({
+      content: JSON.stringify({
+        title: "Attached Feature",
+        content: "# Attached Feature\n\n## Overview\n\nPlan from attached context.",
+        complexity: "low",
+        mockups: [],
+      }),
+    });
+
+    await planService.generatePlanFromDescription(projectId, "Build feature from spec", [
+      { name: "spec.md", mimeType: "text/markdown", textContent: "# Spec\n\nBuild a sidebar.", size: 30 },
+    ]);
+
+    const callArgs = mockInvokePlanningAgent.mock.calls[0][0] as { messages: Array<{ content: string }> };
+    const prompt = callArgs.messages[0].content;
+    expect(prompt).toContain("User-Supplied Attachments");
+    expect(prompt).toContain("spec.md");
+    expect(prompt).toContain("Build a sidebar.");
+  });
+
+  it("generatePlanFromDescription omits attachment section when no attachments provided", async () => {
+    mockInvokePlanningAgent.mockResolvedValue({
+      content: JSON.stringify({
+        title: "No Attachments Feature",
+        content: "# No Attachments Feature\n\n## Overview\n\nBasic plan.",
+        complexity: "low",
+        mockups: [],
+      }),
+    });
+
+    await planService.generatePlanFromDescription(projectId, "Simple feature");
+
+    const callArgs = mockInvokePlanningAgent.mock.calls[0][0] as { messages: Array<{ content: string }> };
+    const prompt = callArgs.messages[0].content;
+    expect(prompt).not.toContain("User-Supplied Attachments");
+  });
+
   it("listPlans returns plans from task store (no file-based plans)", async () => {
     const planId = "why-opensprint-section";
     const metadata = {

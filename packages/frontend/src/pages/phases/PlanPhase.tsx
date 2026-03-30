@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from "react";
 import { shallowEqual } from "react-redux";
 import { useQueryClient, useIsMutating } from "@tanstack/react-query";
-import type { Plan, PlanExecuteBatchItem, PlanExecuteBatchStatus, PlanStatus } from "@opensprint/shared";
+import type { Plan, PlanAttachment, PlanExecuteBatchItem, PlanExecuteBatchStatus, PlanStatus } from "@opensprint/shared";
 import { DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS, sortPlansByStatus } from "@opensprint/shared";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store";
@@ -489,7 +489,7 @@ export function PlanPhase({
   const planQueueRef = useRef<string[]>([]);
   const processingQueueRef = useRef(false);
   const generateQueueRef = useRef<
-    Array<{ description: string; tempId: string; resolve?: (ok: boolean) => void }>
+    Array<{ description: string; tempId: string; attachments?: PlanAttachment[]; resolve?: (ok: boolean) => void }>
   >([]);
   const processingGenerateRef = useRef(false);
 
@@ -578,9 +578,9 @@ export function PlanPhase({
     processingGenerateRef.current = true;
     try {
       while (generateQueueRef.current.length > 0) {
-        const { description, tempId, resolve } = generateQueueRef.current[0];
+        const { description, tempId, attachments: queueAttachments, resolve } = generateQueueRef.current[0];
         generateQueueRef.current = generateQueueRef.current.slice(1);
-        const result = await dispatch(generatePlan({ projectId, description, tempId }));
+        const result = await dispatch(generatePlan({ projectId, description, tempId, attachments: queueAttachments }));
         if (generatePlan.fulfilled.match(result)) {
           if (result.payload.status === "created") {
             resolve?.(true);
@@ -1091,7 +1091,7 @@ export function PlanPhase({
   };
 
   const handleGeneratePlan = useCallback(
-    (description: string): Promise<boolean> => {
+    (description: string, attachments?: PlanAttachment[]): Promise<boolean> => {
       const trimmed = description.trim();
       if (!trimmed) return Promise.resolve(false);
 
@@ -1102,7 +1102,7 @@ export function PlanPhase({
       return new Promise<boolean>((resolve) => {
         generateQueueRef.current = [
           ...generateQueueRef.current,
-          { description: trimmed, tempId, resolve },
+          { description: trimmed, tempId, attachments, resolve },
         ];
         processGenerateQueue();
       });

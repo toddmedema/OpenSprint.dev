@@ -4,6 +4,7 @@
  */
 import type {
   Plan,
+  PlanAttachment,
   PlanMetadata,
   PlanDependencyEdge,
   SuggestedPlan,
@@ -86,6 +87,30 @@ or
 {"title":"Feature Name","content":"# Feature Name\\n\\n...","complexity":"medium","mockups":[]}
 (mockups may be [] or include ASCII wireframes; you may use fenced mermaid in content for diagrams.)
 Do not include prose outside the JSON.`;
+
+/**
+ * Build a prompt section from user-supplied attachments (Markdown text, PDFs, images).
+ * Text-based attachments are inlined; binary attachments are described with a note.
+ */
+function buildAttachmentContext(attachments?: PlanAttachment[]): string {
+  if (!attachments || attachments.length === 0) return "";
+  const sections: string[] = [];
+  for (const att of attachments) {
+    if (att.textContent) {
+      sections.push(`### Attachment: ${att.name}\n\n${att.textContent}`);
+    } else if (att.mimeType.startsWith("image/")) {
+      sections.push(
+        `### Attachment: ${att.name} (image, ${att.mimeType})\n\n[Image attached — use the visual context if your model supports multimodal input; otherwise treat this as supplementary reference material named "${att.name}".]`
+      );
+    } else if (att.mimeType === "application/pdf") {
+      sections.push(
+        `### Attachment: ${att.name} (PDF)\n\n[PDF document attached — text extraction is not available in this pipeline. Treat this as supplementary reference material named "${att.name}".]`
+      );
+    }
+  }
+  if (sections.length === 0) return "";
+  return `\n\n## User-Supplied Attachments\n\n${sections.join("\n\n")}`;
+}
 
 export interface PlanDecomposeGenerateDeps {
   taskStore: {
@@ -418,7 +443,8 @@ export class PlanDecomposeGenerateService {
 
   async generatePlanFromDescription(
     projectId: string,
-    description: string
+    description: string,
+    attachments?: PlanAttachment[]
   ): Promise<GeneratePlanResult> {
     const repoPath = await this.getRepoPath(projectId);
     const settings = await this.deps.projectService.getSettings(projectId);
@@ -431,7 +457,8 @@ export class PlanDecomposeGenerateService {
       ? `${systemPrompt}\n\n## AI Autonomy Level\n\n${autonomyDesc}\n\n`
       : systemPrompt;
 
-    const prompt = `Generate a complete feature plan for the following idea.\n\n## Feature Idea\n\n${description}\n\n## PRD Context\n\n${prdContext}`;
+    const attachmentContext = buildAttachmentContext(attachments);
+    const prompt = `Generate a complete feature plan for the following idea.\n\n## Feature Idea\n\n${description}\n\n## PRD Context\n\n${prdContext}${attachmentContext}`;
 
     const agentId = `plan-generate-${projectId}-${Date.now()}`;
 

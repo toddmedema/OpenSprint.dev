@@ -120,7 +120,7 @@ export function useDecomposePlans(projectId: string) {
 export function useGeneratePlan(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { description: string }) => api.plans.generate(projectId, data),
+    mutationFn: (data: import("@opensprint/shared").GeneratePlanRequest) => api.plans.generate(projectId, data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.plans.list(projectId) });
     },

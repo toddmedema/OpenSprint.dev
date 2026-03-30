@@ -275,9 +275,10 @@ export class PlanService {
   /** Generate a plan from a freeform feature description. */
   async generatePlanFromDescription(
     projectId: string,
-    description: string
+    description: string,
+    attachments?: import("@opensprint/shared").PlanAttachment[]
   ): Promise<GeneratePlanResult> {
-    return this.planDecomposeGenerateService.generatePlanFromDescription(projectId, description);
+    return this.planDecomposeGenerateService.generatePlanFromDescription(projectId, description, attachments);
   }
 
   /** AI-assisted decomposition (suggest only): returns suggested plans, does not create. */
