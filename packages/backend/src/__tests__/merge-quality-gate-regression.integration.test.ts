@@ -1018,6 +1018,302 @@ describe("Cross-service quality-gate regression integration", () => {
     expect(qualityGateFailures).toHaveLength(0);
   });
 
+  describe("merged_candidate: node_modules missing + npm ci repair regression", () => {
+    it("merged_candidate with no node_modules triggers precheck failure that leads to auto-repair", async () => {
+      const orchestrator = new OrchestratorService();
+
+      await fs.rm(path.join(worktreePath, "node_modules"), { recursive: true, force: true });
+
+      let repairNpmCiCalled = false;
+      const symlinkSpy = vi
+        .spyOn(BranchManager.prototype, "symlinkNodeModules")
+        .mockImplementation(async (_repo: string, wt: string) => {
+          const repoNm = path.join(_repo, "node_modules");
+          try {
+            await fs.access(repoNm);
+            const nm = path.join(wt, "node_modules");
+            await fs.mkdir(nm, { recursive: true });
+            await fs.writeFile(path.join(nm, ".opensprint-test"), "ok");
+          } catch {
+            // repo has no node_modules — symlink would fail
+          }
+        });
+
+      mockRunCommand.mockImplementation(
+        async (
+          spec: { command: string; args?: string[] },
+          options?: { cwd?: string; timeout?: number }
+        ) => {
+          const command = [spec.command, ...(spec.args ?? [])].join(" ");
+          if (command === "git rev-parse --verify HEAD") {
+            return { stdout: "deadbeef", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          if (command.startsWith("npm ls")) {
+            return { stdout: "", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          if (command === "npm run lint" && options?.cwd !== worktreePath) {
+            return { stdout: "baseline ok", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          if (command === "npm run lint" && options?.cwd === worktreePath) {
+            return { stdout: "lint passed", stderr: "", executable: spec.command, cwd: options?.cwd ?? worktreePath, exitCode: 0, signal: null };
+          }
+          if (command === "npm ci") {
+            repairNpmCiCalled = true;
+            return { stdout: "added 10 packages", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          throw new Error(`Unexpected command: ${command} (${options?.cwd ?? "no-cwd"})`);
+        }
+      );
+
+      const slot: MergeSlot = {
+        taskId,
+        attempt: 1,
+        worktreePath,
+        branchName,
+        phaseResult: { codingDiff: "", codingSummary: "Done", testResults: null, testOutput: "" },
+        agent: { outputLog: [], startedAt: new Date().toISOString() },
+      };
+      const state = {
+        slots: new Map([[taskId, slot]]),
+        status: { totalDone: 0, totalFailed: 0, queueDepth: 0 },
+        globalTimers: {} as never,
+      };
+      const mockTaskStoreUpdate = vi.fn().mockResolvedValue(undefined);
+
+      const host: MergeCoordinatorHost = {
+        getState: vi.fn().mockImplementation(() => state),
+        taskStore: {
+          close: vi.fn().mockResolvedValue(undefined),
+          update: mockTaskStoreUpdate,
+          comment: vi.fn().mockResolvedValue(undefined),
+          sync: vi.fn().mockResolvedValue(undefined),
+          syncForPush: vi.fn().mockResolvedValue(undefined),
+          listAll: vi.fn().mockResolvedValue([]),
+          show: vi.fn().mockResolvedValue(task),
+          setCumulativeAttempts: vi.fn().mockResolvedValue(undefined),
+          getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(0),
+          setConflictFiles: vi.fn().mockResolvedValue(undefined),
+          setMergeStage: vi.fn().mockResolvedValue(undefined),
+          planGetByEpicId: vi.fn().mockResolvedValue(null),
+        },
+        branchManager: {
+          waitForGitReady: vi.fn().mockResolvedValue(undefined),
+          commitWip: vi.fn().mockResolvedValue(undefined),
+          removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
+          deleteBranch: vi.fn().mockResolvedValue(undefined),
+          getChangedFiles: vi.fn().mockResolvedValue([]),
+          pushMain: vi.fn().mockResolvedValue(undefined),
+          pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
+          isMergeInProgress: vi.fn().mockResolvedValue(false),
+          mergeAbort: vi.fn().mockResolvedValue(undefined),
+          mergeContinue: vi.fn().mockResolvedValue(undefined),
+          rebaseAbort: vi.fn().mockResolvedValue(undefined),
+          rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        },
+        runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
+        runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
+        setBaselineRuntimeState: vi.fn().mockResolvedValue(undefined),
+        sessionManager: {
+          createSession: vi.fn().mockResolvedValue({ id: "sess-1" }),
+          archiveSession: vi.fn().mockResolvedValue(undefined),
+        },
+        fileScopeAnalyzer: { recordActual: vi.fn().mockResolvedValue(undefined) },
+        feedbackService: { checkAutoResolveOnTaskDone: vi.fn().mockResolvedValue(undefined) },
+        projectService: {
+          getSettings: vi.fn().mockResolvedValue({
+            simpleComplexityAgent: { type: "cursor", model: null },
+            complexComplexityAgent: { type: "cursor", model: null },
+            deployment: { mode: "custom" },
+            gitWorkingMode: "worktree",
+          }),
+        },
+        transition: vi.fn(),
+        persistCounters: vi.fn().mockResolvedValue(undefined),
+        nudge: vi.fn(),
+      };
+
+      const coordinator = new MergeCoordinatorService(host);
+      await coordinator.performMergeAndDone(projectId, repoPath, task as never, branchName);
+
+      expect(repairNpmCiCalled).toBe(true);
+      expect(symlinkSpy).toHaveBeenCalledWith(repoPath, worktreePath);
+
+      const loggedEvents = mockEventAppend.mock.calls.map(([, event]) => event);
+      const qualityGateFailures = loggedEvents.filter(
+        (e) =>
+          e.event === "merge.failed" &&
+          (e.data as Record<string, unknown>)?.qualityGateCategory === "environment_setup"
+      );
+      expect(qualityGateFailures).toHaveLength(0);
+    });
+
+    it("merged_candidate npm ci repair failure surfaces actionable error with stderr in diagnostics", async () => {
+      const orchestrator = new OrchestratorService();
+
+      await fs.rm(path.join(repoPath, "node_modules"), { recursive: true, force: true });
+      await fs.rm(path.join(worktreePath, "node_modules"), { recursive: true, force: true });
+
+      vi.spyOn(BranchManager.prototype, "symlinkNodeModules")
+        .mockResolvedValue(undefined);
+
+      const npmCiStderr = "npm ERR! code ERESOLVE\nnpm ERR! Could not resolve dependency:\nnpm ERR! peer react@\"^17\" from react-dom@17.0.2";
+      mockRunCommand.mockImplementation(
+        async (
+          spec: { command: string; args?: string[] },
+          options?: { cwd?: string; timeout?: number }
+        ) => {
+          const command = [spec.command, ...(spec.args ?? [])].join(" ");
+          if (command === "git rev-parse --verify HEAD") {
+            return { stdout: "deadbeef", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          if (command.startsWith("npm ls")) {
+            return { stdout: "", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          if (command === "npm run lint" && options?.cwd !== worktreePath) {
+            return { stdout: "baseline ok", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          }
+          if (command === "npm ci") {
+            throw {
+              message: "npm ci failed: ERESOLVE",
+              stderr: npmCiStderr,
+              stdout: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 1,
+              signal: null,
+            };
+          }
+          if (command === "npm run lint" && options?.cwd === worktreePath) {
+            throw {
+              message: "Command failed: npm run lint",
+              stderr: "Cannot find module 'eslint'",
+              executable: spec.command,
+              cwd: options?.cwd ?? worktreePath,
+              exitCode: 1,
+              signal: null,
+            };
+          }
+          throw new Error(`Unexpected command: ${command} (${options?.cwd ?? "no-cwd"})`);
+        }
+      );
+
+      const slot: MergeSlot = {
+        taskId,
+        attempt: 1,
+        worktreePath,
+        branchName,
+        phaseResult: { codingDiff: "", codingSummary: "Done", testResults: null, testOutput: "" },
+        agent: { outputLog: [], startedAt: new Date().toISOString() },
+      };
+      const state = {
+        slots: new Map([[taskId, slot]]),
+        status: { totalDone: 0, totalFailed: 0, queueDepth: 0 },
+        globalTimers: {} as never,
+      };
+      const updates: Array<Record<string, unknown>> = [];
+      const mockTaskStoreUpdate = vi.fn().mockImplementation(
+        async (_projectId: string, _id: string, fields: Record<string, unknown>) => {
+          updates.push(fields);
+        }
+      );
+
+      const host: MergeCoordinatorHost = {
+        getState: vi.fn().mockImplementation(() => state),
+        taskStore: {
+          close: vi.fn().mockResolvedValue(undefined),
+          update: mockTaskStoreUpdate,
+          comment: vi.fn().mockResolvedValue(undefined),
+          sync: vi.fn().mockResolvedValue(undefined),
+          syncForPush: vi.fn().mockResolvedValue(undefined),
+          listAll: vi.fn().mockResolvedValue([]),
+          show: vi.fn().mockResolvedValue(task),
+          setCumulativeAttempts: vi.fn().mockResolvedValue(undefined),
+          getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(0),
+          setConflictFiles: vi.fn().mockResolvedValue(undefined),
+          setMergeStage: vi.fn().mockResolvedValue(undefined),
+          planGetByEpicId: vi.fn().mockResolvedValue(null),
+        },
+        branchManager: {
+          waitForGitReady: vi.fn().mockResolvedValue(undefined),
+          commitWip: vi.fn().mockResolvedValue(undefined),
+          removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
+          deleteBranch: vi.fn().mockResolvedValue(undefined),
+          getChangedFiles: vi.fn().mockResolvedValue([]),
+          pushMain: vi.fn().mockResolvedValue(undefined),
+          pushMainToOrigin: vi.fn().mockResolvedValue(undefined),
+          isMergeInProgress: vi.fn().mockResolvedValue(false),
+          mergeAbort: vi.fn().mockResolvedValue(undefined),
+          mergeContinue: vi.fn().mockResolvedValue(undefined),
+          rebaseAbort: vi.fn().mockResolvedValue(undefined),
+          rebaseContinue: vi.fn().mockResolvedValue(undefined),
+        },
+        runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
+        runMergeQualityGates: (options) => orchestrator.runMergeQualityGates(options),
+        setBaselineRuntimeState: vi.fn().mockResolvedValue(undefined),
+        sessionManager: {
+          createSession: vi.fn().mockResolvedValue({ id: "sess-1" }),
+          archiveSession: vi.fn().mockResolvedValue(undefined),
+        },
+        fileScopeAnalyzer: { recordActual: vi.fn().mockResolvedValue(undefined) },
+        feedbackService: { checkAutoResolveOnTaskDone: vi.fn().mockResolvedValue(undefined) },
+        projectService: {
+          getSettings: vi.fn().mockResolvedValue({
+            simpleComplexityAgent: { type: "cursor", model: null },
+            complexComplexityAgent: { type: "cursor", model: null },
+            deployment: { mode: "custom" },
+            gitWorkingMode: "worktree",
+          }),
+        },
+        transition: vi.fn(),
+        persistCounters: vi.fn().mockResolvedValue(undefined),
+        nudge: vi.fn(),
+      };
+
+      const coordinator = new MergeCoordinatorService(host);
+      await coordinator.performMergeAndDone(projectId, repoPath, task as never, branchName);
+
+      const loggedEvents = mockEventAppend.mock.calls.map(([, event]) => event);
+      const mergeFailedEvent = loggedEvents.find((event) => event.event === "merge.failed");
+      expect(mergeFailedEvent).toBeDefined();
+      expect(mergeFailedEvent?.data?.qualityGateCategory).toBe("environment_setup");
+
+      const requeuedUpdate = updates.find((fields) => fields.status === "open");
+      expect(requeuedUpdate).toBeDefined();
+      const extra = requeuedUpdate?.extra as Record<string, unknown>;
+      const qualityGateDetail = extra?.qualityGateDetail as Record<string, unknown> | undefined;
+      expect(qualityGateDetail?.category).toBe("environment_setup");
+
+      mockEventReadForTask.mockResolvedValue(
+        loggedEvents.map((event) => ({ ...event, taskId, projectId }))
+      );
+
+      const diagnosticsTask = {
+        ...task,
+        status: "open",
+        labels: ["attempts:1", "merge_stage:quality_gate"],
+        ...extra,
+      };
+
+      const diagnosticsService = new TaskExecutionDiagnosticsService(
+        { getProject: vi.fn().mockResolvedValue({ id: projectId, repoPath }) } as never,
+        {
+          show: vi.fn().mockResolvedValue(diagnosticsTask),
+          getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(1),
+        } as never,
+        { listSessions: vi.fn().mockResolvedValue([]) } as never
+      );
+
+      const diagnostics = await diagnosticsService.getDiagnostics(projectId, taskId);
+      expect(diagnostics.latestQualityGateDetail).toEqual(
+        expect.objectContaining({
+          category: "environment_setup",
+          repairAttempted: true,
+          repairSucceeded: false,
+        })
+      );
+    });
+  });
+
   it("applies deterministic merge-gate env policy consistently across task and merged-candidate workspaces", async () => {
     await fs.writeFile(
       path.join(repoPath, "package.json"),

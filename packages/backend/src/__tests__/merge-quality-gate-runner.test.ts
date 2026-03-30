@@ -761,6 +761,212 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(env).toBeUndefined();
   });
 
+  describe("merged_candidate: missing node_modules precheck regression", () => {
+    it("detects absent node_modules and reports environment_setup before running any gate", async () => {
+      const repoPath = await makeTempWorktree({ build: "tsc -b" }, true);
+      const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
+      const runCommand = vi.fn(
+        async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+          const label = commandLabel(spec);
+          if (label === "git rev-parse --verify HEAD") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm ci") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm ls --depth=0 --include=dev") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+      );
+      const symlinkNodeModules = vi.fn(async () => undefined);
+
+      const failure = await runMergeQualityGates(
+        {
+          projectId: "proj-mc-precheck",
+          repoPath,
+          worktreePath,
+          taskId: "os-mc-precheck-1",
+          branchName: "opensprint/os-mc-precheck-1",
+          baseBranch: "main",
+          validationWorkspace: "merged_candidate",
+        },
+        {
+          commands: ["npm run build"],
+          runCommand,
+          symlinkNodeModules,
+        }
+      );
+
+      expect(failure).not.toBeNull();
+      expect(failure!.category).toBe("environment_setup");
+      expect(failure!.reason).toMatch(/node_modules.*missing|empty/i);
+      expect(failure!.validationWorkspace).toBe("merged_candidate");
+      expect(failure!.autoRepairAttempted).toBe(true);
+      const gateCommands = getExecutedCommands(runCommand);
+      expect(gateCommands).not.toContain("npm run build");
+    });
+
+    it("repair failure with npm ci stderr produces actionable environment_setup message", async () => {
+      const repoPath = await makeTempWorktree({ build: "tsc -b" }, false);
+      const worktreePath = await makeTempWorktree({ build: "tsc -b" }, false);
+      const npmCiStderr =
+        "npm ERR! code ERESOLVE\nnpm ERR! ERESOLVE unable to resolve dependency tree";
+      const runCommand = vi.fn(
+        async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+          const label = commandLabel(spec);
+          if (label === "git rev-parse --verify HEAD") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm ci") {
+            throw makeCommandFailure(spec, options.cwd, {
+              message: "npm ci failed: dependency resolution error",
+              stderr: npmCiStderr,
+            });
+          }
+          if (label === "git checkout HEAD -- package.json") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm ls --depth=0 --include=dev") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+      );
+      const symlinkNodeModules = vi.fn(async () => undefined);
+
+      const failure = await runMergeQualityGates(
+        {
+          projectId: "proj-mc-npmci-fail",
+          repoPath,
+          worktreePath,
+          taskId: "os-mc-npmci-1",
+          branchName: "opensprint/os-mc-npmci-1",
+          baseBranch: "main",
+          validationWorkspace: "merged_candidate",
+        },
+        {
+          commands: ["npm run build"],
+          runCommand,
+          symlinkNodeModules,
+        }
+      );
+
+      expect(failure).not.toBeNull();
+      expect(failure!.category).toBe("environment_setup");
+      expect(failure!.autoRepairAttempted).toBe(true);
+      expect(failure!.autoRepairSucceeded).toBe(false);
+      expect(failure!.autoRepairOutput).toContain("ERESOLVE");
+      expect(failure!.autoRepairOutput).toContain("npm ci");
+    });
+
+    it("network failure during npm ci repair surfaces stderr in the output", async () => {
+      const repoPath = await makeTempWorktree({ test: "vitest run" }, false);
+      const worktreePath = await makeTempWorktree({ test: "vitest run" }, false);
+      const networkStderr =
+        "npm ERR! code ETIMEDOUT\nnpm ERR! network request to https://registry.npmjs.org failed";
+      const runCommand = vi.fn(
+        async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+          const label = commandLabel(spec);
+          if (label === "git rev-parse --verify HEAD") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm ci") {
+            throw makeCommandFailure(spec, options.cwd, {
+              message: "npm ci failed: network timeout",
+              stderr: networkStderr,
+            });
+          }
+          if (label === "git checkout HEAD -- package.json") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+      );
+      const symlinkNodeModules = vi.fn(async () => undefined);
+
+      const failure = await runMergeQualityGates(
+        {
+          projectId: "proj-mc-network",
+          repoPath,
+          worktreePath,
+          taskId: "os-mc-network-1",
+          branchName: "opensprint/os-mc-network-1",
+          baseBranch: "main",
+          validationWorkspace: "merged_candidate",
+        },
+        {
+          commands: ["npm run test"],
+          runCommand,
+          symlinkNodeModules,
+        }
+      );
+
+      expect(failure).not.toBeNull();
+      expect(failure!.category).toBe("environment_setup");
+      expect(failure!.autoRepairAttempted).toBe(true);
+      expect(failure!.autoRepairOutput).toContain("ETIMEDOUT");
+      expect(failure!.autoRepairOutput).toContain("registry.npmjs.org");
+    });
+
+    it("lockfile missing triggers different precheck than node_modules missing", async () => {
+      const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
+      await fs.rm(path.join(worktreePath, "package-lock.json"), { force: true });
+      const runCommand = vi.fn(
+        async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+          makeCommandResult(spec, options.cwd)
+      );
+
+      const lockfileFailure = await runMergeQualityGates(
+        {
+          projectId: "proj-lockfile-vs-nm",
+          repoPath: worktreePath,
+          worktreePath,
+          taskId: "os-lockfile-vs-nm",
+          branchName: "opensprint/os-lockfile-vs-nm",
+          baseBranch: "main",
+          validationWorkspace: "merged_candidate",
+        },
+        {
+          commands: ["npm run build"],
+          runCommand,
+        }
+      );
+
+      expect(lockfileFailure).not.toBeNull();
+      expect(lockfileFailure!.category).toBe("environment_setup");
+      expect(lockfileFailure!.reason).toContain("package-lock.json");
+      expect(lockfileFailure!.reason).not.toContain("node_modules");
+
+      const worktreePath2 = await makeTempWorktree({ build: "tsc -b" }, false);
+      const runCommand2 = vi.fn(
+        async (spec: { command: string; args?: string[] }, options: { cwd: string }) =>
+          makeCommandResult(spec, options.cwd)
+      );
+
+      const nmFailure = await runMergeQualityGates(
+        {
+          projectId: "proj-lockfile-vs-nm",
+          repoPath: worktreePath2,
+          worktreePath: worktreePath2,
+          taskId: "os-nm-vs-lockfile",
+          branchName: "opensprint/os-nm-vs-lockfile",
+          baseBranch: "main",
+          validationWorkspace: "merged_candidate",
+        },
+        {
+          commands: ["npm run build"],
+          runCommand: runCommand2,
+        }
+      );
+
+      expect(nmFailure).not.toBeNull();
+      expect(nmFailure!.category).toBe("environment_setup");
+      expect(nmFailure!.reason).toContain("node_modules");
+    });
+  });
+
   it("supports language-agnostic gates when dependency strategy is none", async () => {
     const worktreePath = await makeTempWorktree(undefined, false);
     const runCommand = vi.fn(
