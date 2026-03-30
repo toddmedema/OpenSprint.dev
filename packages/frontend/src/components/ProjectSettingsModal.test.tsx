@@ -159,6 +159,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByText("Deliver")).toBeInTheDocument();
     expect(screen.getByText("Autonomy")).toBeInTheDocument();
     expect(screen.getByText("Team")).toBeInTheDocument();
+    expect(screen.getByText("Integrations")).toBeInTheDocument();
   });
 
   it("content area has min-h-0 and overflow-y-auto for proper scroll behavior on Agent Config", async () => {
@@ -959,6 +960,17 @@ describe("ProjectSettingsModal", () => {
         })
       )
     );
+  });
+
+  it("Integrations tab shows placeholder content", async () => {
+    renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
+    await waitForModalReady();
+
+    const integrationsTab = screen.getByRole("button", { name: "Integrations" });
+    await userEvent.click(integrationsTab);
+
+    expect(screen.getByTestId("integrations-tab-content")).toBeInTheDocument();
+    expect(screen.getByText("Integrations settings coming soon")).toBeInTheDocument();
   });
 
   it("Deliver tab shows auto-deploy per environment", async () => {
