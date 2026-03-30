@@ -31,10 +31,14 @@ const PENDING_DELETE_RETRY_LIMIT = 20;
  */
 function mapTodoistPriority(todoistPriority: number): number {
   switch (todoistPriority) {
-    case 4: return 0; // Critical
-    case 3: return 1; // High
-    case 2: return 2; // Medium
-    default: return 3; // Low (includes priority 1 = normal)
+    case 4:
+      return 0; // Critical
+    case 3:
+      return 1; // High
+    case 2:
+      return 2; // Medium
+    default:
+      return 3; // Low (includes priority 1 = normal)
   }
 }
 
@@ -141,7 +145,13 @@ export class TodoistSyncService {
       // 6. Process each task
       for (const task of tasksToProcess) {
         try {
-          const imported = await this.processTask(projectId, providerResourceId, connectionId, task, todoistClient);
+          const imported = await this.processTask(
+            projectId,
+            providerResourceId,
+            connectionId,
+            task,
+            todoistClient
+          );
           if (imported) result.imported++;
         } catch (err) {
           if (err instanceof TodoistAuthError) throw err;
@@ -159,11 +169,7 @@ export class TodoistSyncService {
       await this.retryPendingDeletes(projectId, todoistClient);
 
       // 8. Update last_sync_at, clear error
-      await this.deps.integrationStore.updateLastSync(
-        connectionId,
-        new Date().toISOString(),
-        null
-      );
+      await this.deps.integrationStore.updateLastSync(connectionId, new Date().toISOString(), null);
 
       log.info("Sync completed", {
         connectionId,
@@ -252,14 +258,10 @@ export class TodoistSyncService {
     providerResourceId: string,
     connectionId: string,
     task: Task,
-    todoistClient: TodoistApiClient,
+    todoistClient: TodoistApiClient
   ): Promise<boolean> {
     // 6a. Atomically claim import slot (idempotent across concurrent workers)
-    const claimed = await this.deps.integrationStore.claimImportSlot(
-      projectId,
-      "todoist",
-      task.id
-    );
+    const claimed = await this.deps.integrationStore.claimImportSlot(projectId, "todoist", task.id);
     if (!claimed) return false;
 
     let finalized = false;
@@ -290,10 +292,11 @@ export class TodoistSyncService {
           ? JSON.parse((existing as { extra: string }).extra || "{}")
           : {};
         const merged = { ...currentExtra, ...provenance };
-        await client.execute(
-          "UPDATE feedback SET extra = $1 WHERE id = $2 AND project_id = $3",
-          [JSON.stringify(merged), feedbackItem.id, projectId]
-        );
+        await client.execute("UPDATE feedback SET extra = $1 WHERE id = $2 AND project_id = $3", [
+          JSON.stringify(merged),
+          feedbackItem.id,
+          projectId,
+        ]);
       });
 
       // 6d. Finalize ledger row to pending_delete with real feedback_id
@@ -320,7 +323,7 @@ export class TodoistSyncService {
   private async deleteAndUpdateLedger(
     projectId: string,
     externalItemId: string,
-    todoistClient: TodoistApiClient,
+    todoistClient: TodoistApiClient
   ): Promise<void> {
     const entries = await this.deps.integrationStore.getPendingDeletes(projectId, "todoist", 1);
     const entry = entries.find((e) => e.external_item_id === externalItemId);
@@ -340,7 +343,7 @@ export class TodoistSyncService {
 
   private async retryPendingDeletes(
     projectId: string,
-    todoistClient: TodoistApiClient,
+    todoistClient: TodoistApiClient
   ): Promise<void> {
     const pendingDeletes = await this.deps.integrationStore.getPendingDeletes(
       projectId,

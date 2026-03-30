@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PlanShipService, type PlanShipDeps, type PlanShipStore } from "../services/plan-ship.service.js";
+import {
+  PlanShipService,
+  type PlanShipDeps,
+  type PlanShipStore,
+} from "../services/plan-ship.service.js";
 import type { Plan, PlanComplexity } from "@opensprint/shared";
 
 vi.mock("../services/plan-versioning.service.js", () => ({
@@ -168,9 +172,11 @@ describe("PlanShipService — harmonizer fire-and-forget", () => {
 
   it("shipped content and metadata are set before harmonizer is triggered", async () => {
     const callOrder: string[] = [];
-    (deps.taskStore.planSetShippedContent as ReturnType<typeof vi.fn>).mockImplementation(async () => {
-      callOrder.push("shippedContent");
-    });
+    (deps.taskStore.planSetShippedContent as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        callOrder.push("shippedContent");
+      }
+    );
     (deps.taskStore.planUpdateMetadata as ReturnType<typeof vi.fn>).mockImplementation(async () => {
       callOrder.push("metadata");
     });

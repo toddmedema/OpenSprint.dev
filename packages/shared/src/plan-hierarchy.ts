@@ -10,7 +10,7 @@ export const MAX_PLAN_DEPTH = 4;
  */
 export function calculatePlanDepth(
   planId: string,
-  plansMap: Map<string, { parentPlanId?: string }>,
+  plansMap: Map<string, { parentPlanId?: string }>
 ): number {
   let depth = 1;
   const visited = new Set<string>();
@@ -20,7 +20,7 @@ export function calculatePlanDepth(
   while (current?.parentPlanId) {
     if (visited.has(current.parentPlanId)) {
       throw new Error(
-        `Cycle detected in plan hierarchy: "${current.parentPlanId}" already visited`,
+        `Cycle detected in plan hierarchy: "${current.parentPlanId}" already visited`
       );
     }
     visited.add(current.parentPlanId);
@@ -39,9 +39,9 @@ export function canCreateSubPlan(currentDepth: number): boolean {
  * Group plans by their `parentPlanId`. Root plans (no parent) are keyed under
  * the empty string `""`.
  */
-export function buildPlanTree<
-  T extends { planId: string; parentPlanId?: string },
->(plans: T[]): Map<string, T[]> {
+export function buildPlanTree<T extends { planId: string; parentPlanId?: string }>(
+  plans: T[]
+): Map<string, T[]> {
   const tree = new Map<string, T[]>();
   for (const plan of plans) {
     const key = plan.parentPlanId ?? "";

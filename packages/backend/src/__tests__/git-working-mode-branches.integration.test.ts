@@ -115,8 +115,8 @@ describe("Git working mode Branches — full Execute flow integration", () => {
           name: "git-branches-integration",
           private: true,
           scripts: {
-            lint: "node -e \"process.exit(0)\"",
-            test: "node -e \"process.exit(0)\"",
+            lint: 'node -e "process.exit(0)"',
+            test: 'node -e "process.exit(0)"',
           },
         },
         null,
@@ -163,88 +163,88 @@ describe("Git working mode Branches — full Execute flow integration", () => {
     "full Execute flow in Branches mode: creates a local merge and skips worktree cleanup",
     { timeout: 60_000 },
     async () => {
-    // 1. Pre-agent: create/checkout branch (simulates PhaseExecutor in branches mode)
-    await branchManager.createOrCheckoutBranch(repoPath, branchName);
+      // 1. Pre-agent: create/checkout branch (simulates PhaseExecutor in branches mode)
+      await branchManager.createOrCheckoutBranch(repoPath, branchName);
 
-    // 2. Simulate agent work: make a commit on the task branch
-    await fs.writeFile(path.join(repoPath, "feature.ts"), "export const x = 1;");
-    await execAsync("git add feature.ts && git commit -m 'add feature'", { cwd: repoPath });
+      // 2. Simulate agent work: make a commit on the task branch
+      await fs.writeFile(path.join(repoPath, "feature.ts"), "export const x = 1;");
+      await execAsync("git add feature.ts && git commit -m 'add feature'", { cwd: repoPath });
 
-    // 3. Slot state as it would be after agent completes (worktreePath = repoPath in branches mode)
-    const slot: MergeSlot = {
-      taskId,
-      attempt: 1,
-      worktreePath: repoPath, // In Branches mode, agent runs in main repo
-      branchName,
-      phaseResult: {
-        codingDiff: "",
-        codingSummary: "Done",
-        testResults: null,
-        testOutput: "",
-      },
-      agent: { outputLog: [], startedAt: new Date().toISOString() },
-    };
+      // 3. Slot state as it would be after agent completes (worktreePath = repoPath in branches mode)
+      const slot: MergeSlot = {
+        taskId,
+        attempt: 1,
+        worktreePath: repoPath, // In Branches mode, agent runs in main repo
+        branchName,
+        phaseResult: {
+          codingDiff: "",
+          codingSummary: "Done",
+          testResults: null,
+          testOutput: "",
+        },
+        agent: { outputLog: [], startedAt: new Date().toISOString() },
+      };
 
-    const mockGetSettings = vi.fn().mockResolvedValue({
-      simpleComplexityAgent: { type: "cursor", model: null },
-      complexComplexityAgent: { type: "cursor", model: null },
-      deployment: { mode: "custom" },
-      gitWorkingMode: "branches",
-    });
+      const mockGetSettings = vi.fn().mockResolvedValue({
+        simpleComplexityAgent: { type: "cursor", model: null },
+        complexComplexityAgent: { type: "cursor", model: null },
+        deployment: { mode: "custom" },
+        gitWorkingMode: "branches",
+      });
 
-    const mockHost: MergeCoordinatorHost = {
-      getState: vi.fn().mockReturnValue({
-        slots: new Map([[taskId, slot]]),
-        status: { totalDone: 0, queueDepth: 0 },
-        globalTimers: {},
-      }),
-      taskStore: {
-        close: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn().mockResolvedValue(undefined),
-        comment: vi.fn().mockResolvedValue(undefined),
-        sync: vi.fn().mockResolvedValue(undefined),
-        syncForPush: vi.fn().mockResolvedValue(undefined),
-        listAll: vi.fn().mockResolvedValue([]),
-        show: vi.fn().mockResolvedValue(makeTask()),
-        setCumulativeAttempts: vi.fn().mockResolvedValue(undefined),
-        getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(0),
-        setConflictFiles: vi.fn().mockResolvedValue(undefined),
-        setMergeStage: vi.fn().mockResolvedValue(undefined),
-      },
-      branchManager,
-      sessionManager: {
-        createSession: vi.fn().mockResolvedValue({ id: "sess-1" }),
-        archiveSession: vi.fn().mockResolvedValue(undefined),
-      },
-      fileScopeAnalyzer: {
-        recordActual: vi.fn().mockResolvedValue(undefined),
-      },
-      feedbackService: {
-        checkAutoResolveOnTaskDone: vi.fn().mockResolvedValue(undefined),
-      },
-      projectService: {
-        getSettings: mockGetSettings,
-      },
-      transition: vi.fn(),
-      persistCounters: vi.fn().mockResolvedValue(undefined),
-      nudge: vi.fn(),
-      runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
-    };
+      const mockHost: MergeCoordinatorHost = {
+        getState: vi.fn().mockReturnValue({
+          slots: new Map([[taskId, slot]]),
+          status: { totalDone: 0, queueDepth: 0 },
+          globalTimers: {},
+        }),
+        taskStore: {
+          close: vi.fn().mockResolvedValue(undefined),
+          update: vi.fn().mockResolvedValue(undefined),
+          comment: vi.fn().mockResolvedValue(undefined),
+          sync: vi.fn().mockResolvedValue(undefined),
+          syncForPush: vi.fn().mockResolvedValue(undefined),
+          listAll: vi.fn().mockResolvedValue([]),
+          show: vi.fn().mockResolvedValue(makeTask()),
+          setCumulativeAttempts: vi.fn().mockResolvedValue(undefined),
+          getCumulativeAttemptsFromIssue: vi.fn().mockReturnValue(0),
+          setConflictFiles: vi.fn().mockResolvedValue(undefined),
+          setMergeStage: vi.fn().mockResolvedValue(undefined),
+        },
+        branchManager,
+        sessionManager: {
+          createSession: vi.fn().mockResolvedValue({ id: "sess-1" }),
+          archiveSession: vi.fn().mockResolvedValue(undefined),
+        },
+        fileScopeAnalyzer: {
+          recordActual: vi.fn().mockResolvedValue(undefined),
+        },
+        feedbackService: {
+          checkAutoResolveOnTaskDone: vi.fn().mockResolvedValue(undefined),
+        },
+        projectService: {
+          getSettings: mockGetSettings,
+        },
+        transition: vi.fn(),
+        persistCounters: vi.fn().mockResolvedValue(undefined),
+        nudge: vi.fn(),
+        runMergerAgentAndWait: vi.fn().mockResolvedValue(false),
+      };
 
-    const coordinator = new MergeCoordinatorService(mockHost);
+      const coordinator = new MergeCoordinatorService(mockHost);
 
-    // 4. Post-agent: merge and done (MergeCoordinator.performMergeAndDone)
-    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
-    await coordinator.waitForPushComplete(projectId);
+      // 4. Post-agent: merge and done (MergeCoordinator.performMergeAndDone)
+      await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+      await coordinator.waitForPushComplete(projectId);
 
-    // 5. Assertions
-    expect(removeTaskWorktreeSpy).not.toHaveBeenCalled();
+      // 5. Assertions
+      expect(removeTaskWorktreeSpy).not.toHaveBeenCalled();
 
-    // Merge should have succeeded on main even if the local checkout has not switched branches yet.
-    const { stdout: mergedContent } = await execAsync("git show main:feature.ts", {
-      cwd: repoPath,
-    });
-    expect(mergedContent.trim()).toBe("export const x = 1;");
+      // Merge should have succeeded on main even if the local checkout has not switched branches yet.
+      const { stdout: mergedContent } = await execAsync("git show main:feature.ts", {
+        cwd: repoPath,
+      });
+      expect(mergedContent.trim()).toBe("export const x = 1;");
     }
   );
 });

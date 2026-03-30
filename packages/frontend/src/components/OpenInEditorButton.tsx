@@ -33,8 +33,7 @@ export function OpenInEditorButton({
   const isDisabled = !isInProgress || !worktreePath;
   const disabledTooltip = getDisabledTooltip(isInProgress, worktreePath);
   const tooltipText =
-    disabledTooltip ??
-    (isBranchesMode ? "Open shared checkout in editor" : "Open in editor");
+    disabledTooltip ?? (isBranchesMode ? "Open shared checkout in editor" : "Open in editor");
 
   useEffect(() => {
     if (!copyInfo) return;

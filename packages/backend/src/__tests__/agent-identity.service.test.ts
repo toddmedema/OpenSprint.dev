@@ -165,10 +165,12 @@ describe.skipIf(!agentIdentityPostgresOk)("AgentIdentityService", () => {
     const attempt4 = recent.filter((record) => record.attempt === 4);
     expect(attempt4).toHaveLength(2);
     expect(attempt4.filter((record) => record.agentId === "cursor-review-general")).toHaveLength(1);
-    expect(attempt4.filter((record) => record.agentId === "cursor-review-security")).toHaveLength(1);
-    expect(
-      attempt4.find((record) => record.agentId === "cursor-review-security")?.outcome
-    ).toBe("success");
+    expect(attempt4.filter((record) => record.agentId === "cursor-review-security")).toHaveLength(
+      1
+    );
+    expect(attempt4.find((record) => record.agentId === "cursor-review-security")?.outcome).toBe(
+      "success"
+    );
     expect(attempt4.find((record) => record.agentId === "cursor-review-general")?.outcome).toBe(
       "no_result"
     );

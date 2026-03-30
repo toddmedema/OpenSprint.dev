@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from "react";
 import { shallowEqual } from "react-redux";
 import { useQueryClient, useIsMutating } from "@tanstack/react-query";
-import type { Plan, PlanAttachment, PlanExecuteBatchItem, PlanExecuteBatchStatus, PlanStatus } from "@opensprint/shared";
+import type {
+  Plan,
+  PlanAttachment,
+  PlanExecuteBatchItem,
+  PlanExecuteBatchStatus,
+  PlanStatus,
+} from "@opensprint/shared";
 import { DEFAULT_MAX_TOTAL_CONCURRENT_AGENTS, sortPlansByStatus } from "@opensprint/shared";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store";
@@ -476,7 +482,7 @@ export function PlanPhase({
       )) ??
     null;
   const sidebarOpenQuestionNotification =
-    draftPlanNotification ?? (selectedPlanNotification ?? selectedDraftNotification);
+    draftPlanNotification ?? selectedPlanNotification ?? selectedDraftNotification;
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const prevChatMessageCountRef = useRef(0);
 
@@ -675,7 +681,9 @@ export function PlanPhase({
 
   /** Plans that should show "Execute" (planning + task generation already run for current version). */
   const plansReadyToExecute = useMemo(() => {
-    return plans.filter((p) => p.status === "planning" && hasGeneratedPlanTasksForCurrentVersion(p));
+    return plans.filter(
+      (p) => p.status === "planning" && hasGeneratedPlanTasksForCurrentVersion(p)
+    );
   }, [plans]);
 
   /** Plan IDs for "Execute All" in dependency order (foundational first). */
@@ -711,8 +719,7 @@ export function PlanPhase({
       ? `plan:${selectedPlanId}`
       : null;
   const notificationDraftPlanId =
-    !selectedPlanId &&
-    sidebarOpenQuestionNotification?.sourceId?.startsWith("draft:")
+    !selectedPlanId && sidebarOpenQuestionNotification?.sourceId?.startsWith("draft:")
       ? sidebarOpenQuestionNotification.sourceId.replace(/^draft:/, "")
       : null;
   const effectiveDraftPlanId = activeDraftPlanId ?? notificationDraftPlanId;
@@ -951,7 +958,8 @@ export function PlanPhase({
         const plan = plansReadyToExecute.find((p) => p.metadata.planId === planId);
         const versionNumber = plan?.lastExecutedVersionNumber;
         const item: PlanExecuteBatchItem = { planId };
-        if (deps.prerequisitePlanIds.length > 0) item.prerequisitePlanIds = deps.prerequisitePlanIds;
+        if (deps.prerequisitePlanIds.length > 0)
+          item.prerequisitePlanIds = deps.prerequisitePlanIds;
         if (versionNumber != null) item.version_number = versionNumber;
         items.push(item);
       }
@@ -1029,7 +1037,8 @@ export function PlanPhase({
           return;
         }
         const item: PlanExecuteBatchItem = { planId };
-        if (deps.prerequisitePlanIds.length > 0) item.prerequisitePlanIds = deps.prerequisitePlanIds;
+        if (deps.prerequisitePlanIds.length > 0)
+          item.prerequisitePlanIds = deps.prerequisitePlanIds;
         if (p.lastExecutedVersionNumber != null) item.version_number = p.lastExecutedVersionNumber;
         items.push(item);
       }
@@ -1595,9 +1604,7 @@ export function PlanPhase({
                           <div className="space-y-2">
                             {selectedPlanGenState === "planning" && !selectedPlanTasksGenerating ? (
                               <>
-                                <p className="text-sm text-theme-muted">
-                                  {PLANNING_TOOLTIP}
-                                </p>
+                                <p className="text-sm text-theme-muted">{PLANNING_TOOLTIP}</p>
                                 <button
                                   type="button"
                                   disabled
@@ -1614,9 +1621,7 @@ export function PlanPhase({
                               </>
                             ) : selectedPlanGenState === "stale" && !selectedPlanTasksGenerating ? (
                               <>
-                                <p className="text-sm text-theme-warning-text">
-                                  {STALE_TOOLTIP}
-                                </p>
+                                <p className="text-sm text-theme-warning-text">{STALE_TOOLTIP}</p>
                                 <button
                                   type="button"
                                   onClick={() => handleRetryPlan(selectedPlan.metadata.planId)}

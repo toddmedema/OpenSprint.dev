@@ -47,8 +47,7 @@ export function DiffView({
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
   const toggleRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const effectiveMode =
-    mode === "rendered" && parseErrorFallback ? "raw" : mode;
+  const effectiveMode = mode === "rendered" && parseErrorFallback ? "raw" : mode;
 
   const { lines, summary } = diff;
   const isCapped = lines.length > INITIAL_LINE_CAP && !expanded;
@@ -70,7 +69,7 @@ export function DiffView({
         toggleRefs.current[MODES.indexOf(prev)]?.focus();
       }
     },
-    [mode],
+    [mode]
   );
 
   const handleLineKeyDown = useCallback(
@@ -91,7 +90,7 @@ export function DiffView({
         setFocusedIndex(maxIdx);
       }
     },
-    [visibleLines.length],
+    [visibleLines.length]
   );
 
   useEffect(() => {
@@ -119,7 +118,9 @@ export function DiffView({
           {MODES.map((m, i) => (
             <button
               key={m}
-              ref={(el) => { toggleRefs.current[i] = el; }}
+              ref={(el) => {
+                toggleRefs.current[i] = el;
+              }}
               type="button"
               role="radio"
               aria-checked={mode === m}
@@ -175,11 +176,7 @@ export function DiffView({
                 {visibleLines.map((line, i) => {
                   const isAdd = line.type === "add";
                   const isRemove = line.type === "remove";
-                  const bg = isAdd
-                    ? "bg-theme-success-bg"
-                    : isRemove
-                      ? "bg-theme-error-bg"
-                      : "";
+                  const bg = isAdd ? "bg-theme-success-bg" : isRemove ? "bg-theme-error-bg" : "";
                   const textColor = isAdd
                     ? "text-theme-success-text"
                     : isRemove
@@ -187,10 +184,8 @@ export function DiffView({
                       : "text-theme-text";
                   const marker = isAdd ? "+" : isRemove ? "-" : " ";
                   const ariaLabel = LINE_ARIA[line.type];
-                  const oldNum =
-                    line.oldLineNumber != null ? String(line.oldLineNumber) : "";
-                  const newNum =
-                    line.newLineNumber != null ? String(line.newLineNumber) : "";
+                  const oldNum = line.oldLineNumber != null ? String(line.oldLineNumber) : "";
+                  const newNum = line.newLineNumber != null ? String(line.newLineNumber) : "";
                   return (
                     <div
                       key={i}
@@ -251,10 +246,7 @@ export function DiffView({
           onParseError={() => setParseErrorFallback(true)}
         />
       ) : (
-        <div
-          className="p-4 text-sm text-theme-muted"
-          data-testid="diff-view-rendered-placeholder"
-        >
+        <div className="p-4 text-sm text-theme-muted" data-testid="diff-view-rendered-placeholder">
           Rendered diff requires fromContent and toContent.
         </div>
       )}

@@ -26,7 +26,15 @@ const baseUrlSchema = z
   })
   .transform((s) => (s === undefined || s === "" ? s : s.replace(/\/+$/, "")));
 
-const timeoutMsSchema = z.union([z.literal(5 * 60 * 1000), z.literal(15 * 60 * 1000), z.literal(30 * 60 * 1000), z.literal(60 * 60 * 1000), z.null()]).optional();
+const timeoutMsSchema = z
+  .union([
+    z.literal(5 * 60 * 1000),
+    z.literal(15 * 60 * 1000),
+    z.literal(30 * 60 * 1000),
+    z.literal(60 * 60 * 1000),
+    z.null(),
+  ])
+  .optional();
 
 /**
  * Agent configuration schema (PRD §6.3, §10.2).

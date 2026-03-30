@@ -14,7 +14,9 @@ export type ExecuteStatusMergeGateSnapshotSource = {
   baselineRemediationStatus?: unknown;
 };
 
-export function snapshotExecuteStatusMergeGateFields(ev: ExecuteStatusMergeGateSnapshotSource): string {
+export function snapshotExecuteStatusMergeGateFields(
+  ev: ExecuteStatusMergeGateSnapshotSource
+): string {
   return JSON.stringify({
     gmq: ev.gitMergeQueue ?? null,
     mv: ev.mergeValidationStatus ?? null,

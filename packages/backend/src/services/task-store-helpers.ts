@@ -48,8 +48,7 @@ export function hydrateTask(
   const lastAutoRetryAt = (extra.last_auto_retry_at as string) ?? null;
   const { complexity: extraComplexity, ...extraRest } = extra;
   const fromColumn = clampTaskComplexity(coerceOptionalSqlInt(row.complexity));
-  const complexity =
-    fromColumn ?? clampTaskComplexity(coerceOptionalSqlInt(extraComplexity));
+  const complexity = fromColumn ?? clampTaskComplexity(coerceOptionalSqlInt(extraComplexity));
   return {
     ...extraRest,
     ...(complexity != null && { complexity }),

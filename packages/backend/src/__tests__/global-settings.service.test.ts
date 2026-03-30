@@ -352,7 +352,10 @@ describe("global-settings.service", () => {
     it("persists and reloads simpleComplexityAgent and complexComplexityAgent", async () => {
       const simple = { type: "cursor" as const, model: "fast-global", cliCommand: null as null };
       const complex = { type: "cursor" as const, model: "smart-global", cliCommand: null as null };
-      await updateGlobalSettings({ simpleComplexityAgent: simple, complexComplexityAgent: complex });
+      await updateGlobalSettings({
+        simpleComplexityAgent: simple,
+        complexComplexityAgent: complex,
+      });
       const loaded = await getGlobalSettings();
       expect(loaded.simpleComplexityAgent).toEqual(simple);
       expect(loaded.complexComplexityAgent).toEqual(complex);
@@ -397,11 +400,7 @@ describe("global-settings.service", () => {
     it("defaults to 'auto' when file has invalid preferredEditor value", async () => {
       const dir = path.join(tempDir, ".opensprint");
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(
-        getFilePath(),
-        JSON.stringify({ preferredEditor: "vim" }),
-        "utf-8"
-      );
+      await fs.writeFile(getFilePath(), JSON.stringify({ preferredEditor: "vim" }), "utf-8");
 
       const settings = await getGlobalSettings();
       expect(settings.preferredEditor).toBe("auto");

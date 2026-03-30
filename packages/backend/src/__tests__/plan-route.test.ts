@@ -1277,7 +1277,9 @@ Updated description for task two.`;
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      const execRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      const execRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+      );
       expect(execRes.status).toBe(200);
       const updateRes = await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
@@ -1292,7 +1294,9 @@ Updated description for task two.`;
       for (const task of planTasks) {
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-      const markRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`);
+      const markRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
+      );
       expect(markRes.status).toBe(200);
 
       const reshipRes = await request(app)
@@ -1346,7 +1350,9 @@ Updated description for task two.`;
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      const execRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      const execRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+      );
       expect(execRes.status).toBe(200);
       const updateRes = await request(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
@@ -1361,7 +1367,9 @@ Updated description for task two.`;
       for (const task of planTasks) {
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-      const markRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`);
+      const markRes = await request(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
+      );
       expect(markRes.status).toBe(200);
 
       // No body: backend must use last_executed_version_number for plan_old

@@ -121,7 +121,10 @@ describe.skipIf(!sessionPostgresOk)("SessionManager", () => {
   beforeEach(async () => {
     if (!testClientRef.current) throw new Error("Postgres required");
     manager = new SessionManager(mockProjectService as never);
-    repoPath = path.join(os.tmpdir(), `opensprint-session-test-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`);
+    repoPath = path.join(
+      os.tmpdir(),
+      `opensprint-session-test-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
+    );
     await fs.mkdir(repoPath, { recursive: true });
     const { taskStore } = await import("../services/task-store.service.js");
     await taskStore.init();

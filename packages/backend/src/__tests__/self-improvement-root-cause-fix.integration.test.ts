@@ -55,11 +55,13 @@ vi.mock("../services/task-store.service.js", () => ({
       ...record,
       timestamp: record.completedAt,
     })),
-    runWrite: vi.fn().mockImplementation(
-      async (fn: (client: { execute: () => Promise<void> }) => Promise<void>) => {
-        await fn({ execute: vi.fn().mockResolvedValue(undefined) });
-      },
-    ),
+    runWrite: vi
+      .fn()
+      .mockImplementation(
+        async (fn: (client: { execute: () => Promise<void> }) => Promise<void>) => {
+          await fn({ execute: vi.fn().mockResolvedValue(undefined) });
+        }
+      ),
   },
 }));
 
@@ -263,9 +265,27 @@ describe("Root-cause fix task creation from failure analysis", () => {
 
     it("buildFailurePatternSummary groups failures by type", () => {
       const failures = [
-        { taskId: "t1", failureType: "execution" as const, attemptCount: 1, finalDisposition: "blocked" as const, timestamp: "2026-01-01T00:00:00Z" },
-        { taskId: "t2", failureType: "execution" as const, attemptCount: 2, finalDisposition: "requeued" as const, timestamp: "2026-01-02T00:00:00Z" },
-        { taskId: "t3", failureType: "merge" as const, attemptCount: 1, finalDisposition: "blocked" as const, timestamp: "2026-01-03T00:00:00Z" },
+        {
+          taskId: "t1",
+          failureType: "execution" as const,
+          attemptCount: 1,
+          finalDisposition: "blocked" as const,
+          timestamp: "2026-01-01T00:00:00Z",
+        },
+        {
+          taskId: "t2",
+          failureType: "execution" as const,
+          attemptCount: 2,
+          finalDisposition: "requeued" as const,
+          timestamp: "2026-01-02T00:00:00Z",
+        },
+        {
+          taskId: "t3",
+          failureType: "merge" as const,
+          attemptCount: 1,
+          finalDisposition: "blocked" as const,
+          timestamp: "2026-01-03T00:00:00Z",
+        },
       ];
       const summary = buildFailurePatternSummary(failures);
       expect(summary).toBe("execution: 2, merge: 1");
@@ -279,7 +299,7 @@ describe("Root-cause fix task creation from failure analysis", () => {
       const desc = enrichRootCauseDescription(
         "Original description",
         ["os-1234", "os-5678"],
-        "execution: 2",
+        "execution: 2"
       );
       expect(desc).toContain("Original description");
       expect(desc).toContain("**Source failure tasks:** os-1234, os-5678");
@@ -343,9 +363,7 @@ describe("Root-cause fix task creation from failure analysis", () => {
       expect(result).toHaveProperty("tasksCreated");
       expect((result as { tasksCreated: number }).tasksCreated).toBe(3);
 
-      const rootCauseTasks = createdTasks.filter((t) =>
-        t.title.startsWith(ROOT_CAUSE_PREFIX),
-      );
+      const rootCauseTasks = createdTasks.filter((t) => t.title.startsWith(ROOT_CAUSE_PREFIX));
       expect(rootCauseTasks.length).toBe(2);
 
       const firstFix = rootCauseTasks[0]!;
@@ -357,16 +375,14 @@ describe("Root-cause fix task creation from failure analysis", () => {
         aiAssignedComplexity: true,
       });
       expect((firstFix.opts.extra as Record<string, unknown>).sourceFailureTaskIds).toEqual(
-        expect.arrayContaining(["os-fail-1", "os-fail-2"]),
+        expect.arrayContaining(["os-fail-1", "os-fail-2"])
       );
       expect(firstFix.opts.extra).toHaveProperty("failurePattern");
       expect(firstFix.opts.description).toContain("**Source failure tasks:**");
       expect(firstFix.opts.description).toContain("os-fail-1");
       expect(firstFix.opts.description).toContain("os-fail-2");
 
-      const normalTasks = createdTasks.filter(
-        (t) => !t.title.startsWith(ROOT_CAUSE_PREFIX),
-      );
+      const normalTasks = createdTasks.filter((t) => !t.title.startsWith(ROOT_CAUSE_PREFIX));
       expect(normalTasks.length).toBe(1);
       expect(normalTasks[0]!.title).toBe("Add input validation to settings API");
       const normalExtra = normalTasks[0]!.opts.extra as Record<string, unknown>;
@@ -418,18 +434,12 @@ describe("Root-cause fix task creation from failure analysis", () => {
 
       expect((result as { tasksCreated: number }).tasksCreated).toBe(2);
 
-      const rootCauseTasks = createdTasks.filter((t) =>
-        t.title.startsWith(ROOT_CAUSE_PREFIX),
-      );
+      const rootCauseTasks = createdTasks.filter((t) => t.title.startsWith(ROOT_CAUSE_PREFIX));
       expect(rootCauseTasks.length).toBe(1);
-      expect(rootCauseTasks[0]!.title).toBe(
-        "[Root Cause] Handle missing test fixtures gracefully",
-      );
+      expect(rootCauseTasks[0]!.title).toBe("[Root Cause] Handle missing test fixtures gracefully");
 
       const skippedTitles = createdTasks.map((t) => t.title);
-      expect(skippedTitles).not.toContain(
-        "[Root Cause] Fix flaky dependency resolution in CI",
-      );
+      expect(skippedTitles).not.toContain("[Root Cause] Fix flaky dependency resolution in CI");
     });
 
     it("does not skip closed root-cause fix tasks as duplicates", async () => {
@@ -474,9 +484,7 @@ describe("Root-cause fix task creation from failure analysis", () => {
 
       const result = await selfImprovementRunnerService.runSelfImprovement(projectId);
 
-      const rootCauseTasks = createdTasks.filter((t) =>
-        t.title.startsWith(ROOT_CAUSE_PREFIX),
-      );
+      const rootCauseTasks = createdTasks.filter((t) => t.title.startsWith(ROOT_CAUSE_PREFIX));
       expect(rootCauseTasks.length).toBe(2);
       expect((result as { tasksCreated: number }).tasksCreated).toBe(3);
     });
@@ -508,23 +516,51 @@ describe("Root-cause fix task creation from failure analysis", () => {
 
       mockGetSettings.mockResolvedValue({ ...baseSettings });
       mockListAll.mockResolvedValue([
-        { id: "os-f1", project_id: projectId, title: "T1", issue_type: "task", status: "blocked", priority: 2, labels: [], created_at: "2026-01-01T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
-        { id: "os-f2", project_id: projectId, title: "T2", issue_type: "task", status: "blocked", priority: 2, labels: [], created_at: "2026-01-01T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
-        { id: "os-f3", project_id: projectId, title: "T3", issue_type: "task", status: "blocked", priority: 2, labels: [], created_at: "2026-01-01T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
+        {
+          id: "os-f1",
+          project_id: projectId,
+          title: "T1",
+          issue_type: "task",
+          status: "blocked",
+          priority: 2,
+          labels: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-03-20T00:00:00Z",
+        },
+        {
+          id: "os-f2",
+          project_id: projectId,
+          title: "T2",
+          issue_type: "task",
+          status: "blocked",
+          priority: 2,
+          labels: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-03-20T00:00:00Z",
+        },
+        {
+          id: "os-f3",
+          project_id: projectId,
+          title: "T3",
+          issue_type: "task",
+          status: "blocked",
+          priority: 2,
+          labels: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-03-20T00:00:00Z",
+        },
       ]);
 
       await selfImprovementRunnerService.runSelfImprovement(projectId);
 
-      const rootCauseTasks = createdTasks.filter((t) =>
-        t.title.startsWith(ROOT_CAUSE_PREFIX),
-      );
+      const rootCauseTasks = createdTasks.filter((t) => t.title.startsWith(ROOT_CAUSE_PREFIX));
       expect(rootCauseTasks.length).toBeGreaterThan(0);
 
       for (const task of rootCauseTasks) {
         const extra = task.opts.extra as Record<string, unknown>;
         expect(extra.failurePattern).toContain("execution");
         expect(extra.sourceFailureTaskIds).toEqual(
-          expect.arrayContaining(["os-f1", "os-f2", "os-f3"]),
+          expect.arrayContaining(["os-f1", "os-f2", "os-f3"])
         );
       }
     });
@@ -536,9 +572,7 @@ describe("Root-cause fix task creation from failure analysis", () => {
 
       await selfImprovementRunnerService.runSelfImprovement(projectId);
 
-      const rootCauseTasks = createdTasks.filter((t) =>
-        t.title.startsWith(ROOT_CAUSE_PREFIX),
-      );
+      const rootCauseTasks = createdTasks.filter((t) => t.title.startsWith(ROOT_CAUSE_PREFIX));
       for (const task of rootCauseTasks) {
         const extra = task.opts.extra as Record<string, unknown>;
         expect(extra.sourceFailureTaskIds).toEqual([]);

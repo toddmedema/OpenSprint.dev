@@ -84,12 +84,10 @@ describe("OrchestratorDispatchService", () => {
       getProjectService: vi
         .fn()
         .mockReturnValue({ getSettings: vi.fn().mockResolvedValue({ mergeStrategy: "per_task" }) }),
-      getBranchManager: vi
-        .fn()
-        .mockReturnValue({
-          ensureOnMain: vi.fn().mockResolvedValue(undefined),
-          getWorktreePath: vi.fn().mockImplementation((key: string) => `/tmp/repo/.worktrees/${key}`),
-        }),
+      getBranchManager: vi.fn().mockReturnValue({
+        ensureOnMain: vi.fn().mockResolvedValue(undefined),
+        getWorktreePath: vi.fn().mockImplementation((key: string) => `/tmp/repo/.worktrees/${key}`),
+      }),
       getFileScopeAnalyzer: vi
         .fn()
         .mockReturnValue({ predict: vi.fn().mockResolvedValue({ modify: ["a.ts"] }) }),
@@ -261,8 +259,9 @@ describe("OrchestratorDispatchService", () => {
   });
 
   it("sets slot.worktreePath to repoPath in branches mode", async () => {
-    (host.getProjectService() as { getSettings: ReturnType<typeof vi.fn> }).getSettings
-      .mockResolvedValueOnce({ mergeStrategy: "per_task", gitWorkingMode: "branches" });
+    (
+      host.getProjectService() as { getSettings: ReturnType<typeof vi.fn> }
+    ).getSettings.mockResolvedValueOnce({ mergeStrategy: "per_task", gitWorkingMode: "branches" });
 
     const task = baseTask("os-br01");
     await service.dispatchTask(projectId, repoPath, task, 0);

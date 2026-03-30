@@ -11,7 +11,12 @@
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import type { AgentConfig, ApiKeysUpdate, GlobalSettings, PreferredEditor } from "@opensprint/shared";
+import type {
+  AgentConfig,
+  ApiKeysUpdate,
+  GlobalSettings,
+  PreferredEditor,
+} from "@opensprint/shared";
 import {
   sanitizeApiKeys,
   mergeApiKeysWithCurrent,
@@ -200,7 +205,10 @@ export async function setGlobalSettings(settings: GlobalSettings): Promise<void>
 
 /** Partial merge input; `null` for agent fields clears the stored global default. */
 export type GlobalSettingsPartialUpdate = Partial<
-  Omit<GlobalSettings, "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent" | "preferredEditor">
+  Omit<
+    GlobalSettings,
+    "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent" | "preferredEditor"
+  >
 > & {
   apiKeys?: ApiKeysUpdate;
   simpleComplexityAgent?: AgentConfig | null;

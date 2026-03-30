@@ -747,16 +747,44 @@ describe("Cross-service quality-gate regression integration", () => {
       ) => {
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
-          return { stdout: "deadbeef", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          return {
+            stdout: "deadbeef",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command.startsWith("npm ls")) {
-          return { stdout: "", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          return {
+            stdout: "",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command === "npm run lint" && options?.cwd !== worktreePath) {
-          return { stdout: "baseline ok", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          return {
+            stdout: "baseline ok",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command === "npm run lint" && options?.cwd === worktreePath) {
-          return { stdout: "lint passed", stderr: "", executable: spec.command, cwd: options?.cwd ?? worktreePath, exitCode: 0, signal: null };
+          return {
+            stdout: "lint passed",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? worktreePath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command === "npm ci") {
           // Simulate npm ci creating node_modules
@@ -764,7 +792,14 @@ describe("Cross-service quality-gate regression integration", () => {
           const nm = path.join(cwd, "node_modules");
           await fs.mkdir(nm, { recursive: true });
           await fs.writeFile(path.join(nm, ".opensprint-test"), "ok");
-          return { stdout: "added 42 packages", stderr: "", executable: spec.command, cwd, exitCode: 0, signal: null };
+          return {
+            stdout: "added 42 packages",
+            stderr: "",
+            executable: spec.command,
+            cwd,
+            exitCode: 0,
+            signal: null,
+          };
         }
         throw new Error(`Unexpected command: ${command} (${options?.cwd ?? "no-cwd"})`);
       }
@@ -784,11 +819,13 @@ describe("Cross-service quality-gate regression integration", () => {
       globalTimers: {} as never,
     };
     const updates: Array<Record<string, unknown>> = [];
-    const mockTaskStoreUpdate = vi.fn().mockImplementation(
-      async (_projectId: string, _id: string, fields: Record<string, unknown>) => {
-        updates.push(fields);
-      }
-    );
+    const mockTaskStoreUpdate = vi
+      .fn()
+      .mockImplementation(
+        async (_projectId: string, _id: string, fields: Record<string, unknown>) => {
+          updates.push(fields);
+        }
+      );
 
     const host: MergeCoordinatorHost = {
       getState: vi.fn().mockImplementation(() => state),
@@ -858,7 +895,8 @@ describe("Cross-service quality-gate regression integration", () => {
     const loggedEvents = mockEventAppend.mock.calls.map(([, event]) => event);
     const mergeFailedEvents = loggedEvents.filter((e) => e.event === "merge.failed");
     const qualityGateFailures = mergeFailedEvents.filter(
-      (e: Record<string, unknown>) => (e.data as Record<string, unknown>)?.qualityGateCategory != null
+      (e: Record<string, unknown>) =>
+        (e.data as Record<string, unknown>)?.qualityGateCategory != null
     );
     expect(qualityGateFailures).toHaveLength(0);
 
@@ -879,8 +917,7 @@ describe("Cross-service quality-gate regression integration", () => {
     await fs.rm(path.join(worktreePath, "node_modules"), { recursive: true, force: true });
 
     const repoNpmCiFailed = true;
-    vi.spyOn(BranchManager.prototype, "symlinkNodeModules")
-      .mockResolvedValue(undefined);
+    vi.spyOn(BranchManager.prototype, "symlinkNodeModules").mockResolvedValue(undefined);
 
     mockRunCommand.mockImplementation(
       async (
@@ -889,16 +926,44 @@ describe("Cross-service quality-gate regression integration", () => {
       ) => {
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
-          return { stdout: "deadbeef", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          return {
+            stdout: "deadbeef",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command.startsWith("npm ls")) {
-          return { stdout: "", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          return {
+            stdout: "",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command === "npm run lint" && options?.cwd !== worktreePath) {
-          return { stdout: "baseline ok", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+          return {
+            stdout: "baseline ok",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? repoPath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command === "npm run lint" && options?.cwd === worktreePath) {
-          return { stdout: "lint passed", stderr: "", executable: spec.command, cwd: options?.cwd ?? worktreePath, exitCode: 0, signal: null };
+          return {
+            stdout: "lint passed",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? worktreePath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         if (command === "npm ci" && options?.cwd === repoPath && repoNpmCiFailed) {
           // First npm ci at repo root fails (e.g. network error)
@@ -916,7 +981,14 @@ describe("Cross-service quality-gate regression integration", () => {
           const nm = path.join(worktreePath, "node_modules");
           await fs.mkdir(nm, { recursive: true });
           await fs.writeFile(path.join(nm, ".opensprint-test"), "ok");
-          return { stdout: "added 42 packages", stderr: "", executable: spec.command, cwd: options?.cwd ?? worktreePath, exitCode: 0, signal: null };
+          return {
+            stdout: "added 42 packages",
+            stderr: "",
+            executable: spec.command,
+            cwd: options?.cwd ?? worktreePath,
+            exitCode: 0,
+            signal: null,
+          };
         }
         throw new Error(`Unexpected command: ${command} (${options?.cwd ?? "no-cwd"})`);
       }
@@ -1046,20 +1118,55 @@ describe("Cross-service quality-gate regression integration", () => {
         ) => {
           const command = [spec.command, ...(spec.args ?? [])].join(" ");
           if (command === "git rev-parse --verify HEAD") {
-            return { stdout: "deadbeef", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "deadbeef",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command.startsWith("npm ls")) {
-            return { stdout: "", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command === "npm run lint" && options?.cwd !== worktreePath) {
-            return { stdout: "baseline ok", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "baseline ok",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command === "npm run lint" && options?.cwd === worktreePath) {
-            return { stdout: "lint passed", stderr: "", executable: spec.command, cwd: options?.cwd ?? worktreePath, exitCode: 0, signal: null };
+            return {
+              stdout: "lint passed",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? worktreePath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command === "npm ci") {
             repairNpmCiCalled = true;
-            return { stdout: "added 10 packages", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "added 10 packages",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           throw new Error(`Unexpected command: ${command} (${options?.cwd ?? "no-cwd"})`);
         }
@@ -1153,10 +1260,10 @@ describe("Cross-service quality-gate regression integration", () => {
       await fs.rm(path.join(repoPath, "node_modules"), { recursive: true, force: true });
       await fs.rm(path.join(worktreePath, "node_modules"), { recursive: true, force: true });
 
-      vi.spyOn(BranchManager.prototype, "symlinkNodeModules")
-        .mockResolvedValue(undefined);
+      vi.spyOn(BranchManager.prototype, "symlinkNodeModules").mockResolvedValue(undefined);
 
-      const npmCiStderr = "npm ERR! code ERESOLVE\nnpm ERR! Could not resolve dependency:\nnpm ERR! peer react@\"^17\" from react-dom@17.0.2";
+      const npmCiStderr =
+        'npm ERR! code ERESOLVE\nnpm ERR! Could not resolve dependency:\nnpm ERR! peer react@"^17" from react-dom@17.0.2';
       mockRunCommand.mockImplementation(
         async (
           spec: { command: string; args?: string[] },
@@ -1164,13 +1271,34 @@ describe("Cross-service quality-gate regression integration", () => {
         ) => {
           const command = [spec.command, ...(spec.args ?? [])].join(" ");
           if (command === "git rev-parse --verify HEAD") {
-            return { stdout: "deadbeef", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "deadbeef",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command.startsWith("npm ls")) {
-            return { stdout: "", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command === "npm run lint" && options?.cwd !== worktreePath) {
-            return { stdout: "baseline ok", stderr: "", executable: spec.command, cwd: options?.cwd ?? repoPath, exitCode: 0, signal: null };
+            return {
+              stdout: "baseline ok",
+              stderr: "",
+              executable: spec.command,
+              cwd: options?.cwd ?? repoPath,
+              exitCode: 0,
+              signal: null,
+            };
           }
           if (command === "npm ci") {
             throw {
@@ -1211,11 +1339,13 @@ describe("Cross-service quality-gate regression integration", () => {
         globalTimers: {} as never,
       };
       const updates: Array<Record<string, unknown>> = [];
-      const mockTaskStoreUpdate = vi.fn().mockImplementation(
-        async (_projectId: string, _id: string, fields: Record<string, unknown>) => {
-          updates.push(fields);
-        }
-      );
+      const mockTaskStoreUpdate = vi
+        .fn()
+        .mockImplementation(
+          async (_projectId: string, _id: string, fields: Record<string, unknown>) => {
+            updates.push(fields);
+          }
+        );
 
       const host: MergeCoordinatorHost = {
         getState: vi.fn().mockImplementation(() => state),

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Task } from "@doist/todoist-api-typescript";
-import type { FeedbackItem, FeedbackSubmitRequest, IntegrationConnection, ServerEvent } from "@opensprint/shared";
+import type {
+  FeedbackItem,
+  FeedbackSubmitRequest,
+  IntegrationConnection,
+  ServerEvent,
+} from "@opensprint/shared";
 import type { IntegrationStoreService } from "../services/integration-store.service.js";
 import type { TokenEncryptionService } from "../services/token-encryption.service.js";
 import type { TodoistSyncDeps } from "../services/todoist-sync.service.js";
@@ -35,9 +40,8 @@ vi.mock("../services/task-store.service.js", () => ({
 }));
 
 const { TodoistSyncService } = await import("../services/todoist-sync.service.js");
-const { TodoistAuthError, TodoistRateLimitError } = await import(
-  "../services/todoist-api-client.service.js"
-);
+const { TodoistAuthError, TodoistRateLimitError } =
+  await import("../services/todoist-api-client.service.js");
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -257,7 +261,10 @@ describe("TodoistSyncService", () => {
     });
 
     it("appends description to feedback text", async () => {
-      const task = makeTask({ content: "Add search", description: "Full-text search using Postgres" });
+      const task = makeTask({
+        content: "Add search",
+        description: "Full-text search using Postgres",
+      });
       mockGetTasks.mockResolvedValue([task]);
       (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>).mockResolvedValue([
         {
@@ -388,9 +395,7 @@ describe("TodoistSyncService", () => {
       const task = makeTask();
       mockGetTasks.mockResolvedValue([task]);
       const claimImportSlot = deps.integrationStore.claimImportSlot as ReturnType<typeof vi.fn>;
-      claimImportSlot
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(false);
+      claimImportSlot.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
       const [first, second] = await Promise.all([
         service.runSync("conn-1"),
@@ -450,10 +455,7 @@ describe("TodoistSyncService", () => {
 
       const result = await service.runSync("conn-1");
 
-      expect(deps.integrationStore.markFailedDelete).toHaveBeenCalledWith(
-        "led-1",
-        "Network error"
-      );
+      expect(deps.integrationStore.markFailedDelete).toHaveBeenCalledWith("led-1", "Network error");
       expect(result.imported).toBe(1);
     });
   });

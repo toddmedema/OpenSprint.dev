@@ -57,7 +57,7 @@ describe("openInEditor", () => {
       "code",
       ["/tmp/worktree"],
       expect.objectContaining({ timeout: 10_000 }),
-      expect.any(Function),
+      expect.any(Function)
     );
   });
 
@@ -71,7 +71,7 @@ describe("openInEditor", () => {
       "cursor",
       ["/tmp/worktree"],
       expect.objectContaining({ timeout: 10_000 }),
-      expect.any(Function),
+      expect.any(Function)
     );
   });
 

@@ -95,7 +95,9 @@ export class PhaseExecutorService {
       outputParseBuffer: "",
       activeToolCallIds: new Set<string>(),
       activeToolCallSummaries: new Map<string, string | null>(),
+      activeToolCallStartedAtMs: new Map<string, number>(),
       startedAt,
+      firstOutputAtIso: undefined,
       exitHandled: false,
       killedDueToTimeout: false,
       lifecycleState: "running",
@@ -445,7 +447,15 @@ export class PhaseExecutorService {
           projectId,
           taskId: task.id,
           event: "agent.spawned",
-          data: { phase: "coding", model: agentConfig.model, attempt: slot.attempt },
+          data: {
+            phase: "coding",
+            model: agentConfig.model,
+            attempt: slot.attempt,
+            attemptStartedAt: slot.agent.startedAt ?? null,
+            queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
+              ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
+              : null,
+          },
         })
         .catch(() => {});
 
@@ -668,7 +678,15 @@ export class PhaseExecutorService {
             projectId,
             taskId: task.id,
             event: "agent.spawned",
-            data: { phase: "review", model: agentConfig.model, attempt: slot.attempt },
+            data: {
+              phase: "review",
+              model: agentConfig.model,
+              attempt: slot.attempt,
+              attemptStartedAt: slot.agent.startedAt ?? null,
+              queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
+                ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
+                : null,
+            },
           })
           .catch(() => {});
       };
@@ -804,7 +822,16 @@ export class PhaseExecutorService {
               projectId,
               taskId: task.id,
               event: "agent.spawned",
-              data: { phase: "review", model: agentConfig.model, attempt: slot.attempt, angle },
+              data: {
+                phase: "review",
+                model: agentConfig.model,
+                attempt: slot.attempt,
+                angle,
+                attemptStartedAt: slot.agent.startedAt ?? null,
+                queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
+                  ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
+                  : null,
+              },
             })
             .catch(() => {});
         };
@@ -866,7 +893,15 @@ export class PhaseExecutorService {
             projectId,
             taskId: task.id,
             event: "agent.spawned",
-            data: { phase: "review", model: agentConfig.model, attempt: slot.attempt },
+            data: {
+              phase: "review",
+              model: agentConfig.model,
+              attempt: slot.attempt,
+              attemptStartedAt: slot.agent.startedAt ?? null,
+              queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
+                ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
+                : null,
+            },
           })
           .catch(() => {});
       }

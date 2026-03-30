@@ -219,7 +219,10 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       const decomposeRes = await request(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/decompose`
       );
-      expect(decomposeRes.status, `decompose responded ${decomposeRes.status}: ${JSON.stringify(decomposeRes.body)}`).toBe(201);
+      expect(
+        decomposeRes.status,
+        `decompose responded ${decomposeRes.status}: ${JSON.stringify(decomposeRes.body)}`
+      ).toBe(201);
 
       const db = await planStatusTaskStore.getDb();
       const rows = await db.query(
@@ -303,7 +306,10 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       const decomposeRes = await request(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/decompose`
       );
-      expect(decomposeRes.status, `decompose responded ${decomposeRes.status}: ${JSON.stringify(decomposeRes.body)}`).toBe(201);
+      expect(
+        decomposeRes.status,
+        `decompose responded ${decomposeRes.status}: ${JSON.stringify(decomposeRes.body)}`
+      ).toBe(201);
 
       const db = await planStatusTaskStore.getDb();
       const row = await db.queryOne(

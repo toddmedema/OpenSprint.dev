@@ -45,7 +45,7 @@ declare global {
       onWindowUnmaximized?: (callback: () => void) => () => void;
       openInEditor?: (
         folderPath: string,
-        editor?: "vscode" | "cursor" | "auto",
+        editor?: "vscode" | "cursor" | "auto"
       ) => Promise<{
         success: boolean;
         editor: string;

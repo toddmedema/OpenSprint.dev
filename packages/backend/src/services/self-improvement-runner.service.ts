@@ -137,7 +137,7 @@ export function buildFailurePatternSummary(failures: CollectedFailure[]): string
 export function enrichRootCauseDescription(
   description: string | undefined,
   sourceFailureTaskIds: string[],
-  failurePattern: string,
+  failurePattern: string
 ): string {
   const parts: string[] = [];
   if (description) parts.push(description);
@@ -732,7 +732,7 @@ export class SelfImprovementRunnerService {
 
     const failures = await collectFailuresSince(
       projectId,
-      settings.selfImprovementLastRunAt ?? undefined,
+      settings.selfImprovementLastRunAt ?? undefined
     );
     const failureContext = formatFailuresForPrompt(failures);
     const failureSystemSupplement = buildFailureReviewSystemSupplement(failures);
@@ -924,7 +924,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
         if (duplicate) {
           log.info(
             "Skipping duplicate root-cause fix task — open task with same root cause exists",
-            { projectId, runId, title: item.title, rootCauseKey, existingTaskId: duplicate.id },
+            { projectId, runId, title: item.title, rootCauseKey, existingTaskId: duplicate.id }
           );
           continue;
         }
@@ -932,7 +932,7 @@ Review the codebase and output a structured list of improvement tasks (JSON arra
         const description = enrichRootCauseDescription(
           item.description,
           sourceFailureTaskIds,
-          failurePatternSummary,
+          failurePatternSummary
         );
 
         const created = await this.taskStore.create(projectId, item.title, {

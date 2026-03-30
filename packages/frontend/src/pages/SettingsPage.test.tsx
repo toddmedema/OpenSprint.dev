@@ -77,7 +77,9 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("global-settings-content")).toBeInTheDocument();
     const globalSubBar = screen.getByTestId("global-settings-sub-tabs-bar");
     expect(globalSubBar).toHaveClass("justify-center", "items-center");
-    expect(screen.getByTestId("settings-page").querySelector(".overflow-y-auto")).toHaveClass("pt-0");
+    expect(screen.getByTestId("settings-page").querySelector(".overflow-y-auto")).toHaveClass(
+      "pt-0"
+    );
     expect(screen.queryByRole("link", { name: "Back to home" })).not.toBeInTheDocument();
     expect(screen.getByTestId("settings-save-indicator")).toHaveTextContent("Saved");
   });

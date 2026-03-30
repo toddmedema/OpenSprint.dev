@@ -91,16 +91,17 @@ const EpicTaskRow = memo(function EpicTaskRow({
             </span>
           ) : null}
         </button>
-        {projectId && (task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review") && (
-          <OpenInEditorButton
-            projectId={projectId}
-            taskId={task.id}
-            isInProgress
-            worktreePath={worktreePath ?? null}
-            isBranchesMode={isBranchesMode}
-            variant="icon"
-          />
-        )}
+        {projectId &&
+          (task.kanbanColumn === "in_progress" || task.kanbanColumn === "in_review") && (
+            <OpenInEditorButton
+              projectId={projectId}
+              taskId={task.id}
+              isInProgress
+              worktreePath={worktreePath ?? null}
+              isBranchesMode={isBranchesMode}
+              variant="icon"
+            />
+          )}
         {task.kanbanColumn === "blocked" && onUnblock && (
           <button
             type="button"

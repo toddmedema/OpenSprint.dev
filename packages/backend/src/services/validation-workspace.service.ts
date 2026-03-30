@@ -18,7 +18,11 @@ const NPM_INCLUDE_DEV_ENV = {
 
 export type ValidationWorkspaceKind = "baseline" | "merged_candidate";
 
-export type NodeModulesStrategy = "symlink" | "repo_repair_then_symlink" | "npm_ci_worktree" | "none";
+export type NodeModulesStrategy =
+  | "symlink"
+  | "repo_repair_then_symlink"
+  | "npm_ci_worktree"
+  | "none";
 
 export interface NodeModulesResult {
   ok: boolean;
@@ -309,10 +313,9 @@ export class ValidationWorkspaceService {
     try {
       await fs.access(pkgPath);
     } catch {
-      log.warn(
-        "merged_candidate worktree has no package.json; cannot run npm ci fallback",
-        { worktreePath }
-      );
+      log.warn("merged_candidate worktree has no package.json; cannot run npm ci fallback", {
+        worktreePath,
+      });
       return {
         ok: false,
         strategy: "none",

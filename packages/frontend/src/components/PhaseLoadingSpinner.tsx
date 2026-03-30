@@ -20,7 +20,10 @@ export function PhaseLoadingSpinner({
         aria-hidden
       />
       {status ? (
-        <p className="text-left text-sm leading-snug text-theme-muted" data-testid={`${dataTestId}-status`}>
+        <p
+          className="text-left text-sm leading-snug text-theme-muted"
+          data-testid={`${dataTestId}-status`}
+        >
           {status}
         </p>
       ) : null}

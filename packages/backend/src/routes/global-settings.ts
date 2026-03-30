@@ -47,8 +47,12 @@ function buildResponse(settings: GlobalSettings) {
     ...(settings.apiKeys && { apiKeys: maskApiKeysForResponse(settings.apiKeys) }),
     showNotificationDotInMenuBar: settings.showNotificationDotInMenuBar !== false,
     showRunningAgentCountInMenuBar: settings.showRunningAgentCountInMenuBar !== false,
-    ...(settings.simpleComplexityAgent && { simpleComplexityAgent: settings.simpleComplexityAgent }),
-    ...(settings.complexComplexityAgent && { complexComplexityAgent: settings.complexComplexityAgent }),
+    ...(settings.simpleComplexityAgent && {
+      simpleComplexityAgent: settings.simpleComplexityAgent,
+    }),
+    ...(settings.complexComplexityAgent && {
+      complexComplexityAgent: settings.complexComplexityAgent,
+    }),
     preferredEditor: settings.preferredEditor ?? "auto",
   };
 }

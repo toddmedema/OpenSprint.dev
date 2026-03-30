@@ -1542,7 +1542,9 @@ export class TaskStoreService {
     return this.withWriteLock(async () => {
       await this.ensureInitialized();
       const client = this.ensureClient();
-      const countRow = await client.queryOne("SELECT COUNT(*)::int as cnt FROM orchestrator_events");
+      const countRow = await client.queryOne(
+        "SELECT COUNT(*)::int as cnt FROM orchestrator_events"
+      );
       const total = (countRow?.cnt as number) ?? 0;
       if (total <= 100) return 0;
 
@@ -1552,9 +1554,10 @@ export class TaskStoreService {
       const cutoffId = cutoffRow?.id as number | undefined;
       if (cutoffId == null) return 0;
 
-      const pruned = await client.execute(toPgParams("DELETE FROM orchestrator_events WHERE id < ?"), [
-        cutoffId,
-      ]);
+      const pruned = await client.execute(
+        toPgParams("DELETE FROM orchestrator_events WHERE id < ?"),
+        [cutoffId]
+      );
 
       if (pruned > 0) {
         log.info("Pruned orchestrator_events", { pruned, retained: 100 });

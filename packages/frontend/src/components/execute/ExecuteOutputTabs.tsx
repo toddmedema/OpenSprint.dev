@@ -9,7 +9,11 @@ export interface ExecuteOutputTabsProps {
   onTabChange?: (tab: ExecuteOutputTab) => void;
 }
 
-export function ExecuteOutputTabs({ outputContent, chatContent, onTabChange }: ExecuteOutputTabsProps) {
+export function ExecuteOutputTabs({
+  outputContent,
+  chatContent,
+  onTabChange,
+}: ExecuteOutputTabsProps) {
   const [activeTab, setActiveTab] = useState<ExecuteOutputTab>("output");
 
   const handleTabChange = (tab: ExecuteOutputTab) => {

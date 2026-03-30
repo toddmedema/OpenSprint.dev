@@ -2,9 +2,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DbClient } from "../db/client.js";
 import { createMockDbClient } from "./test-db-helper.js";
 
-const queryFn = vi.fn<(sql: string, params?: unknown[]) => Promise<unknown[]>>().mockResolvedValue([]);
-const queryOneFn = vi.fn<(sql: string, params?: unknown[]) => Promise<unknown | undefined>>().mockResolvedValue(undefined);
-const executeFn = vi.fn<(sql: string, params?: unknown[]) => Promise<number>>().mockResolvedValue(1);
+const queryFn = vi
+  .fn<(sql: string, params?: unknown[]) => Promise<unknown[]>>()
+  .mockResolvedValue([]);
+const queryOneFn = vi
+  .fn<(sql: string, params?: unknown[]) => Promise<unknown | undefined>>()
+  .mockResolvedValue(undefined);
+const executeFn = vi
+  .fn<(sql: string, params?: unknown[]) => Promise<number>>()
+  .mockResolvedValue(1);
 
 const mockDb: DbClient = createMockDbClient({
   query: queryFn,
@@ -23,9 +29,7 @@ vi.mock("../services/task-store.service.js", () => {
   };
 });
 
-const { IntegrationStoreService } = await import(
-  "../services/integration-store.service.js"
-);
+const { IntegrationStoreService } = await import("../services/integration-store.service.js");
 
 let store: InstanceType<typeof IntegrationStoreService>;
 
@@ -110,20 +114,17 @@ describe("IntegrationStoreService — connections", () => {
       queryFn.mockResolvedValueOnce([makeConnectionRow(), makeConnectionRow({ id: "conn-2" })]);
       const result = await store.getActiveConnections();
       expect(result).toHaveLength(2);
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("status = $1"),
-        ["active"]
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("status = $1"), ["active"]);
     });
 
     it("filters by provider when provided", async () => {
       queryFn.mockResolvedValueOnce([makeConnectionRow()]);
       const result = await store.getActiveConnections("todoist");
       expect(result).toHaveLength(1);
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("provider = $2"),
-        ["active", "todoist"]
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("provider = $2"), [
+        "active",
+        "todoist",
+      ]);
     });
 
     it("returns empty array when no active connections", async () => {
@@ -137,8 +138,8 @@ describe("IntegrationStoreService — connections", () => {
     it("inserts new connection when none exists", async () => {
       const row = makeConnectionRow();
       queryOneFn
-        .mockResolvedValueOnce(undefined)  // check existing
-        .mockResolvedValueOnce(row);       // fetch saved
+        .mockResolvedValueOnce(undefined) // check existing
+        .mockResolvedValueOnce(row); // fetch saved
 
       const result = await store.upsertConnection({
         project_id: "proj-1",
@@ -158,8 +159,8 @@ describe("IntegrationStoreService — connections", () => {
     it("updates existing connection when one exists", async () => {
       const row = makeConnectionRow();
       queryOneFn
-        .mockResolvedValueOnce({ id: "conn-1" })  // check existing
-        .mockResolvedValueOnce(row);               // fetch saved
+        .mockResolvedValueOnce({ id: "conn-1" }) // check existing
+        .mockResolvedValueOnce(row); // fetch saved
 
       const result = await store.upsertConnection({
         project_id: "proj-1",
@@ -175,9 +176,7 @@ describe("IntegrationStoreService — connections", () => {
     });
 
     it("throws when result row is not found after upsert", async () => {
-      queryOneFn
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce(undefined);
+      queryOneFn.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
 
       await expect(
         store.upsertConnection({
@@ -211,19 +210,23 @@ describe("IntegrationStoreService — connections", () => {
     it("updates last_sync_at and clears error", async () => {
       const syncAt = "2025-06-01T12:00:00.000Z";
       await store.updateLastSync("conn-1", syncAt);
-      expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("last_sync_at"),
-        [syncAt, null, expect.any(String), "conn-1"]
-      );
+      expect(executeFn).toHaveBeenCalledWith(expect.stringContaining("last_sync_at"), [
+        syncAt,
+        null,
+        expect.any(String),
+        "conn-1",
+      ]);
     });
 
     it("sets error when provided", async () => {
       const syncAt = "2025-06-01T12:00:00.000Z";
       await store.updateLastSync("conn-1", syncAt, "Rate limited");
-      expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("last_sync_at"),
-        [syncAt, "Rate limited", expect.any(String), "conn-1"]
-      );
+      expect(executeFn).toHaveBeenCalledWith(expect.stringContaining("last_sync_at"), [
+        syncAt,
+        "Rate limited",
+        expect.any(String),
+        "conn-1",
+      ]);
     });
   });
 
@@ -270,15 +273,24 @@ describe("IntegrationStoreService — ledger", () => {
       await store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1");
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("SET feedback_id = $1, import_status = $2"),
-        ["fb-1", "pending_delete", null, expect.any(String), "proj-1", "todoist", "ext-1", "importing"]
+        [
+          "fb-1",
+          "pending_delete",
+          null,
+          expect.any(String),
+          "proj-1",
+          "todoist",
+          "ext-1",
+          "importing",
+        ]
       );
     });
 
     it("throws when no importing row exists", async () => {
       executeFn.mockResolvedValueOnce(0);
-      await expect(
-        store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1")
-      ).rejects.toThrow("Failed to finalize import slot");
+      await expect(store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1")).rejects.toThrow(
+        "Failed to finalize import slot"
+      );
     });
   });
 
@@ -321,19 +333,20 @@ describe("IntegrationStoreService — ledger", () => {
       expect(result).toHaveLength(2);
       expect(result[0].import_status).toBe("pending_delete");
       expect(result[1].import_status).toBe("failed_delete");
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("pending_delete"),
-        ["proj-1", "todoist"]
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("pending_delete"), [
+        "proj-1",
+        "todoist",
+      ]);
     });
 
     it("respects limit parameter", async () => {
       queryFn.mockResolvedValueOnce([makeLedgerRow()]);
       await store.getPendingDeletes("proj-1", "todoist", 10);
-      expect(queryFn).toHaveBeenCalledWith(
-        expect.stringContaining("LIMIT $3"),
-        ["proj-1", "todoist", 10]
-      );
+      expect(queryFn).toHaveBeenCalledWith(expect.stringContaining("LIMIT $3"), [
+        "proj-1",
+        "todoist",
+        10,
+      ]);
     });
 
     it("returns empty array when no pending deletes", async () => {
@@ -346,10 +359,11 @@ describe("IntegrationStoreService — ledger", () => {
   describe("markCompleted", () => {
     it("updates import_status to completed", async () => {
       await store.markCompleted("42");
-      expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("import_status = $1"),
-        ["completed", expect.any(String), "42"]
-      );
+      expect(executeFn).toHaveBeenCalledWith(expect.stringContaining("import_status = $1"), [
+        "completed",
+        expect.any(String),
+        "42",
+      ]);
     });
   });
 

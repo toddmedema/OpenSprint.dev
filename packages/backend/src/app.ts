@@ -33,7 +33,10 @@ import { requestIdMiddleware } from "./middleware/request-id.js";
 import { wrapAsync } from "./middleware/wrap-async.js";
 import { requireDatabase } from "./middleware/require-database.js";
 import { orchestratorService } from "./services/orchestrator.service.js";
-import { getLocalSessionToken, ensureLocalSessionToken } from "./services/local-session-auth.service.js";
+import {
+  getLocalSessionToken,
+  ensureLocalSessionToken,
+} from "./services/local-session-auth.service.js";
 
 export function createApp(services?: AppServices) {
   ensureLocalSessionToken();

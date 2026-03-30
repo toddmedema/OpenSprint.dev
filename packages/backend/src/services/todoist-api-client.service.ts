@@ -27,7 +27,7 @@ export class TodoistAuthError extends Error {
   override name = "TodoistAuthError" as const;
   constructor(
     message: string,
-    public readonly httpStatusCode: number,
+    public readonly httpStatusCode: number
   ) {
     super(message);
   }
@@ -37,7 +37,7 @@ export class TodoistRateLimitError extends Error {
   override name = "TodoistRateLimitError" as const;
   constructor(
     message: string,
-    public readonly retryAfter: number,
+    public readonly retryAfter: number
   ) {
     super(message);
   }
@@ -57,10 +57,7 @@ function classifyAndThrow(err: unknown, context: string): never {
     const status = err.httpStatusCode;
 
     if (status === 401 || status === 403) {
-      throw new TodoistAuthError(
-        `Todoist auth failed during ${context}: ${err.message}`,
-        status,
-      );
+      throw new TodoistAuthError(`Todoist auth failed during ${context}: ${err.message}`, status);
     }
 
     if (status === 429) {
@@ -70,14 +67,11 @@ function classifyAndThrow(err: unknown, context: string): never {
         const parsed = Number((data as Record<string, unknown>).retry_after);
         if (Number.isFinite(parsed) && parsed > 0) retryAfter = parsed;
       }
-      throw new TodoistRateLimitError(
-        `Todoist rate limited during ${context}`,
-        retryAfter,
-      );
+      throw new TodoistRateLimitError(`Todoist rate limited during ${context}`, retryAfter);
     }
 
     throw new Error(
-      `Todoist API error during ${context} (HTTP ${status ?? "unknown"}): ${err.message}`,
+      `Todoist API error during ${context} (HTTP ${status ?? "unknown"}): ${err.message}`
     );
   }
 
@@ -103,19 +97,14 @@ export class TodoistApiClient {
       let cursor: string | null | undefined;
 
       do {
-        const response = await this.api.getProjects(
-          cursor ? { cursor } : undefined,
-        );
+        const response = await this.api.getProjects(cursor ? { cursor } : undefined);
         projects.push(...response.results);
         cursor = response.nextCursor;
       } while (cursor);
 
       return projects.map((p) => ({ id: p.id, name: p.name }));
     } catch (err) {
-      if (
-        err instanceof TodoistAuthError ||
-        err instanceof TodoistRateLimitError
-      ) {
+      if (err instanceof TodoistAuthError || err instanceof TodoistRateLimitError) {
         throw err;
       }
       return classifyAndThrow(err, "getProjects");
@@ -129,9 +118,7 @@ export class TodoistApiClient {
 
       do {
         const response = await this.api.getTasks(
-          cursor
-            ? { projectId: todoistProjectId, cursor }
-            : { projectId: todoistProjectId },
+          cursor ? { projectId: todoistProjectId, cursor } : { projectId: todoistProjectId }
         );
         tasks.push(...response.results);
         cursor = response.nextCursor;
@@ -139,10 +126,7 @@ export class TodoistApiClient {
 
       return tasks;
     } catch (err) {
-      if (
-        err instanceof TodoistAuthError ||
-        err instanceof TodoistRateLimitError
-      ) {
+      if (err instanceof TodoistAuthError || err instanceof TodoistRateLimitError) {
         throw err;
       }
       return classifyAndThrow(err, "getTasks");
@@ -153,20 +137,14 @@ export class TodoistApiClient {
     try {
       return await this.api.deleteTask(taskId);
     } catch (err) {
-      if (
-        err instanceof TodoistRequestError &&
-        err.httpStatusCode === 404
-      ) {
+      if (err instanceof TodoistRequestError && err.httpStatusCode === 404) {
         log.info("Todoist task already deleted (404 treated as success)", {
           taskId,
         });
         return true;
       }
 
-      if (
-        err instanceof TodoistAuthError ||
-        err instanceof TodoistRateLimitError
-      ) {
+      if (err instanceof TodoistAuthError || err instanceof TodoistRateLimitError) {
         throw err;
       }
       return classifyAndThrow(err, "deleteTask");
@@ -183,7 +161,7 @@ export function generateOAuthState(): string {
 export function buildAuthorizationUrl(
   clientId: string,
   scopes: readonly Permission[],
-  state: string,
+  state: string
 ): string {
   return getAuthorizationUrl({ clientId, permissions: scopes, state });
 }
@@ -191,7 +169,7 @@ export function buildAuthorizationUrl(
 export async function exchangeCodeForToken(
   clientId: string,
   clientSecret: string,
-  code: string,
+  code: string
 ): Promise<{ accessToken: string; tokenType: string }> {
   try {
     return await getAuthToken({ clientId, clientSecret, code });
@@ -203,7 +181,7 @@ export async function exchangeCodeForToken(
 export async function revokeAccessToken(
   clientId: string,
   clientSecret: string,
-  accessToken: string,
+  accessToken: string
 ): Promise<boolean> {
   try {
     return await revokeToken({
@@ -231,7 +209,7 @@ export function getTodoistOAuthConfig(): TodoistOAuthConfig {
 
   if (!clientId || !clientSecret || !redirectUri) {
     throw new Error(
-      "Missing Todoist OAuth config: TODOIST_CLIENT_ID, TODOIST_CLIENT_SECRET, and TODOIST_REDIRECT_URI must be set",
+      "Missing Todoist OAuth config: TODOIST_CLIENT_ID, TODOIST_CLIENT_SECRET, and TODOIST_REDIRECT_URI must be set"
     );
   }
 

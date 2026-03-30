@@ -102,9 +102,7 @@ export class IntegrationStoreService {
     return row ? connectionRowToPublic(row as unknown as ConnectionRow) : null;
   }
 
-  async getActiveConnections(
-    provider?: IntegrationProvider
-  ): Promise<IntegrationConnection[]> {
+  async getActiveConnections(provider?: IntegrationProvider): Promise<IntegrationConnection[]> {
     const client = await taskStore.getDb();
     if (provider) {
       const rows = await client.query(
@@ -113,10 +111,9 @@ export class IntegrationStoreService {
       );
       return (rows as unknown as ConnectionRow[]).map(connectionRowToPublic);
     }
-    const rows = await client.query(
-      "SELECT * FROM integration_connections WHERE status = $1",
-      ["active"]
-    );
+    const rows = await client.query("SELECT * FROM integration_connections WHERE status = $1", [
+      "active",
+    ]);
     return (rows as unknown as ConnectionRow[]).map(connectionRowToPublic);
   }
 
@@ -210,9 +207,7 @@ export class IntegrationStoreService {
         "SELECT * FROM integration_connections WHERE project_id = $1 AND provider = $2",
         [data.project_id, data.provider]
       );
-      resultRow = saved
-        ? connectionRowToPublic(saved as unknown as ConnectionRow)
-        : null;
+      resultRow = saved ? connectionRowToPublic(saved as unknown as ConnectionRow) : null;
     });
 
     if (!resultRow) {
@@ -241,11 +236,7 @@ export class IntegrationStoreService {
     log.info("Updated connection status", { id, status });
   }
 
-  async updateLastSync(
-    id: string,
-    lastSyncAt: string,
-    lastError?: string | null
-  ): Promise<void> {
+  async updateLastSync(id: string, lastSyncAt: string, lastError?: string | null): Promise<void> {
     const now = new Date().toISOString();
     await taskStore.runWrite(async (client) => {
       await client.execute(
@@ -272,10 +263,7 @@ export class IntegrationStoreService {
     log.info("Updated selected resource", { id, resourceId, resourceName });
   }
 
-  async deleteConnection(
-    projectId: string,
-    provider: IntegrationProvider
-  ): Promise<void> {
+  async deleteConnection(projectId: string, provider: IntegrationProvider): Promise<void> {
     await taskStore.runWrite(async (client) => {
       await client.execute(
         "DELETE FROM integration_connections WHERE project_id = $1 AND provider = $2",
@@ -287,10 +275,7 @@ export class IntegrationStoreService {
 
   async getConnectionById(id: string): Promise<IntegrationConnection | null> {
     const client = await taskStore.getDb();
-    const row = await client.queryOne(
-      "SELECT * FROM integration_connections WHERE id = $1",
-      [id]
-    );
+    const row = await client.queryOne("SELECT * FROM integration_connections WHERE id = $1", [id]);
     return row ? connectionRowToPublic(row as unknown as ConnectionRow) : null;
   }
 

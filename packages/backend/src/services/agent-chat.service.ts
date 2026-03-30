@@ -33,11 +33,7 @@ export interface SendMessageResult {
   error?: string;
 }
 
-const CLI_BACKENDS: ReadonlySet<AgentType> = new Set([
-  "claude-cli",
-  "cursor",
-  "custom",
-]);
+const CLI_BACKENDS: ReadonlySet<AgentType> = new Set(["claude-cli", "cursor", "custom"]);
 
 const API_BACKENDS: ReadonlySet<AgentType> = new Set([
   "claude",
@@ -57,8 +53,7 @@ export class AgentChatService {
   ) {}
 
   private chatLogPath(taskId: string): string {
-    const base =
-      this.basePath ?? path.join(process.cwd(), ".opensprint", "active");
+    const base = this.basePath ?? path.join(process.cwd(), ".opensprint", "active");
     return path.join(base, taskId, "chat-log.jsonl");
   }
 
@@ -75,11 +70,7 @@ export class AgentChatService {
   /**
    * Read chat history from the JSONL log, optionally filtered by attempt.
    */
-  getHistory(
-    _projectId: string,
-    taskId: string,
-    attempt?: number
-  ): ChatMessage[] {
+  getHistory(_projectId: string, taskId: string, attempt?: number): ChatMessage[] {
     const logPath = this.chatLogPath(taskId);
     if (!fs.existsSync(logPath)) return [];
 
@@ -195,8 +186,7 @@ export class AgentChatService {
         messageId,
         timestamp,
         delivered: false,
-        error:
-          "Too many pending messages — wait for the agent to respond.",
+        error: "Too many pending messages — wait for the agent to respond.",
       };
     }
 
@@ -211,11 +201,7 @@ export class AgentChatService {
    * Record an assistant response in the chat log.
    * Called by the agentic loop (or its callback) when the agent produces a chat reply.
    */
-  appendAssistantMessage(
-    taskId: string,
-    content: string,
-    attempt: number = 1
-  ): ChatMessage {
+  appendAssistantMessage(taskId: string, content: string, attempt: number = 1): ChatMessage {
     const message: ChatMessage = {
       id: `msg-${crypto.randomUUID()}`,
       timestamp: new Date().toISOString(),

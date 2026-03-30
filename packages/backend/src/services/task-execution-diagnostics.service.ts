@@ -61,6 +61,12 @@ function asBoolean(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+function formatNoResultReasonCode(value: unknown): string | null {
+  const code = asString(value);
+  if (!code) return null;
+  return code.replace(/_/g, " ");
+}
+
 function firstNonEmptyLine(value: string | null): string | null {
   if (!value) return null;
   for (const line of value.split(/\r?\n/)) {
@@ -401,6 +407,7 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
   if (event.event === "agent.spawned") {
     const phase = phaseFromUnknown(data.phase, "coding");
     const model = asString(data.model);
+    const queueLagMs = asNumber(data.queueLagMs) ?? asNumber(data.startupDurationMs);
     return {
       at: event.timestamp,
       attempt,
@@ -408,10 +415,30 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
       outcome: "running",
       title: titleForOutcome(phase, "running"),
       summary: compactExecutionText(
-        `${labelForPhase(phase)} agent spawned${model ? ` (${model})` : ""}`,
+        `${labelForPhase(phase)} agent spawned${model ? ` (${model})` : ""}${
+          queueLagMs != null ? ` | startup ${Math.round(queueLagMs)}ms` : ""
+        }`,
         240
       ),
       model,
+    };
+  }
+
+  if (event.event === "agent.first_output") {
+    const phase = phaseFromUnknown(data.phase, "coding");
+    const startupDurationMs = asNumber(data.startupDurationMs);
+    return {
+      at: event.timestamp,
+      attempt,
+      phase,
+      outcome: "running",
+      title: `${labelForPhase(phase)} first output`,
+      summary: compactExecutionText(
+        `${labelForPhase(phase)} produced first output${
+          startupDurationMs != null ? ` after ${Math.round(startupDurationMs)}ms` : ""
+        }`,
+        240
+      ),
     };
   }
 
@@ -419,19 +446,53 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     const phase = phaseFromUnknown(data.phase, "coding");
     const toolSummary = asString(data.summary);
     const waiting = event.event === "agent.waiting_on_tool";
+    const toolStatus = asString(data.toolStatus);
+    const durationMs = asNumber(data.durationMs);
+    const completedTitle =
+      toolStatus === "failed"
+        ? "Tool failed"
+        : toolStatus === "cancelled"
+          ? "Tool cancelled"
+          : "Tool completed";
     return {
       at: event.timestamp,
       attempt,
       phase,
       outcome: "running",
-      title: waiting ? "Waiting on tool" : "Tool completed",
+      title: waiting ? "Waiting on tool" : completedTitle,
       summary: compactExecutionText(
         waiting
           ? `${labelForPhase(phase)} waiting on ${toolSummary ?? "a tool call"}`
-          : `${labelForPhase(phase)} tool completed${toolSummary ? `: ${toolSummary}` : ""}`,
+          : `${labelForPhase(phase)} tool ${toolStatus ?? "completed"}${
+              toolSummary ? `: ${toolSummary}` : ""
+            }${durationMs != null ? ` (${Math.round(durationMs)}ms)` : ""}`,
         240
       ),
       nextAction: waiting ? "Awaiting tool completion" : "Agent resuming after tool output",
+    };
+  }
+
+  if (event.event === "agent.result_detected" || event.event === "agent.process_exited") {
+    const phase = phaseFromUnknown(data.phase, "coding");
+    const durationMs = asNumber(data.durationMs);
+    const status = asString(data.status);
+    const isResult = event.event === "agent.result_detected";
+    return {
+      at: event.timestamp,
+      attempt,
+      phase,
+      outcome: "running",
+      title: isResult ? "Result detected" : "Process exited",
+      summary: compactExecutionText(
+        isResult
+          ? `${labelForPhase(phase)} detected terminal result${
+              status ? ` (${status})` : ""
+            }${durationMs != null ? ` after ${Math.round(durationMs)}ms` : ""}`
+          : `${labelForPhase(phase)} process exited${
+              durationMs != null ? ` after ${Math.round(durationMs)}ms` : ""
+            }`,
+        240
+      ),
     };
   }
 
@@ -479,8 +540,12 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     const phase = phaseFromUnknown(data.phase, "coding");
     const reason = asString(data.reason);
     const qualityGateDetail = extractQualityGateDetail(data);
+    const noResultReason = formatNoResultReasonCode(data.noResultReasonCode);
     const summary =
       buildActionableFailureSummary(qualityGateDetail) ??
+      (noResultReason
+        ? compactExecutionText(`${labelForPhase(phase)} failed (${noResultReason})`, 360)
+        : null) ??
       asString(data.summary) ??
       (reason ? `${labelForPhase(phase)} failed: ${compactExecutionText(reason, 360)}` : null) ??
       `${labelForPhase(phase)} failed`;
@@ -559,6 +624,7 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
   if (event.event === "task.requeued") {
     const phase = phaseFromUnknown(data.phase, "orchestrator");
     const qualityGateDetail = extractQualityGateDetail(data);
+    const noResultReason = formatNoResultReasonCode(data.noResultReasonCode);
     return withQualityGateDetail(
       {
         at: event.timestamp,
@@ -568,6 +634,9 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
         title: "Task requeued",
         summary:
           buildActionableFailureSummary(qualityGateDetail) ??
+          (noResultReason
+            ? compactExecutionText(`Task requeued (${noResultReason})`, 300)
+            : null) ??
           asString(data.summary) ??
           "Task requeued for another attempt",
         failureType: asString(data.failureType),

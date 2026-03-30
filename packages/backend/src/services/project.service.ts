@@ -150,6 +150,16 @@ const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
   "- Do not push, merge, or close tasks manually; the orchestrator handles validation, task state, merging, and remote publication.",
 ].join("\n");
 
+// Runtime and worktree paths must stay local and never be committed.
+const PROJECT_GITIGNORE_ENTRIES = [
+  ".opensprint/orchestrator-state.json",
+  ".opensprint/worktrees/",
+  ".opensprint/pending-commits.json",
+  ".opensprint/sessions/",
+  ".opensprint/active/",
+  ".opensprint/runtime/",
+] as const;
+
 function removeLegacyBdTaskTrackingInstruction(content: string): string {
   return content
     .replace(new RegExp(`(^|\\n)${LEGACY_BD_TASK_TRACKING_INSTRUCTION}(?=\\n|$)`, "g"), "\n")
@@ -168,6 +178,21 @@ function ensureOpenSprintRuntimeContract(content: string): string {
     return `# Agent Instructions\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
   }
   return `${normalized}\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
+}
+
+async function ensureProjectGitignoreEntries(repoPath: string): Promise<void> {
+  const gitignorePath = path.join(repoPath, ".gitignore");
+  try {
+    let content = await fs.readFile(gitignorePath, "utf-8");
+    for (const entry of PROJECT_GITIGNORE_ENTRIES) {
+      if (!content.includes(entry)) {
+        content += `\n${entry}`;
+      }
+    }
+    await fs.writeFile(gitignorePath, content.trimEnd() + "\n");
+  } catch {
+    await fs.writeFile(gitignorePath, PROJECT_GITIGNORE_ENTRIES.join("\n") + "\n");
+  }
 }
 
 /** Resolve aiAutonomyLevel and hilConfig from create/update input. aiAutonomyLevel takes precedence. */
@@ -340,7 +365,9 @@ function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
       s.selfImprovementReviewerAgents.length > 0 && {
         selfImprovementReviewerAgents: s.selfImprovementReviewerAgents,
       }),
-    ...(s.selfImprovementIncludeGeneralReview === true && { selfImprovementIncludeGeneralReview: true }),
+    ...(s.selfImprovementIncludeGeneralReview === true && {
+      selfImprovementIncludeGeneralReview: true,
+    }),
     ...(s.selfImprovementPendingCandidateId && {
       selfImprovementPendingCandidateId: s.selfImprovementPendingCandidateId,
     }),
@@ -583,6 +610,7 @@ export class ProjectService {
     try {
       await fs.access(opensprintDir);
       if (existingEntries.length > 0) {
+        await ensureProjectGitignoreEntries(repoPath);
         const existing = await this.getPreferredProjectEntry(existingEntries);
         return this.getProject(existing.id);
       }
@@ -603,6 +631,7 @@ export class ProjectService {
       delete adoptInitial.lowComplexityAgent;
       delete adoptInitial.highComplexityAgent;
       await setSettingsInStore(adoptId, adoptInitial as unknown as ProjectSettings);
+      await ensureProjectGitignoreEntries(repoPath);
       this.invalidateListCache();
       return this.getProject(adoptId);
     } catch (err) {
@@ -649,28 +678,8 @@ export class ProjectService {
       await fs.writeFile(agentsMdPath, ensureOpenSprintRuntimeContract(""));
     }
 
-    // PRD §5.9: Add orchestrator state and worktrees to .gitignore during setup
-    const gitignorePath = path.join(repoPath, ".gitignore");
-    // Runtime and WIP paths only; feedback, counters, events, agent-stats, deployments are DB-only
-    const gitignoreEntries = [
-      ".opensprint/orchestrator-state.json",
-      ".opensprint/worktrees/",
-      ".opensprint/pending-commits.json",
-      ".opensprint/sessions/",
-      ".opensprint/active/",
-    ];
-    try {
-      let content = await fs.readFile(gitignorePath, "utf-8");
-      for (const entry of gitignoreEntries) {
-        if (!content.includes(entry)) {
-          content += `\n${entry}`;
-        }
-      }
-      await fs.writeFile(gitignorePath, content.trimEnd() + "\n");
-    } catch {
-      // No .gitignore yet — create one
-      await fs.writeFile(gitignorePath, gitignoreEntries.join("\n") + "\n");
-    }
+    // PRD §5.9: Add runtime/worktree paths to .gitignore during setup.
+    await ensureProjectGitignoreEntries(repoPath);
 
     // Keep .opensprint root marker, but canonical project state now lives in the DB.
     await fs.mkdir(opensprintDir, { recursive: true });
@@ -1033,7 +1042,9 @@ export class ProjectService {
       let packageScripts = new Set<string>();
       try {
         const packageJsonRaw = await fs.readFile(path.join(repoPath, "package.json"), "utf-8");
-        const packageJson = JSON.parse(packageJsonRaw) as { scripts?: Record<string, unknown> } | null;
+        const packageJson = JSON.parse(packageJsonRaw) as {
+          scripts?: Record<string, unknown>;
+        } | null;
         if (packageJson?.scripts && typeof packageJson.scripts === "object") {
           packageScripts = new Set(Object.keys(packageJson.scripts));
         }
@@ -1431,7 +1442,10 @@ export class ProjectService {
       delete workingRaw.highComplexityAgent;
     } else if (complexUpdate !== undefined) {
       try {
-        workingRaw.complexComplexityAgent = parseAgentConfig(complexUpdate, "complexComplexityAgent");
+        workingRaw.complexComplexityAgent = parseAgentConfig(
+          complexUpdate,
+          "complexComplexityAgent"
+        );
         delete workingRaw.highComplexityAgent;
       } catch (err) {
         const msg = getErrorMessage(err, "Invalid complex complexity agent configuration");

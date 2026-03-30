@@ -21,9 +21,7 @@ export function getPlanGenerationState(
   activeAgents: readonly ActiveAgent[],
   now: number = Date.now()
 ): PlanGenState {
-  const plannerAgent = activeAgents.find(
-    (a) => a.role === "planner" && a.planId === planId
-  );
+  const plannerAgent = activeAgents.find((a) => a.role === "planner" && a.planId === planId);
 
   if (!plannerAgent) return "ready";
 
@@ -32,9 +30,7 @@ export function getPlanGenerationState(
 }
 
 /** Return plan IDs that have an active planner agent. */
-export function getActivePlannerPlanIds(
-  activeAgents: readonly ActiveAgent[]
-): Set<string> {
+export function getActivePlannerPlanIds(activeAgents: readonly ActiveAgent[]): Set<string> {
   const ids = new Set<string>();
   for (const a of activeAgents) {
     if (a.role === "planner" && a.planId) ids.add(a.planId);

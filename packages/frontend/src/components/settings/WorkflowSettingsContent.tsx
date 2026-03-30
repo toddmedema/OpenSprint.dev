@@ -781,9 +781,8 @@ export function WorkflowSettingsContent({
                 Self-Improvement Review
               </h4>
               <p className="text-xs text-theme-muted mb-3">
-                Configure which review angles to use when the self-improvement audit reviews
-                recent code changes. When not customized, these inherit the code review angles
-                above.
+                Configure which review angles to use when the self-improvement audit reviews recent
+                code changes. When not customized, these inherit the code review angles above.
               </p>
 
               {/* Review angles multi-select */}
@@ -819,11 +818,8 @@ export function WorkflowSettingsContent({
                             data-testid="si-review-customize-btn"
                             onClick={() => {
                               const fromCodeReview =
-                                lastReviewAnglesRef.current ??
-                                draftSettings.reviewAngles ??
-                                [];
-                              const includeGeneral =
-                                draftSettings.includeGeneralReview ?? false;
+                                lastReviewAnglesRef.current ?? draftSettings.reviewAngles ?? [];
+                              const includeGeneral = draftSettings.includeGeneralReview ?? false;
                               applySettingsUpdate((s) => ({
                                 ...s,
                                 selfImprovementReviewerAgents: fromCodeReview,
@@ -872,13 +868,11 @@ export function WorkflowSettingsContent({
                           const angleValue: ReviewAngle | null = isGeneral
                             ? null
                             : (opt.value as ReviewAngle);
-                          const generalSelected =
-                            angles.length === 0 || includeGeneral;
+                          const generalSelected = angles.length === 0 || includeGeneral;
                           const selected = isGeneral
                             ? generalSelected
                             : angleValue !== null && angles.includes(angleValue);
-                          const selectedCount =
-                            (generalSelected ? 1 : 0) + angles.length;
+                          const selectedCount = (generalSelected ? 1 : 0) + angles.length;
                           const wouldLeaveZero = selected && selectedCount === 1;
                           const disabled = wouldLeaveZero || !hasExplicitAngles;
                           return (
@@ -927,14 +921,8 @@ export function WorkflowSettingsContent({
                                       : angleValue
                                         ? [...current, angleValue]
                                         : current;
-                                    if (
-                                      next.length === 0 &&
-                                      selected &&
-                                      !includeGeneral
-                                    )
-                                      return;
-                                    const wasGeneralOnly =
-                                      current.length === 0 && generalSelected;
+                                    if (next.length === 0 && selected && !includeGeneral) return;
+                                    const wasGeneralOnly = current.length === 0 && generalSelected;
                                     applySettingsUpdate((s) => {
                                       const nextSettings: ProjectSettings = {
                                         ...s,
@@ -942,13 +930,11 @@ export function WorkflowSettingsContent({
                                           next.length > 0 ? next : undefined,
                                       };
                                       if (wasGeneralOnly)
-                                        nextSettings.selfImprovementIncludeGeneralReview =
-                                          true;
+                                        nextSettings.selfImprovementIncludeGeneralReview = true;
                                       return nextSettings;
                                     });
                                     void persistSettings(undefined, {
-                                      selfImprovementReviewerAgents:
-                                        next.length > 0 ? next : [],
+                                      selfImprovementReviewerAgents: next.length > 0 ? next : [],
                                       ...(wasGeneralOnly && {
                                         selfImprovementIncludeGeneralReview: true,
                                       }),

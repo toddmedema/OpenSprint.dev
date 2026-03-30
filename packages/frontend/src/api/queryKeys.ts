@@ -72,8 +72,7 @@ export const queryKeys = {
     status: (projectId: string, provider: string) =>
       ["integrations", projectId, provider, "status"] as const,
     all: (projectId: string) => ["integrations", projectId] as const,
-    todoistStatus: (projectId: string) =>
-      ["integrations", projectId, "todoist", "status"] as const,
+    todoistStatus: (projectId: string) => ["integrations", projectId, "todoist", "status"] as const,
     todoistProjects: (projectId: string) =>
       ["integrations", projectId, "todoist", "projects"] as const,
   },

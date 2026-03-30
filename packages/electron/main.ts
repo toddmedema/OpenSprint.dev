@@ -1263,11 +1263,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle(
     "shell:openInEditor",
-    async (
-      _event: Electron.IpcMainInvokeEvent,
-      folderPath: string,
-      editor?: EditorMode,
-    ) => {
+    async (_event: Electron.IpcMainInvokeEvent, folderPath: string, editor?: EditorMode) => {
       return openInEditor(folderPath, editor ?? "auto", {
         execFile,
         openExternal: (url: string) => shell.openExternal(url),

@@ -60,10 +60,7 @@ function getClockStore(intervalMs: number): ClockStore {
 }
 
 export function useSharedNow(intervalMs: number, enabled = true): Date | null {
-  const store = useMemo(
-    () => (enabled ? getClockStore(intervalMs) : null),
-    [enabled, intervalMs]
-  );
+  const store = useMemo(() => (enabled ? getClockStore(intervalMs) : null), [enabled, intervalMs]);
   const snapshot = useSyncExternalStore(
     store?.subscribe ?? EMPTY_SUBSCRIBE,
     store?.getSnapshot ?? ZERO_SNAPSHOT,

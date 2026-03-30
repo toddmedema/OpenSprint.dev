@@ -182,10 +182,20 @@ export function findPlannerTaskArray(value: unknown, path = "$"): ExtractedPlann
     return { key: "tasks", path: `${path}.tasks`, value: record.tasks, count: record.tasks.length };
   }
   if (Array.isArray(record.task_list)) {
-    return { key: "task_list", path: `${path}.task_list`, value: record.task_list, count: record.task_list.length };
+    return {
+      key: "task_list",
+      path: `${path}.task_list`,
+      value: record.task_list,
+      count: record.task_list.length,
+    };
   }
   if (Array.isArray(record.taskList)) {
-    return { key: "taskList", path: `${path}.taskList`, value: record.taskList, count: record.taskList.length };
+    return {
+      key: "taskList",
+      path: `${path}.taskList`,
+      value: record.taskList,
+      count: record.taskList.length,
+    };
   }
 
   for (const [key, child] of Object.entries(record)) {
@@ -358,10 +368,20 @@ export function findSubPlanArray(value: unknown, path = "$"): ExtractedSubPlanAr
   const record = value as Record<string, unknown>;
 
   if (Array.isArray(record.sub_plans)) {
-    return { key: "sub_plans", path: `${path}.sub_plans`, value: record.sub_plans, count: record.sub_plans.length };
+    return {
+      key: "sub_plans",
+      path: `${path}.sub_plans`,
+      value: record.sub_plans,
+      count: record.sub_plans.length,
+    };
   }
   if (Array.isArray(record.subPlans)) {
-    return { key: "subPlans", path: `${path}.subPlans`, value: record.subPlans, count: record.subPlans.length };
+    return {
+      key: "subPlans",
+      path: `${path}.subPlans`,
+      value: record.subPlans,
+      count: record.subPlans.length,
+    };
   }
 
   for (const [key, child] of Object.entries(record)) {

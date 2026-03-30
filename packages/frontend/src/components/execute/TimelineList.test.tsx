@@ -4,11 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Provider } from "react-redux";
 import userEvent from "@testing-library/user-event";
 import { TimelineList, TIMELINE_VIRTUALIZE_THRESHOLD } from "./TimelineList";
-import {
-  renderWithProviders,
-  createTestStore,
-  createTestQueryClient,
-} from "../../test/test-utils";
+import { renderWithProviders, createTestStore, createTestQueryClient } from "../../test/test-utils";
 import type { ComponentProps, RefObject } from "react";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
@@ -1046,7 +1042,10 @@ describe("TimelineList", () => {
     );
 
     try {
-      expect(screen.getByTestId("timeline-list")).toHaveAttribute("data-timeline-virtualized", "true");
+      expect(screen.getByTestId("timeline-list")).toHaveAttribute(
+        "data-timeline-virtualized",
+        "true"
+      );
       const section = screen.getByTestId("timeline-section-ready");
       expect(section.querySelector(".sticky")).toBeNull();
     } finally {

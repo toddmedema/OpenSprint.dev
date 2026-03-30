@@ -44,9 +44,8 @@ vi.mock("../services/task-store.service.js", () => ({
 /* ── Lazy-import after mocks are registered ──────────────────────────── */
 
 const { TodoistSyncService } = await import("../services/todoist-sync.service.js");
-const { TodoistAuthError, TodoistRateLimitError } = await import(
-  "../services/todoist-api-client.service.js"
-);
+const { TodoistAuthError, TodoistRateLimitError } =
+  await import("../services/todoist-api-client.service.js");
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -114,7 +113,7 @@ function makeFeedbackItem(id = "fb-1"): FeedbackItem {
 }
 
 function makeLedgerEntry(
-  overrides: Partial<IntegrationImportLedgerEntry> = {},
+  overrides: Partial<IntegrationImportLedgerEntry> = {}
 ): IntegrationImportLedgerEntry {
   return {
     id: "led-1",
@@ -193,15 +192,21 @@ describe("TodoistSyncService", () => {
     mockGetTasks.mockResolvedValue(tasks);
 
     let fbIdx = 0;
-    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(
-      async () => makeFeedbackItem(`fb-${++fbIdx}`),
+    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(async () =>
+      makeFeedbackItem(`fb-${++fbIdx}`)
     );
 
     const store = deps.integrationStore;
     (store.getPendingDeletes as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce([makeLedgerEntry({ id: "led-1", external_item_id: "t1", feedback_id: "fb-1" })])
-      .mockResolvedValueOnce([makeLedgerEntry({ id: "led-2", external_item_id: "t2", feedback_id: "fb-2" })])
-      .mockResolvedValueOnce([makeLedgerEntry({ id: "led-3", external_item_id: "t3", feedback_id: "fb-3" })])
+      .mockResolvedValueOnce([
+        makeLedgerEntry({ id: "led-1", external_item_id: "t1", feedback_id: "fb-1" }),
+      ])
+      .mockResolvedValueOnce([
+        makeLedgerEntry({ id: "led-2", external_item_id: "t2", feedback_id: "fb-2" }),
+      ])
+      .mockResolvedValueOnce([
+        makeLedgerEntry({ id: "led-3", external_item_id: "t3", feedback_id: "fb-3" }),
+      ])
       .mockResolvedValueOnce([]); // retryPendingDeletes — nothing left
 
     const result = await service.runSync("conn-1");
@@ -265,11 +270,11 @@ describe("TodoistSyncService", () => {
         import_status: "failed_delete",
       }),
     ];
-    (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>).mockResolvedValue(entries);
+    (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>).mockResolvedValue(
+      entries
+    );
 
-    mockDeleteTask
-      .mockResolvedValueOnce(true)
-      .mockRejectedValueOnce(new Error("Still failing"));
+    mockDeleteTask.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error("Still failing"));
 
     await service.runSync("conn-1");
 
@@ -287,7 +292,7 @@ describe("TodoistSyncService", () => {
     expect(deps.integrationStore.updateConnectionStatus).toHaveBeenCalledWith(
       "conn-1",
       "needs_reconnect",
-      expect.stringContaining("Unauthorized"),
+      expect.stringContaining("Unauthorized")
     );
     expect(result).toEqual({ imported: 0, errors: 0 });
     expect(deps.submitFeedback).not.toHaveBeenCalled();
@@ -301,7 +306,7 @@ describe("TodoistSyncService", () => {
     expect(deps.integrationStore.updateLastSync).toHaveBeenCalledWith(
       "conn-1",
       expect.any(String),
-      expect.stringContaining("Rate limited"),
+      expect.stringContaining("Rate limited")
     );
     expect(result).toEqual({ imported: 0, errors: 0 });
     expect(deps.submitFeedback).not.toHaveBeenCalled();
@@ -317,7 +322,7 @@ describe("TodoistSyncService", () => {
     expect(deps.integrationStore.updateLastSync).toHaveBeenCalledWith(
       "conn-1",
       expect.any(String),
-      null,
+      null
     );
   });
 
@@ -330,8 +335,8 @@ describe("TodoistSyncService", () => {
     mockGetTasks.mockResolvedValue(tasks);
 
     let idx = 0;
-    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(
-      async () => makeFeedbackItem(`fb-${++idx}`),
+    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(async () =>
+      makeFeedbackItem(`fb-${++idx}`)
     );
 
     await service.runSync("conn-1");
@@ -347,13 +352,13 @@ describe("TodoistSyncService", () => {
       makeTask({
         id: `task-${i}`,
         addedAt: `2025-01-01T00:${String(i).padStart(2, "0")}:00Z`,
-      }),
+      })
     );
     mockGetTasks.mockResolvedValue(tasks);
 
     let fbCount = 0;
-    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(
-      async () => makeFeedbackItem(`fb-${++fbCount}`),
+    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(async () =>
+      makeFeedbackItem(`fb-${++fbCount}`)
     );
 
     const result = await service.runSync("conn-1");
@@ -390,8 +395,8 @@ describe("TodoistSyncService", () => {
     mockGetTasks.mockResolvedValue(tasks);
 
     let idx = 0;
-    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(
-      async () => makeFeedbackItem(`fb-${++idx}`),
+    (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(async () =>
+      makeFeedbackItem(`fb-${++idx}`)
     );
 
     await service.runSync("conn-1");
@@ -418,8 +423,7 @@ describe("TodoistSyncService", () => {
 
     const updateCall = mockExecute.mock.calls.find(
       (call: unknown[]) =>
-        typeof call[0] === "string" &&
-        (call[0] as string).includes("UPDATE feedback SET extra"),
+        typeof call[0] === "string" && (call[0] as string).includes("UPDATE feedback SET extra")
     );
     expect(updateCall).toBeDefined();
 

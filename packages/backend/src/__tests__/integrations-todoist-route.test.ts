@@ -14,9 +14,7 @@ import {
   pinOpenSprintPathsForTesting,
   resetOpenSprintPathsForTesting,
 } from "./opensprint-path-test-helper.js";
-import {
-  oauthStateStore,
-} from "../routes/integrations-todoist.js";
+import { oauthStateStore } from "../routes/integrations-todoist.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -88,7 +86,7 @@ vi.mock("../services/todoist-api-client.service.js", () => {
     override name = "TodoistAuthError" as const;
     constructor(
       message: string,
-      public readonly httpStatusCode: number,
+      public readonly httpStatusCode: number
     ) {
       super(message);
     }
@@ -98,7 +96,7 @@ vi.mock("../services/todoist-api-client.service.js", () => {
     override name = "TodoistRateLimitError" as const;
     constructor(
       message: string,
-      public readonly retryAfter: number,
+      public readonly retryAfter: number
     ) {
       super(message);
     }
@@ -106,9 +104,11 @@ vi.mock("../services/todoist-api-client.service.js", () => {
 
   return {
     generateOAuthState: vi.fn().mockReturnValue("mock-state-token"),
-    buildAuthorizationUrl: vi.fn().mockReturnValue(
-      "https://app.todoist.com/oauth/authorize?client_id=test-client-id&scope=data%3Aread_write%2Cdata%3Adelete&state=mock-state-token",
-    ),
+    buildAuthorizationUrl: vi
+      .fn()
+      .mockReturnValue(
+        "https://app.todoist.com/oauth/authorize?client_id=test-client-id&scope=data%3Aread_write%2Cdata%3Adelete&state=mock-state-token"
+      ),
     exchangeCodeForToken: vi.fn().mockResolvedValue({
       accessToken: "tok-abc-123",
       tokenType: "Bearer",
@@ -117,7 +117,8 @@ vi.mock("../services/todoist-api-client.service.js", () => {
     getTodoistOAuthConfig: vi.fn().mockReturnValue({
       clientId: "test-client-id",
       clientSecret: "test-client-secret",
-      redirectUri: "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
+      redirectUri:
+        "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
     }),
     TodoistApiClient: vi.fn().mockImplementation(() => ({
       getProjects: vi.fn().mockResolvedValue([
@@ -139,7 +140,7 @@ function todoistUrl(projectId: string, route = "") {
 
 async function seedConnection(
   projectId: string,
-  overrides: Record<string, unknown> = {},
+  overrides: Record<string, unknown> = {}
 ): Promise<void> {
   const realEncryptedToken = tokenEncryption.encryptToken("test-access-token");
   const defaults = {
@@ -163,7 +164,7 @@ async function cleanIntegrationData(projectId: string): Promise<void> {
   const db = await taskStore.getDb();
   await db.execute(
     "DELETE FROM integration_import_ledger WHERE project_id = $1 AND provider = $2",
-    [projectId, "todoist"],
+    [projectId, "todoist"]
   );
 }
 
@@ -205,9 +206,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
 
   describe("POST /oauth/start", () => {
     it("returns 200 with authorizationUrl containing client_id and scopes", async () => {
-      const res = await request(app)
-        .post(todoistUrl(projectId, "/oauth/start"))
-        .expect(200);
+      const res = await request(app).post(todoistUrl(projectId, "/oauth/start")).expect(200);
 
       expect(res.body.data.authorizationUrl).toContain("client_id=test-client-id");
       expect(res.body.data.authorizationUrl).toContain("data%3Aread_write");
@@ -216,7 +215,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       expect(mockedTodoistService.buildAuthorizationUrl).toHaveBeenCalledWith(
         "test-client-id",
         ["data:read_write", "data:delete"],
-        "mock-state-token",
+        "mock-state-token"
       );
     });
 
@@ -225,9 +224,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
         throw new Error("Missing config");
       });
 
-      const res = await request(app)
-        .post(todoistUrl(projectId, "/oauth/start"))
-        .expect(500);
+      const res = await request(app).post(todoistUrl(projectId, "/oauth/start")).expect(500);
 
       expect(res.body.error.code).toBe("INTEGRATION_NOT_CONFIGURED");
     });
@@ -251,7 +248,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       expect(mockedTodoistService.exchangeCodeForToken).toHaveBeenCalledWith(
         "test-client-id",
         "test-client-secret",
-        "auth-code-xyz",
+        "auth-code-xyz"
       );
 
       const conn = await integrationStore.getConnection(projectId, "todoist");
@@ -320,9 +317,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
 
   describe("GET /status", () => {
     it("returns connected: false when no connection exists", async () => {
-      const res = await request(app)
-        .get(todoistUrl(projectId, "/status"))
-        .expect(200);
+      const res = await request(app).get(todoistUrl(projectId, "/status")).expect(200);
 
       expect(res.body.data).toEqual({ connected: false, status: "disabled" });
     });
@@ -334,12 +329,10 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       });
       await integrationStore.updateLastSync(
         (await integrationStore.getConnection(projectId, "todoist"))!.id,
-        "2025-06-01T12:00:00.000Z",
+        "2025-06-01T12:00:00.000Z"
       );
 
-      const res = await request(app)
-        .get(todoistUrl(projectId, "/status"))
-        .expect(200);
+      const res = await request(app).get(todoistUrl(projectId, "/status")).expect(200);
 
       expect(res.body.data.connected).toBe(true);
       expect(res.body.data.status).toBe("active");
@@ -365,9 +358,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
     it("returns project list from mocked Todoist SDK", async () => {
       await seedConnection(projectId);
 
-      const res = await request(app)
-        .get(todoistUrl(projectId, "/projects"))
-        .expect(200);
+      const res = await request(app).get(todoistUrl(projectId, "/projects")).expect(200);
 
       expect(res.body.data.projects).toEqual([
         { id: "tp-1", name: "Inbox" },
@@ -376,9 +367,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
     });
 
     it("returns 404 when not connected", async () => {
-      const res = await request(app)
-        .get(todoistUrl(projectId, "/projects"))
-        .expect(404);
+      const res = await request(app).get(todoistUrl(projectId, "/projects")).expect(404);
 
       expect(res.body.error.code).toBe("NOT_CONNECTED");
     });
@@ -388,17 +377,13 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       vi.mocked(mockedTodoistService.TodoistApiClient).mockImplementationOnce(
         () =>
           ({
-            getProjects: vi.fn().mockRejectedValue(
-              new TodoistAuthError("token revoked", 401),
-            ),
-          }) as ReturnType<typeof mockedTodoistService.TodoistApiClient>,
+            getProjects: vi.fn().mockRejectedValue(new TodoistAuthError("token revoked", 401)),
+          }) as ReturnType<typeof mockedTodoistService.TodoistApiClient>
       );
 
       await seedConnection(projectId);
 
-      const res = await request(app)
-        .get(todoistUrl(projectId, "/projects"))
-        .expect(401);
+      const res = await request(app).get(todoistUrl(projectId, "/projects")).expect(401);
 
       expect(res.body.error.code).toBe("TODOIST_AUTH_FAILED");
 
@@ -453,9 +438,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
 
   describe("POST /sync", () => {
     it("returns 404 when not connected", async () => {
-      const res = await request(app)
-        .post(todoistUrl(projectId, "/sync"))
-        .expect(404);
+      const res = await request(app).post(todoistUrl(projectId, "/sync")).expect(404);
 
       expect(res.body.error.code).toBe("NOT_CONNECTED");
     });
@@ -463,14 +446,9 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
     it("returns 429 when sync triggered within 10 seconds", async () => {
       await seedConnection(projectId);
       const conn = await integrationStore.getConnection(projectId, "todoist");
-      await integrationStore.updateLastSync(
-        conn!.id,
-        new Date(Date.now() - 3000).toISOString(),
-      );
+      await integrationStore.updateLastSync(conn!.id, new Date(Date.now() - 3000).toISOString());
 
-      const res = await request(app)
-        .post(todoistUrl(projectId, "/sync"))
-        .expect(429);
+      const res = await request(app).post(todoistUrl(projectId, "/sync")).expect(429);
 
       expect(res.body.error.code).toBe("SYNC_RATE_LIMITED");
     });
@@ -478,9 +456,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
     it("returns 500 when sync service is not configured (createApp default)", async () => {
       await seedConnection(projectId);
 
-      const res = await request(app)
-        .post(todoistUrl(projectId, "/sync"))
-        .expect(500);
+      const res = await request(app).post(todoistUrl(projectId, "/sync")).expect(500);
 
       expect(res.body.error.code).toBe("SYNC_NOT_AVAILABLE");
     });
@@ -492,9 +468,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
     it("disconnects, revokes token, and returns success", async () => {
       await seedConnection(projectId);
 
-      const res = await request(app)
-        .delete(todoistUrl(projectId, ""))
-        .expect(200);
+      const res = await request(app).delete(todoistUrl(projectId, "")).expect(200);
 
       expect(res.body.data.disconnected).toBe(true);
       expect(mockedTodoistService.revokeAccessToken).toHaveBeenCalled();
@@ -513,13 +487,11 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
           `INSERT INTO integration_import_ledger
             (project_id, provider, external_item_id, feedback_id, import_status, retry_count, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [projectId, "todoist", extId, `fb-${extId}`, "pending_delete", 0, now, now],
+          [projectId, "todoist", extId, `fb-${extId}`, "pending_delete", 0, now, now]
         );
       }
 
-      const res = await request(app)
-        .delete(todoistUrl(projectId, ""))
-        .expect(200);
+      const res = await request(app).delete(todoistUrl(projectId, "")).expect(200);
 
       expect(res.body.data).toEqual({
         disconnected: true,
@@ -528,9 +500,7 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
     });
 
     it("returns 404 when not connected", async () => {
-      const res = await request(app)
-        .delete(todoistUrl(projectId, ""))
-        .expect(404);
+      const res = await request(app).delete(todoistUrl(projectId, "")).expect(404);
 
       expect(res.body.error.code).toBe("NOT_CONNECTED");
     });

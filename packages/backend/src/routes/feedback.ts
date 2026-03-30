@@ -17,7 +17,12 @@ type FeedbackParams = { projectId: string; feedbackId: string };
 interface FeedbackRouterDeps {
   feedbackService: Pick<
     FeedbackService,
-    "listFeedback" | "submitFeedback" | "getFeedback" | "recategorizeFeedback" | "resolveFeedback" | "cancelFeedback"
+    | "listFeedback"
+    | "submitFeedback"
+    | "getFeedback"
+    | "recategorizeFeedback"
+    | "resolveFeedback"
+    | "cancelFeedback"
   >;
   orchestratorService: Pick<OrchestratorService, "nudge">;
 }
@@ -107,7 +112,10 @@ export function createFeedbackRouter({
     "/:feedbackId/cancel",
     validateParams(feedbackParamsSchema),
     wrapAsync(async (req: Request<FeedbackParams>, res) => {
-      const item = await feedbackService.cancelFeedback(req.params.projectId, req.params.feedbackId);
+      const item = await feedbackService.cancelFeedback(
+        req.params.projectId,
+        req.params.feedbackId
+      );
       const body: ApiResponse<FeedbackItem> = { data: item };
       res.json(body);
     })

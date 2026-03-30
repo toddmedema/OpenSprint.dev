@@ -30,9 +30,8 @@ const { ProjectService } = await import("../services/project.service.js");
 const { BranchManager } = await import("../services/branch-manager.js");
 const { orchestratorService } = await import("../services/orchestrator.service.js");
 const { getGlobalSettings } = await import("../services/global-settings.service.js");
-const { resolveOpenEditor, isCliAvailable, resolveEditor } = await import(
-  "../services/open-editor.service.js"
-);
+const { resolveOpenEditor, isCliAvailable, resolveEditor } =
+  await import("../services/open-editor.service.js");
 
 describe("open-editor.service", () => {
   let tmpDir: string;
@@ -97,7 +96,18 @@ describe("open-editor.service", () => {
 
   describe("resolveOpenEditor", () => {
     it("returns worktree path and editor when task is actively executing", async () => {
-      setupMocks({ repoPath: tmpDir, activeTasks: [{ taskId: "os-1234", worktreePath: tmpDir, phase: "coding", startedAt: new Date().toISOString(), state: "running" }] });
+      setupMocks({
+        repoPath: tmpDir,
+        activeTasks: [
+          {
+            taskId: "os-1234",
+            worktreePath: tmpDir,
+            phase: "coding",
+            startedAt: new Date().toISOString(),
+            state: "running",
+          },
+        ],
+      });
 
       const result = await resolveOpenEditor("proj-1", "os-1234");
 
@@ -120,11 +130,19 @@ describe("open-editor.service", () => {
 
     it("throws 404 when worktree path does not exist on disk", async () => {
       const fakePath = path.join(tmpDir, "nonexistent");
-      setupMocks({ activeTasks: [{ taskId: "os-1234", worktreePath: fakePath, phase: "coding", startedAt: new Date().toISOString(), state: "running" }] });
+      setupMocks({
+        activeTasks: [
+          {
+            taskId: "os-1234",
+            worktreePath: fakePath,
+            phase: "coding",
+            startedAt: new Date().toISOString(),
+            state: "running",
+          },
+        ],
+      });
 
-      await expect(resolveOpenEditor("proj-1", "os-1234")).rejects.toThrow(
-        /does not exist/i
-      );
+      await expect(resolveOpenEditor("proj-1", "os-1234")).rejects.toThrow(/does not exist/i);
       await expect(resolveOpenEditor("proj-1", "os-1234")).rejects.toMatchObject({
         statusCode: 404,
         code: "WORKTREE_NOT_FOUND",
@@ -135,7 +153,15 @@ describe("open-editor.service", () => {
       setupMocks({
         gitWorkingMode: "branches",
         repoPath: tmpDir,
-        activeTasks: [{ taskId: "os-1234", worktreePath: "/some/other/path", phase: "coding", startedAt: new Date().toISOString(), state: "running" }],
+        activeTasks: [
+          {
+            taskId: "os-1234",
+            worktreePath: "/some/other/path",
+            phase: "coding",
+            startedAt: new Date().toISOString(),
+            state: "running",
+          },
+        ],
       });
 
       const result = await resolveOpenEditor("proj-1", "os-1234");
@@ -147,7 +173,15 @@ describe("open-editor.service", () => {
     it("falls back to BranchManager.getWorktreePath when activeEntry has no worktreePath", async () => {
       const { branchInstance } = setupMocks({
         gitWorkingMode: "worktree",
-        activeTasks: [{ taskId: "os-1234", worktreePath: null, phase: "coding", startedAt: new Date().toISOString(), state: "running" }],
+        activeTasks: [
+          {
+            taskId: "os-1234",
+            worktreePath: null,
+            phase: "coding",
+            startedAt: new Date().toISOString(),
+            state: "running",
+          },
+        ],
         branchWorktreePath: tmpDir,
       });
 

@@ -4562,9 +4562,7 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() =>
-        expect(screen.getByText("From Todoist no project")).toBeInTheDocument()
-      );
+      await waitFor(() => expect(screen.getByText("From Todoist no project")).toBeInTheDocument());
       const badge = screen.getByTestId("todoist-provenance-badge");
       expect(badge).toBeInTheDocument();
       expect(badge).not.toHaveAttribute("title");

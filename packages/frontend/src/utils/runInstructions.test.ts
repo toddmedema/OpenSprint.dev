@@ -80,7 +80,12 @@ describe("getRunInstructions", () => {
     expect(
       getRunInstructions(
         "/home/todd/my-project",
-        { platform: "linux", isWsl: true, wslDistroName: "Ubuntu", repoPathPolicy: "linux_fs_only" },
+        {
+          platform: "linux",
+          isWsl: true,
+          wslDistroName: "Ubuntu",
+          repoPathPolicy: "linux_fs_only",
+        },
         "empty"
       )
     ).toEqual(['cd "/home/todd/my-project"']);

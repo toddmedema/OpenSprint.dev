@@ -137,11 +137,15 @@ describe("ProjectService", () => {
     expect(agentsMd).toContain("Do not use external task CLIs");
     expect(agentsMd).not.toContain("Use 'bd' for task tracking");
 
-    // PRD §5.9: Verify .gitignore has orchestrator-state and worktrees
+    // PRD §5.9: Verify .gitignore has runtime/worktree exclusions.
     const gitignorePath = path.join(repoPath, ".gitignore");
     const gitignore = await fs.readFile(gitignorePath, "utf-8");
     expect(gitignore).toContain(".opensprint/orchestrator-state.json");
     expect(gitignore).toContain(".opensprint/worktrees/");
+    expect(gitignore).toContain(".opensprint/pending-commits.json");
+    expect(gitignore).toContain(".opensprint/sessions/");
+    expect(gitignore).toContain(".opensprint/active/");
+    expect(gitignore).toContain(".opensprint/runtime/");
 
     // Verify global index
     const indexPath = path.join(tempDir, ".opensprint", "projects.json");
@@ -450,6 +454,8 @@ describe("ProjectService", () => {
 
     expect(project.repoPath).toBe(repoPath);
     expect(project.name).toBe("Test");
+    const gitignore = await fs.readFile(path.join(repoPath, ".gitignore"), "utf-8");
+    expect(gitignore).toContain(".opensprint/runtime/");
   });
 
   it("should return existing project when path has .opensprint and project is in index", async () => {
@@ -473,6 +479,39 @@ describe("ProjectService", () => {
     expect(again.id).toBe(first.id);
     expect(again.name).toBe(first.name);
     expect(again.repoPath).toBe(first.repoPath);
+  });
+
+  it("should restore missing runtime gitignore entries when reopening an existing indexed project", async () => {
+    const repoPath = path.join(tempDir, "existing-indexed-gitignore-refresh");
+    await projectService.createProject({
+      name: "First",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const gitignorePath = path.join(repoPath, ".gitignore");
+    const before = await fs.readFile(gitignorePath, "utf-8");
+    const withoutRuntime = before
+      .split("\n")
+      .filter((line) => line.trim() !== ".opensprint/runtime/")
+      .join("\n")
+      .trimEnd();
+    await fs.writeFile(gitignorePath, `${withoutRuntime}\n`, "utf-8");
+
+    await projectService.createProject({
+      name: "Again",
+      repoPath,
+      simpleComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      complexComplexityAgent: { type: "claude", model: null, cliCommand: null },
+      deployment: { mode: "custom" },
+      hilConfig: DEFAULT_HIL_CONFIG,
+    });
+
+    const refreshed = await fs.readFile(gitignorePath, "utf-8");
+    expect(refreshed).toContain(".opensprint/runtime/");
   });
 
   it("should accept createProject when agent tiers are omitted (inherit global defaults)", async () => {

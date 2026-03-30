@@ -407,10 +407,7 @@ export class OrchestratorLoopService {
 
       for (let i = 0; i < dispatchBatch.length; i++) {
         const selectedTask = dispatchBatch[i]!;
-        if (
-          dispatchedTaskIds.has(selectedTask.task.id) ||
-          state.slots.has(selectedTask.task.id)
-        ) {
+        if (dispatchedTaskIds.has(selectedTask.task.id) || state.slots.has(selectedTask.task.id)) {
           log.info("Skipping dispatch: task already selected or active this pass", {
             projectId,
             taskId: selectedTask.task.id,
@@ -462,6 +459,7 @@ export class OrchestratorLoopService {
                 data: {
                   phase: "dispatch",
                   failureType: "worktree_branch_in_use",
+                  policyDecision: "defer_dispatch",
                   otherTaskId: error.otherTaskId ?? null,
                   otherWorktreePath: error.otherPath ?? null,
                   reason,

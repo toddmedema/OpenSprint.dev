@@ -27,10 +27,7 @@ describe("PrdProposalStore", () => {
 
     it("computes baseContentHash when baseContent is provided", () => {
       const baseContent = "# Current SPEC\n\nOriginal content";
-      const expectedHash = crypto
-        .createHash("sha256")
-        .update(baseContent, "utf8")
-        .digest("hex");
+      const expectedHash = crypto.createHash("sha256").update(baseContent, "utf8").digest("hex");
 
       const result = store.register("hil-0002", "# Proposed", baseContent);
 

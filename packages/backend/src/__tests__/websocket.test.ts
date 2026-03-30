@@ -374,7 +374,9 @@ describe("WebSocket agent.chat event handling", () => {
     const p1 = collectFrom(ws1);
     const p2 = collectFrom(ws2);
 
-    ws1.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-multi", message: "hello all" }));
+    ws1.send(
+      JSON.stringify({ type: "agent.chat.send", taskId: "task-multi", message: "hello all" })
+    );
     const [r1, r2] = await Promise.all([p1, p2]);
 
     expect(r1.type).toBe("agent.chat.received");

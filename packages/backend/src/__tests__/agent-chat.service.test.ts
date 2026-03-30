@@ -80,11 +80,7 @@ describe("AgentChatService", () => {
       const history = service.getHistory("proj-1", taskId);
       expect(history).toHaveLength(3);
       expect(history.map((m) => m.id)).toEqual(["msg-1", "msg-2", "msg-3"]);
-      expect(history.map((m) => m.content)).toEqual([
-        "First",
-        "Second",
-        "Third",
-      ]);
+      expect(history.map((m) => m.content)).toEqual(["First", "Second", "Third"]);
     });
 
     it("filters by attempt when specified", () => {
@@ -310,11 +306,7 @@ describe("AgentChatService", () => {
       const queue = new PendingMessageQueue();
       activeAgents.registerChannel("task-1", queue, "claude-cli");
 
-      const result = service.sendMessage(
-        "proj-1",
-        "task-1",
-        "Hello"
-      );
+      const result = service.sendMessage("proj-1", "task-1", "Hello");
       expect(result.delivered).toBe(false);
       expect(result.error).toContain("CLI-based agent backends");
       expect(result.messageId).toBe("");
@@ -322,11 +314,7 @@ describe("AgentChatService", () => {
     });
 
     it("rejects when no active agent exists", () => {
-      const result = service.sendMessage(
-        "proj-1",
-        "nonexistent",
-        "Hello"
-      );
+      const result = service.sendMessage("proj-1", "nonexistent", "Hello");
       expect(result.delivered).toBe(false);
       expect(result.error).toContain("No active agent");
       expect(result.messageId).toBe("");
@@ -339,11 +327,7 @@ describe("AgentChatService", () => {
       queue.push("msg-1");
       queue.push("msg-2");
 
-      const result = service.sendMessage(
-        "proj-1",
-        "task-1",
-        "This should fail"
-      );
+      const result = service.sendMessage("proj-1", "task-1", "This should fail");
       expect(result.delivered).toBe(false);
       expect(result.messageId).toMatch(/^msg-/);
       expect(result.error).toContain("Too many pending messages");
@@ -373,28 +357,16 @@ describe("AgentChatService", () => {
       service.sendMessage("proj-1", "task-1", "Third");
 
       const drained = queue.drain();
-      expect(drained.map((d) => d.message)).toEqual([
-        "First",
-        "Second",
-        "Third",
-      ]);
+      expect(drained.map((d) => d.message)).toEqual(["First", "Second", "Third"]);
 
       const history = service.getHistory("proj-1", "task-1");
-      expect(history.map((m) => m.content)).toEqual([
-        "First",
-        "Second",
-        "Third",
-      ]);
+      expect(history.map((m) => m.content)).toEqual(["First", "Second", "Third"]);
     });
   });
 
   describe("appendAssistantMessage", () => {
     it("records an assistant response in the chat log", () => {
-      const msg = service.appendAssistantMessage(
-        "task-1",
-        "I will fix the bug now.",
-        1
-      );
+      const msg = service.appendAssistantMessage("task-1", "I will fix the bug now.", 1);
 
       expect(msg.role).toBe("assistant");
       expect(msg.content).toBe("I will fix the bug now.");
@@ -417,12 +389,7 @@ describe("AgentChatService", () => {
 
       const history = service.getHistory("proj-1", "task-1");
       expect(history).toHaveLength(4);
-      expect(history.map((m) => m.role)).toEqual([
-        "user",
-        "assistant",
-        "user",
-        "assistant",
-      ]);
+      expect(history.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
       expect(history.map((m) => m.content)).toEqual([
         "Fix tests",
         "Working on it.",

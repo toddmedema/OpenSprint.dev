@@ -83,9 +83,7 @@ describe("composition", () => {
     expect(services.projectService.getProject).toHaveBeenCalledWith("proj-1");
     expect(services.prdService.getPrd).toHaveBeenCalledWith("proj-1");
     expect(services.chatService.getHistory).toHaveBeenCalledWith("proj-1", "sketch");
-    expect(services.agentInstructionsService.getGeneralInstructions).toHaveBeenCalledWith(
-      "proj-1"
-    );
+    expect(services.agentInstructionsService.getGeneralInstructions).toHaveBeenCalledWith("proj-1");
     expect(services.feedbackService.listFeedback).toHaveBeenCalledWith("proj-1", undefined);
   });
 

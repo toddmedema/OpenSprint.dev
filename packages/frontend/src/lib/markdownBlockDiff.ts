@@ -105,7 +105,7 @@ function mergeRuns(raw: DiffBlock[]): DiffBlock[] {
 
 export function computeMarkdownBlockDiff(
   fromContent: string,
-  toContent: string,
+  toContent: string
 ): MarkdownDiffResult {
   let fromTree: Root;
   let toTree: Root;

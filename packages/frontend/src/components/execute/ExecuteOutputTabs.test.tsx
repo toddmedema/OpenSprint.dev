@@ -187,8 +187,6 @@ describe("ExecuteOutputTabs", () => {
       />
     );
 
-    await expect(
-      user.click(screen.getByRole("tab", { name: "Chat" }))
-    ).resolves.not.toThrow();
+    await expect(user.click(screen.getByRole("tab", { name: "Chat" }))).resolves.not.toThrow();
   });
 });

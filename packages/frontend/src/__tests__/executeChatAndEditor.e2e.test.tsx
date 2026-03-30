@@ -519,9 +519,7 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
     const sendButton = screen.getByRole("button", { name: "Send" });
     expect(sendButton).toBeDisabled();
 
-    expect(
-      screen.getByPlaceholderText("Chat unavailable with CLI backend")
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Chat unavailable with CLI backend")).toBeInTheDocument();
   });
 
   it("handles chatUnsupported WS event and updates Redux state", () => {
@@ -558,9 +556,7 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
     );
 
     expect(screen.getByTestId("chat-not-running-notice")).toBeInTheDocument();
-    expect(
-      screen.getByText(/The agent is not currently running/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/The agent is not currently running/)).toBeInTheDocument();
   });
 
   it("unsupported notice takes priority over not-running notice", () => {
@@ -610,10 +606,7 @@ describe("E2E: Open in Editor (Scenario C)", () => {
     });
 
     await waitFor(() => {
-      expect(ipcMock).toHaveBeenCalledWith(
-        "/tmp/opensprint-worktrees/os-test",
-        "cursor"
-      );
+      expect(ipcMock).toHaveBeenCalledWith("/tmp/opensprint-worktrees/os-test", "cursor");
     });
   });
 
@@ -632,9 +625,7 @@ describe("E2E: Open in Editor (Scenario C)", () => {
       expect(screen.getByTestId("copy-path-popover")).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText("/tmp/opensprint-worktrees/os-test")
-    ).toBeInTheDocument();
+    expect(screen.getByText("/tmp/opensprint-worktrees/os-test")).toBeInTheDocument();
 
     expect(screen.getByTestId("copy-path-btn")).toBeInTheDocument();
 

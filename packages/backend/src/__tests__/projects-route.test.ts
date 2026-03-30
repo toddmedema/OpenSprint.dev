@@ -368,25 +368,22 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     expect(res.body.data.summary).toBeDefined();
   });
 
-  it(
-    "POST /projects/:id/archive removes project from list, keeps .opensprint",
-    async () => {
-      const repoPath = path.join(tempDir, "my-project");
-      const opensprintPath = path.join(repoPath, OPENSPRINT_DIR);
+  it("POST /projects/:id/archive removes project from list, keeps .opensprint", async () => {
+    const repoPath = path.join(tempDir, "my-project");
+    const opensprintPath = path.join(repoPath, OPENSPRINT_DIR);
 
-      const listBefore = await request(app).get(`${API_PREFIX}/projects`);
-      expect(listBefore.body.data).toHaveLength(1);
+    const listBefore = await request(app).get(`${API_PREFIX}/projects`);
+    expect(listBefore.body.data).toHaveLength(1);
 
-      const archiveRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/archive`);
-      expect(archiveRes.status).toBe(204);
+    const archiveRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/archive`);
+    expect(archiveRes.status).toBe(204);
 
-      const listAfter = await request(app).get(`${API_PREFIX}/projects`);
-      expect(listAfter.body.data).toHaveLength(0);
+    const listAfter = await request(app).get(`${API_PREFIX}/projects`);
+    expect(listAfter.body.data).toHaveLength(0);
 
-      const stat = await fs.stat(opensprintPath);
-      expect(stat.isDirectory()).toBe(true);
-    }
-  );
+    const stat = await fs.stat(opensprintPath);
+    expect(stat.isDirectory()).toBe(true);
+  });
 
   it("DELETE /projects/:id removes project from list and deletes .opensprint", async () => {
     const repoPath = path.join(tempDir, "my-project");

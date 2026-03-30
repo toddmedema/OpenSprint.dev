@@ -90,7 +90,9 @@ describe("local-session-auth.service", () => {
         });
 
         it(`${method} — accepts localhost Referer without bearer`, () => {
-          expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(true);
+          expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(
+            true
+          );
         });
 
         it(`${method} — rejects when no credentials at all`, () => {
@@ -110,15 +112,21 @@ describe("local-session-auth.service", () => {
         });
 
         it(`${method} — rejects localhost Origin without bearer (CSRF protection)`, () => {
-          expect(requestIsAuthenticated(method, undefined, LOCALHOST_ORIGIN, undefined)).toBe(false);
+          expect(requestIsAuthenticated(method, undefined, LOCALHOST_ORIGIN, undefined)).toBe(
+            false
+          );
         });
 
         it(`${method} — rejects localhost Referer without bearer (CSRF protection)`, () => {
-          expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(false);
+          expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(
+            false
+          );
         });
 
         it(`${method} — rejects wrong bearer even with localhost origin`, () => {
-          expect(requestIsAuthenticated(method, "Bearer wrong", LOCALHOST_ORIGIN, undefined)).toBe(false);
+          expect(requestIsAuthenticated(method, "Bearer wrong", LOCALHOST_ORIGIN, undefined)).toBe(
+            false
+          );
         });
 
         it(`${method} — rejects no credentials`, () => {

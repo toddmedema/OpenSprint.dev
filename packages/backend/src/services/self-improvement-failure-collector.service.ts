@@ -29,6 +29,9 @@ export interface CollectedFailure {
   failureType: AgentFailureType;
   /** The raw failure type string from the event/task (e.g. "test_failure", "merge_conflict"). */
   rawFailureType?: string;
+  noResultReasonCode?: string;
+  policyDecision?: string;
+  apiErrorKind?: string;
   failedCommand?: string;
   errorSnippet?: string;
   attemptCount: number;
@@ -37,12 +40,7 @@ export interface CollectedFailure {
   timestamp: string;
 }
 
-const FAILURE_EVENTS = new Set([
-  "task.failed",
-  "task.blocked",
-  "merge.failed",
-  "task.requeued",
-]);
+const FAILURE_EVENTS = new Set(["task.failed", "task.blocked", "merge.failed", "task.requeued"]);
 
 /**
  * Map raw failure-type strings (from FailureType union or event data) to
@@ -78,7 +76,7 @@ export function classifyFailureType(raw: string | undefined | null): AgentFailur
  */
 function resolveDisposition(
   eventName: string,
-  task: StoredTask | undefined,
+  task: StoredTask | undefined
 ): CollectedFailure["finalDisposition"] {
   if (task) {
     const s = (task.status as string) ?? "open";
@@ -120,7 +118,7 @@ function extractFailedCommand(data: Record<string, unknown> | undefined): string
  */
 export async function collectFailuresSince(
   projectId: string,
-  sinceIso: string | undefined,
+  sinceIso: string | undefined
 ): Promise<CollectedFailure[]> {
   const since = sinceIso?.trim() || "1970-01-01T00:00:00.000Z";
 
@@ -174,6 +172,11 @@ export async function collectFailuresSince(
       taskId,
       failureType,
       ...(rawType && { rawFailureType: rawType }),
+      ...(typeof data?.noResultReasonCode === "string" && {
+        noResultReasonCode: data.noResultReasonCode,
+      }),
+      ...(typeof data?.policyDecision === "string" && { policyDecision: data.policyDecision }),
+      ...(typeof data?.apiErrorKind === "string" && { apiErrorKind: data.apiErrorKind }),
       failedCommand: extractFailedCommand(data),
       errorSnippet: extractErrorSnippet(data),
       attemptCount,
@@ -204,7 +207,18 @@ export function formatFailuresForPrompt(failures: CollectedFailure[]): string {
 
   for (const f of failures) {
     lines.push(`### Task ${f.taskId}`);
-    lines.push(`- **Failure type:** ${f.failureType}${f.rawFailureType ? ` (${f.rawFailureType})` : ""}`);
+    lines.push(
+      `- **Failure type:** ${f.failureType}${f.rawFailureType ? ` (${f.rawFailureType})` : ""}`
+    );
+    if (f.noResultReasonCode) {
+      lines.push(`- **No-result reason code:** ${f.noResultReasonCode}`);
+    }
+    if (f.policyDecision) {
+      lines.push(`- **Policy decision:** ${f.policyDecision}`);
+    }
+    if (f.apiErrorKind) {
+      lines.push(`- **API error kind:** ${f.apiErrorKind}`);
+    }
     lines.push(`- **Attempts:** ${f.attemptCount}`);
     lines.push(`- **Disposition:** ${f.finalDisposition}`);
     if (f.failedCommand) {
@@ -249,14 +263,22 @@ export function buildFailureReviewSystemSupplement(failures: CollectedFailure[])
   ];
 
   if (hasEnvOrInfra) {
-    lines.push("   - **Environmental/infrastructure:** failures caused by environment setup, missing tools, dependency issues, CI configuration, or quality-gate command misconfiguration.");
+    lines.push(
+      "   - **Environmental/infrastructure:** failures caused by environment setup, missing tools, dependency issues, CI configuration, or quality-gate command misconfiguration."
+    );
   }
   if (hasCodeLogic) {
-    lines.push("   - **Code/logic:** failures caused by bugs, incorrect implementations, test logic errors, or merge conflicts from overlapping changes.");
+    lines.push(
+      "   - **Code/logic:** failures caused by bugs, incorrect implementations, test logic errors, or merge conflicts from overlapping changes."
+    );
   }
   if (!hasEnvOrInfra && !hasCodeLogic) {
-    lines.push("   - **Environmental/infrastructure:** failures caused by environment setup, missing tools, dependency issues, CI configuration.");
-    lines.push("   - **Code/logic:** failures caused by bugs, incorrect implementations, test logic errors, or merge conflicts.");
+    lines.push(
+      "   - **Environmental/infrastructure:** failures caused by environment setup, missing tools, dependency issues, CI configuration."
+    );
+    lines.push(
+      "   - **Code/logic:** failures caused by bugs, incorrect implementations, test logic errors, or merge conflicts."
+    );
   }
 
   lines.push(
@@ -272,7 +294,7 @@ export function buildFailureReviewSystemSupplement(failures: CollectedFailure[])
     "   - `complexity` — as usual, 1-10 based on implementation difficulty.",
     "",
     "Prioritize root-cause fix tasks for **high-frequency** (affecting multiple tasks) and **high-impact** (tasks blocked rather than requeued) failure patterns.",
-    "Root-cause fix tasks should appear first in your output, before general improvement tasks.",
+    "Root-cause fix tasks should appear first in your output, before general improvement tasks."
   );
 
   return lines.join("\n");

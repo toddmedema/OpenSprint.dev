@@ -12,44 +12,40 @@ import {
 describe("TASK_GENERATION_SYSTEM_PROMPT", () => {
   it("states the 15-task cap explicitly", () => {
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Generate between 8 and 15 implementation tasks. Never exceed 15.",
+      "Generate between 8 and 15 implementation tasks. Never exceed 15."
     );
   });
 
   it("instructs consolidation when more than 15 tasks seem needed", () => {
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "consolidate related concerns into fewer, broader tasks rather than exceeding the cap",
+      "consolidate related concerns into fewer, broader tasks rather than exceeding the cap"
     );
   });
 
   it("requires single-scope tasks with one primary outcome", () => {
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Each task must have exactly one primary outcome",
+      "Each task must have exactly one primary outcome"
     );
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "one file concern, one API endpoint, one component",
+      "one file concern, one API endpoint, one component"
     );
   });
 
   it("requires explicit acceptance criteria in descriptions", () => {
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "**Acceptance criteria:** A numbered list of concrete, verifiable conditions",
+      "**Acceptance criteria:** A numbered list of concrete, verifiable conditions"
     );
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Each task description must contain explicit acceptance criteria (numbered list)",
+      "Each task description must contain explicit acceptance criteria (numbered list)"
     );
   });
 
   it("requires stable dependency references using exact titles", () => {
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Use exact task titles from your output for dependsOn entries",
+      "Use exact task titles from your output for dependsOn entries"
     );
-    expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "copy them character-for-character",
-    );
-    expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Do not paraphrase or abbreviate",
-    );
+    expect(TASK_GENERATION_SYSTEM_PROMPT).toContain("copy them character-for-character");
+    expect(TASK_GENERATION_SYSTEM_PROMPT).toContain("Do not paraphrase or abbreviate");
   });
 
   it("preserves the JSON output schema", () => {
@@ -63,17 +59,13 @@ describe("TASK_GENERATION_SYSTEM_PROMPT", () => {
   });
 
   it("retains task-level complexity range 1-10", () => {
-    expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Task-level complexity: integer 1-10 only",
-    );
+    expect(TASK_GENERATION_SYSTEM_PROMPT).toContain("Task-level complexity: integer 1-10 only");
   });
 });
 
 describe("DECOMPOSE_SYSTEM_PROMPT", () => {
   it("contains the scale/speed/cost instruction paragraph", () => {
-    expect(DECOMPOSE_SYSTEM_PROMPT).toContain(
-      "**Scale, speed, and cost:**",
-    );
+    expect(DECOMPOSE_SYSTEM_PROMPT).toContain("**Scale, speed, and cost:**");
   });
 
   it("references all three constraint categories", () => {
@@ -84,13 +76,13 @@ describe("DECOMPOSE_SYSTEM_PROMPT", () => {
 
   it("instructs Technical Approach handling when constraints are present", () => {
     expect(DECOMPOSE_SYSTEM_PROMPT).toContain(
-      "ensure each relevant plan's Technical Approach reflects them",
+      "ensure each relevant plan's Technical Approach reflects them"
     );
   });
 
   it("instructs Assumptions note when constraints are absent for affected plans", () => {
     expect(DECOMPOSE_SYSTEM_PROMPT).toContain(
-      "add a brief note in the Assumptions section of plans likely affected by scale/speed/cost",
+      "add a brief note in the Assumptions section of plans likely affected by scale/speed/cost"
     );
   });
 
@@ -111,21 +103,13 @@ describe("SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT", () => {
   });
 
   it("enforces the 15-task threshold for strategy selection", () => {
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      "15 or fewer",
-    );
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      "more than 15",
-    );
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("15 or fewer");
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("more than 15");
   });
 
   it("specifies max depth constraint", () => {
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      `${MAX_SUB_PLAN_DEPTH} levels deep`,
-    );
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      `already **${MAX_SUB_PLAN_DEPTH}**`,
-    );
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(`${MAX_SUB_PLAN_DEPTH} levels deep`);
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(`already **${MAX_SUB_PLAN_DEPTH}**`);
   });
 
   it("includes both JSON output shapes", () => {
@@ -134,9 +118,7 @@ describe("SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT", () => {
   });
 
   it("requires sub-plan content to follow plan template structure", () => {
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      "plan template structure",
-    );
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("plan template structure");
     expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("Overview");
     expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("Acceptance Criteria");
     expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("Technical Approach");
@@ -161,20 +143,16 @@ describe("SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT", () => {
   });
 
   it("requires acceptance criteria in task descriptions", () => {
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      "**Acceptance criteria:**",
-    );
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("**Acceptance criteria:**");
   });
 
   it("requires stable dependency references for tasks", () => {
-    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      "character-for-character",
-    );
+    expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain("character-for-character");
   });
 
   it("instructs no file modifications", () => {
     expect(SUB_PLAN_DECOMPOSITION_SYSTEM_PROMPT).toContain(
-      "Do NOT create, modify, stage, or commit repository files",
+      "Do NOT create, modify, stage, or commit repository files"
     );
   });
 });

@@ -81,11 +81,7 @@ export class OAuthStateStore {
       const raw = fs.readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw) as Record<string, StoredOAuthState>;
       for (const [state, entry] of Object.entries(parsed)) {
-        if (
-          entry &&
-          typeof entry.projectId === "string" &&
-          typeof entry.expiresAt === "number"
-        ) {
+        if (entry && typeof entry.projectId === "string" && typeof entry.expiresAt === "number") {
           this.states.set(state, entry);
         }
       }
@@ -148,7 +144,11 @@ export class OAuthStateStore {
         this.cleanupTimer = null;
       }
     }, STATE_CLEANUP_INTERVAL_MS);
-    if (this.cleanupTimer && typeof this.cleanupTimer === "object" && "unref" in this.cleanupTimer) {
+    if (
+      this.cleanupTimer &&
+      typeof this.cleanupTimer === "object" &&
+      "unref" in this.cleanupTimer
+    ) {
       this.cleanupTimer.unref();
     }
   }
@@ -209,9 +209,7 @@ export interface TodoistIntegrationRouterDeps {
 
 type ProjectParams = { projectId: string };
 
-export function createTodoistIntegrationRouter(
-  deps: TodoistIntegrationRouterDeps,
-): Router {
+export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDeps): Router {
   const router = Router({ mergeParams: true });
   const { integrationStore, tokenEncryption } = deps;
 
@@ -239,11 +237,7 @@ export function createTodoistIntegrationRouter(
       const state = generateOAuthState();
       oauthStateStore.store(state, projectId);
 
-      const authorizationUrl = buildAuthorizationUrl(
-        config.clientId,
-        OAUTH_SCOPES,
-        state,
-      );
+      const authorizationUrl = buildAuthorizationUrl(config.clientId, OAUTH_SCOPES, state);
 
       log.info("OAuth flow started", { projectId });
 
@@ -251,7 +245,7 @@ export function createTodoistIntegrationRouter(
         data: { authorizationUrl },
       };
       res.json(body);
-    }),
+    })
   );
 
   // GET /oauth/callback
@@ -289,7 +283,7 @@ export function createTodoistIntegrationRouter(
       const { accessToken } = await exchangeCodeForToken(
         config.clientId,
         config.clientSecret,
-        code,
+        code
       );
 
       const encryptedToken = tokenEncryption.encryptToken(accessToken);
@@ -323,17 +317,16 @@ export function createTodoistIntegrationRouter(
 
       const redirectUrl = config.redirectUri.replace(
         /\/api\/.*$/,
-        `/projects/${projectId}/settings?integration=todoist&status=success`,
+        `/projects/${projectId}/settings?integration=todoist&status=success`
       );
 
-      const isApiClient =
-        req.headers.accept?.includes("application/json") ?? false;
+      const isApiClient = req.headers.accept?.includes("application/json") ?? false;
       if (isApiClient) {
         res.json({ data: { success: true, projectId } });
       } else {
         res.redirect(redirectUrl);
       }
-    }),
+    })
   );
 
   // GET /status
@@ -360,9 +353,7 @@ export function createTodoistIntegrationRouter(
       if (connection.provider_user_id) {
         status.todoistUser = {
           id: connection.provider_user_id,
-          ...(connection.provider_user_email
-            ? { email: connection.provider_user_email }
-            : {}),
+          ...(connection.provider_user_email ? { email: connection.provider_user_email } : {}),
         };
       }
 
@@ -383,7 +374,7 @@ export function createTodoistIntegrationRouter(
 
       log.info("Returned integration status", { projectId, connected: true });
       res.json({ data: status });
-    }),
+    })
   );
 
   // GET /projects
@@ -408,16 +399,13 @@ export function createTodoistIntegrationRouter(
         res.status(409).json({
           error: {
             code: "NEEDS_RECONNECT",
-            message:
-              "Todoist connection requires re-authentication. Please reconnect.",
+            message: "Todoist connection requires re-authentication. Please reconnect.",
           },
         });
         return;
       }
 
-      const encryptedToken = await integrationStore.getEncryptedTokenById(
-        connection.id,
-      );
+      const encryptedToken = await integrationStore.getEncryptedTokenById(connection.id);
       if (!encryptedToken) {
         res.status(500).json({
           error: {
@@ -451,14 +439,13 @@ export function createTodoistIntegrationRouter(
           await integrationStore.updateConnectionStatus(
             connection.id,
             "needs_reconnect",
-            err.message,
+            err.message
           );
           log.warn("Todoist auth failed — marked needs_reconnect", { projectId });
           res.status(401).json({
             error: {
               code: "TODOIST_AUTH_FAILED",
-              message:
-                "Todoist authentication failed. Please reconnect your account.",
+              message: "Todoist authentication failed. Please reconnect your account.",
             },
           });
           return;
@@ -482,7 +469,7 @@ export function createTodoistIntegrationRouter(
 
         throw err;
       }
-    }),
+    })
   );
 
   // PUT /project
@@ -505,9 +492,7 @@ export function createTodoistIntegrationRouter(
         return;
       }
 
-      const encryptedToken = await integrationStore.getEncryptedTokenById(
-        connection.id,
-      );
+      const encryptedToken = await integrationStore.getEncryptedTokenById(connection.id);
       if (!encryptedToken) {
         res.status(500).json({
           error: {
@@ -540,14 +525,13 @@ export function createTodoistIntegrationRouter(
           await integrationStore.updateConnectionStatus(
             connection.id,
             "needs_reconnect",
-            err.message,
+            err.message
           );
           log.warn("Todoist auth failed — marked needs_reconnect", { projectId });
           res.status(401).json({
             error: {
               code: "TODOIST_AUTH_FAILED",
-              message:
-                "Todoist authentication failed. Please reconnect your account.",
+              message: "Todoist authentication failed. Please reconnect your account.",
             },
           });
           return;
@@ -586,7 +570,7 @@ export function createTodoistIntegrationRouter(
       await integrationStore.updateSelectedResource(
         connection.id,
         selectedProject.id,
-        selectedProject.name,
+        selectedProject.name
       );
 
       log.info("Todoist project selected", {
@@ -604,7 +588,7 @@ export function createTodoistIntegrationRouter(
           },
         },
       });
-    }),
+    })
   );
 
   // POST /sync
@@ -629,8 +613,7 @@ export function createTodoistIntegrationRouter(
         res.status(409).json({
           error: {
             code: "NEEDS_RECONNECT",
-            message:
-              "Todoist connection requires re-authentication. Please reconnect.",
+            message: "Todoist connection requires re-authentication. Please reconnect.",
           },
         });
         return;
@@ -660,9 +643,7 @@ export function createTodoistIntegrationRouter(
         return;
       }
 
-      const result: TodoistSyncResult = await deps.todoistSyncService.runSync(
-        connection.id,
-      );
+      const result: TodoistSyncResult = await deps.todoistSyncService.runSync(connection.id);
 
       log.info("Manual sync completed", {
         projectId,
@@ -671,7 +652,7 @@ export function createTodoistIntegrationRouter(
       });
 
       res.json({ data: result });
-    }),
+    })
   );
 
   // DELETE /
@@ -693,9 +674,7 @@ export function createTodoistIntegrationRouter(
       }
 
       // Attempt token revocation — failure must not block disconnect
-      const encryptedToken = await integrationStore.getEncryptedTokenById(
-        connection.id,
-      );
+      const encryptedToken = await integrationStore.getEncryptedTokenById(connection.id);
       if (encryptedToken) {
         try {
           const accessToken = tokenEncryption.decryptToken(encryptedToken);
@@ -711,15 +690,15 @@ export function createTodoistIntegrationRouter(
       }
 
       // Check for pending_delete ledger entries
-      const pendingDeletes = await integrationStore.getPendingDeletes(
-        projectId,
-        "todoist",
-      );
+      const pendingDeletes = await integrationStore.getPendingDeletes(projectId, "todoist");
       const pendingCount = pendingDeletes.length;
 
       await integrationStore.deleteConnection(projectId, "todoist");
 
-      log.info("Todoist disconnected", { projectId, pendingDeletesWarning: pendingCount || undefined });
+      log.info("Todoist disconnected", {
+        projectId,
+        pendingDeletesWarning: pendingCount || undefined,
+      });
 
       const body: { data: { disconnected: true; pendingDeletesWarning?: number } } = {
         data: { disconnected: true },
@@ -729,7 +708,7 @@ export function createTodoistIntegrationRouter(
       }
 
       res.json(body);
-    }),
+    })
   );
 
   return router;

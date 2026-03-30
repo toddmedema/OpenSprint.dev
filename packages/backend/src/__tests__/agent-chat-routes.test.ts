@@ -35,9 +35,27 @@ describe("GET /tasks/:taskId/chat-history", () => {
 
   it("returns messages in chronological order for a given attempt", async () => {
     const messages = [
-      { id: "msg-1", timestamp: "2026-03-25T10:00:00Z", role: "user", content: "First", attempt: 1 },
-      { id: "msg-2", timestamp: "2026-03-25T10:01:00Z", role: "assistant", content: "Second", attempt: 1 },
-      { id: "msg-3", timestamp: "2026-03-25T10:02:00Z", role: "user", content: "Third", attempt: 1 },
+      {
+        id: "msg-1",
+        timestamp: "2026-03-25T10:00:00Z",
+        role: "user",
+        content: "First",
+        attempt: 1,
+      },
+      {
+        id: "msg-2",
+        timestamp: "2026-03-25T10:01:00Z",
+        role: "assistant",
+        content: "Second",
+        attempt: 1,
+      },
+      {
+        id: "msg-3",
+        timestamp: "2026-03-25T10:02:00Z",
+        role: "user",
+        content: "Third",
+        attempt: 1,
+      },
     ];
     mockGetHistory.mockReturnValue(messages);
     mockSupportsChat.mockReturnValue({ supported: true, backend: "claude", reason: null });
@@ -61,35 +79,50 @@ describe("GET /tasks/:taskId/chat-history", () => {
 
   it("defaults to the latest attempt when attempt is omitted", async () => {
     const allMessages = [
-      { id: "msg-a1", timestamp: "2026-03-25T09:00:00Z", role: "user", content: "Attempt 1", attempt: 1 },
-      { id: "msg-a2", timestamp: "2026-03-25T10:00:00Z", role: "user", content: "Attempt 2", attempt: 2 },
-      { id: "msg-a3", timestamp: "2026-03-25T10:01:00Z", role: "assistant", content: "Reply attempt 2", attempt: 2 },
+      {
+        id: "msg-a1",
+        timestamp: "2026-03-25T09:00:00Z",
+        role: "user",
+        content: "Attempt 1",
+        attempt: 1,
+      },
+      {
+        id: "msg-a2",
+        timestamp: "2026-03-25T10:00:00Z",
+        role: "user",
+        content: "Attempt 2",
+        attempt: 2,
+      },
+      {
+        id: "msg-a3",
+        timestamp: "2026-03-25T10:01:00Z",
+        role: "assistant",
+        content: "Reply attempt 2",
+        attempt: 2,
+      },
     ];
     mockGetHistory.mockReturnValue(allMessages);
     mockSupportsChat.mockReturnValue({ supported: true, backend: "openai", reason: null });
 
-    const res = await request(app).get(
-      `${API_PREFIX}/projects/proj-1/tasks/os-5678/chat-history`
-    );
+    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-5678/chat-history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.attempt).toBe(2);
     expect(res.body.data.messages).toHaveLength(2);
-    expect(res.body.data.messages.map((m: { id: string }) => m.id)).toEqual([
-      "msg-a2",
-      "msg-a3",
-    ]);
+    expect(res.body.data.messages.map((m: { id: string }) => m.id)).toEqual(["msg-a2", "msg-a3"]);
 
     expect(mockGetHistory).toHaveBeenCalledWith("proj-1", "os-5678");
   });
 
   it("returns attempt=1 and empty messages when no chat history exists", async () => {
     mockGetHistory.mockReturnValue([]);
-    mockSupportsChat.mockReturnValue({ supported: false, backend: null, reason: "No active agent found for this task." });
+    mockSupportsChat.mockReturnValue({
+      supported: false,
+      backend: null,
+      reason: "No active agent found for this task.",
+    });
 
-    const res = await request(app).get(
-      `${API_PREFIX}/projects/proj-1/tasks/os-empty/chat-history`
-    );
+    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-empty/chat-history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.attempt).toBe(1);
@@ -102,7 +135,8 @@ describe("GET /tasks/:taskId/chat-history", () => {
     mockSupportsChat.mockReturnValue({
       supported: false,
       backend: "claude-cli",
-      reason: "Chat is not available for CLI-based agent backends. Switch to API mode (Project Settings → Agent Config) to chat with running agents.",
+      reason:
+        "Chat is not available for CLI-based agent backends. Switch to API mode (Project Settings → Agent Config) to chat with running agents.",
     });
 
     const res = await request(app).get(
@@ -133,9 +167,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
   it("returns supported=true for API backend (claude)", async () => {
     mockSupportsChat.mockReturnValue({ supported: true, backend: "claude", reason: null });
 
-    const res = await request(app).get(
-      `${API_PREFIX}/projects/proj-1/tasks/os-api/chat-support`
-    );
+    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-api/chat-support`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({

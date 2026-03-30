@@ -1001,7 +1001,9 @@ describe("api client", () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
         status: 200,
-        json: vi.fn().mockResolvedValue({ data: { messages: [], attempt: 2, chatSupported: false } }),
+        json: vi
+          .fn()
+          .mockResolvedValue({ data: { messages: [], attempt: 2, chatSupported: false } }),
       } as Response);
 
       await api.tasks.chatHistory("proj-1", "os-1234", 2);

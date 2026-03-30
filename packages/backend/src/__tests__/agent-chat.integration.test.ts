@@ -14,11 +14,7 @@ import os from "os";
 import { WebSocket } from "ws";
 import express from "express";
 import request from "supertest";
-import {
-  setupWebSocket,
-  closeWebSocket,
-  sendAgentChatResponse,
-} from "../websocket/index.js";
+import { setupWebSocket, closeWebSocket, sendAgentChatResponse } from "../websocket/index.js";
 import { AgentChatService } from "../services/agent-chat.service.js";
 import { ActiveAgentsService } from "../services/active-agents.service.js";
 import { PendingMessageQueue } from "../services/agentic-loop.js";
@@ -86,7 +82,8 @@ function collectEvents(
   return new Promise((resolve, reject) => {
     const events: Record<string, unknown>[] = [];
     const timer = setTimeout(
-      () => reject(new Error(`Timed out waiting for ${count} ${type} event(s); got ${events.length}`)),
+      () =>
+        reject(new Error(`Timed out waiting for ${count} ${type} event(s); got ${events.length}`)),
       timeoutMs
     );
     ws.on("message", (data) => {
@@ -204,7 +201,9 @@ describe("agent-chat integration (WebSocket)", () => {
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     const receivedPromise = waitForEvent(ws, "agent.chat.received");
-    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-api", message: "Describe the bug" }));
+    ws.send(
+      JSON.stringify({ type: "agent.chat.send", taskId: "task-api", message: "Describe the bug" })
+    );
 
     const received = await receivedPromise;
     expect(received.type).toBe("agent.chat.received");
@@ -219,7 +218,12 @@ describe("agent-chat integration (WebSocket)", () => {
 
     // Simulate the agentic loop responding
     const responsePromise = waitForEvent(ws, "agent.chat.response");
-    sendAgentChatResponse("proj-integ", "task-api", received.messageId as string, "I found the issue in line 42.");
+    sendAgentChatResponse(
+      "proj-integ",
+      "task-api",
+      received.messageId as string,
+      "I found the issue in line 42."
+    );
     const response = await responsePromise;
     expect(response.type).toBe("agent.chat.response");
     expect(response.taskId).toBe("task-api");
@@ -329,7 +333,9 @@ describe("agent-chat integration (WebSocket)", () => {
 
     // User sends chat
     const receivedPromise = waitForEvent(ws, "agent.chat.received");
-    ws.send(JSON.stringify({ type: "agent.chat.send", taskId: "task-round", message: "Fix tests" }));
+    ws.send(
+      JSON.stringify({ type: "agent.chat.send", taskId: "task-round", message: "Fix tests" })
+    );
     const _received = await receivedPromise;
 
     // Simulate assistant responding and persisting
@@ -393,9 +399,7 @@ describe("open-editor integration (HTTP)", () => {
       ],
     });
 
-    const res = await request(app).post(
-      `${API_PREFIX}/projects/proj-1/tasks/os-1234/open-editor`
-    );
+    const res = await request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-1234/open-editor`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.worktreePath).toBe(tmpDir);
@@ -418,9 +422,7 @@ describe("open-editor integration (HTTP)", () => {
       ],
     });
 
-    const res = await request(app).post(
-      `${API_PREFIX}/projects/proj-1/tasks/os-404/open-editor`
-    );
+    const res = await request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-404/open-editor`);
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("WORKTREE_NOT_FOUND");
@@ -433,9 +435,7 @@ describe("open-editor integration (HTTP)", () => {
       activeTasks: [],
     });
 
-    const res = await request(app).post(
-      `${API_PREFIX}/projects/proj-1/tasks/os-idle/open-editor`
-    );
+    const res = await request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-idle/open-editor`);
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("TASK_NOT_EXECUTING");

@@ -525,9 +525,7 @@ describe("executeSlice", () => {
 
     it("taskUpdated clears lastExecutionSummary when server sends null", () => {
       const store = createStore();
-      store.dispatch(
-        setTasks([{ ...mockTask, lastExecutionSummary: "old summary" }])
-      );
+      store.dispatch(setTasks([{ ...mockTask, lastExecutionSummary: "old summary" }]));
       store.dispatch(
         taskUpdated({
           taskId: "task-1",

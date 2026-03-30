@@ -93,11 +93,7 @@ export class ActiveAgentsService {
    * Register a pending-messages channel for a task so other services
    * (e.g. AgentChatService) can push live user messages into the agentic loop.
    */
-  registerChannel(
-    id: string,
-    pendingMessages: PendingMessageQueue,
-    backendType: string
-  ): void {
+  registerChannel(id: string, pendingMessages: PendingMessageQueue, backendType: string): void {
     this.channels.set(id, { pendingMessages, backendType });
   }
 

@@ -45,7 +45,7 @@ export interface EvaluatePlanComplexityOptions {
  * without invoking the LLM.
  */
 export async function evaluatePlanComplexity(
-  options: EvaluatePlanComplexityOptions,
+  options: EvaluatePlanComplexityOptions
 ): Promise<SubPlanDecompositionResult> {
   const {
     projectId,

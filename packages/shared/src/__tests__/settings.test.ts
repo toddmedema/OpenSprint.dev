@@ -2179,9 +2179,7 @@ describe("self-improvement reviewer agent settings", () => {
         selfImprovementReviewAngles: ["code_quality"],
       });
       expect(parsed.selfImprovementReviewerAgents).toEqual(["code_quality"]);
-      expect(
-        (parsed as Record<string, unknown>).selfImprovementReviewAngles
-      ).toBeUndefined();
+      expect((parsed as Record<string, unknown>).selfImprovementReviewAngles).toBeUndefined();
     });
 
     it("should prefer selfImprovementReviewerAgents over legacy selfImprovementReviewAngles", () => {

@@ -13,10 +13,7 @@ export function NotificationBar() {
     [notifications]
   );
 
-  const handleDismiss = useCallback(
-    (id: string) => dispatch(dismissNotification(id)),
-    [dispatch]
-  );
+  const handleDismiss = useCallback((id: string) => dispatch(dismissNotification(id)), [dispatch]);
 
   if (toasts.length === 0) return null;
 

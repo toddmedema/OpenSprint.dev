@@ -92,16 +92,20 @@ process.on("uncaughtException", (err) => {
 `;
 
   try {
-    const child = spawn(process.execPath, ["-e", script, String(backendPid), String(parentPid), sessionId], {
-      detached: true,
-      env: {
-        ...process.env,
-        // Backend clears this globally so other child processes run normally.
-        // Re-enable it only for this helper so Electron's embedded runtime behaves like Node.
-        ELECTRON_RUN_AS_NODE: "1",
-      },
-      stdio: "ignore",
-    });
+    const child = spawn(
+      process.execPath,
+      ["-e", script, String(backendPid), String(parentPid), sessionId],
+      {
+        detached: true,
+        env: {
+          ...process.env,
+          // Backend clears this globally so other child processes run normally.
+          // Re-enable it only for this helper so Electron's embedded runtime behaves like Node.
+          ELECTRON_RUN_AS_NODE: "1",
+        },
+        stdio: "ignore",
+      }
+    );
     child.unref();
     appendRuntimeTrace("process.sentinel_started", sessionId, {
       watcherPid: child.pid ?? null,

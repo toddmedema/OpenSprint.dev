@@ -10,7 +10,9 @@ vi.mock("../services/structured-agent-output.service.js", () => ({
 }));
 
 vi.mock("../services/agent-instructions.service.js", () => ({
-  getCombinedInstructions: vi.fn().mockResolvedValue("## Open Sprint Defaults\n\n### Planner Defaults\n"),
+  getCombinedInstructions: vi
+    .fn()
+    .mockResolvedValue("## Open Sprint Defaults\n\n### Planner Defaults\n"),
 }));
 
 vi.mock("../services/plan/plan-repo-guard.js", () => ({
@@ -44,7 +46,9 @@ describe("evaluatePlanComplexity", () => {
   });
 
   it("forces tasks strategy at depth > MAX_SUB_PLAN_DEPTH without calling the LLM", async () => {
-    const result = await evaluatePlanComplexity(baseOptions({ currentDepth: MAX_SUB_PLAN_DEPTH + 2 }));
+    const result = await evaluatePlanComplexity(
+      baseOptions({ currentDepth: MAX_SUB_PLAN_DEPTH + 2 })
+    );
 
     expect(result).toEqual({ strategy: "tasks", tasks: [] });
     expect(mockInvokeStructuredPlanningAgent).not.toHaveBeenCalled();
@@ -53,9 +57,7 @@ describe("evaluatePlanComplexity", () => {
   it("calls the LLM when depth < MAX_SUB_PLAN_DEPTH and returns tasks strategy", async () => {
     const agentResult = {
       strategy: "tasks" as const,
-      tasks: [
-        { title: "Task A", description: "Do A", priority: 1, dependsOn: [], complexity: 3 },
-      ],
+      tasks: [{ title: "Task A", description: "Do A", priority: 1, dependsOn: [], complexity: 3 }],
     };
     mockInvokeStructuredPlanningAgent.mockResolvedValue({
       ok: true,
@@ -126,7 +128,7 @@ describe("evaluatePlanComplexity", () => {
         currentDepth: 1,
         ancestorChainSummary: "Root plan: Build the app",
         siblingPlanSummaries: "Sibling: Auth module",
-      }),
+      })
     );
 
     const call = mockInvokeStructuredPlanningAgent.mock.calls[0]?.[0];

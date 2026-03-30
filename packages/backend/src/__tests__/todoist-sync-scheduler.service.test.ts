@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { IntegrationConnection, TodoistSyncResult } from "@opensprint/shared";
 
-const mockGetActiveConnections = vi.fn<
-  (provider?: string) => Promise<IntegrationConnection[]>
->().mockResolvedValue([]);
+const mockGetActiveConnections = vi
+  .fn<(provider?: string) => Promise<IntegrationConnection[]>>()
+  .mockResolvedValue([]);
 
 vi.mock("../services/integration-store.service.js", () => ({
   integrationStore: {
-    getActiveConnections: (...args: unknown[]) => mockGetActiveConnections(...args as [string?]),
+    getActiveConnections: (...args: unknown[]) => mockGetActiveConnections(...(args as [string?])),
   },
 }));
 
@@ -59,7 +59,8 @@ function makeConnection(overrides: Partial<IntegrationConnection> = {}): Integra
 }
 
 function makeMockSyncService(runSyncImpl?: (id: string) => Promise<TodoistSyncResult>) {
-  const runSync = vi.fn<(id: string) => Promise<TodoistSyncResult>>()
+  const runSync = vi
+    .fn<(id: string) => Promise<TodoistSyncResult>>()
     .mockImplementation(runSyncImpl ?? (() => Promise.resolve({ imported: 0, errors: 0 })));
   return { runSync } as unknown as import("../services/todoist-sync.service.js").TodoistSyncService;
 }

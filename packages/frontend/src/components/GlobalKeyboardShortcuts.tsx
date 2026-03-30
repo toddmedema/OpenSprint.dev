@@ -87,13 +87,7 @@ export function GlobalKeyboardShortcuts() {
       const key = e.key;
 
       // Ctrl+Tab / Ctrl+Shift+Tab: cycle phase tabs (wrap) — works even when focus is in an input/textarea
-      if (
-        key === "Tab" &&
-        e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        projectId
-      ) {
+      if (key === "Tab" && e.ctrlKey && !e.metaKey && !e.altKey && projectId) {
         e.preventDefault();
         e.stopPropagation();
         const len = VALID_PHASES.length;

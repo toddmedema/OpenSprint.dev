@@ -47,11 +47,7 @@ export class PrdProposalStore {
    * If `baseContent` is provided its SHA-256 hex digest is stored as
    * `baseContentHash` for staleness detection.
    */
-  register(
-    requestId: string,
-    proposedContent: string,
-    baseContent?: string,
-  ): PrdProposal {
+  register(requestId: string, proposedContent: string, baseContent?: string): PrdProposal {
     const createdAt = new Date().toISOString();
     const baseContentHash = baseContent ? hashContent(baseContent) : undefined;
     const entry: PrdProposalEntry = {

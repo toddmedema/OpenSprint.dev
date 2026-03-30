@@ -90,7 +90,9 @@ export function SidebarSectionNav({
     const updateActiveSection = () => {
       const entries = Array.from(visibleSections.entries());
       if (entries.length === 0) {
-        setActiveSectionId((prev) => (prev && sections.some((s) => s.id === prev) ? prev : sections[0].id));
+        setActiveSectionId((prev) =>
+          prev && sections.some((s) => s.id === prev) ? prev : sections[0].id
+        );
         return;
       }
       const rootRect = scrollEl.getBoundingClientRect();

@@ -525,9 +525,7 @@ export const api = {
     getActiveExecuteBatch: (projectId: string) =>
       request<PlanExecuteBatchStatus | null>(`/projects/${projectId}/plans/execute-batch/active`),
     getExecuteBatchStatus: (projectId: string, batchId: string) =>
-      request<PlanExecuteBatchStatus>(
-        `/projects/${projectId}/plans/execute-batch/${batchId}`
-      ),
+      request<PlanExecuteBatchStatus>(`/projects/${projectId}/plans/execute-batch/${batchId}`),
     reExecute: (projectId: string, planId: string, options?: { version_number?: number }) => {
       const body: { version_number?: number } = {};
       if (options?.version_number != null) body.version_number = options.version_number;
@@ -609,18 +607,15 @@ export const api = {
         method: "POST",
       }),
     openEditor: (projectId: string, taskId: string) =>
-      request<OpenEditorResponse>(
-        `/projects/${projectId}/tasks/${taskId}/open-editor`,
-        { method: "POST" }
-      ),
+      request<OpenEditorResponse>(`/projects/${projectId}/tasks/${taskId}/open-editor`, {
+        method: "POST",
+      }),
     chatHistory: (projectId: string, taskId: string, attempt?: number) =>
       request<AgentChatHistoryResponse>(
         `/projects/${projectId}/tasks/${taskId}/chat-history${attempt != null ? `?attempt=${attempt}` : ""}`
       ),
     chatSupport: (projectId: string, taskId: string) =>
-      request<AgentChatSupportResponse>(
-        `/projects/${projectId}/tasks/${taskId}/chat-support`
-      ),
+      request<AgentChatSupportResponse>(`/projects/${projectId}/tasks/${taskId}/chat-support`),
   },
 
   // ─── Execute ───
@@ -822,9 +817,7 @@ export const api = {
   integrations: {
     todoist: {
       getStatus: (projectId: string) =>
-        request<TodoistIntegrationStatus>(
-          `/projects/${projectId}/integrations/todoist/status`
-        ),
+        request<TodoistIntegrationStatus>(`/projects/${projectId}/integrations/todoist/status`),
       startOAuth: (projectId: string) =>
         request<TodoistOAuthStartResponse>(
           `/projects/${projectId}/integrations/todoist/oauth/start`,
@@ -840,10 +833,9 @@ export const api = {
           { method: "PUT", body: JSON.stringify(body) }
         ),
       syncNow: (projectId: string) =>
-        request<TodoistSyncResult>(
-          `/projects/${projectId}/integrations/todoist/sync`,
-          { method: "POST" }
-        ),
+        request<TodoistSyncResult>(`/projects/${projectId}/integrations/todoist/sync`, {
+          method: "POST",
+        }),
       disconnect: (projectId: string) =>
         request<{ disconnected: boolean; pendingDeletesWarning?: number }>(
           `/projects/${projectId}/integrations/todoist`,

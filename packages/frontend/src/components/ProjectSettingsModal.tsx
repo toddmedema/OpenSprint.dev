@@ -109,7 +109,15 @@ function patchDefines<T extends object, K extends keyof T>(patch: T | undefined,
 function parseTabFromSearch(search: string): SettingsSubTab | null {
   const params = new URLSearchParams(search);
   const t = params.get(TAB_PARAM);
-  const valid: SettingsSubTab[] = ["basics", "agents", "workflow", "deployment", "hil", "team", "integrations"];
+  const valid: SettingsSubTab[] = [
+    "basics",
+    "agents",
+    "workflow",
+    "deployment",
+    "hil",
+    "team",
+    "integrations",
+  ];
   if (t && valid.includes(t as SettingsSubTab)) return t as SettingsSubTab;
   return null;
 }
@@ -1107,34 +1115,34 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             </select>
                           </div>
                           {!simpleInherited &&
-                          (simpleComplexityAgent.type === "lmstudio" ||
-                            simpleComplexityAgent.type === "ollama") && (
-                            <div className="flex-1 min-w-[180px]">
-                              <label
-                                htmlFor="simple-base-url"
-                                className="block text-xs font-medium text-theme-muted mb-1"
-                              >
-                                Base URL
-                              </label>
-                              <input
-                                id="simple-base-url"
-                                type="text"
-                                className="input w-full font-mono text-sm"
-                                placeholder={
-                                  simpleComplexityAgent.type === "ollama"
-                                    ? DEFAULT_OLLAMA_BASE_URL
-                                    : DEFAULT_LMSTUDIO_BASE_URL
-                                }
-                                value={simpleComplexityAgent.baseUrl ?? ""}
-                                onChange={(e) =>
-                                  updateSimpleComplexityAgent({
-                                    baseUrl: e.target.value.trim() || undefined,
-                                  })
-                                }
-                                onBlur={scheduleSaveOnBlur}
-                              />
-                            </div>
-                          )}
+                            (simpleComplexityAgent.type === "lmstudio" ||
+                              simpleComplexityAgent.type === "ollama") && (
+                              <div className="flex-1 min-w-[180px]">
+                                <label
+                                  htmlFor="simple-base-url"
+                                  className="block text-xs font-medium text-theme-muted mb-1"
+                                >
+                                  Base URL
+                                </label>
+                                <input
+                                  id="simple-base-url"
+                                  type="text"
+                                  className="input w-full font-mono text-sm"
+                                  placeholder={
+                                    simpleComplexityAgent.type === "ollama"
+                                      ? DEFAULT_OLLAMA_BASE_URL
+                                      : DEFAULT_LMSTUDIO_BASE_URL
+                                  }
+                                  value={simpleComplexityAgent.baseUrl ?? ""}
+                                  onChange={(e) =>
+                                    updateSimpleComplexityAgent({
+                                      baseUrl: e.target.value.trim() || undefined,
+                                    })
+                                  }
+                                  onBlur={scheduleSaveOnBlur}
+                                />
+                              </div>
+                            )}
                           {simpleInherited ? (
                             <p className="text-sm text-theme-muted flex-1 min-w-[200px] self-end pb-1">
                               Provider, model, and timeout follow global Settings → Agent Config.
@@ -1281,34 +1289,34 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
                             </select>
                           </div>
                           {!complexInherited &&
-                          (complexComplexityAgent.type === "lmstudio" ||
-                            complexComplexityAgent.type === "ollama") && (
-                            <div className="flex-1 min-w-[180px]">
-                              <label
-                                htmlFor="complex-base-url"
-                                className="block text-xs font-medium text-theme-muted mb-1"
-                              >
-                                Base URL
-                              </label>
-                              <input
-                                id="complex-base-url"
-                                type="text"
-                                className="input w-full font-mono text-sm"
-                                placeholder={
-                                  complexComplexityAgent.type === "ollama"
-                                    ? DEFAULT_OLLAMA_BASE_URL
-                                    : DEFAULT_LMSTUDIO_BASE_URL
-                                }
-                                value={complexComplexityAgent.baseUrl ?? ""}
-                                onChange={(e) =>
-                                  updateComplexComplexityAgent({
-                                    baseUrl: e.target.value.trim() || undefined,
-                                  })
-                                }
-                                onBlur={scheduleSaveOnBlur}
-                              />
-                            </div>
-                          )}
+                            (complexComplexityAgent.type === "lmstudio" ||
+                              complexComplexityAgent.type === "ollama") && (
+                              <div className="flex-1 min-w-[180px]">
+                                <label
+                                  htmlFor="complex-base-url"
+                                  className="block text-xs font-medium text-theme-muted mb-1"
+                                >
+                                  Base URL
+                                </label>
+                                <input
+                                  id="complex-base-url"
+                                  type="text"
+                                  className="input w-full font-mono text-sm"
+                                  placeholder={
+                                    complexComplexityAgent.type === "ollama"
+                                      ? DEFAULT_OLLAMA_BASE_URL
+                                      : DEFAULT_LMSTUDIO_BASE_URL
+                                  }
+                                  value={complexComplexityAgent.baseUrl ?? ""}
+                                  onChange={(e) =>
+                                    updateComplexComplexityAgent({
+                                      baseUrl: e.target.value.trim() || undefined,
+                                    })
+                                  }
+                                  onBlur={scheduleSaveOnBlur}
+                                />
+                              </div>
+                            )}
                           {complexInherited ? (
                             <p className="text-sm text-theme-muted flex-1 min-w-[200px] self-end pb-1">
                               Provider, model, and timeout follow global Settings → Agent Config.
@@ -2153,9 +2161,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
 
                 {activeTab === "integrations" && (
                   <div className="space-y-4" data-testid="integrations-tab-content">
-                    <p className="text-sm text-theme-muted">
-                      Integrations settings coming soon
-                    </p>
+                    <p className="text-sm text-theme-muted">Integrations settings coming soon</p>
                   </div>
                 )}
               </>

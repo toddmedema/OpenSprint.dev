@@ -179,7 +179,12 @@ describe("PlanCrudService — hierarchy features", () => {
     it("returns parentPlanId from the DB column", async () => {
       mockStore.plans.set("child-plan", {
         content: "# Child",
-        metadata: { planId: "child-plan", epicId: "os-epic-1", shippedAt: null, complexity: "medium" },
+        metadata: {
+          planId: "child-plan",
+          epicId: "os-epic-1",
+          shippedAt: null,
+          complexity: "medium",
+        },
         shipped_content: null,
         updated_at: new Date().toISOString(),
         current_version_number: 1,

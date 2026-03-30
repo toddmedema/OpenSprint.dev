@@ -86,10 +86,7 @@ async function captureSnapshot(repoPath: string): Promise<RepoSnapshot> {
 function snapshotsMatch(before: RepoSnapshot, after: RepoSnapshot): boolean {
   // Ignore HEAD-only drift (for example, concurrent fast-forward updates) and
   // focus on filesystem/index mutations performed during planner execution.
-  return (
-    before.branch === after.branch &&
-    !hasContentMutation(before, after)
-  );
+  return before.branch === after.branch && !hasContentMutation(before, after);
 }
 
 function collectChangedPaths(before: RepoSnapshot, after: RepoSnapshot): string[] {

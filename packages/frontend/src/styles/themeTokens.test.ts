@@ -109,9 +109,7 @@ function contrastRatio(hex1: string, hex2: string): number {
 
 function extractLightModeValue(css: string, varName: string): string | null {
   const lightBlock = css.split('html[data-theme="dark"]')[0];
-  const re = new RegExp(
-    `${varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(#[0-9a-fA-F]{6})`,
-  );
+  const re = new RegExp(`${varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(#[0-9a-fA-F]{6})`);
   const m = lightBlock.match(re);
   return m ? m[1] : null;
 }

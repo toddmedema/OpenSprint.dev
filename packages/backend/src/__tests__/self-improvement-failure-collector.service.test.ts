@@ -39,7 +39,7 @@ function makeTask(
   id: string,
   status: string,
   labels: string[] = [],
-  extra: Record<string, unknown> = {},
+  extra: Record<string, unknown> = {}
 ) {
   return {
     id,
@@ -128,7 +128,7 @@ describe("collectFailuresSince", () => {
     expect(result).toEqual([]);
     expect(eventLogService.readSinceByProjectId).toHaveBeenCalledWith(
       "proj-1",
-      "2026-03-15T00:00:00.000Z",
+      "2026-03-15T00:00:00.000Z"
     );
   });
 
@@ -153,9 +153,7 @@ describe("collectFailuresSince", () => {
         },
       }),
     ]);
-    vi.mocked(taskStore.listAll).mockResolvedValue([
-      makeTask("os-1234", "open", ["attempts:2"]),
-    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([makeTask("os-1234", "open", ["attempts:2"])]);
 
     const result = await collectFailuresSince("proj-1", "2026-03-15T00:00:00.000Z");
     expect(result).toHaveLength(1);
@@ -167,7 +165,7 @@ describe("collectFailuresSince", () => {
         attemptCount: 2,
         finalDisposition: "requeued",
         errorSnippet: "Tests failed in module X",
-      }),
+      })
     );
   });
 
@@ -200,7 +198,7 @@ describe("collectFailuresSince", () => {
         errorSnippet: "TS2345: Argument of type 'string'",
         attemptCount: 1,
         finalDisposition: "blocked",
-      }),
+      })
     );
   });
 
@@ -229,7 +227,7 @@ describe("collectFailuresSince", () => {
         rawFailureType: "merge_conflict",
         attemptCount: 3,
         finalDisposition: "blocked",
-      }),
+      })
     );
   });
 
@@ -245,9 +243,7 @@ describe("collectFailuresSince", () => {
         },
       }),
     ]);
-    vi.mocked(taskStore.listAll).mockResolvedValue([
-      makeTask("os-env1", "blocked"),
-    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([makeTask("os-env1", "blocked")]);
 
     const result = await collectFailuresSince("proj-1", "2026-03-01T00:00:00.000Z");
     expect(result).toHaveLength(1);
@@ -257,7 +253,7 @@ describe("collectFailuresSince", () => {
         failureType: "environment",
         rawFailureType: "environment_setup",
         finalDisposition: "blocked",
-      }),
+      })
     );
   });
 
@@ -266,7 +262,7 @@ describe("collectFailuresSince", () => {
     await collectFailuresSince("proj-1", undefined);
     expect(eventLogService.readSinceByProjectId).toHaveBeenCalledWith(
       "proj-1",
-      "1970-01-01T00:00:00.000Z",
+      "1970-01-01T00:00:00.000Z"
     );
   });
 
@@ -275,7 +271,7 @@ describe("collectFailuresSince", () => {
     await collectFailuresSince("proj-1", "");
     expect(eventLogService.readSinceByProjectId).toHaveBeenCalledWith(
       "proj-1",
-      "1970-01-01T00:00:00.000Z",
+      "1970-01-01T00:00:00.000Z"
     );
   });
 
@@ -300,9 +296,7 @@ describe("collectFailuresSince", () => {
         data: { failureType: "test_failure", attempt: 2, summary: "Blocked after retry" },
       }),
     ]);
-    vi.mocked(taskStore.listAll).mockResolvedValue([
-      makeTask("os-dup", "blocked", ["attempts:2"]),
-    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([makeTask("os-dup", "blocked", ["attempts:2"])]);
 
     const result = await collectFailuresSince("proj-1", "2026-03-15T00:00:00.000Z");
     expect(result).toHaveLength(1);
@@ -344,9 +338,7 @@ describe("collectFailuresSince", () => {
         data: { failureType: "coding_failure", attempt: 1 },
       }),
     ]);
-    vi.mocked(taskStore.listAll).mockResolvedValue([
-      makeTask("os-closed", "closed"),
-    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([makeTask("os-closed", "closed")]);
 
     const result = await collectFailuresSince("proj-1", "2026-03-15T00:00:00.000Z");
     expect(result).toHaveLength(1);
@@ -370,7 +362,7 @@ describe("collectFailuresSince", () => {
 
   it("returns empty array gracefully when eventLogService throws", async () => {
     vi.mocked(eventLogService.readSinceByProjectId).mockRejectedValue(
-      new Error("DB connection failed"),
+      new Error("DB connection failed")
     );
     const result = await collectFailuresSince("proj-1", "2026-03-15T00:00:00.000Z");
     expect(result).toEqual([]);
@@ -400,9 +392,7 @@ describe("collectFailuresSince", () => {
         data: { failureType: "coding_failure", cumulativeAttempts: 5 },
       }),
     ]);
-    vi.mocked(taskStore.listAll).mockResolvedValue([
-      makeTask("os-cum", "open", ["attempts:5"]),
-    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([makeTask("os-cum", "open", ["attempts:5"])]);
 
     const result = await collectFailuresSince("proj-1", "2026-03-15T00:00:00.000Z");
     expect(result).toHaveLength(1);
@@ -417,9 +407,7 @@ describe("collectFailuresSince", () => {
         data: { failureType: "test_failure" },
       }),
     ]);
-    vi.mocked(taskStore.listAll).mockResolvedValue([
-      makeTask("os-lab", "open", ["attempts:7"]),
-    ]);
+    vi.mocked(taskStore.listAll).mockResolvedValue([makeTask("os-lab", "open", ["attempts:7"])]);
 
     const result = await collectFailuresSince("proj-1", "2026-03-15T00:00:00.000Z");
     expect(result).toHaveLength(1);

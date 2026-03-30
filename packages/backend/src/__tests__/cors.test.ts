@@ -20,57 +20,43 @@ describe("localhostCors", () => {
   });
 
   it("allows http://localhost:5173", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "http://localhost:5173");
+    const res = await request(app).get("/test").set("Origin", "http://localhost:5173");
     expect(res.status).toBe(200);
     expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
   });
 
   it("allows http://127.0.0.1:3100", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "http://127.0.0.1:3100");
+    const res = await request(app).get("/test").set("Origin", "http://127.0.0.1:3100");
     expect(res.status).toBe(200);
     expect(res.headers["access-control-allow-origin"]).toBe("http://127.0.0.1:3100");
   });
 
   it("allows http://localhost (no port)", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "http://localhost");
+    const res = await request(app).get("/test").set("Origin", "http://localhost");
     expect(res.status).toBe(200);
     expect(res.headers["access-control-allow-origin"]).toBe("http://localhost");
   });
 
   it("allows http://127.0.0.1 (no port)", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "http://127.0.0.1");
+    const res = await request(app).get("/test").set("Origin", "http://127.0.0.1");
     expect(res.status).toBe(200);
     expect(res.headers["access-control-allow-origin"]).toBe("http://127.0.0.1");
   });
 
   it("blocks https://evil.com", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "https://evil.com");
+    const res = await request(app).get("/test").set("Origin", "https://evil.com");
     expect(res.status).toBe(500);
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
 
   it("blocks https://localhost.evil.com", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "https://localhost.evil.com");
+    const res = await request(app).get("/test").set("Origin", "https://localhost.evil.com");
     expect(res.status).toBe(500);
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
 
   it("blocks http://192.168.1.1:3100", async () => {
-    const res = await request(app)
-      .get("/test")
-      .set("Origin", "http://192.168.1.1:3100");
+    const res = await request(app).get("/test").set("Origin", "http://192.168.1.1:3100");
     expect(res.status).toBe(500);
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });

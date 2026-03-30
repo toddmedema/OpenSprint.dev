@@ -38,7 +38,10 @@ describe("ValidationWorkspaceService.ensureMergedCandidateNodeModules", () => {
     const branchManager = { symlinkNodeModules, ensureRepoNodeModules } as unknown as BranchManager;
     const service = new ValidationWorkspaceService({ runCommand, branchManager });
 
-    const result: NodeModulesResult = await service.ensureMergedCandidateNodeModules(repoPath, worktreePath);
+    const result: NodeModulesResult = await service.ensureMergedCandidateNodeModules(
+      repoPath,
+      worktreePath
+    );
 
     expect(result.ok).toBe(true);
     expect(result.strategy).toBe("symlink");
@@ -80,7 +83,14 @@ describe("ValidationWorkspaceService.ensureMergedCandidateNodeModules", () => {
       const nm = path.join(opts.cwd, "node_modules");
       await fs.mkdir(nm, { recursive: true });
       await fs.writeFile(path.join(nm, ".package-lock.json"), "{}");
-      return { stdout: "", stderr: "", executable: "/usr/bin/npm", cwd: opts.cwd, exitCode: 0, signal: null };
+      return {
+        stdout: "",
+        stderr: "",
+        executable: "/usr/bin/npm",
+        cwd: opts.cwd,
+        exitCode: 0,
+        signal: null,
+      };
     });
     const branchManager = { symlinkNodeModules, ensureRepoNodeModules } as unknown as BranchManager;
     const service = new ValidationWorkspaceService({ runCommand, branchManager });
@@ -142,7 +152,14 @@ describe("ValidationWorkspaceService.ensureMergedCandidateNodeModules", () => {
       const nm = path.join(opts.cwd, "node_modules");
       await fs.mkdir(nm, { recursive: true });
       await fs.writeFile(path.join(nm, ".package-lock.json"), "{}");
-      return { stdout: "", stderr: "", executable: "/usr/bin/npm", cwd: opts.cwd, exitCode: 0, signal: null };
+      return {
+        stdout: "",
+        stderr: "",
+        executable: "/usr/bin/npm",
+        cwd: opts.cwd,
+        exitCode: 0,
+        signal: null,
+      };
     });
     const branchManager = { symlinkNodeModules, ensureRepoNodeModules } as unknown as BranchManager;
     const service = new ValidationWorkspaceService({ runCommand, branchManager });
@@ -159,7 +176,14 @@ describe("ValidationWorkspaceService.ensureMergedCandidateNodeModules", () => {
     const symlinkNodeModules = vi.fn(async () => undefined);
     const ensureRepoNodeModules = vi.fn(async () => false);
     const runCommand = vi.fn(async () => {
-      return { stdout: "", stderr: "", executable: "/usr/bin/npm", cwd: worktreePath, exitCode: 0, signal: null };
+      return {
+        stdout: "",
+        stderr: "",
+        executable: "/usr/bin/npm",
+        cwd: worktreePath,
+        exitCode: 0,
+        signal: null,
+      };
     });
     const branchManager = { symlinkNodeModules, ensureRepoNodeModules } as unknown as BranchManager;
     const service = new ValidationWorkspaceService({ runCommand, branchManager });
