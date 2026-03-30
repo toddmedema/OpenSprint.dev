@@ -1,6 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../../lib/markdownSanitize";
 import { CollapsibleSection } from "./CollapsibleSection";
 
 /** Execute sidebar: no horizontal rules (task feedback x5cqqc) */
@@ -11,7 +11,7 @@ const DescriptionMarkdown = React.memo(({ content }: { content: string }) => (
     className="prose-task-description prose-execute-task"
     data-testid="task-description-markdown"
   >
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_NO_HR}>
+    <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
       {content}
     </ReactMarkdown>
   </div>

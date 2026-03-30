@@ -1,6 +1,5 @@
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
+import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../lib/markdownSanitize";
 
 export interface MarkdownChatBubbleProps {
   content: string;
@@ -14,7 +13,7 @@ export interface MarkdownChatBubbleProps {
 export function MarkdownChatBubble({ content }: MarkdownChatBubbleProps) {
   return (
     <div className="prose-chat-bubble">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+      <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>
         {content}
       </ReactMarkdown>
     </div>

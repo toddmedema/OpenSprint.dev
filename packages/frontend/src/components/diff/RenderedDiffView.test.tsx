@@ -340,6 +340,82 @@ describe("RenderedDiffView", () => {
     });
   });
 
+  describe("XSS hardening", () => {
+    it("strips script tags from added diff blocks", () => {
+      const from = "# Title";
+      const to = '# Title\n\nSafe text <script>alert("xss")</script>';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      expect(container.querySelector("script")).toBeNull();
+      expect(container.innerHTML).not.toContain("<script");
+    });
+
+    it("strips event handlers from diff content", () => {
+      const from = "# Title";
+      const to = '# Title\n\n<img src="x" onerror="alert(1)">';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      const img = container.querySelector("img");
+      if (img) {
+        expect(img.getAttribute("onerror")).toBeNull();
+      }
+    });
+
+    it("blocks javascript: protocol in links within diff", () => {
+      const from = "# Title";
+      const to = "# Title\n\n[click](javascript:alert(1))";
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      const a = container.querySelector("a");
+      if (a) {
+        const href = a.getAttribute("href") ?? "";
+        expect(href).not.toContain("javascript:");
+      }
+    });
+
+    it("strips iframe from diff content", () => {
+      const from = "# Title";
+      const to = '# Title\n\n<iframe src="https://evil.com"></iframe>';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      expect(container.querySelector("iframe")).toBeNull();
+    });
+
+    it("strips style tags from diff content", () => {
+      const from = "# Title";
+      const to = "# Title\n\n<style>body{display:none}</style>";
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      expect(container.innerHTML).not.toContain("<style");
+    });
+
+    it("strips form elements from diff content", () => {
+      const from = "# Title";
+      const to = '# Title\n\n<form action="/evil"><input type="submit"></form>';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      expect(container.querySelector("form")).toBeNull();
+    });
+
+    it("strips svg elements (potential script container) from diff", () => {
+      const from = "# Title";
+      const to = '# Title\n\n<svg onload="alert(1)"><circle r="10"/></svg>';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      expect(container.querySelector("svg")).toBeNull();
+    });
+
+    it("does not render raw HTML div injection in modified blocks", () => {
+      const from = "Some text here.";
+      const to = 'Some text <div class="injected">here</div>.';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      expect(container.querySelector(".injected")).toBeNull();
+    });
+
+    it("no style attributes survive sanitization in diff output", () => {
+      const from = "# Title";
+      const to = '# Title\n\n<p style="position:fixed;top:0;left:0">overlay</p>';
+      const { container } = render(<RenderedDiffView fromContent={from} toContent={to} />);
+      const allElements = container.querySelectorAll("p, span, div");
+      allElements.forEach((node) => {
+        expect(node.getAttribute("style")).toBeNull();
+      });
+    });
+  });
+
   describe("large fixture performance", () => {
     it("renders ~300 line markdown diff within reasonable time", () => {
       const lines: string[] = [];

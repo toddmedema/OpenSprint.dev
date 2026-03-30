@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../../lib/markdownSanitize";
 import {
   computeMarkdownBlockDiff,
   type DiffBlock,
@@ -152,7 +152,7 @@ function RenderBlock({ block, index }: { block: DiffBlock; index: number }) {
       {block.status === "modified" && block.wordDiff ? (
         <WordDiffSpans parts={block.wordDiff} />
       ) : (
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>{block.markdown}</ReactMarkdown>
       )}
     </BlockWrapper>
   );

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { remark } from "remark";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "./markdownSanitize";
 
 describe("DiffView markdown and diff dependencies", () => {
   it("remark parses markdown to mdast", () => {
@@ -24,5 +25,10 @@ describe("DiffView markdown and diff dependencies", () => {
 
   it("react-markdown default export is usable", () => {
     expect(typeof ReactMarkdown).toBe("function");
+  });
+
+  it("SAFE_REMARK_PLUGINS and SAFE_REHYPE_PLUGINS are exported arrays", () => {
+    expect(Array.isArray(SAFE_REMARK_PLUGINS)).toBe(true);
+    expect(Array.isArray(SAFE_REHYPE_PLUGINS)).toBe(true);
   });
 });

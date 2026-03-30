@@ -1,7 +1,7 @@
 import React, { useMemo, useDeferredValue } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../../lib/markdownSanitize";
 
 /** Execute sidebar: no horizontal rules (task feedback x5cqqc) */
 const MARKDOWN_NO_HR = { hr: () => null };
@@ -83,7 +83,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
         onScroll={onScroll}
       >
         {useMarkdown ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_NO_HR}>
+          <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
             {deferredContent || ""}
           </ReactMarkdown>
         ) : (
@@ -123,7 +123,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
               }}
             >
               {useMarkdown ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_NO_HR}>
+                <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
                   {blockContent}
                 </ReactMarkdown>
               ) : (

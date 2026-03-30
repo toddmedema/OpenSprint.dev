@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../../lib/markdownSanitize";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { setSelectedTaskId, setAgentOutputBackfill } from "../../store/slices/executeSlice";
 import { wsSend } from "../../store/middleware/websocketMiddleware";
@@ -199,7 +199,7 @@ export function AgentDashboard({ projectId }: AgentDashboardProps) {
                 className="flex-1 overflow-y-auto p-4 prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-theme-text prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg"
                 data-testid="agent-output"
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>
                   {agentOutput.length > 0 ? agentOutput.join("") : "Waiting for agent output..."}
                 </ReactMarkdown>
               </div>
