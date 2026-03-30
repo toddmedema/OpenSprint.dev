@@ -20,6 +20,10 @@ import { getSafeTaskActiveDir } from "../utils/path-safety.js";
 import { getOrchestratorTestStatusPromptPath } from "./orchestrator-test-status.js";
 import { buildFailureDebugPacket, formatDebugPacketForPrompt } from "./agentic-repair.service.js";
 import { buildPromptEnvelope } from "../utils/prompt-cache.js";
+import {
+  PROTECTED_PATH_PATTERNS,
+  SCOPE_UNLOCK_KEYWORDS,
+} from "./protected-path-policy.js";
 
 /** Short checklist items per review angle for angle-specific prompts. Exported for epic final review. */
 export const REVIEW_ANGLE_CHECKLISTS: Record<ReviewAngle, string[]> = {
@@ -410,6 +414,30 @@ export class ContextAssembler {
     ].join("\n\n");
   }
 
+  /** Build the Protected Path Policy section for coding and review prompts. */
+  buildProtectedPathPolicySection(role: "coder" | "reviewer"): string {
+    const patterns = PROTECTED_PATH_PATTERNS.map(
+      (p) => `| \`${p.pattern}\` | ${p.label} |`
+    ).join("\n");
+    const keywords = SCOPE_UNLOCK_KEYWORDS.map((k) => `\`${k}\``).join(", ");
+
+    let section = `## Protected Path Policy\n\n`;
+    section += `Certain file paths are **sensitive surfaces** (integration, OAuth, token handling) and must only be modified when the task explicitly scopes integration or OAuth work.\n\n`;
+    section += `**Protected patterns:**\n\n`;
+    section += `| Pattern | Label |\n|---------|-------|\n${patterns}\n\n`;
+    section += `**Scope keywords that unlock protected paths:** ${keywords}.\n\n`;
+
+    if (role === "coder") {
+      section += `If your task does **not** contain any of the scope keywords above in its title or description, you **must not** modify files matching these patterns. `;
+      section += `If you genuinely need to touch a protected file, report \`status: "failed"\` with \`open_questions\` asking for explicit scope confirmation.\n`;
+    } else {
+      section += `When reviewing, **flag and reject** any modifications to files matching these patterns if the task does not contain scope keywords above in its title or description. `;
+      section += `Cite the specific protected pattern and file in your rejection.\n`;
+    }
+
+    return section;
+  }
+
   private buildStructuredOutputRepairSection(params: {
     enabled?: boolean;
     resultPath: string;
@@ -588,6 +616,8 @@ export class ContextAssembler {
     prompt += `   After writing result.json, exit the process immediately so the orchestrator can continue (exit code 0 on success).\n\n`;
     prompt += `If your targeted tests fail after implementation, fix them before writing result.json. Do not report success if you know the relevant tests are failing. The orchestrator will run the repository validation command after you exit.\n\n`;
     prompt += `Never run destructive cleanup commands such as \`rm -rf\`, \`find ... -delete\`, or \`git clean -fdx\` against the repo. If you think broad cleanup is required, stop and report failure; the orchestrator owns cleanup.\n\n`;
+
+    prompt += this.buildProtectedPathPolicySection("coder") + "\n";
 
     const autonomyDesc = buildAutonomyDescription(config.aiAutonomyLevel, config.hilConfig);
     if (autonomyDesc) {
@@ -814,7 +844,10 @@ export class ContextAssembler {
     if (technicalApproach) {
       prompt += `- [ ] The technical approach matches the plan (or deviations are justified)\n`;
     }
-    prompt += `- [ ] No unrelated changes or scope creep\n\n`;
+    prompt += `- [ ] No unrelated changes or scope creep\n`;
+    prompt += `- [ ] **Protected Path Policy** — No modifications to protected integration/OAuth paths unless task explicitly scopes that work\n\n`;
+
+    prompt += this.buildProtectedPathPolicySection("reviewer") + "\n";
 
     prompt += `### Part 2: Code Quality\n\n`;
     prompt += `- [ ] **Correctness** — No bugs, off-by-one errors, race conditions, or unhandled edge cases\n`;
@@ -953,6 +986,9 @@ export class ContextAssembler {
       prompt += `- **Reasonable coverage:** 80–90% for new/changed code is sufficient. Do not reject for missing coverage on every branch or line.\n`;
       prompt += `- **Behavior over implementation:** Prefer tests that assert outcomes and behavior aligned with the spec; avoid tests that assert internal structure, exact call counts, or implementation details that change with refactors.\n`;
       prompt += `- **Stability:** Flag tests that are likely to be fragile (e.g., tightly coupled to private APIs or formatting). Do not require such tests.\n\n`;
+    }
+    if (angle === "code_quality" || angle === "security") {
+      prompt += this.buildProtectedPathPolicySection("reviewer") + "\n";
     }
     if (angle === "performance") {
       prompt += `## Performance angle guidance\n\n`;
