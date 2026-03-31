@@ -139,23 +139,34 @@ function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
     case "agent.subscribe": {
       if ("taskId" in event && event.taskId) {
         const taskId = event.taskId;
-        agentSubscriptions.get(ws)?.add(taskId);
         log.info("Client subscribed to agent output", { taskId });
-        // Push existing live output to this client only (backfill)
         const projectId = wsToProjectId.get(ws);
         if (projectId && getLiveOutput && ws.readyState === 1 /* WebSocket.OPEN */) {
+          // Send backfill BEFORE registering the subscription so that no
+          // live agent.output events are delivered to this client until the
+          // backfill (which already contains all prior output) has been sent.
+          // This eliminates the window where the same tail text appears in
+          // both the backfill and a live chunk, preventing duplicate output.
           getLiveOutput(projectId, taskId)
             .then((output) => {
-              if (output.length > 0 && ws.readyState === 1) {
-                const backfill: AgentOutputBackfillEvent = {
-                  type: "agent.outputBackfill",
-                  taskId,
-                  output,
-                };
-                ws.send(JSON.stringify(backfill));
+              if (ws.readyState === 1) {
+                if (output.length > 0) {
+                  const backfill: AgentOutputBackfillEvent = {
+                    type: "agent.outputBackfill",
+                    taskId,
+                    output,
+                  };
+                  ws.send(JSON.stringify(backfill));
+                }
+                agentSubscriptions.get(ws)?.add(taskId);
               }
             })
-            .catch((err) => log.warn("getLiveOutput failed on subscribe", { taskId, err }));
+            .catch((err) => {
+              log.warn("getLiveOutput failed on subscribe", { taskId, err });
+              agentSubscriptions.get(ws)?.add(taskId);
+            });
+        } else {
+          agentSubscriptions.get(ws)?.add(taskId);
         }
       }
       break;

@@ -48,7 +48,22 @@ vi.mock("../api/client", () => ({
       get: () => mockGlobalSettingsGet(),
       put: (...args: unknown[]) => mockGlobalSettingsPut(...args),
     },
+    integrations: {
+      todoist: {
+        getStatus: vi.fn().mockResolvedValue({
+          connected: false,
+          status: "disabled",
+        }),
+        startOAuth: vi.fn().mockResolvedValue({ authorizationUrl: "https://todoist.com/oauth" }),
+        disconnect: vi.fn().mockResolvedValue({ disconnected: true }),
+        listProjects: vi.fn().mockResolvedValue({ projects: [] }),
+        selectProject: vi.fn().mockResolvedValue({ success: true }),
+        syncNow: vi.fn().mockResolvedValue({ imported: 0, errors: 0 }),
+      },
+    },
   },
+  isApiError: () => false,
+  isConnectionError: () => false,
 }));
 
 const mockProject: Project = {
@@ -962,7 +977,7 @@ describe("ProjectSettingsModal", () => {
     );
   });
 
-  it("Integrations tab shows placeholder content", async () => {
+  it("Integrations tab shows Todoist integration card", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
     await waitForModalReady();
 
@@ -970,7 +985,7 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(integrationsTab);
 
     expect(screen.getByTestId("integrations-tab-content")).toBeInTheDocument();
-    expect(screen.getByText("Integrations settings coming soon")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-integration-card")).toBeInTheDocument();
   });
 
   it("Deliver tab shows auto-deploy per environment", async () => {

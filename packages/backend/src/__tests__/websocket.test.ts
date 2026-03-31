@@ -201,6 +201,99 @@ describe("WebSocket server and connection handling", () => {
   });
 });
 
+describe("WebSocket agent.subscribe backfill ordering", () => {
+  let server: ReturnType<typeof createServer>;
+  let port: number;
+
+  afterEach(async () => {
+    closeWebSocket();
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+    await new Promise((r) => setTimeout(r, 50));
+  });
+
+  it("sends backfill before registering subscription so live chunks don't overlap", async () => {
+    const getLiveOutput = vi.fn().mockResolvedValue("backfill-content");
+    server = createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    setupWebSocket(server, { getLiveOutput });
+    await new Promise<void>((resolve) => {
+      server.listen(0, () => {
+        const addr = server.address();
+        port = typeof addr === "object" && addr ? addr.port : 31999;
+        resolve();
+      });
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-backfill`, WS_AUTH);
+    const events: Record<string, unknown>[] = [];
+    ws.on("message", (data) => {
+      events.push(JSON.parse(data.toString()));
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.subscribe", taskId: "task-bf" }));
+    // Wait for the async getLiveOutput to resolve and backfill to be sent
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(getLiveOutput).toHaveBeenCalledWith("proj-backfill", "task-bf");
+    expect(events.length).toBe(1);
+    expect(events[0]).toMatchObject({
+      type: "agent.outputBackfill",
+      taskId: "task-bf",
+      output: "backfill-content",
+    });
+
+    // Now that the subscription is registered (after backfill), live output should arrive
+    sendAgentOutputToProject("proj-backfill", "task-bf", "live-chunk");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(events.length).toBe(2);
+    expect(events[1]).toMatchObject({ type: "agent.output", chunk: "live-chunk" });
+
+    ws.close();
+    await waitForClose(ws);
+  });
+
+  it("registers subscription even when getLiveOutput rejects", async () => {
+    const getLiveOutput = vi.fn().mockRejectedValue(new Error("boom"));
+    server = createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    setupWebSocket(server, { getLiveOutput });
+    await new Promise<void>((resolve) => {
+      server.listen(0, () => {
+        const addr = server.address();
+        port = typeof addr === "object" && addr ? addr.port : 31999;
+        resolve();
+      });
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-err`, WS_AUTH);
+    const events: Record<string, unknown>[] = [];
+    ws.on("message", (data) => {
+      events.push(JSON.parse(data.toString()));
+    });
+    await new Promise<void>((resolve) => ws.on("open", () => resolve()));
+
+    ws.send(JSON.stringify({ type: "agent.subscribe", taskId: "task-err" }));
+    await new Promise((r) => setTimeout(r, 100));
+
+    // No backfill sent (error), but subscription should still be registered
+    expect(events.length).toBe(0);
+    sendAgentOutputToProject("proj-err", "task-err", "after-error");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(events.length).toBe(1);
+    expect(events[0]).toMatchObject({ type: "agent.output", chunk: "after-error" });
+
+    ws.close();
+    await waitForClose(ws);
+  });
+});
+
 describe("WebSocket agent.chat event handling", () => {
   let server: ReturnType<typeof createServer>;
   let port: number;

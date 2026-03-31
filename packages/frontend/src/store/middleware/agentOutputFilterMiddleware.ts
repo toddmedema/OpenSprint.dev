@@ -17,7 +17,7 @@ const BATCH_MS = 150;
  * Flushes pending content on setSelectedTaskId to ensure no loss.
  * Also filters setAgentOutputBackfill and resets filter on setSelectedTaskId.
  */
-export const agentOutputFilterMiddleware: Middleware = () => {
+export const agentOutputFilterMiddleware: Middleware = (store) => {
   const filter = createAgentOutputFilter();
   const buffer = new Map<string, string[]>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -68,9 +68,23 @@ export const agentOutputFilterMiddleware: Middleware = () => {
     }
     if (setAgentOutputBackfill.match(action)) {
       const { taskId } = action.payload;
+      const filtered = filterAgentOutput(action.payload.output);
+
+      // Skip stale backfills: when a REST or late-arriving WS backfill
+      // contains less content than the current state (which already
+      // incorporates a fresher backfill + live chunks), applying it would
+      // rewind the output.  Subsequent live chunks then re-append the tail
+      // that was already displayed — the "duplicate final sentence" bug.
+      const current = (store.getState() as { execute?: { agentOutput?: Record<string, string[]> } })
+        .execute?.agentOutput?.[taskId];
+      if (current) {
+        const currentLen = current.reduce((sum, c) => sum + c.length, 0);
+        if (currentLen > filtered.length) {
+          return;
+        }
+      }
+
       // Discard buffered chunks for this task — the backfill supersedes them.
-      // Without this, stale buffered chunks flush after the backfill replaces
-      // state, causing duplicate trailing text.
       buffer.delete(taskId);
       if (buffer.size === 0 && flushTimer) {
         clearTimeout(flushTimer);
@@ -79,7 +93,6 @@ export const agentOutputFilterMiddleware: Middleware = () => {
       // Reset incremental filter so subsequent WS chunks are not processed
       // against stale partial-line state from before the backfill.
       filter.reset();
-      const filtered = filterAgentOutput(action.payload.output);
       return next(setAgentOutputBackfill({ taskId, output: filtered }));
     }
     return next(action);

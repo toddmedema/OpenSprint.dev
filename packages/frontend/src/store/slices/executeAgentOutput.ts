@@ -96,10 +96,17 @@ export function addAgentOutputExtraReducers(builder: ActionReducerMapBuilder<Exe
 
   builder.addCase(fetchLiveOutputBackfill.fulfilled, (state, action) => {
     if (!state.agentOutput) state.agentOutput = {};
+    const taskId = action.payload.taskId;
     const filtered = filterAgentOutput(action.payload.output ?? "");
-    state.agentOutput[action.payload.taskId] = [filtered];
+    // Skip stale backfills that would rewind state behind live chunks
+    const current = state.agentOutput[taskId];
+    if (current) {
+      const currentLen = current.reduce((sum, c) => sum + c.length, 0);
+      if (currentLen > filtered.length) return;
+    }
+    state.agentOutput[taskId] = [filtered];
     if (filtered.length > 0) {
-      touchAgentOutputLastReceived(state, action.payload.taskId);
+      touchAgentOutputLastReceived(state, taskId);
     }
   });
 }
