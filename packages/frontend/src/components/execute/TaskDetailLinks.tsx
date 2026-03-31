@@ -78,8 +78,8 @@ export function TaskDetailLinks({
   ]);
 
   return (
-    <div className="-mb-2" data-section="view-plan-deps-addlink">
-      <div className="pt-0 px-4 pb-0">
+    <div data-section="view-plan-deps-addlink">
+      <div className="px-4 flex flex-col gap-3">
         {showLinks && (
           <div className="text-xs">
             <div className="flex flex-col gap-y-1.5">
@@ -167,7 +167,7 @@ export function TaskDetailLinks({
           <button
             type="button"
             onClick={() => setAddLinkOpen(true)}
-            className="text-xs text-brand-600 hover:text-brand-700 hover:underline text-left mt-1.5"
+            className="text-xs text-brand-600 hover:text-brand-700 hover:underline text-left"
             data-testid="sidebar-add-link-btn"
           >
             Add link

@@ -688,9 +688,8 @@ describe("TimelineList", () => {
     const completedSection = screen.getByTestId("timeline-section-completed");
     const stickyWrapper = activeSection.querySelector(".sticky");
     expect(stickyWrapper).toBeInTheDocument();
-    expect(stickyWrapper).toHaveClass("z-[12]", "bg-theme-surface");
-    expect(stickyWrapper?.className).toContain("top-[56px]");
-    expect(stickyWrapper?.className).toContain("sm:top-[60px]");
+    expect(stickyWrapper).toHaveClass("z-[12]", "backdrop-blur-sm", "bg-theme-bg/95");
+    expect(stickyWrapper?.className).toContain("top-0");
     expect(stickyWrapper?.className).toContain("[background-clip:padding-box]");
     expect(completedSection.querySelector(".sticky")).toBeInTheDocument();
   });

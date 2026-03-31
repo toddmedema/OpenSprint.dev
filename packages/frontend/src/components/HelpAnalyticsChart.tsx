@@ -15,7 +15,7 @@ function formatDuration(ms: number): string {
   return `${(ms / 3_600_000).toFixed(1)}h`;
 }
 
-/** Dual-axis chart: bars for avg completion time (left Y), line for task count (right Y), X = complexity 1–10 */
+/** Dual-axis chart: bars for task count (left Y), line for avg completion time (right Y), X = complexity 1–10 */
 export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
@@ -66,7 +66,7 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
       .append("g")
       .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
 
-    // Bars (avg completion time)
+    // Bars (task count)
     const barWidth = (xScale.bandwidth() ?? 0) * BAR_WIDTH_RATIO;
     const barOffset = ((xScale.bandwidth() ?? 0) - barWidth) / 2;
 
@@ -75,17 +75,17 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
       .join("rect")
       .attr("class", "bar")
       .attr("x", (d) => (xScale(String(d.complexity)) ?? 0) + barOffset)
-      .attr("y", (d) => yTimeScale(d.avgCompletionTimeMs))
+      .attr("y", (d) => yCountScale(d.taskCount))
       .attr("width", barWidth)
-      .attr("height", (d) => innerHeight - yTimeScale(d.avgCompletionTimeMs))
+      .attr("height", (d) => innerHeight - yCountScale(d.taskCount))
       .attr("fill", "var(--ui-accent-primary)")
       .attr("opacity", 0.8);
 
-    // Line (task count)
+    // Line (avg completion time)
     const line = d3
       .line<TaskAnalyticsBucket>()
       .x((d) => (xScale(String(d.complexity)) ?? 0) + (xScale.bandwidth() ?? 0) / 2)
-      .y((d) => yCountScale(d.taskCount));
+      .y((d) => yTimeScale(d.avgCompletionTimeMs));
 
     g.append("path")
       .datum(data)
@@ -102,7 +102,7 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
       .join("circle")
       .attr("class", "line-dot")
       .attr("cx", (d) => (xScale(String(d.complexity)) ?? 0) + (xScale.bandwidth() ?? 0) / 2)
-      .attr("cy", (d) => yCountScale(d.taskCount))
+      .attr("cy", (d) => yTimeScale(d.avgCompletionTimeMs))
       .attr("r", 4)
       .attr("fill", "var(--ui-text-primary)");
 
@@ -114,22 +114,22 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
       .selectAll("text")
       .attr("font-size", "11px");
 
-    // Left Y axis (completion time)
+    // Left Y axis (task count)
     g.append("g")
-      .call(
-        d3
-          .axisLeft(yTimeScale)
-          .ticks(5)
-          .tickFormat((v) => formatDuration(Number(v)))
-      )
+      .call(d3.axisLeft(yCountScale).ticks(5))
       .attr("color", "var(--ui-text-secondary)")
       .selectAll("text")
       .attr("font-size", "10px");
 
-    // Right Y axis (task count)
+    // Right Y axis (completion time)
     g.append("g")
       .attr("transform", `translate(${innerWidth},0)`)
-      .call(d3.axisRight(yCountScale).ticks(5))
+      .call(
+        d3
+          .axisRight(yTimeScale)
+          .ticks(5)
+          .tickFormat((v) => formatDuration(Number(v)))
+      )
       .attr("color", "var(--ui-text-secondary)")
       .selectAll("text")
       .attr("font-size", "10px");
@@ -167,11 +167,11 @@ export function HelpAnalyticsChart({ data, totalTasks }: HelpAnalyticsChartProps
       <div className="flex gap-6 mt-2 text-xs text-theme-muted">
         <span>
           <span className="inline-block w-3 h-3 rounded-sm bg-accent-primary opacity-80 mr-1" />
-          Avg completion time (left axis)
+          Task count (left axis)
         </span>
         <span>
           <span className="inline-block w-3 h-3 border-2 border-theme-text rounded-full mr-1" />
-          Task count (right axis)
+          Avg completion time (right axis)
         </span>
       </div>
       <p className="mt-2 text-xs text-theme-muted">

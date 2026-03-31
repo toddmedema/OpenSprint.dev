@@ -3,8 +3,14 @@ import type {
   HelpChatResponse,
   HelpChatHistory,
   ActiveAgent,
+  AgentConfig,
 } from "@opensprint/shared";
-import { getAgentForPlanningRole, AGENT_ROLE_LABELS, OPENSPRINT_PATHS } from "@opensprint/shared";
+import {
+  getAgentForPlanningRole,
+  AGENT_ROLE_LABELS,
+  OPENSPRINT_PATHS,
+  getDatabaseDialect,
+} from "@opensprint/shared";
 import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
@@ -12,8 +18,10 @@ import { ProjectService } from "./project.service.js";
 import { PrdService } from "./prd.service.js";
 import { PlanService } from "./plan.service.js";
 import { taskStore } from "./task-store.service.js";
+import type { StoredTask } from "./task-store.service.js";
 import { orchestratorService } from "./orchestrator.service.js";
 import { agentService } from "./agent.service.js";
+import { getDatabaseUrl } from "./global-settings.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
@@ -41,6 +49,32 @@ Your role is to help users understand their projects, tasks, plans, and currentl
 - Describe agent roles and phases when asked
 - Use the "Open Sprint Internal Documentation" section to explain internal behavior (scheduling, task runnability, why one coder is active, epic-blocked logic, loop kicker vs watchdog). Never say "I don't have access" — you have the docs.`;
 
+const HELP_TOOLING_PROMPT = `
+## Help Tools (read-only)
+
+You have read-only tools for task store and database lookups. Do NOT guess task details. When you need fresh data, call a tool.
+
+To call a tool, respond with ONLY this block:
+[HELP_TOOL_CALL]
+{"tool":"<tool_name>","args":{...}}
+[/HELP_TOOL_CALL]
+
+Supported tools:
+- list_projects: {}
+- get_database_info: {}
+- list_tasks: {"limit"?: number, "offset"?: number, "status"?: string, "assignee"?: string, "issueType"?: string, "query"?: string, "includeEpics"?: boolean}
+- get_task: {"taskId": string}
+- task_counts: {}
+- ready_tasks: {"limit"?: number}
+
+After a tool call, you'll receive:
+[HELP_TOOL_RESULT]
+{ ...json result ... }
+[/HELP_TOOL_RESULT]
+
+Then continue reasoning. When you have enough info, answer normally (without tool-call tags).
+`;
+
 /** Max chars per section in context to avoid token overflow */
 const MAX_CONTEXT_CHARS = 8000;
 
@@ -49,6 +83,9 @@ const MAX_DOCS_CHARS = 12000;
 
 /** Path to bundled Open Sprint internal docs (relative to backend package) */
 const OPENSPRINT_HELP_DOCS_PATH = "docs/opensprint-help-context.md";
+const MAX_TOOL_ROUNDS = 8;
+const HELP_TOOL_CALL_OPEN = "[HELP_TOOL_CALL]";
+const HELP_TOOL_CALL_CLOSE = "[/HELP_TOOL_CALL]";
 
 /** Load Open Sprint internal docs for Help Chat context. Returns empty string if file not found. */
 async function loadOpenSprintDocs(): Promise<string> {
@@ -65,6 +102,72 @@ async function loadOpenSprintDocs(): Promise<string> {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max) + "\n\n[... truncated for context length]";
+}
+
+function summarizeTask(task: StoredTask): string {
+  const blockers = taskStore.getBlockersFromIssue(task);
+  return JSON.stringify(
+    {
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      issueType: task.issue_type,
+      assignee: task.assignee ?? null,
+      priority: task.priority ?? null,
+      blockers,
+      dependentCount: task.dependentCount ?? 0,
+      description: task.description ?? null,
+      createdAt: task.created_at,
+      updatedAt: task.updated_at,
+      labels: task.labels ?? [],
+    },
+    null,
+    2
+  );
+}
+
+async function buildDatabaseContext(): Promise<string> {
+  try {
+    const databaseUrl = await getDatabaseUrl();
+    const dialect = getDatabaseDialect(databaseUrl);
+    let target = "(unavailable)";
+    try {
+      const parsed = new URL(databaseUrl);
+      if (dialect === "sqlite") {
+        target = parsed.pathname || "(default sqlite path)";
+      } else {
+        target = `${parsed.hostname}${parsed.pathname}`;
+      }
+    } catch {
+      // Keep fallback target
+    }
+    return `## Open Sprint Database\n\n- backend: ${dialect}\n- target: ${target}\n- source: DATABASE_URL, then ~/.opensprint/global-settings.json databaseUrl, then default SQLite path`;
+  } catch {
+    return "";
+  }
+}
+
+function parseHelpToolCall(
+  content: string
+): { tool: string; args: Record<string, unknown> } | null {
+  const start = content.indexOf(HELP_TOOL_CALL_OPEN);
+  const end = content.indexOf(HELP_TOOL_CALL_CLOSE);
+  if (start === -1 || end === -1 || end <= start) return null;
+  const json = content.slice(start + HELP_TOOL_CALL_OPEN.length, end).trim();
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json) as { tool?: unknown; args?: unknown };
+    if (typeof parsed.tool !== "string" || !parsed.tool.trim()) return null;
+    return {
+      tool: parsed.tool.trim(),
+      args:
+        parsed.args && typeof parsed.args === "object" && !Array.isArray(parsed.args)
+          ? (parsed.args as Record<string, unknown>)
+          : {},
+    };
+  } catch {
+    return null;
+  }
 }
 
 const HELP_CHAT_FILENAME = "help.json";
@@ -161,15 +264,14 @@ export class HelpChatService {
     });
   }
 
-  /** Build project-scoped context: PRD, plans, tasks, active agents */
+  /** Build project-scoped context: PRD, plans, active agents (no task snapshots). */
   private async buildProjectContext(projectId: string): Promise<string> {
-    const [project, prdResult, plansResult, tasksResult, agents] = await Promise.all([
+    const [project, prdResult, plansResult, agents] = await Promise.all([
       this.projectService.getProject(projectId),
       this.prdService.getPrd(projectId).catch(() => null),
       this.getPlanService()
         .listPlans(projectId)
         .catch(() => []),
-      taskStore.listAll(projectId).catch(() => []),
       orchestratorService.getActiveAgents(projectId).catch(() => []),
     ]);
 
@@ -205,20 +307,9 @@ export class HelpChatService {
       parts.push("## Plans\n(No plans yet)");
     }
 
-    // Tasks (summary)
-    const nonEpic = tasksResult.filter((t) => t.issue_type !== "epic");
-    if (nonEpic.length > 0) {
-      const taskLines = nonEpic
-        .slice(0, 50)
-        .map(
-          (t) =>
-            `- ${t.id}: ${(t.title ?? "").slice(0, 60)} | status: ${t.status} | assignee: ${t.assignee ?? "unassigned"}`
-        );
-      const more = nonEpic.length > 50 ? `\n... and ${nonEpic.length - 50} more tasks` : "";
-      parts.push("## Tasks\n\n" + taskLines.join("\n") + more);
-    } else {
-      parts.push("## Tasks\n(No tasks yet)");
-    }
+    parts.push(
+      "## Task Access\n\nTask details are intentionally not preloaded. Use the help tools to query task store data on demand."
+    );
 
     // Active agents
     if (agents.length > 0) {
@@ -229,6 +320,11 @@ export class HelpChatService {
       parts.push("## Currently Running Agents\n\n" + agentLines.join("\n"));
     } else {
       parts.push("## Currently Running Agents\n(None)");
+    }
+
+    const dbContext = await buildDatabaseContext();
+    if (dbContext) {
+      parts.push(dbContext);
     }
 
     return parts.join("\n\n---\n\n");
@@ -270,10 +366,189 @@ export class HelpChatService {
     }
 
     parts.push(
-      "\n**Instructions for the user:** To get detailed context about a specific project (PRD, plans, tasks), they should open that project and use the Help modal from the project view."
+      "\n**Instructions for the user:** To get detailed task context for a project, open that project and use the Help modal from the project view."
     );
 
     return parts.join("\n\n---\n\n");
+  }
+
+  private async runHelpTool(
+    projectId: string | null,
+    toolName: string,
+    args: Record<string, unknown>
+  ): Promise<string> {
+    const dbContext = await buildDatabaseContext();
+    const clamp = (value: unknown, fallback = 50, max = 500): number => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(0, Math.min(max, Math.floor(n)));
+    };
+
+    if (toolName === "list_projects") {
+      const projects = await this.projectService.listProjects();
+      return JSON.stringify(
+        {
+          projects: projects.map((p) => ({ id: p.id, name: p.name, repoPath: p.repoPath })),
+        },
+        null,
+        2
+      );
+    }
+
+    if (toolName === "get_database_info") {
+      const connection = await taskStore.checkConnection();
+      return JSON.stringify({ connection, context: dbContext }, null, 2);
+    }
+
+    if (!projectId) {
+      return JSON.stringify(
+        {
+          error:
+            "Project-scoped tool requires projectId context. Ask the user to open a project and try again.",
+        },
+        null,
+        2
+      );
+    }
+
+    if (toolName === "get_task") {
+      const taskId = String(args.taskId ?? "").trim();
+      if (!taskId) return JSON.stringify({ error: "Missing required arg: taskId" }, null, 2);
+      try {
+        const task = await taskStore.show(projectId, taskId);
+        return summarizeTask(task);
+      } catch {
+        return JSON.stringify({ taskId, error: "Task not found" }, null, 2);
+      }
+    }
+
+    if (toolName === "task_counts") {
+      const all = await taskStore.listAll(projectId);
+      const byStatus = new Map<string, number>();
+      const byType = new Map<string, number>();
+      for (const task of all) {
+        byStatus.set(task.status, (byStatus.get(task.status) ?? 0) + 1);
+        byType.set(task.issue_type, (byType.get(task.issue_type) ?? 0) + 1);
+      }
+      return JSON.stringify(
+        {
+          projectId,
+          total: all.length,
+          byStatus: Object.fromEntries(
+            [...byStatus.entries()].sort(([a], [b]) => a.localeCompare(b))
+          ),
+          byType: Object.fromEntries([...byType.entries()].sort(([a], [b]) => a.localeCompare(b))),
+        },
+        null,
+        2
+      );
+    }
+
+    if (toolName === "ready_tasks") {
+      const ready = await taskStore.ready(projectId);
+      const limit = clamp(args.limit, 50, 500);
+      return JSON.stringify(
+        {
+          projectId,
+          totalReady: ready.length,
+          tasks: ready.slice(0, limit).map((task) => ({
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            assignee: task.assignee ?? null,
+            priority: task.priority ?? null,
+          })),
+        },
+        null,
+        2
+      );
+    }
+
+    if (toolName === "list_tasks") {
+      const all = await taskStore.listAll(projectId);
+      const includeEpics = args.includeEpics === true;
+      const status = typeof args.status === "string" ? args.status.trim().toLowerCase() : "";
+      const assignee = typeof args.assignee === "string" ? args.assignee.trim().toLowerCase() : "";
+      const issueType =
+        typeof args.issueType === "string" ? args.issueType.trim().toLowerCase() : "";
+      const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
+      const offset = clamp(args.offset, 0, 50_000);
+      const limit = clamp(args.limit, 50, 500);
+      const filtered = all.filter((task) => {
+        if (!includeEpics && task.issue_type === "epic") return false;
+        if (status && task.status.toLowerCase() !== status) return false;
+        if (assignee && (task.assignee ?? "").toLowerCase() !== assignee) return false;
+        if (issueType && task.issue_type.toLowerCase() !== issueType) return false;
+        if (query) {
+          const haystack = `${task.id} ${task.title ?? ""} ${task.description ?? ""}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        return true;
+      });
+      const rows = filtered.slice(offset, offset + limit).map((task) => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        issueType: task.issue_type,
+        assignee: task.assignee ?? null,
+        priority: task.priority ?? null,
+      }));
+      return JSON.stringify(
+        {
+          projectId,
+          totalMatching: filtered.length,
+          offset,
+          limit,
+          tasks: rows,
+        },
+        null,
+        2
+      );
+    }
+
+    return JSON.stringify({ error: `Unknown tool: ${toolName}` }, null, 2);
+  }
+
+  private async invokeHelpAgentWithTools(params: {
+    projectId: string | null;
+    effectiveProjectId: string;
+    agentConfig: AgentConfig;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+    systemPrompt: string;
+    cwd?: string;
+    agentId: string;
+  }): Promise<string> {
+    const { projectId, effectiveProjectId, agentConfig, messages, systemPrompt, cwd, agentId } =
+      params;
+    const loopMessages = [...messages];
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const response = await agentService.invokePlanningAgent({
+        projectId: effectiveProjectId,
+        role: "dreamer",
+        config: agentConfig,
+        messages: loopMessages,
+        systemPrompt,
+        cwd,
+        tracking: {
+          id: round === 0 ? agentId : `${agentId}-tool-${round}`,
+          projectId: effectiveProjectId,
+          phase: "help",
+          role: "dreamer",
+          label: "Help chat",
+        },
+      });
+      const content = response?.content ?? "";
+      const call = parseHelpToolCall(content);
+      if (!call) return content;
+
+      const toolResult = await this.runHelpTool(projectId, call.tool, call.args);
+      loopMessages.push({ role: "assistant", content });
+      loopMessages.push({
+        role: "user",
+        content: `[HELP_TOOL_RESULT]\n${toolResult}\n[/HELP_TOOL_RESULT]\nContinue and answer the user's original question. Call another tool if needed.`,
+      });
+    }
+    return "I couldn't complete the lookup within tool limits. Please narrow the question (for example, ask for a specific task ID or status).";
   }
 
   async sendMessage(body: HelpChatRequest): Promise<HelpChatResponse> {
@@ -301,7 +576,7 @@ export class HelpChatService {
         ? `\n\n---\n\n## Open Sprint Internal Documentation\n\nThe following describes Open Sprint's internal behavior. Use it to answer questions about scheduling, config, orchestrator logic, task runnability, epic-blocked behavior, and why agents run (or don't run).\n\n${opensprintDocs}`
         : "";
 
-    let systemPrompt = `${HELP_SYSTEM_PROMPT}\n\n---\n\n## Current Context\n\nThe following context is provided for answering the user's question. Use it to give accurate, helpful answers.\n\n${context}${docsSection}`;
+    let systemPrompt = `${HELP_SYSTEM_PROMPT}\n\n${HELP_TOOLING_PROMPT}\n\n---\n\n## Current Context\n\nThe following context is provided for answering the user's question. Use it to give accurate, helpful answers.\n\n${context}${docsSection}`;
 
     const priorMessages = (body.messages ?? []).map((m) => ({
       role: m.role as "user" | "assistant",
@@ -344,22 +619,15 @@ export class HelpChatService {
         messageLen: message.length,
       });
       const effectiveProjectId = projectId ?? "help-homepage";
-      const response = await agentService.invokePlanningAgent({
-        projectId: effectiveProjectId,
-        role: "dreamer",
-        config: agentConfig,
+      const content = await this.invokeHelpAgentWithTools({
+        projectId,
+        effectiveProjectId,
+        agentConfig,
         messages,
         systemPrompt,
         cwd,
-        tracking: {
-          id: agentId,
-          projectId: effectiveProjectId,
-          phase: "help",
-          role: "dreamer",
-          label: "Help chat",
-        },
+        agentId,
       });
-      const content = response?.content ?? "";
       log.info("Help agent returned", { contentLen: content.length });
 
       // Persist conversation for page reload / session continuity

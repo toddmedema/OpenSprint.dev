@@ -67,11 +67,11 @@ export function TaskDetailMetadata({
     })();
 
   return (
-    <div className="px-4 pt-2 pb-0">
+    <div className="px-4">
       {task && (
-        <>
+        <div className="flex flex-col gap-3">
           <div
-            className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 mb-1 text-xs text-theme-muted"
+            className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-xs text-theme-muted"
             data-testid="task-detail-priority-state-row"
           >
             <span className="inline-flex items-center gap-1.5 flex-wrap">
@@ -154,13 +154,13 @@ export function TaskDetailMetadata({
               })()}
           </div>
           {isBlockedTask && task.blockReason && (
-            <div className="mb-3 text-xs text-theme-error-text" data-testid="task-block-reason">
+            <div className="text-xs text-theme-error-text" data-testid="task-block-reason">
               {task.blockReason}
             </div>
           )}
           {task.kanbanColumn === "waiting_to_merge" && task.lastExecutionSummary && (
             <div
-              className="mb-3 text-xs text-theme-muted"
+              className="text-xs text-theme-muted"
               data-testid="task-detail-merge-summary"
               title={task.lastExecutionSummary}
             >
@@ -169,7 +169,7 @@ export function TaskDetailMetadata({
           )}
           {roleLabel && (
             <div
-              className="mb-3 px-3 py-1.5 rounded-md bg-theme-warning-bg border border-theme-warning-border text-xs font-medium text-theme-warning-text flex items-center gap-3 min-w-0"
+              className="px-3 py-1.5 rounded-md bg-theme-warning-bg border border-theme-warning-border text-xs font-medium text-theme-warning-text flex items-center gap-3 min-w-0"
               data-testid="task-detail-active-callout"
             >
               <span className="truncate">
@@ -188,7 +188,7 @@ export function TaskDetailMetadata({
               </span>
             </div>
           )}
-        </>
+        </div>
       )}
       {taskDetailError ? (
         <div

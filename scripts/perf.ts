@@ -9,6 +9,8 @@
  * Prerequisites:
  * - Backend running on port 3100 (npm run dev:backend)
  * - Frontend running on port 5173 (npm run dev:frontend)
+ * - If the API requires auth: set OPENSPRINT_LOCAL_SESSION to the backend token, or run the
+ *   backend with OPENSPRINT_DESKTOP=1 so /__opensprint_local_session.js is available (same as Electron).
  * - Optional: at least one project with at least one task (for execute/sidebar metrics)
  *
  * Usage:
@@ -32,8 +34,35 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
-const API_BASE = "http://localhost:3100/api/v1";
+const BACKEND_ORIGIN = "http://localhost:3100";
+const API_BASE = `${BACKEND_ORIGIN}/api/v1`;
 const APP_URL = "http://localhost:5173";
+
+/**
+ * Same session the UI uses: test token when backend runs with NODE_ENV=test (perf CI),
+ * OPENSPRINT_LOCAL_SESSION env, or desktop script when backend serves it.
+ */
+async function resolvePerfBackendAuthHeaders(): Promise<Record<string, string>> {
+  if (process.env.NODE_ENV === "test") {
+    // Must match VITEST_DEFAULT_LOCAL_SESSION_TOKEN in local-session-auth.service.ts
+    return { Authorization: "Bearer vitest-local-session-auth-token" };
+  }
+  const fromEnv = process.env.OPENSPRINT_LOCAL_SESSION?.trim();
+  if (fromEnv) return { Authorization: `Bearer ${fromEnv}` };
+  try {
+    const res = await fetch(`${BACKEND_ORIGIN}/__opensprint_local_session.js`);
+    if (!res.ok) return {};
+    const text = await res.text();
+    const m = text.match(/__OPENSPRINT_LOCAL_SESSION__\s*=\s*([^;]+);/);
+    if (!m) return {};
+    const token = JSON.parse(m[1].trim()) as unknown;
+    return typeof token === "string" && token.length > 0
+      ? { Authorization: `Bearer ${token}` }
+      : {};
+  } catch {
+    return {};
+  }
+}
 
 const BASELINE_PATH = path.join(ROOT, "perf-baseline.json");
 
@@ -55,14 +84,16 @@ function getDeltas(): PerfDeltas {
   };
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+async function fetchJson<T>(url: string, headers: Record<string, string>): Promise<T> {
+  const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
-async function getProjectAndTask(): Promise<{ projectId: string | null; taskId: string | null }> {
-  const projectsRes = await fetchJson<{ data?: { id: string }[] }>(`${API_BASE}/projects`);
+async function getProjectAndTask(
+  headers: Record<string, string>
+): Promise<{ projectId: string | null; taskId: string | null }> {
+  const projectsRes = await fetchJson<{ data?: { id: string }[] }>(`${API_BASE}/projects`, headers);
   const projects = projectsRes?.data ?? [];
   if (!Array.isArray(projects) || projects.length === 0) {
     return { projectId: null, taskId: null };
@@ -73,7 +104,8 @@ async function getProjectAndTask(): Promise<{ projectId: string | null; taskId: 
     return { projectId: null, taskId: null };
   }
   const tasksRes = await fetchJson<{ data?: { id: string }[] | { items: { id: string }[] } }>(
-    `${API_BASE}/projects/${projectId}/tasks?limit=50`
+    `${API_BASE}/projects/${projectId}/tasks?limit=50`,
+    headers
   );
   const raw = tasksRes?.data;
   const tasks = Array.isArray(raw) ? raw : ((raw as { items?: { id: string }[] })?.items ?? []);
@@ -116,7 +148,10 @@ async function getNavigationTiming(page: Page): Promise<{
   });
 }
 
-async function runPerf(browser: Browser): Promise<PerfMetrics> {
+async function runPerf(
+  browser: Browser,
+  apiAuthHeaders: Record<string, string>
+): Promise<PerfMetrics> {
   const page = await browser.newPage();
 
   const client = await page.target().createCDPSession();
@@ -132,7 +167,7 @@ async function runPerf(browser: Browser): Promise<PerfMetrics> {
   };
 
   try {
-    const { projectId, taskId } = await getProjectAndTask();
+    const { projectId, taskId } = await getProjectAndTask(apiAuthHeaders);
 
     const loadStart = Date.now();
     await page.goto(APP_URL, { waitUntil: "networkidle2", timeout: 30000 });
@@ -291,9 +326,21 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const apiAuthHeaders = await resolvePerfBackendAuthHeaders();
+
   console.log("Checking servers...");
   try {
-    await fetch(`${API_BASE}/projects`).then((r) => r.ok);
+    const r = await fetch(`${API_BASE}/projects`, { headers: apiAuthHeaders });
+    if (!r.ok) {
+      console.error(`Backend returned HTTP ${r.status} for`, `${API_BASE}/projects`);
+      console.error("Start with: npm run dev:backend");
+      if (r.status === 403) {
+        console.error(
+          "Auth required: set OPENSPRINT_LOCAL_SESSION to your backend token, or run the backend with OPENSPRINT_DESKTOP=1 so /__opensprint_local_session.js is served."
+        );
+      }
+      process.exit(1);
+    }
   } catch {
     console.error("Backend not reachable at", API_BASE);
     console.error("Start with: npm run dev:backend");
@@ -301,7 +348,8 @@ async function main(): Promise<void> {
   }
 
   try {
-    await fetch(APP_URL).then((r) => r.ok);
+    const r = await fetch(APP_URL);
+    if (!r.ok) throw new Error(String(r.status));
   } catch {
     console.error("Frontend not reachable at", APP_URL);
     console.error("Start with: npm run dev:frontend");
@@ -315,7 +363,7 @@ async function main(): Promise<void> {
   });
 
   try {
-    const metrics = await runPerf(browser);
+    const metrics = await runPerf(browser, apiAuthHeaders);
     printReport(metrics);
 
     if (saveBaseline) {

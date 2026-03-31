@@ -718,6 +718,47 @@ describe("MergeCoordinatorService", () => {
     );
   });
 
+  it("keeps requeueing merge conflicts in optimistic mode regardless of scope confidence", async () => {
+    (
+      mockHost.taskStore.getCumulativeAttemptsFromIssue as unknown as ReturnType<typeof vi.fn>
+    ).mockReturnValue(10);
+    mockGetSettings.mockResolvedValue({
+      simpleComplexityAgent: { type: "cursor", model: null },
+      complexComplexityAgent: { type: "cursor", model: null },
+      deployment: { mode: "custom" },
+      gitWorkingMode: "worktree",
+      unknownScopeStrategy: "optimistic",
+    });
+    mockGitQueueEnqueueAndWait.mockRejectedValue(new Error("merge conflict"));
+
+    await coordinator.performMergeAndDone(
+      projectId,
+      repoPath,
+      makeTask({ labels: ["files:src/explicit.ts"] }),
+      branchName
+    );
+
+    expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({
+        status: "open",
+        extra: expect.objectContaining({
+          next_retry_context: expect.objectContaining({
+            failureType: "merge_conflict",
+          }),
+        }),
+      })
+    );
+    expect(mockHost.taskStore.update).not.toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({
+        status: "blocked",
+      })
+    );
+  });
+
   it("requeues task when pre-merge quality gate fails", async () => {
     mockHost.runMergeQualityGates = vi.fn().mockImplementation(async (options) => {
       if (isBaselineValidation(options)) return null;

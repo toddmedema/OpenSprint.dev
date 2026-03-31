@@ -50,6 +50,9 @@ let trayRefreshInterval: ReturnType<typeof setInterval> | null = null;
 /** Last successful tray state so we don't show 0 or flicker on fetch errors. */
 let lastTrayState: { agentCount: number; title: string } | null = null;
 let trayRefreshInFlight: Promise<void> | null = null;
+/** Bearer token for /api/v1 from desktop backend (same source as renderer __opensprint_local_session.js). */
+let desktopLocalSessionToken: string | null = null;
+let desktopSessionTokenFetchInFlight: Promise<string | null> | null = null;
 let isQuitting = false;
 let quitAfterBackendStop = false;
 let backendStartupInProgress = false;
@@ -181,6 +184,59 @@ function getApiBase(): string {
   return `${getBackendOrigin()}/api/v1`;
 }
 
+const LOCAL_SESSION_AUTH_REQUIRED_CODE = "LOCAL_SESSION_AUTH_REQUIRED";
+
+function clearDesktopLocalSessionTokenCache(): void {
+  desktopLocalSessionToken = null;
+  desktopSessionTokenFetchInFlight = null;
+}
+
+function isLocalSessionApiAuthError(payload: Record<string, unknown> | null): boolean {
+  if (!payload || typeof payload.error !== "object" || payload.error === null) return false;
+  return (payload.error as { code?: string }).code === LOCAL_SESSION_AUTH_REQUIRED_CODE;
+}
+
+function fetchText(url: string, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve(data));
+    });
+    req.on("error", reject);
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject(new Error("Timeout"));
+    });
+  });
+}
+
+/**
+ * Resolves the local API Bearer token (desktop backend serves it without auth at
+ * /__opensprint_local_session.js). Coalesces concurrent fetches.
+ */
+async function resolveDesktopLocalSessionToken(): Promise<string | null> {
+  if (desktopLocalSessionToken) return desktopLocalSessionToken;
+  if (!desktopSessionTokenFetchInFlight) {
+    desktopSessionTokenFetchInFlight = (async (): Promise<string | null> => {
+      try {
+        const body = await fetchText(`${getBackendOrigin()}/__opensprint_local_session.js`, 3000);
+        const m = body.match(/__OPENSPRINT_LOCAL_SESSION__\s*=\s*([^;]+);/);
+        if (!m) return null;
+        const token = JSON.parse(m[1].trim()) as unknown;
+        return typeof token === "string" && token.length > 0 ? token : null;
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      desktopSessionTokenFetchInFlight = null;
+    });
+  }
+  const token = await desktopSessionTokenFetchInFlight;
+  if (token) desktopLocalSessionToken = token;
+  return token;
+}
+
 type DatabaseDialect = "sqlite" | "postgres" | "unknown";
 
 interface DbStartupStatus {
@@ -190,9 +246,13 @@ interface DbStartupStatus {
   dialect: DatabaseDialect;
 }
 
-function fetchJson(url: string, timeoutMs = 500): Promise<Record<string, unknown>> {
+function fetchJson(
+  url: string,
+  timeoutMs = 500,
+  headers?: Record<string, string>
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, (res) => {
+    const req = http.get(url, { headers: headers ?? {} }, (res) => {
       let data = "";
       res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
@@ -255,12 +315,23 @@ async function waitForDatabaseStartupStatus(
   let dialect: DatabaseDialect = "unknown";
 
   while (Date.now() - start < timeoutMs) {
+    const token = await resolveDesktopLocalSessionToken();
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const [statusPayload, settingsPayload] = await Promise.all([
-      fetchJson(`${getApiBase()}/db-status`, 1_500).catch(() => null),
+      fetchJson(`${getApiBase()}/db-status`, 1_500, authHeaders).catch(() => null),
       dialect === "unknown"
-        ? fetchJson(`${getApiBase()}/global-settings`, 1_500).catch(() => null)
+        ? fetchJson(`${getApiBase()}/global-settings`, 1_500, authHeaders).catch(() => null)
         : Promise.resolve(null),
     ]);
+
+    if (
+      (statusPayload && isLocalSessionApiAuthError(statusPayload)) ||
+      (settingsPayload && isLocalSessionApiAuthError(settingsPayload))
+    ) {
+      clearDesktopLocalSessionTokenCache();
+      await delay(DB_STARTUP_POLL_MS);
+      continue;
+    }
 
     if (settingsPayload) {
       dialect = parseDatabaseDialect(settingsPayload);
@@ -696,6 +767,7 @@ function checkPrerequisitesFresh(): Promise<PrerequisitesCheckResult> {
 
 function startBackend(pathOverride?: string): ChildProcess {
   const { backendDir, backendEntry, frontendDist } = getPaths();
+  clearDesktopLocalSessionTokenCache();
   backendLaunchError = null;
   const backendLog = app.isPackaged ? ensureBackendLogStream() : null;
   const normalizedPath =
@@ -761,6 +833,7 @@ function startBackend(pathOverride?: string): ChildProcess {
       backendProcess = null;
       backendShutdownPromise = null;
       closeBackendLogStream();
+      clearDesktopLocalSessionTokenCache();
     }
     if (!isQuitting && code !== 0) {
       backendLaunchError = new Error(`Backend exited with code ${code}`);
@@ -863,88 +936,101 @@ function createWindow(): void {
   }
 }
 
-function runRefreshTrayMenu(): Promise<void> {
-  if (!tray || tray.isDestroyed()) return Promise.resolve();
+async function runRefreshTrayMenu(): Promise<void> {
+  if (!tray || tray.isDestroyed()) return;
   const { normalPath, withDotPath, isTemplate } = getTrayIconPaths();
-  return Promise.all([
-    fetchJson(`${getApiBase()}/agents/active-count`, TRAY_FETCH_TIMEOUT_MS)
-      .then((r) => r)
-      .catch(() => null),
-    fetchJson(`${getApiBase()}/notifications/pending-count`, TRAY_FETCH_TIMEOUT_MS)
-      .then((r) => r)
-      .catch(() => null),
-    fetchJson(`${getApiBase()}/global-settings`, TRAY_FETCH_TIMEOUT_MS)
-      .then((r) => r)
-      .catch(() => null),
-  ]).then(([agentsRes, notifRes, settingsRes]) => {
-    if (!tray || tray.isDestroyed()) return;
-    const fetchOk = agentsRes != null && agentsRes.data != null;
-    const fetchedCount = (agentsRes?.data as { count?: number } | undefined)?.count ?? 0;
-    const agentCount = fetchOk ? fetchedCount : (lastTrayState?.agentCount ?? 0);
-    if (fetchOk) {
-      lastTrayState = lastTrayState ?? { agentCount: 0, title: "" };
-      lastTrayState.agentCount = fetchedCount;
-    }
-    const pendingCount = (notifRes?.data as { count?: number } | undefined)?.count ?? 0;
-    const showDot =
-      (settingsRes?.data as { showNotificationDotInMenuBar?: boolean } | undefined)
-        ?.showNotificationDotInMenuBar !== false;
-    const useDotIcon = pendingCount > 0 && showDot;
-    const iconPath = useDotIcon ? withDotPath : normalPath;
-    let img = nativeImage.createFromPath(iconPath);
-    if (img.isEmpty()) img = nativeImage.createFromPath(normalPath);
-    if (isTemplate && !img.isEmpty()) img.setTemplateImage(true);
-    tray.setImage(img);
-    // On macOS, force multiple setImage calls so the menu bar status item redraws and the
-    // notification dot is removed immediately without requiring app focus.
-    if (process.platform === "darwin" && tray && !tray.isDestroyed()) {
-      const applyIcon = (): void => {
-        if (!tray || tray.isDestroyed()) return;
-        const imgNext = nativeImage.createFromPath(iconPath);
-        const imgToUse = imgNext.isEmpty() ? nativeImage.createFromPath(normalPath) : imgNext;
-        if (isTemplate && !imgToUse.isEmpty()) imgToUse.setTemplateImage(true);
-        tray!.setImage(imgToUse);
-      };
-      setImmediate(applyIcon);
-      // When switching to no-dot, a delayed third setImage helps macOS reliably clear the dot.
-      if (!useDotIcon) {
-        setTimeout(applyIcon, 100);
+
+  const fetchTrayPayload = async (url: string): Promise<Record<string, unknown> | null> => {
+    let token = await resolveDesktopLocalSessionToken();
+    let headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      let payload = await fetchJson(url, TRAY_FETCH_TIMEOUT_MS, headers);
+      if (isLocalSessionApiAuthError(payload)) {
+        clearDesktopLocalSessionTokenCache();
+        token = await resolveDesktopLocalSessionToken();
+        headers = token ? { Authorization: `Bearer ${token}` } : {};
+        payload = await fetchJson(url, TRAY_FETCH_TIMEOUT_MS, headers);
       }
+      return isLocalSessionApiAuthError(payload) ? null : payload;
+    } catch {
+      return null;
     }
-    if (process.platform === "darwin") {
-      const showCount =
-        (settingsRes?.data as { showRunningAgentCountInMenuBar?: boolean } | undefined)
-          ?.showRunningAgentCountInMenuBar !== false;
-      const title = showCount
-        ? agentCount === 0
-          ? ""
-          : agentCount > 9
-            ? "9+"
-            : String(agentCount)
-        : "";
-      if (title !== (lastTrayState?.title ?? null)) {
-        tray.setTitle(title, { fontType: "monospacedDigit" });
-        if (lastTrayState) lastTrayState.title = title;
-        else lastTrayState = { agentCount, title };
-      }
+  };
+
+  const [agentsRes, notifRes, settingsRes] = await Promise.all([
+    fetchTrayPayload(`${getApiBase()}/agents/active-count`),
+    fetchTrayPayload(`${getApiBase()}/notifications/pending-count`),
+    fetchTrayPayload(`${getApiBase()}/global-settings`),
+  ]);
+
+  if (!tray || tray.isDestroyed()) return;
+
+  const fetchOk = agentsRes != null && agentsRes.data != null;
+  const fetchedCount = (agentsRes?.data as { count?: number } | undefined)?.count ?? 0;
+  const agentCount = fetchOk ? fetchedCount : (lastTrayState?.agentCount ?? 0);
+  if (fetchOk) {
+    lastTrayState = lastTrayState ?? { agentCount: 0, title: "" };
+    lastTrayState.agentCount = fetchedCount;
+  }
+  const pendingCount = (notifRes?.data as { count?: number } | undefined)?.count ?? 0;
+  const showDot =
+    (settingsRes?.data as { showNotificationDotInMenuBar?: boolean } | undefined)
+      ?.showNotificationDotInMenuBar !== false;
+  const useDotIcon = pendingCount > 0 && showDot;
+  const iconPath = useDotIcon ? withDotPath : normalPath;
+  let img = nativeImage.createFromPath(iconPath);
+  if (img.isEmpty()) img = nativeImage.createFromPath(normalPath);
+  if (isTemplate && !img.isEmpty()) img.setTemplateImage(true);
+  tray.setImage(img);
+  // On macOS, force multiple setImage calls so the menu bar status item redraws and the
+  // notification dot is removed immediately without requiring app focus.
+  if (process.platform === "darwin" && tray && !tray.isDestroyed()) {
+    const applyIcon = (): void => {
+      if (!tray || tray.isDestroyed()) return;
+      const imgNext = nativeImage.createFromPath(iconPath);
+      const imgToUse = imgNext.isEmpty() ? nativeImage.createFromPath(normalPath) : imgNext;
+      if (isTemplate && !imgToUse.isEmpty()) imgToUse.setTemplateImage(true);
+      tray!.setImage(imgToUse);
+    };
+    setImmediate(applyIcon);
+    // When switching to no-dot, a delayed third setImage helps macOS reliably clear the dot.
+    if (!useDotIcon) {
+      setTimeout(applyIcon, 100);
     }
-    const menu = Menu.buildFromTemplate([
-      { label: `${agentCount} agents running`, enabled: false },
-      { type: "separator" },
-      {
-        label: `Show ${APP_NAME}`,
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          }
-        },
+  }
+  if (process.platform === "darwin") {
+    const showCount =
+      (settingsRes?.data as { showRunningAgentCountInMenuBar?: boolean } | undefined)
+        ?.showRunningAgentCountInMenuBar !== false;
+    const title = showCount
+      ? agentCount === 0
+        ? ""
+        : agentCount > 9
+          ? "9+"
+          : String(agentCount)
+      : "";
+    if (title !== (lastTrayState?.title ?? null)) {
+      tray.setTitle(title, { fontType: "monospacedDigit" });
+      if (lastTrayState) lastTrayState.title = title;
+      else lastTrayState = { agentCount, title };
+    }
+  }
+  const menu = Menu.buildFromTemplate([
+    { label: `${agentCount} agents running`, enabled: false },
+    { type: "separator" },
+    {
+      label: `Show ${APP_NAME}`,
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
       },
-      { type: "separator" },
-      { label: "Quit", role: "quit" },
-    ]);
-    tray.setContextMenu(menu);
-  });
+    },
+    { type: "separator" },
+    { label: "Quit", role: "quit" },
+  ]);
+  tray.setContextMenu(menu);
 }
 
 function refreshTrayMenu(): Promise<void> {

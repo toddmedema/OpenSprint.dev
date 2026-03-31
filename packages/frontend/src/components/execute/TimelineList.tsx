@@ -14,10 +14,18 @@ import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
 import { PriorityIcon } from "../PriorityIcon";
 import { AssigneeSelector } from "./AssigneeSelector";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
-import { EXECUTE_SECTION_HEADER_STICKY_TOP } from "../../lib/phaseMainScrollLayout";
 import { RelativeTimestampDisplay } from "../RelativeTimestampDisplay";
 import { UptimeDisplay } from "../UptimeDisplay";
 import { formatUntilTimestamp } from "../../lib/formatting";
+import { PhaseScrollSectionHeader } from "../PhaseScrollSectionHeader";
+import {
+  PHASE_QUEUE_LIST_SECTION_BODY_CLASSNAME,
+  PHASE_QUEUE_ROW_INNER_CLASSNAME,
+  PHASE_QUEUE_ROW_META_MUTED_CLASSNAME,
+  PHASE_QUEUE_ROW_TITLE_CLASSNAME,
+  PHASE_QUEUE_ROW_VIRTUAL_OUTER_CLASSNAME,
+  phaseQueueRowPrimaryButtonClassName,
+} from "../../lib/phaseQueueListView";
 
 const ACTIVE_TASK_TICK_MS = 10_000;
 
@@ -147,91 +155,102 @@ function TimelineRow({
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const rightLabel = getTimelineRightLabel(task, epicName);
 
-  return (
-    <div
-      role={asListItem ? "listitem" : undefined}
-      data-testid={`timeline-row-${task.id}`}
-      className={`min-h-[52px]${assigneeDropdownOpen ? " relative z-[1000]" : ""}`}
-    >
-      <div className="flex items-center gap-2 px-4 py-2.5 group overflow-x-auto md:overflow-x-visible min-w-0">
+  const rowOuterClass = `min-h-[52px]${assigneeDropdownOpen ? " relative z-[1000]" : ""}`;
+  const rowInner = (
+    <div className={PHASE_QUEUE_ROW_INNER_CLASSNAME}>
+      <button
+        type="button"
+        onClick={() => onTaskSelect(task.id)}
+        className={phaseQueueRowPrimaryButtonClassName(false)}
+      >
+        <PriorityIcon priority={task.priority ?? 1} size="xs" />
+        <span className={PHASE_QUEUE_ROW_TITLE_CLASSNAME} title={task.title}>
+          {task.title}
+        </span>
+        {isSelfImprovementTask(task) && task.kanbanColumn !== "waiting_to_merge" && (
+          <span
+            className={`hidden md:inline ${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} font-medium`}
+            title="Created by self-improvement"
+            data-testid="task-badge-self-improvement"
+          >
+            Self-improvement
+          </span>
+        )}
+        {rightLabel && (
+          <span
+            className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} truncate max-w-[120px] min-[1000px]:max-w-[240px]`}
+            title={rightLabel.title}
+            data-testid={rightLabel.testId}
+          >
+            {rightLabel.text}
+          </span>
+        )}
+        <span className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} tabular-nums`}>
+          {relativeTime}
+        </span>
+      </button>
+      <span
+        className="shrink-0 w-fit max-w-fit tabular-nums inline-flex items-center min-w-0"
+        data-testid="task-row-assignee"
+        role="presentation"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        tabIndex={-1}
+      >
+        {enableHumanTeammates ? (
+          <AssigneeSelector
+            projectId={projectId}
+            taskId={task.id}
+            currentAssignee={task.assignee ?? null}
+            teamMembers={teamMembers}
+            readOnly={isDone || isInProgress}
+            isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
+            matchTaskNameTypography
+            onOpenChange={setAssigneeDropdownOpen}
+          />
+        ) : (
+          <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME}>
+            {task.assignee?.trim() ? task.assignee : "—"}
+          </span>
+        )}
+      </span>
+      {isBlocked && onUnblock && (
         <button
           type="button"
-          onClick={() => onTaskSelect(task.id)}
-          className="flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnblock(task.id);
+          }}
+          disabled={isUnblocking}
+          aria-busy={isUnblocking}
+          aria-label={isUnblocking ? "Retrying" : "Retry"}
+          className="shrink-0 text-xs font-medium text-theme-error-text hover:bg-theme-error-bg px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[3.25rem] min-h-[1.75rem] inline-flex items-center justify-center"
+          data-testid={`timeline-retry-${task.id}`}
         >
-          <PriorityIcon priority={task.priority ?? 1} size="xs" />
-          <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
-            {task.title}
-          </span>
-          {isSelfImprovementTask(task) && task.kanbanColumn !== "waiting_to_merge" && (
+          {isUnblocking ? (
             <span
-              className="hidden md:inline shrink-0 text-xs font-medium text-theme-muted"
-              title="Created by self-improvement"
-              data-testid="task-badge-self-improvement"
-            >
-              Self-improvement
-            </span>
-          )}
-          {rightLabel && (
-            <span
-              className="shrink-0 text-xs text-theme-muted truncate max-w-[120px] min-[1000px]:max-w-[240px]"
-              title={rightLabel.title}
-              data-testid={rightLabel.testId}
-            >
-              {rightLabel.text}
-            </span>
-          )}
-          <span className="text-xs text-theme-muted shrink-0 tabular-nums">{relativeTime}</span>
-        </button>
-        <span
-          className="shrink-0 w-fit max-w-fit tabular-nums inline-flex items-center min-w-0"
-          data-testid="task-row-assignee"
-          role="presentation"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          tabIndex={-1}
-        >
-          {enableHumanTeammates ? (
-            <AssigneeSelector
-              projectId={projectId}
-              taskId={task.id}
-              currentAssignee={task.assignee ?? null}
-              teamMembers={teamMembers}
-              readOnly={isDone || isInProgress}
-              isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
-              matchTaskNameTypography
-              onOpenChange={setAssigneeDropdownOpen}
+              className="inline-block w-3.5 h-3.5 border-2 border-theme-border border-t-brand-500 rounded-full animate-spin"
+              aria-hidden
             />
           ) : (
-            <span className="text-xs text-theme-muted">
-              {task.assignee?.trim() ? task.assignee : "—"}
-            </span>
+            "Retry"
           )}
-        </span>
-        {isBlocked && onUnblock && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnblock(task.id);
-            }}
-            disabled={isUnblocking}
-            aria-busy={isUnblocking}
-            aria-label={isUnblocking ? "Retrying" : "Retry"}
-            className="shrink-0 text-xs font-medium text-theme-error-text hover:bg-theme-error-bg px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[3.25rem] min-h-[1.75rem] inline-flex items-center justify-center"
-            data-testid={`timeline-retry-${task.id}`}
-          >
-            {isUnblocking ? (
-              <span
-                className="inline-block w-3.5 h-3.5 border-2 border-theme-border border-t-brand-500 rounded-full animate-spin"
-                aria-hidden
-              />
-            ) : (
-              "Retry"
-            )}
-          </button>
-        )}
-      </div>
+        </button>
+      )}
+    </div>
+  );
+
+  if (asListItem) {
+    return (
+      <li data-testid={`timeline-row-${task.id}`} className={rowOuterClass}>
+        {rowInner}
+      </li>
+    );
+  }
+
+  return (
+    <div data-testid={`timeline-row-${task.id}`} className={rowOuterClass}>
+      {rowInner}
     </div>
   );
 }
@@ -434,14 +453,13 @@ export function TimelineList({
               >
                 {item.kind === "header" ? (
                   <div data-testid={`timeline-section-${item.sectionKey}`}>
-                    <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] min-h-[44px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]">
-                      <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
-                        {item.label}
-                      </h3>
-                    </div>
+                    <PhaseScrollSectionHeader
+                      variant="execute-timeline-virtual"
+                      title={item.label}
+                    />
                   </div>
                 ) : (
-                  <div className="border-b border-theme-border-subtle min-h-[52px]">
+                  <div className={PHASE_QUEUE_ROW_VIRTUAL_OUTER_CLASSNAME}>
                     <TimelineRow
                       task={item.task}
                       epicName={
@@ -474,14 +492,11 @@ export function TimelineList({
         ({ key, tasks: sectionTasks }) =>
           sectionTasks.length > 0 && (
             <section key={key} data-testid={`timeline-section-${key}`}>
-              <div
-                className={`sticky ${EXECUTE_SECTION_HEADER_STICKY_TOP} z-[12] -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 sm:pt-4 pb-[2px] border-b border-theme-border-subtle bg-theme-surface [background-clip:padding-box]`}
-              >
-                <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
-                  {SECTION_LABELS[key]}
-                </h3>
-              </div>
-              <div role="list" className="divide-y divide-theme-border-subtle">
+              <PhaseScrollSectionHeader
+                variant="execute-timeline-sticky"
+                title={SECTION_LABELS[key] ?? key}
+              />
+              <ul className={PHASE_QUEUE_LIST_SECTION_BODY_CLASSNAME}>
                 {sectionTasks.map((task) => (
                   <TimelineRow
                     key={task.id}
@@ -496,7 +511,7 @@ export function TimelineList({
                     enableHumanTeammates={enableHumanTeammates}
                   />
                 ))}
-              </div>
+              </ul>
             </section>
           )
       )}

@@ -191,19 +191,24 @@ export function isConnectionError(err: unknown): boolean {
   );
 }
 
+/** Bearer for local API (desktop-injected script or dev); omit when unset. */
+function getLocalSessionAuthHeaders(): Record<string, string> {
+  const sessionToken =
+    typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
+  return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+}
+
 /** Generic fetch wrapper with typed responses */
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
   const signal = mergeRequestSignal(timeoutMs, fetchOptions.signal);
 
-  const sessionToken =
-    typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
   const response = await fetch(url, {
     ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      ...getLocalSessionAuthHeaders(),
       ...fetchOptions.headers,
     },
     ...(signal ? { signal } : {}),
@@ -447,6 +452,9 @@ export const api = {
       const response = await fetch(url, {
         method: "POST",
         body: formData,
+        headers: {
+          ...getLocalSessionAuthHeaders(),
+        },
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({

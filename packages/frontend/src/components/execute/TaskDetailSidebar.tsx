@@ -440,63 +440,65 @@ function TaskDetailSidebarInner({
           onCollapseAll={collapseAllSections}
           onExpandAll={expandAllSections}
         />
-        <TaskDetailOpenQuestions
-          projectId={projectId}
-          selectedTask={selectedTask}
-          task={task}
-          openQuestionNotification={openQuestionNotification}
-          onOpenQuestionResolved={onOpenQuestionResolved}
-        />
-
-        <TaskDetailMetadata
-          projectId={projectId}
-          selectedTask={selectedTask}
-          task={task}
-          taskDetailLoading={taskDetailLoading}
-          taskDetailError={taskDetailError}
-          taskIdToStartedAt={taskIdToStartedAt}
-          roleLabel={roleLabel}
-          isDoneTask={isDoneTask}
-          isBlockedTask={isBlockedTask}
-          isInProgressTask={isInProgressTask}
-          enableHumanTeammates={enableHumanTeammates}
-          teamMembers={teamMembers}
-        />
-
-        {task && (
-          <TaskDetailLinks
+        <div className="pt-2 flex flex-col gap-3">
+          <TaskDetailOpenQuestions
             projectId={projectId}
             selectedTask={selectedTask}
             task={task}
-            planByEpicId={planByEpicId}
-            taskById={taskById}
-            allTasks={allTasks}
-            onNavigateToPlan={onNavigateToPlan}
-            onSelectTask={onSelectTask}
-            setDeleteLinkConfirm={setDeleteLinkConfirm}
-            removeLinkRemovingId={removeLinkRemovingId}
-            onAddLink={async (parentTaskId, type) => {
-              await dispatch(
-                addTaskDependency({
-                  projectId,
-                  taskId: selectedTask,
-                  parentTaskId,
-                  type: type as "blocks" | "related" | "parent-child",
-                })
-              ).unwrap();
-            }}
+            openQuestionNotification={openQuestionNotification}
+            onOpenQuestionResolved={onOpenQuestionResolved}
           />
-        )}
 
-        {task && displayDesc ? (
-          <TaskDetailDescription
-            content={displayDesc}
-            expanded={descriptionSectionExpanded}
-            onToggle={() => setDescriptionSectionExpanded((prev) => !prev)}
-            sectionNavId="execute-description-section"
-            sectionNavTitle="Description"
+          <TaskDetailMetadata
+            projectId={projectId}
+            selectedTask={selectedTask}
+            task={task}
+            taskDetailLoading={taskDetailLoading}
+            taskDetailError={taskDetailError}
+            taskIdToStartedAt={taskIdToStartedAt}
+            roleLabel={roleLabel}
+            isDoneTask={isDoneTask}
+            isBlockedTask={isBlockedTask}
+            isInProgressTask={isInProgressTask}
+            enableHumanTeammates={enableHumanTeammates}
+            teamMembers={teamMembers}
           />
-        ) : null}
+
+          {task && (
+            <TaskDetailLinks
+              projectId={projectId}
+              selectedTask={selectedTask}
+              task={task}
+              planByEpicId={planByEpicId}
+              taskById={taskById}
+              allTasks={allTasks}
+              onNavigateToPlan={onNavigateToPlan}
+              onSelectTask={onSelectTask}
+              setDeleteLinkConfirm={setDeleteLinkConfirm}
+              removeLinkRemovingId={removeLinkRemovingId}
+              onAddLink={async (parentTaskId, type) => {
+                await dispatch(
+                  addTaskDependency({
+                    projectId,
+                    taskId: selectedTask,
+                    parentTaskId,
+                    type: type as "blocks" | "related" | "parent-child",
+                  })
+                ).unwrap();
+              }}
+            />
+          )}
+
+          {task && displayDesc ? (
+            <TaskDetailDescription
+              content={displayDesc}
+              expanded={descriptionSectionExpanded}
+              onToggle={() => setDescriptionSectionExpanded((prev) => !prev)}
+              sectionNavId="execute-description-section"
+              sectionNavTitle="Description"
+            />
+          ) : null}
+        </div>
 
         <TaskDetailFeedbackSections
           projectId={projectId}

@@ -2188,14 +2188,10 @@ export function EvalPhase({
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <div
-        ref={feedbackFeedRef}
-        className="flex-1 min-h-0 overflow-y-auto w-full"
-        data-testid="eval-feedback-feed-scroll"
-      >
+    <div className="flex flex-1 flex-col min-h-0 min-w-0 h-full overflow-hidden">
+      <div className="shrink-0 bg-theme-surface border-b border-theme-border">
         <div
-          className={`${CONTENT_CONTAINER_CLASS} py-4 sm:py-8 w-full`}
+          className={`${CONTENT_CONTAINER_CLASS} pt-4 sm:pt-8 pb-4 w-full`}
           data-testid="eval-feedback-content"
         >
           {/* Feedback Input */}
@@ -2406,7 +2402,15 @@ export function EvalPhase({
               </div>
             )}
           </div>
+        </div>
+      </div>
 
+      <div
+        ref={feedbackFeedRef}
+        className="flex-1 min-h-0 min-w-0 overflow-y-auto pt-2 sm:pt-3 pb-4 sm:pb-6 w-full"
+        data-testid="eval-feedback-feed-scroll"
+      >
+        <div className={`${CONTENT_CONTAINER_CLASS} w-full`}>
           {showFeedbackEmptyState && plans.length === 0 ? (
             <PhaseEmptyState
               title={EMPTY_STATE_COPY.eval.title}

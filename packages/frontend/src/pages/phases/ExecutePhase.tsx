@@ -57,11 +57,7 @@ import { TimelineList } from "../../components/execute/TimelineList";
 import { clearPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
-import {
-  EXECUTE_MAIN_CONTENT_INSET_CLASSNAME,
-  EXECUTE_SCROLL_PORT_CLASSNAME,
-  EXECUTE_STICKY_TOOLBAR_CLUSTER_CLASSNAME,
-} from "../../lib/phaseMainScrollLayout";
+import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 import { mergeExecuteSelectedTaskData } from "../../lib/mergeExecuteSelectedTask";
@@ -502,239 +498,227 @@ export function ExecutePhase({
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-theme-surface overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        <ExecuteFilterToolbar
+          chipConfig={chipConfig}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          awaitingApproval={awaitingApproval}
+          selfImprovementRunInProgress={selfImprovementRunInProgress}
+          selfImprovementRunMode={selfImprovementRunMode}
+          searchExpanded={searchExpanded}
+          searchInputValue={searchInputValue}
+          setSearchInputValue={setSearchInputValue}
+          searchInputRef={searchInputRef}
+          handleSearchExpand={handleSearchExpand}
+          handleSearchClose={handleSearchClose}
+          handleSearchKeyDown={handleSearchKeyDown}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          mergeStrategy={projectSettingsQuery.data?.mergeStrategy}
+        />
+
         <div
           ref={executeScrollRef}
-          className={EXECUTE_SCROLL_PORT_CLASSNAME}
+          className={EXECUTE_MAIN_SCROLL_CLASSNAME}
           data-testid="execute-main-scroll"
         >
-          <div className={EXECUTE_STICKY_TOOLBAR_CLUSTER_CLASSNAME}>
-            <ExecuteFilterToolbar
-              chipConfig={chipConfig}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
-              awaitingApproval={awaitingApproval}
-              selfImprovementRunInProgress={selfImprovementRunInProgress}
-              selfImprovementRunMode={selfImprovementRunMode}
-              searchExpanded={searchExpanded}
-              searchInputValue={searchInputValue}
-              setSearchInputValue={setSearchInputValue}
-              searchInputRef={searchInputRef}
-              handleSearchExpand={handleSearchExpand}
-              handleSearchClose={handleSearchClose}
-              handleSearchKeyDown={handleSearchKeyDown}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              mergeStrategy={projectSettingsQuery.data?.mergeStrategy}
+          {baselineStatus === "failing" && (
+            <div
+              className="mb-4 rounded-lg border border-theme-warning-border bg-theme-warning-bg px-4 py-3 text-theme-warning-text"
+              data-testid="execute-baseline-paused-banner"
+              role="status"
+            >
+              <p className="text-sm">
+                Merge queue paused until baseline quality gates on main pass.
+              </p>
+              {baselineFailureSummary && (
+                <p className="mt-1 text-xs opacity-90">{baselineFailureSummary}</p>
+              )}
+              {baselineRemediationStatus && (
+                <p
+                  className="mt-1 text-xs opacity-90"
+                  data-testid="execute-baseline-remediation-status"
+                >
+                  {baselineRemediationStatus.status === "blocked"
+                    ? `Repair blocked after ${baselineRemediationStatus.attempts} attempt${baselineRemediationStatus.attempts !== 1 ? "s" : ""}.`
+                    : `Repair in progress (attempt ${baselineRemediationStatus.attempts} of ${baselineRemediationStatus.maxAttempts}).`}
+                </p>
+              )}
+            </div>
+          )}
+          {mergeValidationStatus === "degraded" && (
+            <div
+              className="mb-4 rounded-lg border border-theme-error-border bg-theme-error-bg px-4 py-3 text-theme-error-text"
+              data-testid="execute-merge-validation-degraded-banner"
+              role="status"
+            >
+              <p className="text-sm">
+                Merge validation is temporarily degraded. Coding continues, but merge retries are
+                being held for periodic canary checks.
+              </p>
+              {mergeValidationFailureSummary && (
+                <p className="mt-1 text-xs opacity-90">{mergeValidationFailureSummary}</p>
+              )}
+            </div>
+          )}
+          {showTasksEmptyState ? (
+            <PhaseEmptyState
+              title={EMPTY_STATE_COPY.execute.title}
+              description={EMPTY_STATE_COPY.execute.description}
+              illustration={<PhaseEmptyStateLogo />}
+              primaryAction={{
+                label: EMPTY_STATE_COPY.execute.primaryActionLabel,
+                onClick: () => navigate(getProjectPhasePath(projectId, "plan")),
+                "data-testid": "empty-state-go-to-plan",
+              }}
             />
-          </div>
-
-          <div className={EXECUTE_MAIN_CONTENT_INSET_CLASSNAME}>
-            {baselineStatus === "failing" && (
-              <div
-                className="mb-4 rounded-lg border border-theme-warning-border bg-theme-warning-bg px-4 py-3 text-theme-warning-text"
-                data-testid="execute-baseline-paused-banner"
-                role="status"
-              >
-                <p className="text-sm">
-                  Merge queue paused until baseline quality gates on main pass.
-                </p>
-                {baselineFailureSummary && (
-                  <p className="mt-1 text-xs opacity-90">{baselineFailureSummary}</p>
-                )}
-                {baselineRemediationStatus && (
-                  <p
-                    className="mt-1 text-xs opacity-90"
-                    data-testid="execute-baseline-remediation-status"
-                  >
-                    {baselineRemediationStatus.status === "blocked"
-                      ? `Repair blocked after ${baselineRemediationStatus.attempts} attempt${baselineRemediationStatus.attempts !== 1 ? "s" : ""}.`
-                      : `Repair in progress (attempt ${baselineRemediationStatus.attempts} of ${baselineRemediationStatus.maxAttempts}).`}
-                  </p>
-                )}
-              </div>
-            )}
-            {mergeValidationStatus === "degraded" && (
-              <div
-                className="mb-4 rounded-lg border border-theme-error-border bg-theme-error-bg px-4 py-3 text-theme-error-text"
-                data-testid="execute-merge-validation-degraded-banner"
-                role="status"
-              >
-                <p className="text-sm">
-                  Merge validation is temporarily degraded. Coding continues, but merge retries are
-                  being held for periodic canary checks.
-                </p>
-                {mergeValidationFailureSummary && (
-                  <p className="mt-1 text-xs opacity-90">{mergeValidationFailureSummary}</p>
-                )}
-              </div>
-            )}
-            {showTasksEmptyState ? (
-              <PhaseEmptyState
-                title={EMPTY_STATE_COPY.execute.title}
-                description={EMPTY_STATE_COPY.execute.description}
-                illustration={<PhaseEmptyStateLogo />}
-                primaryAction={{
-                  label: EMPTY_STATE_COPY.execute.primaryActionLabel,
-                  onClick: () => navigate(getProjectPhasePath(projectId, "plan")),
-                  "data-testid": "empty-state-go-to-plan",
-                }}
-              />
-            ) : viewMode === "kanban" ? (
-              useReadyInLineSections || usePlanningSection ? (
-                readySwimlanes.length > 0 ||
-                inLineSwimlanes.length > 0 ||
-                blockedSwimlanes.length > 0 ||
-                planningSwimlanes.length > 0 ? (
-                  <div className="space-y-8 [&>section:not(:first-child)>h2]:mt-8">
-                    {readySwimlanes.length > 0 && (
-                      <section data-testid="execute-section-ready">
-                        <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
-                          Ready
-                        </h2>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {readySwimlanes.map((lane) => (
-                            <BuildEpicCard
-                              key={lane.epicId || "other"}
-                              epicId={lane.epicId}
-                              epicTitle={lane.epicTitle}
-                              statusFilter="ready"
-                              searchQuery={searchQuery}
-                              filteringActive={isSearchActive}
-                              onTaskSelect={handleSelectTask}
-                              onUnblock={requestUnblock}
-                              onViewPlan={
-                                lane.planId && onNavigateToPlan
-                                  ? () => onNavigateToPlan(lane.planId!)
-                                  : undefined
-                              }
-                              taskIdToStartedAt={taskIdToStartedAt}
-                              selectedTaskId={effectiveSelectedTask}
-                              unblockInflightByTaskId={unblockInflightByTaskId}
-                              projectId={projectId}
-                              taskIdToWorktreePath={taskIdToWorktreePath}
-                              isBranchesMode={
-                                projectSettingsQuery.data?.gitWorkingMode === "branches"
-                              }
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-                    {inLineSwimlanes.length > 0 && (
-                      <section data-testid="execute-section-in_line">
-                        <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
-                          Up Next
-                        </h2>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {inLineSwimlanes.map((lane) => (
-                            <BuildEpicCard
-                              key={lane.epicId || "other"}
-                              epicId={lane.epicId}
-                              epicTitle={lane.epicTitle}
-                              statusFilter="in_line"
-                              searchQuery={searchQuery}
-                              filteringActive={isSearchActive}
-                              onTaskSelect={handleSelectTask}
-                              onUnblock={requestUnblock}
-                              onViewPlan={
-                                lane.planId && onNavigateToPlan
-                                  ? () => onNavigateToPlan(lane.planId!)
-                                  : undefined
-                              }
-                              taskIdToStartedAt={taskIdToStartedAt}
-                              selectedTaskId={effectiveSelectedTask}
-                              unblockInflightByTaskId={unblockInflightByTaskId}
-                              projectId={projectId}
-                              taskIdToWorktreePath={taskIdToWorktreePath}
-                              isBranchesMode={
-                                projectSettingsQuery.data?.gitWorkingMode === "branches"
-                              }
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-                    {blockedSwimlanes.length > 0 && (
-                      <section data-testid="execute-section-blocked">
-                        <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
-                          Failures
-                        </h2>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {blockedSwimlanes.map((lane) => (
-                            <BuildEpicCard
-                              key={lane.epicId || "other"}
-                              epicId={lane.epicId}
-                              epicTitle={lane.epicTitle}
-                              statusFilter="blocked"
-                              searchQuery={searchQuery}
-                              filteringActive={isSearchActive}
-                              onTaskSelect={handleSelectTask}
-                              onUnblock={requestUnblock}
-                              onViewPlan={
-                                lane.planId && onNavigateToPlan
-                                  ? () => onNavigateToPlan(lane.planId!)
-                                  : undefined
-                              }
-                              taskIdToStartedAt={taskIdToStartedAt}
-                              selectedTaskId={effectiveSelectedTask}
-                              unblockInflightByTaskId={unblockInflightByTaskId}
-                              projectId={projectId}
-                              taskIdToWorktreePath={taskIdToWorktreePath}
-                              isBranchesMode={
-                                projectSettingsQuery.data?.gitWorkingMode === "branches"
-                              }
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-                    {planningSwimlanes.length > 0 && (
-                      <section data-testid="execute-section-planning">
-                        <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
-                          Planning
-                        </h2>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {planningSwimlanes.map((lane) => (
-                            <BuildEpicCard
-                              key={lane.epicId || "other"}
-                              epicId={lane.epicId}
-                              epicTitle={lane.epicTitle}
-                              statusFilter="planning"
-                              searchQuery={searchQuery}
-                              plans={plans}
-                              filteringActive={isSearchActive}
-                              onTaskSelect={handleSelectTask}
-                              onUnblock={requestUnblock}
-                              onViewPlan={
-                                lane.planId && onNavigateToPlan
-                                  ? () => onNavigateToPlan(lane.planId!)
-                                  : undefined
-                              }
-                              taskIdToStartedAt={taskIdToStartedAt}
-                              selectedTaskId={effectiveSelectedTask}
-                              unblockInflightByTaskId={unblockInflightByTaskId}
-                              projectId={projectId}
-                              taskIdToWorktreePath={taskIdToWorktreePath}
-                              isBranchesMode={
-                                projectSettingsQuery.data?.gitWorkingMode === "branches"
-                              }
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 text-theme-muted">
-                    {isSearchActive
-                      ? "No tasks match your search."
-                      : statusFilter === "all"
-                        ? "All tasks completed."
-                        : "No tasks match this filter."}
-                  </div>
-                )
-              ) : swimlanes.length === 0 ? (
+          ) : viewMode === "kanban" ? (
+            useReadyInLineSections || usePlanningSection ? (
+              readySwimlanes.length > 0 ||
+              inLineSwimlanes.length > 0 ||
+              blockedSwimlanes.length > 0 ||
+              planningSwimlanes.length > 0 ? (
+                <div className="space-y-8 [&>section:not(:first-child)>h2]:mt-8">
+                  {readySwimlanes.length > 0 && (
+                    <section data-testid="execute-section-ready">
+                      <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
+                        Ready
+                      </h2>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {readySwimlanes.map((lane) => (
+                          <BuildEpicCard
+                            key={lane.epicId || "other"}
+                            epicId={lane.epicId}
+                            epicTitle={lane.epicTitle}
+                            statusFilter="ready"
+                            searchQuery={searchQuery}
+                            filteringActive={isSearchActive}
+                            onTaskSelect={handleSelectTask}
+                            onUnblock={requestUnblock}
+                            onViewPlan={
+                              lane.planId && onNavigateToPlan
+                                ? () => onNavigateToPlan(lane.planId!)
+                                : undefined
+                            }
+                            taskIdToStartedAt={taskIdToStartedAt}
+                            selectedTaskId={effectiveSelectedTask}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
+                            projectId={projectId}
+                            taskIdToWorktreePath={taskIdToWorktreePath}
+                            isBranchesMode={
+                              projectSettingsQuery.data?.gitWorkingMode === "branches"
+                            }
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {inLineSwimlanes.length > 0 && (
+                    <section data-testid="execute-section-in_line">
+                      <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
+                        Up Next
+                      </h2>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {inLineSwimlanes.map((lane) => (
+                          <BuildEpicCard
+                            key={lane.epicId || "other"}
+                            epicId={lane.epicId}
+                            epicTitle={lane.epicTitle}
+                            statusFilter="in_line"
+                            searchQuery={searchQuery}
+                            filteringActive={isSearchActive}
+                            onTaskSelect={handleSelectTask}
+                            onUnblock={requestUnblock}
+                            onViewPlan={
+                              lane.planId && onNavigateToPlan
+                                ? () => onNavigateToPlan(lane.planId!)
+                                : undefined
+                            }
+                            taskIdToStartedAt={taskIdToStartedAt}
+                            selectedTaskId={effectiveSelectedTask}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
+                            projectId={projectId}
+                            taskIdToWorktreePath={taskIdToWorktreePath}
+                            isBranchesMode={
+                              projectSettingsQuery.data?.gitWorkingMode === "branches"
+                            }
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {blockedSwimlanes.length > 0 && (
+                    <section data-testid="execute-section-blocked">
+                      <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
+                        Failures
+                      </h2>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {blockedSwimlanes.map((lane) => (
+                          <BuildEpicCard
+                            key={lane.epicId || "other"}
+                            epicId={lane.epicId}
+                            epicTitle={lane.epicTitle}
+                            statusFilter="blocked"
+                            searchQuery={searchQuery}
+                            filteringActive={isSearchActive}
+                            onTaskSelect={handleSelectTask}
+                            onUnblock={requestUnblock}
+                            onViewPlan={
+                              lane.planId && onNavigateToPlan
+                                ? () => onNavigateToPlan(lane.planId!)
+                                : undefined
+                            }
+                            taskIdToStartedAt={taskIdToStartedAt}
+                            selectedTaskId={effectiveSelectedTask}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
+                            projectId={projectId}
+                            taskIdToWorktreePath={taskIdToWorktreePath}
+                            isBranchesMode={
+                              projectSettingsQuery.data?.gitWorkingMode === "branches"
+                            }
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {planningSwimlanes.length > 0 && (
+                    <section data-testid="execute-section-planning">
+                      <h2 className="text-sm font-semibold text-theme-muted tracking-wide uppercase mb-4">
+                        Planning
+                      </h2>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {planningSwimlanes.map((lane) => (
+                          <BuildEpicCard
+                            key={lane.epicId || "other"}
+                            epicId={lane.epicId}
+                            epicTitle={lane.epicTitle}
+                            statusFilter="planning"
+                            searchQuery={searchQuery}
+                            plans={plans}
+                            filteringActive={isSearchActive}
+                            onTaskSelect={handleSelectTask}
+                            onUnblock={requestUnblock}
+                            onViewPlan={
+                              lane.planId && onNavigateToPlan
+                                ? () => onNavigateToPlan(lane.planId!)
+                                : undefined
+                            }
+                            taskIdToStartedAt={taskIdToStartedAt}
+                            selectedTaskId={effectiveSelectedTask}
+                            unblockInflightByTaskId={unblockInflightByTaskId}
+                            projectId={projectId}
+                            taskIdToWorktreePath={taskIdToWorktreePath}
+                            isBranchesMode={
+                              projectSettingsQuery.data?.gitWorkingMode === "branches"
+                            }
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              ) : (
                 <div className="text-center py-10 text-theme-muted">
                   {isSearchActive
                     ? "No tasks match your search."
@@ -742,36 +726,8 @@ export function ExecutePhase({
                       ? "All tasks completed."
                       : "No tasks match this filter."}
                 </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {swimlanes.map((lane) => (
-                      <BuildEpicCard
-                        key={lane.epicId || "other"}
-                        epicId={lane.epicId}
-                        epicTitle={lane.epicTitle}
-                        statusFilter={statusFilter}
-                        searchQuery={searchQuery}
-                        filteringActive={isSearchActive}
-                        onTaskSelect={handleSelectTask}
-                        onUnblock={requestUnblock}
-                        onViewPlan={
-                          lane.planId && onNavigateToPlan
-                            ? () => onNavigateToPlan(lane.planId!)
-                            : undefined
-                        }
-                        taskIdToStartedAt={taskIdToStartedAt}
-                        selectedTaskId={effectiveSelectedTask}
-                        unblockInflightByTaskId={unblockInflightByTaskId}
-                        projectId={projectId}
-                        taskIdToWorktreePath={taskIdToWorktreePath}
-                        isBranchesMode={projectSettingsQuery.data?.gitWorkingMode === "branches"}
-                      />
-                    ))}
-                  </div>
-                </>
               )
-            ) : filteredTasks.length === 0 ? (
+            ) : swimlanes.length === 0 ? (
               <div className="text-center py-10 text-theme-muted">
                 {isSearchActive
                   ? "No tasks match your search."
@@ -781,23 +737,59 @@ export function ExecutePhase({
               </div>
             ) : (
               <>
-                <TimelineList
-                  tasks={filteredTasks}
-                  plans={plans}
-                  onTaskSelect={handleSelectTask}
-                  onUnblock={requestUnblock}
-                  unblockInflightByTaskId={unblockInflightByTaskId}
-                  taskIdToStartedAt={taskIdToStartedAt}
-                  statusFilter={statusFilter}
-                  scrollRef={executeScrollRef}
-                  selectedTaskId={effectiveSelectedTask}
-                  projectId={projectId}
-                  teamMembers={projectSettingsQuery.data?.teamMembers ?? []}
-                  enableHumanTeammates={projectSettingsQuery.data?.enableHumanTeammates ?? false}
-                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {swimlanes.map((lane) => (
+                    <BuildEpicCard
+                      key={lane.epicId || "other"}
+                      epicId={lane.epicId}
+                      epicTitle={lane.epicTitle}
+                      statusFilter={statusFilter}
+                      searchQuery={searchQuery}
+                      filteringActive={isSearchActive}
+                      onTaskSelect={handleSelectTask}
+                      onUnblock={requestUnblock}
+                      onViewPlan={
+                        lane.planId && onNavigateToPlan
+                          ? () => onNavigateToPlan(lane.planId!)
+                          : undefined
+                      }
+                      taskIdToStartedAt={taskIdToStartedAt}
+                      selectedTaskId={effectiveSelectedTask}
+                      unblockInflightByTaskId={unblockInflightByTaskId}
+                      projectId={projectId}
+                      taskIdToWorktreePath={taskIdToWorktreePath}
+                      isBranchesMode={projectSettingsQuery.data?.gitWorkingMode === "branches"}
+                    />
+                  ))}
+                </div>
               </>
-            )}
-          </div>
+            )
+          ) : filteredTasks.length === 0 ? (
+            <div className="text-center py-10 text-theme-muted">
+              {isSearchActive
+                ? "No tasks match your search."
+                : statusFilter === "all"
+                  ? "All tasks completed."
+                  : "No tasks match this filter."}
+            </div>
+          ) : (
+            <>
+              <TimelineList
+                tasks={filteredTasks}
+                plans={plans}
+                onTaskSelect={handleSelectTask}
+                onUnblock={requestUnblock}
+                unblockInflightByTaskId={unblockInflightByTaskId}
+                taskIdToStartedAt={taskIdToStartedAt}
+                statusFilter={statusFilter}
+                scrollRef={executeScrollRef}
+                selectedTaskId={effectiveSelectedTask}
+                projectId={projectId}
+                teamMembers={projectSettingsQuery.data?.teamMembers ?? []}
+                enableHumanTeammates={projectSettingsQuery.data?.enableHumanTeammates ?? false}
+              />
+            </>
+          )}
         </div>
       </div>
 

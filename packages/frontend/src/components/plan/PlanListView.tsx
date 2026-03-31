@@ -4,6 +4,14 @@ import { sortPlansByStatus } from "@opensprint/shared";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
 import type { PlanGenState } from "../../lib/planGenerationState";
 import { PLANNING_TOOLTIP, STALE_TOOLTIP } from "../../lib/planGenerationState";
+import { PhaseScrollSectionHeader } from "../PhaseScrollSectionHeader";
+import {
+  PHASE_QUEUE_LIST_SECTION_BODY_CLASSNAME,
+  PHASE_QUEUE_ROW_INNER_CLASSNAME,
+  PHASE_QUEUE_ROW_META_MUTED_CLASSNAME,
+  PHASE_QUEUE_ROW_TITLE_CLASSNAME,
+  phaseQueueRowPrimaryButtonClassName,
+} from "../../lib/phaseQueueListView";
 
 const PLAN_STATUS_ORDER: PlanStatus[] = ["planning", "building", "in_review", "complete"];
 
@@ -113,33 +121,28 @@ function PlanListRow({
           Generating tasks
         </span>
       )}
-      <div className="flex items-center gap-2 px-4 py-2.5 group overflow-x-auto md:overflow-x-visible min-w-0">
+      <div className={PHASE_QUEUE_ROW_INNER_CLASSNAME}>
         <button
           type="button"
           onClick={() => onSelect()}
-          className={`flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0 rounded px-1 -mx-1 py-1 -my-0.5 ${
-            isSelected ? "bg-theme-info-bg/50" : ""
-          }`}
+          className={phaseQueueRowPrimaryButtonClassName(isSelected)}
         >
-          <span
-            className="flex-1 min-w-0 truncate font-medium text-theme-text"
-            title={formatPlanIdAsTitle(planId)}
-          >
+          <span className={PHASE_QUEUE_ROW_TITLE_CLASSNAME} title={formatPlanIdAsTitle(planId)}>
             {formatPlanIdAsTitle(planId)}
           </span>
           {plan.status !== "planning" && (
-            <span className="shrink-0 text-xs text-theme-muted">
+            <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME}>
               {plan.taskCount > 0 ? `${plan.doneTaskCount}/${plan.taskCount} tasks` : "No tasks"}
             </span>
           )}
           {plan.status === "planning" && isPlanningTasks && (
-            <span className="shrink-0 text-xs text-theme-muted" aria-hidden>
+            <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} aria-hidden>
               Generating tasks...
             </span>
           )}
           {plan.status === "planning" && isPlannerInFlight && !isPlanningTasks && (
             <span
-              className="shrink-0 text-xs text-theme-muted flex items-center gap-1"
+              className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} flex items-center gap-1`}
               title={PLANNING_TOOLTIP}
             >
               <span
@@ -337,18 +340,14 @@ export function PlanListView({
   }, [plans]);
 
   return (
-    <div data-testid="plan-list-view">
+    <div data-testid="plan-list-view" className="w-full">
       {PLAN_STATUS_ORDER.map((status) => {
         const sectionPlans = grouped[status];
         if (sectionPlans.length === 0) return null;
         return (
           <section key={status} data-testid={`plan-list-section-${status}`}>
-            <div className="sticky top-[-0.5rem] sm:top-[-0.75rem] z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-6 pb-[2px] mb-[7px] border-b border-theme-border-subtle bg-theme-bg/95 backdrop-blur-sm">
-              <h3 className="text-xs font-semibold text-theme-muted tracking-wide uppercase">
-                {SECTION_LABELS[status]}
-              </h3>
-            </div>
-            <ul className="divide-y divide-theme-border-subtle">
+            <PhaseScrollSectionHeader variant="plan-list" title={SECTION_LABELS[status]} />
+            <ul className={PHASE_QUEUE_LIST_SECTION_BODY_CLASSNAME}>
               {sectionPlans.map((plan) => (
                 <PlanListRow
                   key={plan.metadata.planId}

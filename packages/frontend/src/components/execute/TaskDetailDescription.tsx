@@ -38,21 +38,19 @@ export function TaskDetailDescription({
   sectionNavTitle,
 }: TaskDetailDescriptionProps) {
   return (
-    <div className="-mb-2">
-      <CollapsibleSection
-        title="Description"
-        expanded={expanded}
-        onToggle={onToggle}
-        expandAriaLabel="Expand Description"
-        collapseAriaLabel="Collapse Description"
-        contentId="description-content"
-        headerId="description-header"
-        contentClassName="px-4 pt-0 pb-0"
-        sectionNavId={sectionNavId}
-        sectionNavTitle={sectionNavTitle}
-      >
-        <DescriptionMarkdown content={content} />
-      </CollapsibleSection>
-    </div>
+    <CollapsibleSection
+      title="Description"
+      expanded={expanded}
+      onToggle={onToggle}
+      expandAriaLabel="Expand Description"
+      collapseAriaLabel="Collapse Description"
+      contentId="description-content"
+      headerId="description-header"
+      contentClassName="px-4 pt-0 pb-0"
+      sectionNavId={sectionNavId}
+      sectionNavTitle={sectionNavTitle}
+    >
+      <DescriptionMarkdown content={content} />
+    </CollapsibleSection>
   );
 }

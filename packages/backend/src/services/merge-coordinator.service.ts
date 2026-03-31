@@ -2492,6 +2492,9 @@ export class MergeCoordinatorService {
       await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
       await this.host.taskStore.setMergeStage(projectId, task.id, normalizedStage);
       const scopeConfidence = this.getScopeConfidence(freshIssue);
+      const unknownScopeStrategy =
+        (await this.host.projectService.getSettings(projectId)).unknownScopeStrategy ??
+        "optimistic";
       const mergeFailureReason = mergeErr.message?.slice(0, 500) ?? "Merge failed";
       const stageLabel = isQualityGateFailure ? "quality-gate" : "merge";
       const qualityGateFailureDetails = this.getQualityGateFailureDetails(mergeErr);
@@ -2561,10 +2564,16 @@ export class MergeCoordinatorService {
       }
 
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
+      const shouldBypassMergeFailureAutoBlock =
+        unknownScopeStrategy === "optimistic" &&
+        (normalizedStage === "rebase_before_merge" || normalizedStage === "merge_to_main");
       const reachedEnvironmentSetupFailureLimit =
         isEnvironmentSetupQualityGateFailure &&
         cumulativeAttempts >= MAX_ENVIRONMENT_SETUP_QUALITY_GATE_ATTEMPTS;
-      if (reachedEnvironmentSetupFailureLimit || cumulativeAttempts >= maxMergeFailures) {
+      if (
+        reachedEnvironmentSetupFailureLimit ||
+        (!shouldBypassMergeFailureAutoBlock && cumulativeAttempts >= maxMergeFailures)
+      ) {
         const blockedNextAction = environmentSetupRemediation ?? "Blocked pending investigation";
         log.info(`Blocking ${task.id} after ${cumulativeAttempts} ${stageLabel} failures`);
         const blockedSummary = buildTaskLastExecutionSummary({

@@ -24,10 +24,7 @@ import openQuestionsReducer, {
 import websocketReducer, { setConnected } from "../../store/slices/websocketSlice";
 import unreadPhaseReducer, { setPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
-import {
-  EXECUTE_SCROLL_PORT_CLASSNAME,
-  EXECUTE_STICKY_TOOLBAR_CLUSTER_CLASSNAME,
-} from "../../lib/phaseMainScrollLayout";
+import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 
 function createExecutePhaseQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -609,7 +606,7 @@ describe("ExecutePhase top bar", () => {
     expect(topBar?.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
   });
 
-  it("places filter toolbar in a sticky wrapper inside the main scroll column", () => {
+  it("keeps the filter toolbar outside the main scroll column (matches Plan)", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -631,10 +628,8 @@ describe("ExecutePhase top bar", () => {
 
     const mainScroll = screen.getByTestId("execute-main-scroll");
     const toolbar = screen.getByTestId("execute-filter-toolbar");
-    expect(mainScroll).toContainElement(toolbar);
-    const stickyWrap = toolbar.parentElement;
-    expect(stickyWrap).toBeTruthy();
-    expect(stickyWrap?.className).toBe(EXECUTE_STICKY_TOOLBAR_CLUSTER_CLASSNAME);
+    expect(mainScroll.contains(toolbar)).toBe(false);
+    expect(mainScroll.parentElement).toContainElement(toolbar);
   });
 
   it("shows status filter chips with task counts (All, Ready, Done; Blocked only when count > 0; no Planning or Up Next chips)", () => {
@@ -1839,7 +1834,7 @@ describe("ExecutePhase mobile layout", () => {
     localStorage.setItem("opensprint.executeView", "kanban");
   });
 
-  it("main scroll area matches Execute layout tokens (overlap inset + horizontal/bottom padding)", () => {
+  it("main scroll area uses Plan-aligned inset tokens plus min-width and isolate", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -1860,7 +1855,7 @@ describe("ExecutePhase mobile layout", () => {
     );
 
     const mainScroll = screen.getByTestId("execute-main-scroll");
-    expect(mainScroll.className).toBe(EXECUTE_SCROLL_PORT_CLASSNAME);
+    expect(mainScroll.className).toBe(EXECUTE_MAIN_SCROLL_CLASSNAME);
   });
 
   it("filter toolbar has responsive padding (px-4 on mobile, md:px-6)", () => {
@@ -2316,7 +2311,7 @@ describe("ExecutePhase Redux integration", () => {
     localStorage.setItem("opensprint.executeView", "kanban");
   });
 
-  it("main scroll column uses Plan inset tokens plus Execute surface background", () => {
+  it("main scroll column matches Plan scroll classes plus min-width and isolate", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -2336,7 +2331,7 @@ describe("ExecutePhase Redux integration", () => {
       </MemoryRouter>
     );
     const mainScroll = screen.getByTestId("execute-main-scroll");
-    expect(mainScroll.className).toBe(EXECUTE_SCROLL_PORT_CLASSNAME);
+    expect(mainScroll.className).toBe(EXECUTE_MAIN_SCROLL_CLASSNAME);
   });
 
   it("renders OpenQuestionsBlock in task detail when coder has open questions", async () => {

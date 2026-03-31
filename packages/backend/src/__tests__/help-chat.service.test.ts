@@ -11,6 +11,8 @@ const mockGetSettings = vi.fn();
 const mockGetPrd = vi.fn();
 const mockListPlans = vi.fn();
 const mockTaskListAll = vi.fn();
+const mockTaskShow = vi.fn();
+const mockTaskReady = vi.fn();
 const mockGetActiveAgents = vi.fn();
 const mockInvokePlanningAgent = vi.fn();
 const helpHistoryByScope = new Map<string, string>();
@@ -39,6 +41,10 @@ vi.mock("../services/plan.service.js", () => ({
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
     listAll: (...args: unknown[]) => mockTaskListAll(...args),
+    show: (...args: unknown[]) => mockTaskShow(...args),
+    ready: (...args: unknown[]) => mockTaskReady(...args),
+    getBlockersFromIssue: vi.fn().mockReturnValue([]),
+    checkConnection: vi.fn().mockResolvedValue({ ok: true }),
     getDb: async () => ({
       queryOne: async (sql: string, params?: unknown[]) => {
         if (sql.includes("FROM help_chat_histories")) {
@@ -104,6 +110,20 @@ describe("HelpChatService", () => {
     process.env.HOME = tempHome;
     mockGetSettings.mockResolvedValue(makeSettings());
     mockInvokePlanningAgent.mockResolvedValue({ content: "Help answer" });
+    mockTaskShow.mockResolvedValue({
+      id: "os-f412",
+      title: "Task outside snapshot",
+      status: "open",
+      issue_type: "task",
+      assignee: null,
+      priority: 2,
+      dependentCount: 0,
+      description: "detail",
+      created_at: "2026-03-01T00:00:00Z",
+      updated_at: "2026-03-01T00:00:00Z",
+      labels: [],
+    });
+    mockTaskReady.mockResolvedValue([]);
   });
 
   afterEach(async () => {
@@ -191,5 +211,37 @@ describe("HelpChatService", () => {
     expect(call.projectId).toBe("help-homepage");
     expect(call.systemPrompt).toContain("## Homepage View");
     expect(call.systemPrompt).not.toContain("## Open Sprint Internal Documentation");
+  });
+
+  it("runs a tool loop for task lookup instead of preloading task snapshots", async () => {
+    const repoPath = path.join(tempHome, "repo");
+    await fs.mkdir(repoPath, { recursive: true });
+    mockGetProject.mockResolvedValue({ id: "proj-1", name: "Project One", repoPath });
+    mockGetPrd.mockResolvedValue({ sections: {} });
+    mockListPlans.mockResolvedValue([]);
+    mockTaskListAll.mockResolvedValue([]);
+    mockGetActiveAgents.mockResolvedValue([]);
+    mockInvokePlanningAgent
+      .mockResolvedValueOnce({
+        content:
+          '[HELP_TOOL_CALL]\n{"tool":"get_task","args":{"taskId":"os-f412"}}\n[/HELP_TOOL_CALL]',
+      })
+      .mockResolvedValueOnce({ content: "os-f412 is open and unassigned." });
+
+    const service = new HelpChatService();
+    const response = await service.sendMessage({
+      projectId: "proj-1",
+      message: "Can you check os-f412 for me?",
+    });
+    expect(response).toEqual({ message: "os-f412 is open and unassigned." });
+
+    expect(mockTaskShow).toHaveBeenCalledWith("proj-1", "os-f412");
+    expect(mockInvokePlanningAgent).toHaveBeenCalledTimes(2);
+    const firstCall = mockInvokePlanningAgent.mock.calls[0][0];
+    const secondCall = mockInvokePlanningAgent.mock.calls[1][0];
+    expect(firstCall.systemPrompt).toContain("Help Tools (read-only)");
+    expect(firstCall.systemPrompt).not.toContain("## Tasks (Snapshot)");
+    expect(secondCall.messages.at(-1)?.content).toContain("[HELP_TOOL_RESULT]");
+    expect(secondCall.messages.at(-1)?.content).toContain('"id": "os-f412"');
   });
 });
