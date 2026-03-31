@@ -37,6 +37,10 @@ export interface QualityGateDiagnosticDetail {
   cwd?: string | null;
   exitCode?: number | null;
   signal?: string | null;
+  /** Short, human-first headline for environment_setup failures (API/UI). */
+  userTitle?: string | null;
+  /** One-sentence explanation for environment_setup failures (API/UI). */
+  userSummary?: string | null;
 }
 
 export interface TaskExecutionEventItem {
