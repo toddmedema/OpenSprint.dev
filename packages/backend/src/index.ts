@@ -26,8 +26,9 @@ import {
   killAllTrackedAgentProcesses,
   clearAgentProcessRegistry,
 } from "./services/agent-process-registry.js";
-import { createLogger } from "./utils/logger.js";
+import { createLogger, setLogSessionId } from "./utils/logger.js";
 import { getErrorMessage } from "./utils/error-utils.js";
+import { eventLogService } from "./services/event-log.service.js";
 import { databaseRuntime } from "./services/database-runtime.service.js";
 import { openBrowser } from "./utils/open-browser.js";
 import { appendCrashLog } from "./utils/crash-log.js";
@@ -43,6 +44,8 @@ if (process.env.OPENSPRINT_DESKTOP === "1") {
 const logStartup = createLogger("startup");
 const logShutdown = createLogger("shutdown");
 const runtimeSessionId = crypto.randomUUID();
+setLogSessionId(runtimeSessionId);
+eventLogService.setInstanceId(runtimeSessionId);
 
 const port = parseInt(process.env.PORT || String(DEFAULT_API_PORT), 10);
 

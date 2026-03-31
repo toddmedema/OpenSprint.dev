@@ -63,11 +63,16 @@ export class WatchdogService {
           target.repoPath,
           host
         );
-        if (result.requeued.length > 0) {
+        const total = result.requeued.length + result.reattached.length + result.cleaned.length;
+        if (total > 0) {
           log.warn("Recovered tasks", {
             projectId: target.projectId,
-            count: result.requeued.length,
-            recovered: result.requeued,
+            requeuedCount: result.requeued.length,
+            reattachedCount: result.reattached.length,
+            cleanedCount: result.cleaned.length,
+            requeued: result.requeued,
+            reattached: result.reattached,
+            cleaned: result.cleaned,
           });
         }
       } catch (err) {

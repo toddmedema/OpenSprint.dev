@@ -757,14 +757,12 @@ describe("FailureHandlerService", () => {
       taskId,
       expect.objectContaining({
         extra: expect.objectContaining({
-          failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
-          failedGateReason: "Tests failed: 1 failed, 0 passed",
-          failedGateOutputSnippet: expect.stringContaining(
-            "AssertionError: expected 401 to be 403"
-          ),
-          firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
           qualityGateDetail: expect.objectContaining({
             command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
+            reason: "Tests failed: 1 failed, 0 passed",
+            outputSnippet: expect.stringContaining(
+              "AssertionError: expected 401 to be 403"
+            ),
             firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
           }),
         }),
@@ -777,8 +775,6 @@ describe("FailureHandlerService", () => {
 
     expect(failedEvent?.data).toEqual(
       expect.objectContaining({
-        failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
-        firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
         qualityGateDetail: expect.objectContaining({
           command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
           firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
@@ -787,8 +783,6 @@ describe("FailureHandlerService", () => {
     );
     expect(requeuedEvent?.data).toEqual(
       expect.objectContaining({
-        failedGateCommand: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
-        firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
         qualityGateDetail: expect.objectContaining({
           command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
           firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
@@ -854,11 +848,10 @@ describe("FailureHandlerService", () => {
       taskId,
       expect.objectContaining({
         extra: expect.objectContaining({
-          failedGateCommand: "npm run lint",
-          firstErrorLine: "src/foo.ts: error TS2304: Cannot find name 'x'",
           qualityGateDetail: expect.objectContaining({
             command: "npm run lint",
             reason: "Command failed: npm run lint",
+            firstErrorLine: "src/foo.ts: error TS2304: Cannot find name 'x'",
           }),
         }),
       })
@@ -898,10 +891,6 @@ describe("FailureHandlerService", () => {
     const blockedEvent = appendCalls.find((e) => e.event === "task.blocked");
     expect(blockedEvent?.data).toEqual(
       expect.objectContaining({
-        failedGateCommand: "npm run test",
-        failedGateReason: "Tests failed: 1 failed, 0 passed",
-        failedGateOutputSnippet: "AssertionError: expected 1 to be 2",
-        worktreePath: "/tmp/worktree",
         qualityGateDetail: expect.objectContaining({
           command: "npm run test",
           reason: "Tests failed: 1 failed, 0 passed",

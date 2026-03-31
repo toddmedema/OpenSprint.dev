@@ -3,6 +3,9 @@
  * Provides consistent [namespace] prefixes and optional context objects.
  * LOG_LEVEL env var controls verbosity: debug | info | warn | error.
  * Default is info in app runtime, error in Vitest to reduce test I/O noise.
+ *
+ * Output format: `TIMESTAMP LEVEL [namespace] message {context}`
+ * Set LOG_FORMAT=json for machine-readable JSON lines output.
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -12,6 +15,13 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   info: 1,
   warn: 2,
   error: 3,
+};
+
+const LEVEL_LABELS: Record<LogLevel, string> = {
+  debug: "DEBUG",
+  info: "INFO ",
+  warn: "WARN ",
+  error: "ERROR",
 };
 
 function isVitestRuntime(): boolean {
@@ -62,8 +72,44 @@ function safeJsonStringify(value: unknown): string {
   });
 }
 
-function formatMessage(namespace: string, msg: string, ctx?: Record<string, unknown>): string {
-  const prefix = `[${namespace}] ${msg}`;
+let _sessionId: string | undefined;
+
+/** Set a process-wide session/correlation ID included in every log line. */
+export function setLogSessionId(id: string): void {
+  _sessionId = id;
+}
+
+function isJsonFormat(): boolean {
+  return process.env.LOG_FORMAT?.toLowerCase() === "json";
+}
+
+function formatMessage(
+  level: LogLevel,
+  namespace: string,
+  msg: string,
+  ctx?: Record<string, unknown>
+): string {
+  const ts = new Date().toISOString();
+
+  if (isJsonFormat()) {
+    const payload: Record<string, unknown> = {
+      ts,
+      level: level.toUpperCase(),
+      ns: namespace,
+      msg,
+      ...(_sessionId ? { sessionId: _sessionId } : {}),
+      ...(ctx && Object.keys(ctx).length > 0 ? ctx : {}),
+    };
+    try {
+      return safeJsonStringify(payload);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return `{"ts":"${ts}","level":"${level.toUpperCase()}","ns":"${namespace}","msg":"${msg}","_logContextSerializationError":"${reason}"}`;
+    }
+  }
+
+  const sessionTag = _sessionId ? ` sid=${_sessionId}` : "";
+  const prefix = `${ts} ${LEVEL_LABELS[level]}${sessionTag} [${namespace}] ${msg}`;
   if (ctx && Object.keys(ctx).length > 0) {
     try {
       return `${prefix} ${safeJsonStringify(ctx)}`;
@@ -90,22 +136,22 @@ export function createLogger(namespace: string): Logger {
   return {
     info(msg: string, ctx?: Record<string, unknown>): void {
       if (shouldLog("info")) {
-        console.log(formatMessage(namespace, msg, ctx));
+        console.log(formatMessage("info", namespace, msg, ctx));
       }
     },
     warn(msg: string, ctx?: Record<string, unknown>): void {
       if (shouldLog("warn")) {
-        console.warn(formatMessage(namespace, msg, ctx));
+        console.warn(formatMessage("warn", namespace, msg, ctx));
       }
     },
     error(msg: string, ctx?: Record<string, unknown>): void {
       if (shouldLog("error")) {
-        console.error(formatMessage(namespace, msg, ctx));
+        console.error(formatMessage("error", namespace, msg, ctx));
       }
     },
     debug(msg: string, ctx?: Record<string, unknown>): void {
       if (shouldLog("debug")) {
-        console.log(formatMessage(namespace, msg, ctx));
+        console.log(formatMessage("debug", namespace, msg, ctx));
       }
     },
   };

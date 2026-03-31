@@ -71,6 +71,8 @@ export interface AgentSlotLike {
   worktreeKey?: string;
   worktreePath: string | null;
   attempt: number;
+  /** Unique ID for this attempt, for cross-event correlation. */
+  attemptId?: string;
   phase: "coding" | "review";
   phaseResult: {
     codingDiff: string;

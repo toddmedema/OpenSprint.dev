@@ -147,6 +147,28 @@ export class PhaseExecutorService {
   }
 
   /**
+   * Some retry paths reuse an existing task worktree. If that path was cleaned up in the
+   * meantime, assembling `.opensprint/active/...` can recreate only runtime files and leave
+   * no source checkout. Guard against that by requiring a valid git checkout marker.
+   */
+  private async hasUsableExistingWorktree(repoPath: string, wtPath: string): Promise<boolean> {
+    try {
+      await fs.access(wtPath);
+      await fs.access(path.join(wtPath, ".git"));
+      const repoHasPackageJson = await fs
+        .access(path.join(repoPath, "package.json"))
+        .then(() => true)
+        .catch(() => false);
+      if (repoHasPackageJson) {
+        await fs.access(path.join(wtPath, "package.json"));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Run merger + rebase --continue rounds until the retry-path rebase completes or the task fails.
    * @returns false if merge_conflict was reported via handleTaskFailure (caller should return).
    */
@@ -354,8 +376,24 @@ export class PhaseExecutorService {
           typeof slot.worktreePath === "string" &&
           slot.worktreePath.trim() !== "";
         if (canReuseExistingWorktree) {
-          wtPath = slot.worktreePath!;
-          assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
+          const candidatePath = slot.worktreePath!;
+          assertSafeTaskWorktreePath(repoPath, task.id, candidatePath);
+          if (await this.hasUsableExistingWorktree(repoPath, candidatePath)) {
+            wtPath = candidatePath;
+          } else {
+            log.warn("Existing retry worktree is missing checkout files; recreating", {
+              taskId: task.id,
+              branchName: slot.branchName,
+              worktreePath: candidatePath,
+            });
+            wtPath = await this.host.branchManager.createTaskWorktree(
+              repoPath,
+              task.id,
+              baseBranch,
+              worktreeOptions
+            );
+            assertSafeTaskWorktreePath(repoPath, task.id, wtPath);
+          }
         } else {
           wtPath = await this.host.branchManager.createTaskWorktree(
             repoPath,
@@ -603,6 +641,7 @@ export class PhaseExecutorService {
             phase: "coding",
             model: agentConfig.model,
             attempt: slot.attempt,
+            attemptId: slot.attemptId,
             attemptStartedAt: slot.agent.startedAt ?? null,
             queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
               ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
@@ -620,7 +659,7 @@ export class PhaseExecutorService {
         });
         return;
       }
-      log.error(`Coding phase failed for task ${task.id}`, { error });
+      log.error(`Coding phase failed for task ${task.id}`, { projectId, taskId: task.id, branchName, error });
       const failureReason =
         error instanceof RepoPreflightError
           ? this.formatRepoPreflightFailure(error)
@@ -648,7 +687,7 @@ export class PhaseExecutorService {
     const state = this.host.getState(projectId);
     const slot = state.slots.get(task.id);
     if (!slot) {
-      log.warn("executeReviewPhase: no slot found for task", { taskId: task.id });
+      log.warn("executeReviewPhase: no slot found for task", { projectId, taskId: task.id });
       return;
     }
     const settings = await this.host.projectService.getSettings(projectId);
@@ -836,6 +875,7 @@ export class PhaseExecutorService {
               phase: "review",
               model: agentConfig.model,
               attempt: slot.attempt,
+              attemptId: slot.attemptId,
               attemptStartedAt: slot.agent.startedAt ?? null,
               queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
                 ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
@@ -970,6 +1010,7 @@ export class PhaseExecutorService {
             angleTimers
           );
 
+          const angleStartedAt = angleAgent.startedAt ?? slot.agent.startedAt ?? null;
           eventLogService
             .append(repoPath, {
               timestamp: new Date().toISOString(),
@@ -980,10 +1021,11 @@ export class PhaseExecutorService {
                 phase: "review",
                 model: agentConfig.model,
                 attempt: slot.attempt,
+                attemptId: slot.attemptId,
                 angle,
-                attemptStartedAt: slot.agent.startedAt ?? null,
-                queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
-                  ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
+                attemptStartedAt: angleStartedAt,
+                queueLagMs: angleStartedAt && Number.isFinite(Date.parse(angleStartedAt))
+                  ? Math.max(0, Date.now() - Date.parse(angleStartedAt))
                   : null,
               },
             })
@@ -1051,6 +1093,7 @@ export class PhaseExecutorService {
               phase: "review",
               model: agentConfig.model,
               attempt: slot.attempt,
+              attemptId: slot.attemptId,
               attemptStartedAt: slot.agent.startedAt ?? null,
               queueLagMs: Number.isFinite(Date.parse(slot.agent.startedAt ?? ""))
                 ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
@@ -1062,7 +1105,7 @@ export class PhaseExecutorService {
 
       await this.host.persistCounters(projectId, repoPath);
     } catch (error) {
-      log.error(`Review phase failed for task ${task.id}`, { error });
+      log.error(`Review phase failed for task ${task.id}`, { projectId, taskId: task.id, branchName, error });
       const failureReason =
         error instanceof RepoPreflightError
           ? this.formatRepoPreflightFailure(error)

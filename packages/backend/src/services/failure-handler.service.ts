@@ -107,7 +107,9 @@ const GENERIC_PROVIDER_OUTAGE_PATTERNS: RegExp[] = [
 type FailureDiagnosticDetail = {
   command: string | null;
   reason: string | null;
+  reasonTruncated?: boolean;
   outputSnippet: string | null;
+  outputSnippetTruncated?: boolean;
   worktreePath: string | null;
   firstErrorLine: string | null;
 };
@@ -175,6 +177,8 @@ export interface FailureHandlerHost {
 export interface FailureSlot {
   taskId: string;
   attempt: number;
+  /** Unique ID for this specific attempt, for cross-event correlation. */
+  attemptId?: string;
   phase: "coding" | "review";
   infraRetries: number;
   worktreePath: string | null;
@@ -536,14 +540,17 @@ export class FailureHandlerService {
       (params.failureType === "merge_quality_gate" || params.failureType === "environment_setup") &&
       structuredQualityGateDetail
     ) {
+      const rawReason =
+          structuredQualityGateDetail.reason?.trim() ||
+          (params.reason.trim() ? params.reason.trim() : null);
+      const clippedReason = rawReason ? rawReason.slice(0, 500) : null;
       return {
         command:
           structuredQualityGateDetail.command?.trim() ||
           params.slot.phaseResult.validationCommand?.trim() ||
           this.extractCommandFromFailureReason(params.reason),
-        reason:
-          structuredQualityGateDetail.reason?.trim() ||
-          (params.reason.trim() ? params.reason.trim().slice(0, 500) : null),
+        reason: clippedReason,
+        reasonTruncated: rawReason != null && rawReason.length > 500,
         outputSnippet:
           structuredQualityGateDetail.outputSnippet?.trim() ||
           this.toFailureOutputSnippet(params.slot.phaseResult.testOutput),
@@ -572,9 +579,11 @@ export class FailureHandlerService {
     const outputSnippet = this.toFailureOutputSnippet(validationOutput);
     const worktreePath = params.slot.worktreePath?.trim() || null;
     if (!command && !firstErrorLine && !outputSnippet) return null;
+    const rawReason = params.reason.trim() || null;
     return {
       command: command ?? null,
-      reason: params.reason.trim() ? params.reason.slice(0, 500) : null,
+      reason: rawReason ? rawReason.slice(0, 500) : null,
+      reasonTruncated: rawReason != null && rawReason.length > 500,
       outputSnippet,
       worktreePath,
       firstErrorLine: firstErrorLine ?? null,
@@ -610,16 +619,9 @@ export class FailureHandlerService {
 
   private failureDiagnosticFields(
     detail: FailureDiagnosticDetail | null
-  ): Record<string, FailureDiagnosticDetail | string | null> {
+  ): Record<string, FailureDiagnosticDetail | null> {
     if (!detail) return {};
-    return {
-      failedGateCommand: detail.command,
-      failedGateReason: detail.reason,
-      failedGateOutputSnippet: detail.outputSnippet,
-      worktreePath: detail.worktreePath,
-      firstErrorLine: detail.firstErrorLine,
-      qualityGateDetail: detail,
-    };
+    return { qualityGateDetail: detail };
   }
 
   private broadcastTaskRequeuedWs(
@@ -668,6 +670,8 @@ export class FailureHandlerService {
       reviewScope?: string;
       noResultReasonCode?: NoResultReasonCode;
       agentDebugArtifact?: DebugArtifact;
+      exitCode?: number | null;
+      signal?: string | null;
     }
   ): Promise<void> {
     const state = this.host.getState(projectId);
@@ -766,6 +770,7 @@ export class FailureHandlerService {
     let requeueCountForFailureType = 0;
     let repeatedFailureSignatureCount = 0;
     const commonFailureContext = {
+      attemptId: slot.attemptId ?? null,
       attemptDurationMs,
       noResultReasonCode: options?.noResultReasonCode ?? null,
       apiErrorKind: apiErrorKind ?? null,
@@ -864,6 +869,8 @@ export class FailureHandlerService {
           summary: failureSummary,
           nextAction,
           policyDecision: artifactPolicyDecision,
+          exitCode: options?.exitCode ?? null,
+          signal: options?.signal ?? null,
           ...commonFailureContext,
           ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },

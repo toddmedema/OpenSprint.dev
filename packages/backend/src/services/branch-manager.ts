@@ -1826,6 +1826,8 @@ export class BranchManager {
     const wtPath = actualPath ?? this.getWorktreePath(worktreeKey);
     const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
     if (!registeredPath) {
+      // Drop stale git metadata entries that can survive abrupt process exits.
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
       // Use same resolution as validateDisposableWorktreePath (realpath) so we
       // consistently detect repo root and return early on all platforms (e.g. macOS
       // /var vs /private/var); avoid calling removeWorktreeDirectorySafely which
@@ -1872,12 +1874,14 @@ export class BranchManager {
 
     try {
       await this.gitExec(repoPath, ["worktree", "remove", safeRegisteredPath, "--force"]);
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
     } catch (err) {
       log.warn("worktree remove failed, attempting manual cleanup", {
         worktreeKey,
         wtPath: safeRegisteredPath,
         err: err instanceof Error ? err.message : String(err),
       });
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
       const removed = await this.removeWorktreePathWithEscalation(
         repoPath,
         worktreeKey,
@@ -1891,6 +1895,7 @@ export class BranchManager {
           wtPath: safeRegisteredPath,
         });
       }
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
     }
   }
 

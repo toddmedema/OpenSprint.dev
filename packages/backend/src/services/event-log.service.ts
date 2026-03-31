@@ -12,6 +12,7 @@ import { ProjectService } from "./project.service.js";
 
 const log = createLogger("event-log");
 const projectService = new ProjectService();
+let _orchestratorInstanceId: string | undefined;
 
 async function repoPathToProjectId(repoPath: string): Promise<string> {
   const project = await projectService.getProjectByRepoPath(repoPath);
@@ -28,8 +29,18 @@ export interface OrchestratorEvent {
 }
 
 export class EventLogService {
+  /** Set the orchestrator instance ID (called once at startup from index.ts). */
+  setInstanceId(id: string): void {
+    _orchestratorInstanceId = id;
+  }
+
   async append(repoPath: string, event: OrchestratorEvent): Promise<void> {
     const projectId = await repoPathToProjectId(repoPath);
+    const enrichedData: Record<string, unknown> = {
+      ...(_orchestratorInstanceId ? { orchestratorInstanceId: _orchestratorInstanceId } : {}),
+      ...(event.data ?? {}),
+    };
+    const dataStr = Object.keys(enrichedData).length > 0 ? JSON.stringify(enrichedData) : null;
     try {
       await taskStore.runWrite(async (client) => {
         await client.execute(
@@ -40,7 +51,7 @@ export class EventLogService {
             event.taskId,
             event.timestamp,
             event.event,
-            event.data ? JSON.stringify(event.data) : null,
+            dataStr,
           ]
         );
       });
@@ -49,7 +60,7 @@ export class EventLogService {
         err,
         event: event.event,
         taskId: event.taskId,
-        dataSizeBytes: event.data ? JSON.stringify(event.data).length : 0,
+        dataSizeBytes: dataStr ? dataStr.length : 0,
       });
     }
   }

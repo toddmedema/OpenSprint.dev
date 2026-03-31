@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
@@ -195,6 +196,8 @@ export interface AgentSlot {
   agent: AgentRunState;
   phase: "coding" | "review";
   attempt: number;
+  /** Unique ID for this attempt, used for cross-event correlation in diagnostics. */
+  attemptId: string;
   phaseResult: PhaseResult;
   infraRetries: number;
   timers: TimerRegistry;
@@ -465,6 +468,7 @@ export class OrchestratorService {
       },
       phase: "coding",
       attempt,
+      attemptId: crypto.randomUUID(),
       phaseResult: {
         codingDiff: "",
         codingSummary: "",
@@ -561,7 +565,7 @@ export class OrchestratorService {
     }
 
     const activeTask = state.slots.get(t.taskId);
-    log.info(`Transition [${projectId}]: → ${t.to} (task: ${t.taskId})`);
+    log.info("Task state transition", { projectId, taskId: t.taskId, to: t.to });
 
     const repoPath = this.repoPathCache.get(projectId);
     if (repoPath) {
@@ -1607,7 +1611,11 @@ export class OrchestratorService {
         });
       }
       if (recoveryResult.requeued.length > 0) {
-        log.warn(`Recovered ${recoveryResult.requeued.length} orphaned/stale task(s) on startup`);
+        log.warn("Recovered orphaned/stale task(s) on startup", {
+          projectId,
+          requeuedCount: recoveryResult.requeued.length,
+          taskIds: recoveryResult.requeued,
+        });
         state.status.totalFailed += recoveryResult.requeued.length;
         await this.persistCounters(projectId, repoPath);
       }
@@ -2095,7 +2103,7 @@ export class OrchestratorService {
     const state = this.getState(projectId);
     const slot = state.slots.get(task.id);
     if (!slot) {
-      log.warn("handleCodingDone: no slot found for task", { taskId: task.id });
+      log.warn("handleCodingDone: no slot found for task", { projectId, taskId: task.id });
       return;
     }
     if (
@@ -2172,7 +2180,7 @@ export class OrchestratorService {
         null,
         failureType,
         undefined,
-        { noResultReasonCode }
+        { noResultReasonCode, exitCode }
       );
       return;
     }
@@ -2507,7 +2515,7 @@ export class OrchestratorService {
         null,
         "coding_failure",
         undefined,
-        { agentDebugArtifact: result.debugArtifact }
+        { agentDebugArtifact: result.debugArtifact, exitCode }
       );
     }
   }
@@ -2933,7 +2941,7 @@ export class OrchestratorService {
       } catch (err) {
         lastReadFailure =
           err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error";
-        log.warn("readResult attempt failed", { taskId, attempt, err });
+        log.warn("readResult attempt failed", { taskId, attempt, err, wtPath });
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);
       }

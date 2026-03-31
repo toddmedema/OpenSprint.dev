@@ -260,7 +260,7 @@ export class AgentLifecycleManager {
           try {
             await wrappedOnDone(code);
           } catch (err) {
-            log.error("onDone failed", { taskId, exitCode: code, err });
+            log.error("onDone failed", { projectId: params.projectId, taskId, phase: params.phase, attempt: params.attempt, exitCode: code, err });
           }
         },
       });
@@ -615,7 +615,7 @@ export class AgentLifecycleManager {
         if (pidDead) {
           if (runState.exitHandled) return;
           runState.exitHandled = true;
-          log.warn("Agent process dead, recovering immediately", { taskId, pid: proc.pid });
+          log.warn("Agent process dead, recovering immediately", { projectId: params?.projectId, taskId, phase: params?.phase, attempt: params?.attempt, pid: proc.pid });
           if (params) {
             eventLogService
               .append(params.repoPath, {
@@ -638,11 +638,11 @@ export class AgentLifecycleManager {
             .commitWip(wtPath, taskId)
             .then(() => onDone(null))
             .catch((err) => {
-              log.error("Post-death handler failed", { taskId, err });
+              log.error("Post-death handler failed", { projectId: params?.projectId, taskId, phase: params?.phase, attempt: params?.attempt, err });
               return onDone(null);
             })
             .catch((err) => {
-              log.error("onDone fallback also failed", { taskId, err });
+              log.error("onDone fallback also failed", { projectId: params?.projectId, taskId, phase: params?.phase, err });
             });
           return;
         }
@@ -691,7 +691,10 @@ export class AgentLifecycleManager {
           const beyondSuspendGrace = elapsed > AGENT_SUSPEND_GRACE_MS;
           if (!beyondSuspendGrace && runState.lifecycleState !== "suspended" && params) {
             log.warn("Agent suspended due to inactivity", {
+              projectId: params?.projectId,
               taskId,
+              phase: params?.phase,
+              attempt: params?.attempt,
               elapsedMs: elapsed,
               effectiveTimeoutMs: effectiveTimeout,
               suspendTransitionDelayMs: SUSPEND_TRANSITION_DELAY_MS,
@@ -708,7 +711,10 @@ export class AgentLifecycleManager {
             return;
           }
           log.warn("Agent timeout", {
+            projectId: params?.projectId,
             taskId,
+            phase: params?.phase,
+            attempt: params?.attempt,
             elapsedMs: elapsed,
             effectiveTimeoutMs: effectiveTimeout,
             activeToolCallCount: runState.activeToolCallIds.size,
@@ -720,7 +726,7 @@ export class AgentLifecycleManager {
               .commitWip(wtPath, taskId)
               .then(() => runState.activeProcess?.kill())
               .catch((err) => {
-                log.error("Inactivity handler failed", { taskId, err });
+                log.error("Inactivity handler failed", { projectId: params?.projectId, taskId, phase: params?.phase, err });
                 runState.activeProcess?.kill();
               });
           }

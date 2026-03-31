@@ -18,6 +18,7 @@ export class AppError extends Error {
 }
 
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
+  const requestId = _req.requestId;
   if (err instanceof AppError) {
     if (err.code === "DATABASE_UNAVAILABLE") {
       res.setHeader("Retry-After", "5");
@@ -30,12 +31,13 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
       (err.code === ErrorCodes.LM_STUDIO_UNREACHABLE || err.code === ErrorCodes.OLLAMA_UNREACHABLE);
     if (err.statusCode < 500 || localModelProbeUnreachable) {
       log.debug("Request client error", {
+        requestId,
         statusCode: err.statusCode,
         code: err.code,
         message: err.message,
       });
     } else {
-      log.error("Request error", { message: err.message, stack: err.stack });
+      log.error("Request error", { requestId, message: err.message, stack: err.stack });
     }
     const body: ApiErrorResponse = {
       error: {
@@ -49,7 +51,7 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   }
 
   // Unexpected errors
-  log.error("Request error", { message: err.message, stack: err.stack });
+  log.error("Request error", { requestId, message: err.message, stack: err.stack });
   const isDev = process.env.NODE_ENV !== "production";
   const body: ApiErrorResponse = {
     error: {

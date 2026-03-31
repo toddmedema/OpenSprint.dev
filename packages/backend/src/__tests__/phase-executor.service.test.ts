@@ -430,6 +430,22 @@ describe("PhaseExecutorService", () => {
       expect(slot.worktreePath).toBe(epicWtPath);
     });
 
+    it("recreates structured-output-repair worktree when reused path is missing checkout", async () => {
+      const task = makeTask();
+      const stalePath = path.join(os.tmpdir(), "opensprint-worktrees", `${task.id}-missing`);
+      const slot = { ...makeSlot(), worktreePath: stalePath };
+      const slots = new Map([[task.id, slot]]);
+      mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+
+      await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot, {
+        useExistingBranch: true,
+        structuredOutputRepairAttempted: true,
+      });
+
+      expect(mockCreateTaskWorktree).toHaveBeenCalledWith(repoPath, task.id, "main", undefined);
+      expect(slot.worktreePath).toBe(path.join(os.tmpdir(), "opensprint-worktrees", task.id));
+    });
+
     it("reports repo_preflight with code and remediation commands when preflight fails", async () => {
       const task = makeTask();
       const slot = makeSlot();

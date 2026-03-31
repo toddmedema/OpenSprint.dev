@@ -30,7 +30,7 @@ import { databaseRuntime } from "./services/database-runtime.service.js";
 import { PlanService } from "./services/plan.service.js";
 import { resumePlanExecuteBatchesOnStartup } from "./services/plan-execute-batch.service.js";
 
-const logOrchestrator = createLogger("orchestrator");
+const logOrchestrator = createLogger("orchestrator-startup");
 const logShutdown = createLogger("shutdown");
 
 let appDb: AppDb | null = null;

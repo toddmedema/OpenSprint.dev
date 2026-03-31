@@ -308,10 +308,11 @@ export class OrchestratorLoopService {
           dispatchBlockers.slotsFull = readyTasks.length;
         }
         state.status.dispatchBlockers = dispatchBlockers;
-        log.info("No ready tasks or no slots available, going idle", {
+        log.debug("No ready tasks or no slots available, going idle", {
           projectId,
           readyTasks: readyTasks.length,
           slotsAvailable,
+          activeSlotCount: state.slots.size,
         });
         if (state.loopRunId === myRunId) state.loopActive = false;
         await this.broadcastExecuteStatus(projectId);
@@ -348,7 +349,7 @@ export class OrchestratorLoopService {
         const outageBackoff = provider ? getProviderOutageBackoff(projectId, provider) : null;
         if (provider && outageBackoff) {
           skippedForProviderBackoff += 1;
-          log.info("Skipping task: provider outage backoff active", {
+          log.debug("Skipping task: provider outage backoff active", {
             projectId,
             taskId: st.task.id,
             provider,
@@ -359,7 +360,7 @@ export class OrchestratorLoopService {
         }
         if (provider && isExhausted(projectId, provider)) {
           skippedForProviderExhaustion += 1;
-          log.info("Skipping task: provider exhausted", {
+          log.debug("Skipping task: provider exhausted", {
             projectId,
             taskId: st.task.id,
             provider,
@@ -377,7 +378,7 @@ export class OrchestratorLoopService {
         const key = this.dispatchWorktreeKey(st.task, mergeStrategy, allIssues);
         if (worktreeKeysPlanned.has(key)) {
           skippedForWorktreeConflict += 1;
-          log.info("Skipping task: shared epic/worktree branch already active", {
+          log.debug("Skipping task: shared epic/worktree branch already active", {
             projectId,
             taskId: st.task.id,
             worktreeKey: key,
@@ -428,7 +429,7 @@ export class OrchestratorLoopService {
       for (let i = 0; i < dispatchBatch.length; i++) {
         const selectedTask = dispatchBatch[i]!;
         if (dispatchedTaskIds.has(selectedTask.task.id) || state.slots.has(selectedTask.task.id)) {
-          log.info("Skipping dispatch: task already selected or active this pass", {
+          log.debug("Skipping dispatch: task already selected or active this pass", {
             projectId,
             taskId: selectedTask.task.id,
             reason: dispatchedTaskIds.has(selectedTask.task.id)
@@ -467,6 +468,7 @@ export class OrchestratorLoopService {
               });
             } catch (revertErr) {
               log.warn("Failed to revert task status", {
+                projectId,
                 taskId: deferredTask.id,
                 err: revertErr,
               });

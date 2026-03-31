@@ -270,7 +270,7 @@ export class RecoveryService {
     for (const { taskId, assignment } of orphaned) {
       const task = idToIssue.get(taskId);
       if (!task) {
-        log.warn("Recovery: task not found, cleaning up assignment", { taskId });
+        log.warn("Recovery: task not found, cleaning up assignment", { projectId, taskId });
         await this.removeWorktreeIfNeeded(repoPath, taskId, assignment.worktreePath);
         await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
         continue;
@@ -278,6 +278,7 @@ export class RecoveryService {
 
       if ((task.status as string) !== "in_progress") {
         log.info("Recovery: task no longer in_progress, removing stale assignment", {
+          projectId,
           taskId,
           status: task.status,
         });
@@ -328,7 +329,7 @@ export class RecoveryService {
         }
       }
 
-      log.info("Recovery: PID dead or missing, requeuing task", { taskId });
+      log.info("Recovery: PID dead or missing, requeuing task", { projectId, taskId });
       try {
         await this.taskStore.update(projectId, taskId, { status: "open", assignee: "" });
         await this.taskStore.comment(
@@ -337,7 +338,7 @@ export class RecoveryService {
           "Agent crashed (backend restart). Task requeued for next attempt."
         );
       } catch (err) {
-        log.warn("Recovery: failed to requeue task", { taskId, err });
+        log.warn("Recovery: failed to requeue task", { projectId, taskId, err });
       }
       await this.removeWorktreeIfNeeded(repoPath, taskId, assignment.worktreePath);
       await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
@@ -364,6 +365,7 @@ export class RecoveryService {
       if (excludeIds.has(taskId)) continue;
       const staleSec = Math.round((Date.now() - heartbeat.lastOutputTimestamp) / 1000);
       log.warn("Stale heartbeat detected", {
+        projectId,
         taskId,
         staleSec,
         threshold: HEARTBEAT_STALE_MS / 1000,
@@ -513,7 +515,7 @@ export class RecoveryService {
     }
 
     if (recovered.length > 0) {
-      log.warn("Recovered orphaned tasks", { count: recovered.length, recovered });
+      log.warn("Recovered orphaned tasks", { projectId, count: recovered.length, recovered });
     }
     return recovered;
   }
@@ -581,7 +583,7 @@ export class RecoveryService {
     }
 
     if (recovered.length > 0) {
-      log.warn("Recovered assignee-less in-progress tasks", { count: recovered.length, recovered });
+      log.warn("Recovered assignee-less in-progress tasks", { projectId, count: recovered.length, recovered });
     }
     return recovered;
   }
@@ -594,7 +596,7 @@ export class RecoveryService {
       const stat = await fs.stat(lockPath);
       const ageMs = Date.now() - stat.mtimeMs;
       if (ageMs > GIT_LOCK_STALE_MS) {
-        log.warn("Removing stale .git/index.lock", { ageSec: Math.round(ageMs / 1000) });
+        log.warn("Removing stale .git/index.lock", { projectId, repoPath, ageSec: Math.round(ageMs / 1000) });
         await fs.unlink(lockPath);
         eventLogService
           .append(repoPath, {
