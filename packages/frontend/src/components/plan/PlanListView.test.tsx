@@ -133,6 +133,33 @@ describe("PlanListView", () => {
     expect(screen.queryByTestId("plan-list-generate-tasks")).not.toBeInTheDocument();
   });
 
+  it("exposes task-generation status to assistive tech without hiding the live region", () => {
+    const plans = [makePlan("planning-feature", "planning", 0)];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={["planning-feature"]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+    const liveRegion = screen.getByTestId("plan-tasks-loading");
+    expect(liveRegion).toHaveAttribute("role", "status");
+    expect(liveRegion).toHaveAttribute("aria-live", "polite");
+    expect(liveRegion).not.toHaveAttribute("aria-hidden", "true");
+
+    const row = screen.getByTestId("plan-list-row-planning-feature");
+    const visualStatus = within(row).getByText("Generating tasks...");
+    expect(visualStatus).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("shows Approve and Review for in_review plan when onMarkComplete and onGoToEvaluate provided", () => {
     const plans = [makePlan("in-review-feature", "in_review", 2)];
     render(

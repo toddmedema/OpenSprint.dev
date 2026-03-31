@@ -61,7 +61,12 @@ jobs:
 
           node scripts/affected-workspaces.mjs --coverage-only --json > artifacts/test-results/affected-workspaces.json
           WORKSPACES="$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync("artifacts/test-results/affected-workspaces.json", "utf8")); process.stdout.write((data.workspaces || []).join(","));')"
+          REASON="$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync("artifacts/test-results/affected-workspaces.json", "utf8")); process.stdout.write(data.reason || "");')"
           echo "workspaces=$WORKSPACES" >> "$GITHUB_OUTPUT"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          if [ "$REASON" = "coverage-fallback" ]; then
+            echo "::notice::Coverage fallback activated — no specific coverage workspaces were affected, running all coverage suites as a safety net."
+          fi
       - name: Wait for Postgres TCP (belt-and-suspenders with service health)
         if: matrix.gate == 'test'
         run: node scripts/ci/wait-for-tcp.mjs 127.0.0.1 5432 60

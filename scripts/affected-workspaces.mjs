@@ -126,6 +126,29 @@ function mapFileToWorkspaces(filePath) {
   return new Set();
 }
 
+export function computeWorkspacesFromFiles(changedFiles, { coverageOnly = false } = {}) {
+  const affected = new Set();
+  for (const filePath of changedFiles) {
+    for (const workspace of mapFileToWorkspaces(filePath)) {
+      affected.add(workspace);
+    }
+  }
+
+  const workspaces = WORKSPACE_ORDER.filter((workspace) => {
+    if (!affected.has(workspace)) return false;
+    return coverageOnly ? COVERAGE_WORKSPACES.has(workspace) : true;
+  });
+
+  if (coverageOnly && workspaces.length === 0 && changedFiles.length > 0) {
+    return {
+      workspaces: WORKSPACE_ORDER.filter((w) => COVERAGE_WORKSPACES.has(w)),
+      reason: "coverage-fallback",
+    };
+  }
+
+  return { workspaces, reason: "git-diff" };
+}
+
 export function getAffectedWorkspaces(options = {}) {
   const {
     base = null,
@@ -158,20 +181,10 @@ export function getAffectedWorkspaces(options = {}) {
   }
 
   const changedFiles = listChangedFiles(baseRef, head);
-  const affected = new Set();
-  for (const filePath of changedFiles) {
-    for (const workspace of mapFileToWorkspaces(filePath)) {
-      affected.add(workspace);
-    }
-  }
-
-  const workspaces = WORKSPACE_ORDER.filter((workspace) => {
-    if (!affected.has(workspace)) return false;
-    return coverageOnly ? COVERAGE_WORKSPACES.has(workspace) : true;
-  });
+  const { workspaces, reason } = computeWorkspacesFromFiles(changedFiles, { coverageOnly });
 
   return {
-    reason: "git-diff",
+    reason,
     baseRef,
     changedFiles,
     workspaces,

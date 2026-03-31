@@ -109,7 +109,7 @@ function PlanListRow({
   return (
     <li data-testid={`plan-list-row-${planId}`}>
       {isPlanningTasks && (
-        <span data-testid="plan-tasks-loading" className="sr-only" aria-hidden>
+        <span data-testid="plan-tasks-loading" className="sr-only" role="status" aria-live="polite">
           Generating tasks
         </span>
       )}
@@ -133,7 +133,9 @@ function PlanListRow({
             </span>
           )}
           {plan.status === "planning" && isPlanningTasks && (
-            <span className="shrink-0 text-xs text-theme-muted">Generating tasks...</span>
+            <span className="shrink-0 text-xs text-theme-muted" aria-hidden>
+              Generating tasks...
+            </span>
           )}
           {plan.status === "planning" && isPlannerInFlight && !isPlanningTasks && (
             <span
