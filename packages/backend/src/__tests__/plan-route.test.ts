@@ -240,7 +240,9 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       ],
     };
 
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
 
     expect(res.status).toBe(201);
     const plan = res.body.data;
@@ -271,7 +273,9 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       ],
     };
 
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
 
     expect(res.status).toBe(201);
     const plan = res.body.data;
@@ -301,7 +305,9 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       complexity: "low",
     };
 
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
 
     expect(res.status).toBe(201);
     expect(res.body.data.taskCount).toBe(0);
@@ -315,7 +321,9 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       complexity: "low",
     };
 
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send(planBody);
 
     expect(res.status).toBe(201);
     expect(res.body.data).toBeDefined();
@@ -387,7 +395,9 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
 
-    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
+    const getRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/plans/${planId}`
+    );
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.lastModified).toBeDefined();
     expect(typeof getRes.body.data.lastModified).toBe("string");
@@ -423,7 +433,9 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       expect(putRes.status).toBe(200);
       expect(putRes.body.data.content).toBe(updatedContent);
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
+      const getRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}`
+      );
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.content).toBe(updatedContent);
     }
@@ -1825,7 +1837,9 @@ Updated description for task two.`;
           }),
         });
 
-        const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
+        const res = await authedSupertest(app).post(
+          `${API_PREFIX}/projects/${projectId}/plans/suggest`
+        );
 
         expect(res.status).toBe(200);
         expect(res.body.data).toBeDefined();
@@ -1851,7 +1865,9 @@ Updated description for task two.`;
         content: "I cannot produce JSON.",
       });
 
-      const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
+      const res = await authedSupertest(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/suggest`
+      );
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("DECOMPOSE_PARSE_FAILED");
@@ -2397,7 +2413,9 @@ Feature that depends on auth.
         expect(getBeforeRes.body.data.metadata.reviewedAt).toBeFalsy();
 
         // List plans: plan appears with in_review (Evaluate Pending)
-        const listBeforeRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+        const listBeforeRes = await authedSupertest(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans`
+        );
         expect(listBeforeRes.status).toBe(200);
         const planInListBefore = listBeforeRes.body.data?.plans?.find(
           (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
@@ -2420,7 +2438,9 @@ Feature that depends on auth.
         expect(getAfterRes.body.data.status).toBe("complete");
 
         // List plans: plan appears complete (Evaluate Resolved/Done)
-        const listAfterRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+        const listAfterRes = await authedSupertest(app).get(
+          `${API_PREFIX}/projects/${projectId}/plans`
+        );
         expect(listAfterRes.status).toBe(200);
         const planInListAfter = listAfterRes.body.data?.plans?.find(
           (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
@@ -2496,7 +2516,9 @@ Feature that depends on auth.
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      await authedSupertest(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+      );
       const allIssues = await taskStore.listAll(projectId);
       const planTasks = allIssues.filter(
         (i: { id: string; issue_type?: string; type?: string }) =>
@@ -2539,7 +2561,9 @@ Feature that depends on auth.
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      await authedSupertest(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
+      );
       const allIssues = await taskStore.listAll(projectId);
       const planTasks = allIssues.filter(
         (i: { id: string; issue_type?: string; type?: string }) =>

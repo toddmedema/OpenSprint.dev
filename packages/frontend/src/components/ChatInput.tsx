@@ -9,6 +9,9 @@ const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 const INPUT_CLASS =
   "flex-1 rounded-xl border-0 py-2.5 px-3.5 text-sm text-theme-input-text bg-theme-input-bg shadow-sm ring-1 ring-inset ring-theme-ring placeholder:text-theme-input-placeholder focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 resize-none overflow-y-auto min-h-[2.5rem]";
 
+const INPUT_DISABLED_CLASS =
+  " opacity-60 cursor-not-allowed focus-visible:ring-1 focus-visible:ring-theme-ring";
+
 const SEND_BUTTON_CLASS =
   "w-9 min-w-9 h-[2.5rem] rounded-xl bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 transition-colors shrink-0";
 
@@ -18,6 +21,8 @@ export interface ChatInputProps {
   onSend: () => void;
   /** When true, disables the send button (e.g. while sending). Input stays enabled so user can compose next message. */
   sendDisabled?: boolean;
+  /** When true, disables the textarea (e.g. chat not supported or agent not running). */
+  inputDisabled?: boolean;
   /** Tooltip shown when send button is disabled due to sendDisabled (e.g. "Waiting on Dreamer to finish current response"). */
   sendDisabledTooltip?: string;
   placeholder?: string;
@@ -37,6 +42,7 @@ export function ChatInput({
   onChange,
   onSend,
   sendDisabled = false,
+  inputDisabled = false,
   sendDisabledTooltip,
   placeholder,
   inputRef: externalInputRef,
@@ -54,9 +60,11 @@ export function ChatInput({
     el.style.height = `${h}px`;
   }, [value, inputRef]);
 
+  const sendBlocked = sendDisabled || inputDisabled;
+
   const onKeyDown = useSubmitShortcut(onSend, {
     multiline: true,
-    disabled: !value.trim() || sendDisabled,
+    disabled: inputDisabled || !value.trim() || sendDisabled,
   });
 
   return (
@@ -64,19 +72,20 @@ export function ChatInput({
       <textarea
         ref={inputRef}
         rows={1}
-        className={INPUT_CLASS}
+        className={`${INPUT_CLASS}${inputDisabled ? INPUT_DISABLED_CLASS : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         aria-label={ariaLabel}
+        disabled={inputDisabled}
       />
       <button
         type="button"
         onClick={onSend}
-        disabled={sendDisabled || !value.trim()}
+        disabled={sendBlocked || !value.trim()}
         aria-label="Send"
-        title={sendDisabled && sendDisabledTooltip ? sendDisabledTooltip : undefined}
+        title={sendBlocked && sendDisabledTooltip ? sendDisabledTooltip : undefined}
         className={sendButtonClassName}
       >
         <SendIcon className="w-3.5 h-3.5" />

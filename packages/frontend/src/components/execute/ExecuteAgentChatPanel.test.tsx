@@ -131,6 +131,20 @@ describe("ExecuteAgentChatPanel", () => {
 
       expect(screen.getByPlaceholderText("Chat unavailable with CLI backend")).toBeInTheDocument();
     });
+
+    it("disables the text input when chatSupported is false", () => {
+      render(<ExecuteAgentChatPanel {...defaultProps} chatSupported={false} />);
+
+      expect(screen.getByRole("textbox", { name: "Execute chat message" })).toBeDisabled();
+    });
+
+    it("shows CLI empty state when chatSupported is false", () => {
+      render(<ExecuteAgentChatPanel {...defaultProps} chatSupported={false} />);
+
+      expect(
+        screen.getByText("Live chat is not available for this agent backend.")
+      ).toBeInTheDocument();
+    });
   });
 
   describe("agent not running", () => {
@@ -168,6 +182,20 @@ describe("ExecuteAgentChatPanel", () => {
       render(<ExecuteAgentChatPanel {...defaultProps} agentRunning={false} />);
 
       expect(screen.getByPlaceholderText("Agent not running")).toBeInTheDocument();
+    });
+
+    it("disables the text input when agent is not running", () => {
+      render(<ExecuteAgentChatPanel {...defaultProps} agentRunning={false} />);
+
+      expect(screen.getByRole("textbox", { name: "Execute chat message" })).toBeDisabled();
+    });
+
+    it("shows not-running empty state when agent is not running", () => {
+      render(<ExecuteAgentChatPanel {...defaultProps} agentRunning={false} />);
+
+      expect(
+        screen.getByText("Chat will be available when an agent is actively working on this task.")
+      ).toBeInTheDocument();
     });
   });
 

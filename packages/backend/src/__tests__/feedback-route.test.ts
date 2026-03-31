@@ -175,7 +175,9 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should return 400 when text is missing", async () => {
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/feedback`).send({});
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/feedback`)
+      .send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -212,7 +214,9 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/feedback/fb-get-1`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/feedback/fb-get-1`
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe("fb-get-1");
@@ -221,11 +225,13 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should preserve submittedPlanId and planVersionNumber for Reply-to-Plan", async () => {
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/feedback`).send({
-      text: "Add login validation tasks",
-      planId: "auth-plan",
-      planVersionNumber: 2,
-    });
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/feedback`)
+      .send({
+        text: "Add login validation tasks",
+        planId: "auth-plan",
+        planVersionNumber: 2,
+      });
 
     expect(res.status).toBe(201);
     expect(res.body.data.mappedPlanId).toBeNull();

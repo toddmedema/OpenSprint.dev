@@ -52,6 +52,14 @@ describe("agent-output-filter", () => {
       expect(f.filter('{"type":"text","text":"Hello from agent"}\n')).toBe("Hello from agent");
     });
 
+    it("inserts a newline between consecutive assistant messages", () => {
+      const f = createAgentOutputFilter();
+      const chunk =
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Lint passes."}]}}\n' +
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me check on the test output."}]}}\n';
+      expect(f.filter(chunk)).toBe("Lint passes.\nLet me check on the test output.");
+    });
+
     it("filters out metadata-only events (tool_use)", () => {
       const f = createAgentOutputFilter();
       expect(f.filter('{"type":"tool_use","name":"edit","input":{}}\n')).toBe("");
@@ -80,6 +88,13 @@ describe("agent-output-filter", () => {
     it("passes through plain text unchanged", () => {
       const raw = "Plain text output\nNo JSON here\n";
       expect(filterAgentOutput(raw)).toBe("Plain text output\nNo JSON here\n");
+    });
+
+    it("keeps one line break between assistant messages in full-pass mode", () => {
+      const raw =
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"First update"}]}}\n' +
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Second update"}]}}\n';
+      expect(filterAgentOutput(raw)).toBe("First update\nSecond update");
     });
   });
 });

@@ -152,7 +152,9 @@ function RenderBlock({ block, index }: { block: DiffBlock; index: number }) {
       {block.status === "modified" && block.wordDiff ? (
         <WordDiffSpans parts={block.wordDiff} />
       ) : (
-        <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>{block.markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>
+          {block.markdown}
+        </ReactMarkdown>
       )}
     </BlockWrapper>
   );

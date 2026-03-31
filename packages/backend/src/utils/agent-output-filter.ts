@@ -126,6 +126,10 @@ function isThinkingDeltaEvent(obj: Record<string, unknown>): boolean {
   return obj.type === "thinking" && obj.subtype === "delta";
 }
 
+function isDiscreteAssistantMessageEvent(obj: Record<string, unknown>): boolean {
+  return obj.type === "assistant" || obj.type === "message";
+}
+
 export interface AgentOutputFilter {
   filter(chunk: string): string;
   reset(): void;
@@ -137,6 +141,8 @@ export interface AgentOutputFilter {
 export function createAgentOutputFilter(): AgentOutputFilter {
   let lineBuffer = "";
   let previousLineWasThinkingDelta = false;
+  let previousEmissionWasDiscreteAssistantMessage = false;
+  let previousEmissionEndedWithNewline = true;
 
   return {
     filter(chunk: string): string {
@@ -162,18 +168,37 @@ export function createAgentOutputFilter(): AgentOutputFilter {
               obj !== null &&
               typeof obj === "object" &&
               isThinkingDeltaEvent(obj as Record<string, unknown>);
+            const discreteAssistantMessage =
+              obj !== null &&
+              typeof obj === "object" &&
+              isDiscreteAssistantMessageEvent(obj as Record<string, unknown>);
             if (previousLineWasThinkingDelta && !thinkingDelta) {
               results.push("\n");
+              previousEmissionEndedWithNewline = true;
+            }
+            if (
+              !thinkingDelta &&
+              discreteAssistantMessage &&
+              previousEmissionWasDiscreteAssistantMessage &&
+              !previousEmissionEndedWithNewline
+            ) {
+              results.push("\n");
+              previousEmissionEndedWithNewline = true;
             }
             results.push(content);
+            previousEmissionEndedWithNewline = /\n$/.test(content);
+            previousEmissionWasDiscreteAssistantMessage = discreteAssistantMessage;
             previousLineWasThinkingDelta = thinkingDelta;
           } else {
             previousLineWasThinkingDelta = false;
+            previousEmissionWasDiscreteAssistantMessage = false;
           }
         } catch {
           if (previousLineWasThinkingDelta) results.push("\n");
           previousLineWasThinkingDelta = false;
+          previousEmissionWasDiscreteAssistantMessage = false;
           results.push(line + "\n");
+          previousEmissionEndedWithNewline = true;
         }
       }
 
@@ -182,6 +207,8 @@ export function createAgentOutputFilter(): AgentOutputFilter {
     reset(): void {
       lineBuffer = "";
       previousLineWasThinkingDelta = false;
+      previousEmissionWasDiscreteAssistantMessage = false;
+      previousEmissionEndedWithNewline = true;
     },
   };
 }

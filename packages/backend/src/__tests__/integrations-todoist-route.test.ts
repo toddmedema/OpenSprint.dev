@@ -206,7 +206,9 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
 
   describe("POST /oauth/start", () => {
     it("returns 200 with authorizationUrl containing client_id and scopes", async () => {
-      const res = await authedSupertest(app).post(todoistUrl(projectId, "/oauth/start")).expect(200);
+      const res = await authedSupertest(app)
+        .post(todoistUrl(projectId, "/oauth/start"))
+        .expect(200);
 
       expect(res.body.data.authorizationUrl).toContain("client_id=test-client-id");
       expect(res.body.data.authorizationUrl).toContain("data%3Aread_write");
@@ -224,7 +226,9 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
         throw new Error("Missing config");
       });
 
-      const res = await authedSupertest(app).post(todoistUrl(projectId, "/oauth/start")).expect(500);
+      const res = await authedSupertest(app)
+        .post(todoistUrl(projectId, "/oauth/start"))
+        .expect(500);
 
       expect(res.body.error.code).toBe("INTEGRATION_NOT_CONFIGURED");
     });

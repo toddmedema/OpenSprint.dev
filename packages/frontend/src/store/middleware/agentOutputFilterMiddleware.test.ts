@@ -66,6 +66,22 @@ describe("agentOutputFilterMiddleware", () => {
     expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
   });
 
+  it("batches and flushes plain text fragments without newline", () => {
+    vi.useFakeTimers();
+    const store = createStore();
+    store.dispatch(setSelectedTaskId("task-1"));
+
+    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "Restoring baseline" }));
+    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: " quality gates on main" }));
+
+    expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
+    vi.advanceTimersByTime(200);
+    expect(store.getState().execute.agentOutput["task-1"]).toEqual([
+      "Restoring baseline quality gates on main",
+    ]);
+    vi.useRealTimers();
+  });
+
   it("discards buffered chunks when setAgentOutputBackfill arrives (prevents duplicate trailing text)", () => {
     vi.useFakeTimers();
     const store = createStore();

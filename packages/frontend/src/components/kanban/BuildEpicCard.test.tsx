@@ -411,22 +411,6 @@ describe("BuildEpicCard", () => {
     expect(screen.getByRole("img", { name: "Medium" })).toBeInTheDocument();
   });
 
-  it("renders complexity icon when task has complexity", () => {
-    const tasks = [
-      createMockTask({
-        id: "epic-1.1",
-        title: "Simple task",
-        kanbanColumn: "in_progress",
-        complexity: 3,
-      }),
-    ];
-    renderWithStore(
-      <BuildEpicCard epicId="epic-1" epicTitle="Auth" tasks={tasks} onTaskSelect={vi.fn()} />
-    );
-
-    expect(screen.getByRole("img", { name: "Simple complexity" })).toBeInTheDocument();
-  });
-
   it("makes epic title clickable when onViewPlan is provided", async () => {
     const user = userEvent.setup();
     const onViewPlan = vi.fn();

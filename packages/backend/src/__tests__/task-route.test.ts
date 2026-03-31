@@ -122,7 +122,9 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       expect(epicId).toBeDefined();
 
       // Before Execute!: epic blocked -> tasks show planning
-      const tasksBeforeRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksBeforeRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks`
+      );
       expect(tasksBeforeRes.status).toBe(200);
       const tasksBefore = tasksBeforeRes.body.data ?? [];
 
@@ -147,7 +149,9 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       });
 
       // After ship: epic open; Task A has no blockers -> ready; Task B blocks on A (open) -> backlog
-      const tasksAfterRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksAfterRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks`
+      );
       expect(tasksAfterRes.status).toBe(200);
       const tasksAfter = tasksAfterRes.body.data ?? [];
 
@@ -160,7 +164,9 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       await taskStore.close(projectId, taskAAfter.id, "Done");
 
       // Task B should now be ready (only blocker is done)
-      const tasksFinalRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksFinalRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks`
+      );
       const tasksFinal = tasksFinalRes.body.data ?? [];
       const taskAFinal = tasksFinal.find((t: { id: string }) => t.id === taskAAfter.id);
       const taskBFinal = tasksFinal.find((t: { id: string }) => t.id === taskBAfter.id);
@@ -377,7 +383,9 @@ Test review prompt generation.
       const prompt = await fs.readFile(promptPath, "utf-8");
       expect(prompt).toContain("# Review Task: Task Y");
       expect(prompt).toContain("You are reviewing the implementation of a task");
-      expect(prompt).toContain("The orchestrator has already committed them before invoking you");
+      expect(prompt).toContain(
+        "The orchestrator has already committed any produced changes before invoking you"
+      );
       expect(prompt).toMatch(/do NOT merge.*orchestrator will merge after you exit/i);
       expect(prompt).toMatch(/"status":\s*"approved"/);
       expect(prompt).toMatch(/"status":\s*"rejected"/);
@@ -451,7 +459,9 @@ Test review prompt generation.
 
     await taskStore.update(projectId, taskZ.id, { status: "blocked" });
 
-    const tasksBlockedRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasksBlockedRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks`
+    );
     const taskBlocked = (tasksBlockedRes.body.data ?? []).find(
       (t: { id: string }) => t.id === taskZ.id
     );
@@ -465,7 +475,9 @@ Test review prompt generation.
     expect(unblockRes.status).toBe(200);
     expect(unblockRes.body.data.taskUnblocked).toBe(true);
 
-    const tasksAfterRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasksAfterRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks`
+    );
     const taskAfter = (tasksAfterRes.body.data ?? []).find(
       (t: { id: string }) => t.id === taskZ.id
     );
@@ -567,7 +579,9 @@ Test review prompt generation.
       expect(found2.mergePausedUntil).toBe(futureIso);
       expect(found2.mergeWaitingOnMain).toBe(true);
 
-      detailRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${wtmTask.id}`);
+      detailRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks/${wtmTask.id}`
+      );
       expect(detailRes.status).toBe(200);
       expect(detailRes.body.data.kanbanColumn).toBe("waiting_to_merge");
       expect(detailRes.body.data.mergePausedUntil).toBe(futureIso);
@@ -652,7 +666,9 @@ Test review prompt generation.
         description: "Test task for Server-Timing header",
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/tasks/${task.id}`
+      );
       expect(res.status).toBe(200);
       const serverTiming = res.headers["server-timing"];
       expect(serverTiming).toBeDefined();
@@ -874,7 +890,9 @@ Test review prompt generation.
     expect(patchRes.body.data.id).toBe(task.id);
     expect(patchRes.body.data.assignee).toBe("Alice");
 
-    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const getRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks/${task.id}`
+    );
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.assignee).toBe("Alice");
 
@@ -898,7 +916,9 @@ Test review prompt generation.
     expect(res.status).toBe(200);
     expect(res.body.data.assignee).toBeNull();
 
-    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const getRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks/${task.id}`
+    );
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.assignee).toBeNull();
   });
@@ -919,7 +939,9 @@ Test review prompt generation.
     expect(res.status).toBe(200);
     expect(res.body.data.assignee).toBeNull();
 
-    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const getRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks/${task.id}`
+    );
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.assignee).toBeNull();
   });
@@ -973,7 +995,9 @@ Test review prompt generation.
       complexity: 5,
     });
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks/${task.id}`
+    );
     expect(res.status).toBe(200);
     expect(res.body.data.complexity).toBe(5);
   });
@@ -1051,7 +1075,9 @@ Test review prompt generation.
     await taskStore.close(projectId, t1.id, "Done");
     await taskStore.close(projectId, t2.id, "Done");
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/analytics`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/tasks/analytics`
+    );
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(res.body.data.byComplexity).toBeDefined();

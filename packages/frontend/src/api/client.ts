@@ -419,7 +419,7 @@ export const api = {
     getProposedDiff: (
       projectId: string,
       requestId: string,
-      opts?: { includeContent?: boolean },
+      opts?: { includeContent?: boolean }
     ) => {
       const params = new URLSearchParams({ requestId });
       if (opts?.includeContent === false) params.set("includeContent", "false");
@@ -431,7 +431,7 @@ export const api = {
       projectId: string,
       fromVersion: string,
       toVersion?: string,
-      opts?: { includeContent?: boolean },
+      opts?: { includeContent?: boolean }
     ) => {
       const params = new URLSearchParams({ fromVersion });
       if (toVersion != null && toVersion !== "") params.set("toVersion", toVersion);

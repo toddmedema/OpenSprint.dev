@@ -975,9 +975,11 @@ User authentication.
     // Implementation section
     expect(prompt).toContain("## Implementation");
     expect(prompt).toContain(
-      "The coding agent has produced changes on branch `opensprint/bd-a3f8.2`"
+      "The coding agent may have produced changes on branch `opensprint/bd-a3f8.2`"
     );
-    expect(prompt).toContain("The orchestrator has already committed them before invoking you");
+    expect(prompt).toContain(
+      "The orchestrator has already committed any produced changes before invoking you"
+    );
     expect(prompt).toContain(
       "Run `git diff main...opensprint/bd-a3f8.2` to review the committed changes"
     );
@@ -1009,12 +1011,15 @@ User authentication.
     expect(prompt).toContain("Before finalizing, open that file");
     expect(prompt).toContain("If it says `FAILED` or `ERROR`, reject");
     expect(prompt).toContain("If it says `PENDING`, continue based on code quality/scope findings");
-    expect(prompt).toContain("6. Write your result to `.opensprint/active/bd-a3f8.2/result.json`");
+    expect(prompt).toContain("If the implementation diff is empty (or no files changed)");
+    expect(prompt).toContain("do NOT reject for that reason alone");
+    expect(prompt).toContain("7. Write your result to `.opensprint/active/bd-a3f8.2/result.json`");
     expect(prompt).toContain('"status": "approved"');
     expect(prompt).toContain("do NOT merge");
     expect(prompt).toContain('"status": "rejected"');
     expect(prompt).toContain('"summary"');
     expect(prompt).toContain('The `status` field MUST be exactly `"approved"` or `"rejected"`');
+    expect(prompt).toContain("Do NOT reject solely because there were no new code edits");
 
     // Should NOT contain prior review history for first attempt
     expect(prompt).not.toContain("## Prior Review History");
@@ -1207,6 +1212,9 @@ User authentication.
     expect(securityPrompt).toContain(
       "Do NOT rerun the full repo validation or merge quality gates"
     );
+    expect(securityPrompt).toContain("If the implementation diff is empty (or no files changed)");
+    expect(securityPrompt).toContain("do NOT reject for that reason alone");
+    expect(securityPrompt).toContain("no new code edits");
     expect(securityPrompt).toContain(
       ".opensprint/active/bd-a3f8.2/context/orchestrator-test-status.md"
     );

@@ -452,7 +452,9 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 400 when requestId is missing", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/proposed-diff`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff`
+      );
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -566,7 +568,9 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     // Do not write legacy spec-metadata.json: PrdService reads metadata from DB; if no row
     // and legacy file exists, assertMigrationCompleteForResource throws.
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.content).toBe("Our product solves X");
@@ -584,7 +588,9 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("GET /projects/:id/prd/:section should return 400 for invalid section key", async () => {
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/InvalidSection`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/prd/InvalidSection`
+    );
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_SECTION");
@@ -615,7 +621,9 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.newVersion).toBe(1);
 
-    const historyRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
+    const historyRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/prd/history`
+    );
     expect(historyRes.body.data[0].source).toBe("plan");
   });
 

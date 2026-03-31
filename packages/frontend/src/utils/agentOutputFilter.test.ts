@@ -17,8 +17,14 @@ describe("agentOutputFilter", () => {
 
     it("buffers plain text without trailing newline", () => {
       const f = createAgentOutputFilter();
-      expect(f.filter("Some agent output")).toBe("");
-      expect(f.filter("\n")).toBe("Some agent output\n");
+      expect(f.filter("Some agent output")).toBe("Some agent output");
+      expect(f.filter("\n")).toBe("");
+    });
+
+    it("streams plain text fragments immediately without waiting for newline", () => {
+      const f = createAgentOutputFilter();
+      expect(f.filter("Restoring baseline")).toBe("Restoring baseline");
+      expect(f.filter(" quality gates on main")).toBe(" quality gates on main");
     });
 
     it("extracts text from Cursor stream-json type:text", () => {
@@ -50,6 +56,14 @@ describe("agentOutputFilter", () => {
       const chunk =
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will implement the fix."}]},"session_id":"abc","timestamp_ms":123}\n';
       expect(f.filter(chunk)).toBe("I will implement the fix.");
+    });
+
+    it("inserts a newline between consecutive assistant messages", () => {
+      const f = createAgentOutputFilter();
+      const chunk =
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Lint passes."}]}}\n' +
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me check on the test output."}]}}\n';
+      expect(f.filter(chunk)).toBe("Lint passes.\nLet me check on the test output.");
     });
 
     it("extracts newlines from Cursor Composer assistant messages", () => {
@@ -172,6 +186,11 @@ describe("agentOutputFilter", () => {
       expect(f.filter(part2)).toBe("Hello");
     });
 
+    it("emits complete JSON event even when newline has not arrived yet", () => {
+      const f = createAgentOutputFilter();
+      expect(f.filter('{"type":"text","text":"Hello"}')).toBe("Hello");
+    });
+
     it("handles mixed plain text and JSON", () => {
       const f = createAgentOutputFilter();
       const chunk = "Starting...\n" + '{"type":"text","text":"JSON content"}\n';
@@ -272,6 +291,13 @@ describe("agentOutputFilter", () => {
         '{"type":"thinking","subtype":"delta","text":"checking filter"}\n' +
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Here is the fix."}]}}\n';
       expect(filterAgentOutput(raw)).toBe("checking filter\nHere is the fix.");
+    });
+
+    it("keeps one line break between assistant messages in full-pass mode", () => {
+      const raw =
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"First update"}]}}\n' +
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Second update"}]}}\n';
+      expect(filterAgentOutput(raw)).toBe("First update\nSecond update");
     });
 
     it("filters out tool_call and code-context in one pass", () => {

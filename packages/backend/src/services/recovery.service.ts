@@ -682,7 +682,8 @@ export class RecoveryService {
       const heartbeat = assignment.worktreePath
         ? await heartbeatService.readHeartbeat(assignment.worktreePath, taskId)
         : null;
-      const assignmentAgeMsSafe = Number.isFinite(assignmentAgeMs) && assignmentAgeMs >= 0 ? assignmentAgeMs : null;
+      const assignmentAgeMsSafe =
+        Number.isFinite(assignmentAgeMs) && assignmentAgeMs >= 0 ? assignmentAgeMs : null;
       const pidAlive =
         heartbeat != null &&
         typeof heartbeat.processGroupLeaderPid === "number" &&

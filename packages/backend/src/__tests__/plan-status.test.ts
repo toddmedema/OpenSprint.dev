@@ -231,7 +231,9 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       );
       expect(rows.length).toBe(1);
 
-      const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+      const statusRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/plan-status`
+      );
       expect(statusRes.status).toBe(200);
       expect(statusRes.body.data).toEqual({
         hasPlanningRun: true,
@@ -268,7 +270,9 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       executive_summary: { content: "A todo app with new features" },
     });
 
-    const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    const statusRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/plan-status`
+    );
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.data).toEqual({
       hasPlanningRun: true,
@@ -371,7 +375,9 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
         goals_and_metrics: { content: "Section B" },
       });
 
-      const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+      const statusRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/plan-status`
+      );
       expect(statusRes.status).toBe(200);
       expect(statusRes.body.data.action).toBe("replan");
       expect(statusRes.body.data.prdChangedSinceLastRun).toBe(true);
@@ -429,7 +435,9 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     );
 
     const app = createApp();
-    const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    const statusRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/plan-status`
+    );
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.data.hasPlanningRun).toBe(true);
     expect(statusRes.body.data.action).toBe("none");

@@ -12,7 +12,6 @@ import {
 import { isTaskInPlanningPlan, isSelfImprovementTask } from "../../lib/executeTaskFilter";
 import { getEpicTitleFromPlan } from "../../lib/planContentUtils";
 import { PriorityIcon } from "../PriorityIcon";
-import { ComplexityIcon } from "../ComplexityIcon";
 import { AssigneeSelector } from "./AssigneeSelector";
 import type { StatusFilter } from "../../lib/executeTaskFilter";
 import { EXECUTE_SECTION_HEADER_STICKY_TOP } from "../../lib/phaseMainScrollLayout";
@@ -161,7 +160,6 @@ function TimelineRow({
           className="flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0"
         >
           <PriorityIcon priority={task.priority ?? 1} size="xs" />
-          <ComplexityIcon complexity={task.complexity} size="xs" />
           <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
             {task.title}
           </span>

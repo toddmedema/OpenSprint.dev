@@ -961,7 +961,11 @@ describe("FailureHandlerService", () => {
         taskId,
         expect.objectContaining({ status: "blocked" })
       );
-      expect(mockRemoveLabel).toHaveBeenCalledWith(projectId, taskId, "merge_stage:rebase_before_merge");
+      expect(mockRemoveLabel).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        "merge_stage:rebase_before_merge"
+      );
       expect(mockHost.nudge).toHaveBeenCalledWith(projectId);
     });
 

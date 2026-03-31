@@ -121,7 +121,9 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   });
 
   it("GET /projects/:id/sketch-context returns hasExistingCode false when repo has no source files", async () => {
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/sketch-context`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/sketch-context`
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -132,7 +134,9 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     const repoPath = path.join(tempDir, "my-project");
     await fs.writeFile(path.join(repoPath, "index.ts"), "console.log('hello');");
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/sketch-context`);
+    const res = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/sketch-context`
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.hasExistingCode).toBe(true);
@@ -375,7 +379,9 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     const listBefore = await authedSupertest(app).get(`${API_PREFIX}/projects`);
     expect(listBefore.body.data).toHaveLength(1);
 
-    const archiveRes = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/archive`);
+    const archiveRes = await authedSupertest(app).post(
+      `${API_PREFIX}/projects/${projectId}/archive`
+    );
     expect(archiveRes.status).toBe(204);
 
     const listAfter = await authedSupertest(app).get(`${API_PREFIX}/projects`);
@@ -542,7 +548,9 @@ describe("Projects REST API — create and settings", () => {
     expect(res.status).toBe(201);
     const projectId = res.body.data.id;
 
-    const settingsRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const settingsRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/settings`
+    );
     expect(settingsRes.status).toBe(200);
     expect(settingsRes.body.data).not.toHaveProperty("apiKeys");
   });

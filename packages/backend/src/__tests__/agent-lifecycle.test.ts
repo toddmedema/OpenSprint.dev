@@ -120,6 +120,20 @@ describe("AgentLifecycleManager", () => {
       await manager.run(baseParams, runState, timers);
 
       expect(mockInvokeCodingAgent).toHaveBeenCalled();
+      expect(mockInvokeCodingAgent).toHaveBeenCalledWith(
+        baseParams.promptPath,
+        baseParams.agentConfig,
+        expect.objectContaining({
+          tracking: {
+            id: "task-1",
+            projectId: "proj-1",
+            phase: "coding",
+            role: "coder",
+            label: "Coder",
+            branchName: "main",
+          },
+        })
+      );
       expect(mockInvokeReviewAgent).not.toHaveBeenCalled();
       expect(runState.activeProcess).not.toBeNull();
       expect(runState.startedAt).toBeTruthy();

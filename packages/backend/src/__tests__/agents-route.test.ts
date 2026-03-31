@@ -99,14 +99,18 @@ describe("Agents API", () => {
 
   describe("GET /projects/:projectId/agents/active", () => {
     it("should return empty array when no agent is running", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/active`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/agents/active`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/agents/active`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/nonexistent-id/agents/active`
+      );
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -124,7 +128,9 @@ describe("Agents API", () => {
         "opensprint/task-123"
       );
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/active`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/agents/active`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -150,7 +156,9 @@ describe("Agents API", () => {
         "utf-8"
       );
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/agents/instructions`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ content: "# Agent Instructions\n\nUse bd for tasks." });
@@ -160,7 +168,9 @@ describe("Agents API", () => {
       const repoPath = path.join(tempDir, "my-project");
       await fs.unlink(path.join(repoPath, "AGENTS.md"));
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/agents/instructions`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ content: "" });

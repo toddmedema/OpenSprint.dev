@@ -140,6 +140,10 @@ function isThinkingDeltaEvent(obj: Record<string, unknown>): boolean {
   return obj.type === "thinking" && obj.subtype === "delta";
 }
 
+function isDiscreteAssistantMessageEvent(obj: Record<string, unknown>): boolean {
+  return obj.type === "assistant" || obj.type === "message";
+}
+
 export interface AgentOutputFilter {
   filter(chunk: string): string;
   reset(): void;
@@ -154,6 +158,56 @@ export interface AgentOutputFilter {
 export function createAgentOutputFilter(): AgentOutputFilter {
   let lineBuffer = "";
   let previousLineWasThinkingDelta = false;
+  let previousEmissionWasDiscreteAssistantMessage = false;
+  let previousEmissionEndedWithNewline = true;
+
+  const emitParsedEvent = (obj: unknown, rawLine: string, results: string[]): void => {
+    const content = extractContentFromEvent(obj, rawLine);
+    if (content) {
+      const thinkingDelta =
+        obj !== null &&
+        typeof obj === "object" &&
+        isThinkingDeltaEvent(obj as Record<string, unknown>);
+      const discreteAssistantMessage =
+        obj !== null &&
+        typeof obj === "object" &&
+        isDiscreteAssistantMessageEvent(obj as Record<string, unknown>);
+      if (previousLineWasThinkingDelta && !thinkingDelta) {
+        results.push("\n");
+        previousEmissionEndedWithNewline = true;
+      }
+      if (
+        !thinkingDelta &&
+        discreteAssistantMessage &&
+        previousEmissionWasDiscreteAssistantMessage &&
+        !previousEmissionEndedWithNewline
+      ) {
+        results.push("\n");
+        previousEmissionEndedWithNewline = true;
+      }
+      results.push(content);
+      previousEmissionEndedWithNewline = /\n$/.test(content);
+      previousEmissionWasDiscreteAssistantMessage = discreteAssistantMessage;
+      previousLineWasThinkingDelta = thinkingDelta;
+    } else {
+      previousLineWasThinkingDelta = false;
+      previousEmissionWasDiscreteAssistantMessage = false;
+    }
+  };
+
+  const emitPlainText = (text: string, appendNewline: boolean, results: string[]): void => {
+    if (!text) return;
+    const trimmed = text.trim();
+    if (trimmed && isNoiseLine(trimmed)) return;
+    if (previousLineWasThinkingDelta) {
+      results.push("\n");
+    }
+    previousLineWasThinkingDelta = false;
+    previousEmissionWasDiscreteAssistantMessage = false;
+    const value = appendNewline ? `${text}\n` : text;
+    results.push(value);
+    previousEmissionEndedWithNewline = /\n$/.test(value);
+  };
 
   return {
     filter(chunk: string): string {
@@ -172,28 +226,34 @@ export function createAgentOutputFilter(): AgentOutputFilter {
 
         try {
           const obj = JSON.parse(trimmed) as unknown;
-          const content = extractContentFromEvent(obj, trimmed);
-          if (content) {
-            const thinkingDelta =
-              obj !== null &&
-              typeof obj === "object" &&
-              isThinkingDeltaEvent(obj as Record<string, unknown>);
-            if (previousLineWasThinkingDelta && !thinkingDelta) {
-              results.push("\n");
-            }
-            results.push(content);
-            previousLineWasThinkingDelta = thinkingDelta;
-          } else {
-            previousLineWasThinkingDelta = false;
-          }
+          emitParsedEvent(obj, trimmed, results);
         } catch {
           // Not valid JSON - treat as plain text and pass through unless noise
-          if (previousLineWasThinkingDelta) {
-            results.push("\n");
-          }
-          previousLineWasThinkingDelta = false;
-          if (!isNoiseLine(line)) {
-            results.push(line + "\n");
+          emitPlainText(line, true, results);
+        }
+      }
+
+      // Streaming fallback: when trailing buffer does not look like NDJSON, emit it
+      // immediately so plain text fragments are not held until a newline arrives.
+      if (lineBuffer) {
+        const trailingTrimmed = lineBuffer.trim();
+        if (!trailingTrimmed) {
+          emitPlainText(lineBuffer, false, results);
+          lineBuffer = "";
+        } else if (isNoiseLine(trailingTrimmed)) {
+          lineBuffer = "";
+        } else {
+          try {
+            const trailingObj = JSON.parse(trailingTrimmed) as unknown;
+            emitParsedEvent(trailingObj, trailingTrimmed, results);
+            lineBuffer = "";
+          } catch {
+            const looksLikeJsonPrefix =
+              trailingTrimmed.startsWith("{") || trailingTrimmed.startsWith("[");
+            if (!looksLikeJsonPrefix) {
+              emitPlainText(lineBuffer, false, results);
+              lineBuffer = "";
+            }
           }
         }
       }
@@ -203,6 +263,8 @@ export function createAgentOutputFilter(): AgentOutputFilter {
     reset(): void {
       lineBuffer = "";
       previousLineWasThinkingDelta = false;
+      previousEmissionWasDiscreteAssistantMessage = false;
+      previousEmissionEndedWithNewline = true;
     },
   };
 }

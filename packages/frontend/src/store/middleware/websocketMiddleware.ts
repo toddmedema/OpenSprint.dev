@@ -135,8 +135,7 @@ const RECONNECT_MAX_MS = 30000;
 function buildWebSocketUrl(pathFromHost: string): string {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const base = `${protocol}//${window.location.host}${pathFromHost}`;
-  const token =
-    typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
+  const token = typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
   if (!token) return base;
   return `${base}?${new URLSearchParams({ token }).toString()}`;
 }

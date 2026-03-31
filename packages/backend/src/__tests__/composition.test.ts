@@ -76,7 +76,9 @@ describe("composition", () => {
 
     await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1`).expect(200);
     await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/prd`).expect(200);
-    await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/chat/history?context=sketch`).expect(200);
+    await authedSupertest(app)
+      .get(`${API_PREFIX}/projects/proj-1/chat/history?context=sketch`)
+      .expect(200);
     await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/agents/instructions`).expect(200);
     await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/feedback`).expect(200);
 

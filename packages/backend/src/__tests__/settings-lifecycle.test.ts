@@ -409,7 +409,9 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ selfImprovementFrequency: "daily" });
 
-      const resDaily = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const resDaily = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/settings`
+      );
       expect(resDaily.status).toBe(200);
       expect(resDaily.body.data.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("daily"));
 
@@ -417,7 +419,9 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ selfImprovementFrequency: "weekly" });
 
-      const resWeekly = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const resWeekly = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/settings`
+      );
       expect(resWeekly.status).toBe(200);
       expect(resWeekly.body.data.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("weekly"));
 
@@ -425,7 +429,9 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ selfImprovementFrequency: "never" });
 
-      const resNever = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const resNever = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/settings`
+      );
       expect(resNever.status).toBe(200);
       expect(resNever.body.data.nextRunAt).toBeUndefined();
     } finally {
@@ -800,11 +806,13 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings ignores selfImprovementLastRunAt and selfImprovementLastCommitSha from client", async () => {
-    const putRes = await authedSupertest(app).put(`${API_PREFIX}/projects/${projectId}/settings`).send({
-      selfImprovementFrequency: "weekly",
-      selfImprovementLastRunAt: "2025-01-15T12:00:00Z",
-      selfImprovementLastCommitSha: "client-set-sha",
-    });
+    const putRes = await authedSupertest(app)
+      .put(`${API_PREFIX}/projects/${projectId}/settings`)
+      .send({
+        selfImprovementFrequency: "weekly",
+        selfImprovementLastRunAt: "2025-01-15T12:00:00Z",
+        selfImprovementLastCommitSha: "client-set-sha",
+      });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.selfImprovementFrequency).toBe("weekly");

@@ -436,7 +436,12 @@ export class OrchestratorService {
     try {
       const raw = await fs.readFile(leasePath, "utf-8");
       const parsed = JSON.parse(raw) as Partial<LeaseFile>;
-      if (parsed && parsed.version === 1 && parsed.projects && typeof parsed.projects === "object") {
+      if (
+        parsed &&
+        parsed.version === 1 &&
+        parsed.projects &&
+        typeof parsed.projects === "object"
+      ) {
         leaseData = { version: 1, projects: parsed.projects as LeaseFile["projects"] };
       }
     } catch {
@@ -1588,24 +1593,32 @@ export class OrchestratorService {
     if (!ownsLease) {
       state.status.dispatchPausedReason = "another_orchestrator_instance";
       if (!state.globalTimers.has("leaseRetry")) {
-        state.globalTimers.setInterval("leaseRetry", () => {
-          void this.tryAcquireOrRenewLease(projectId).then((acquired) => {
-            if (!acquired) return;
-            const currentState = this.getState(projectId);
-            currentState.status.dispatchPausedReason = null;
-            currentState.globalTimers.clear("leaseRetry");
-            this.nudge(projectId);
-          });
-        }, ORCHESTRATOR_LEASE_RENEW_MS);
+        state.globalTimers.setInterval(
+          "leaseRetry",
+          () => {
+            void this.tryAcquireOrRenewLease(projectId).then((acquired) => {
+              if (!acquired) return;
+              const currentState = this.getState(projectId);
+              currentState.status.dispatchPausedReason = null;
+              currentState.globalTimers.clear("leaseRetry");
+              this.nudge(projectId);
+            });
+          },
+          ORCHESTRATOR_LEASE_RENEW_MS
+        );
       }
       return state.status;
     }
     state.status.dispatchPausedReason = null;
     state.globalTimers.clear("leaseRetry");
     if (!state.globalTimers.has("leaseRenew")) {
-      state.globalTimers.setInterval("leaseRenew", () => {
-        void this.tryAcquireOrRenewLease(projectId).catch(() => {});
-      }, ORCHESTRATOR_LEASE_RENEW_MS);
+      state.globalTimers.setInterval(
+        "leaseRenew",
+        () => {
+          void this.tryAcquireOrRenewLease(projectId).catch(() => {});
+        },
+        ORCHESTRATOR_LEASE_RENEW_MS
+      );
     }
 
     // Restore counters from DB before recovery so recovery increment is not overwritten
@@ -2233,7 +2246,10 @@ export class OrchestratorService {
           startedAt: slot.agent.startedAt ?? new Date().toISOString(),
           completedAt: new Date().toISOString(),
           outcome: "success",
-          durationMs: Math.max(0, Date.now() - new Date(slot.agent.startedAt ?? Date.now()).getTime()),
+          durationMs: Math.max(
+            0,
+            Date.now() - new Date(slot.agent.startedAt ?? Date.now()).getTime()
+          ),
         })
         .catch((err) => log.warn("Failed to record coder run for Agent Log (success)", { err }));
 
@@ -3200,7 +3216,10 @@ export class OrchestratorService {
       let timeoutHandle: NodeJS.Timeout | null = null;
       try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutHandle = setTimeout(() => reject(new Error("readResult timeout")), perAttemptTimeoutMs);
+          timeoutHandle = setTimeout(
+            () => reject(new Error("readResult timeout")),
+            perAttemptTimeoutMs
+          );
         });
         const value = await Promise.race([
           this.readCodingResultWithRaw(wtPath, taskId),
@@ -3220,7 +3239,8 @@ export class OrchestratorService {
           return { raw: value.raw, result: null, readFailure: null };
         }
       } catch (err) {
-        lastReadFailure = err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error";
+        lastReadFailure =
+          err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "error";
         log.warn("readResult attempt failed", { taskId, attempt, err });
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);

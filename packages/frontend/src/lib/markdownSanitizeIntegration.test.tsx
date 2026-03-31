@@ -6,10 +6,7 @@ import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "./markdownSanitize";
 
 function renderMarkdown(md: string): HTMLElement {
   const { container } = render(
-    <ReactMarkdown
-      remarkPlugins={SAFE_REMARK_PLUGINS}
-      rehypePlugins={SAFE_REHYPE_PLUGINS}
-    >
+    <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>
       {md}
     </ReactMarkdown>
   );
@@ -165,12 +162,12 @@ describe("ReactMarkdown + STRICT_MARKDOWN_SCHEMA integration", () => {
     });
 
     it("strips textarea tags", () => {
-      const el = renderMarkdown('<textarea>evil</textarea>');
+      const el = renderMarkdown("<textarea>evil</textarea>");
       expect(el.querySelector("textarea")).toBeNull();
     });
 
     it("strips select/option tags", () => {
-      const el = renderMarkdown('<select><option>evil</option></select>');
+      const el = renderMarkdown("<select><option>evil</option></select>");
       expect(el.querySelector("select")).toBeNull();
       expect(el.querySelector("option")).toBeNull();
     });
@@ -206,7 +203,9 @@ describe("ReactMarkdown + STRICT_MARKDOWN_SCHEMA integration", () => {
         const attrs = Array.from(node.attributes);
         for (const attr of attrs) {
           if (attr.name.startsWith("data-") && node.tagName !== "DIV") {
-            expect.unreachable(`Unexpected data attribute ${attr.name} on <${node.tagName.toLowerCase()}>`);
+            expect.unreachable(
+              `Unexpected data attribute ${attr.name} on <${node.tagName.toLowerCase()}>`
+            );
           }
         }
       });

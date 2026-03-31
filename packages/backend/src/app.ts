@@ -150,7 +150,16 @@ export function createApp(services?: AppServices) {
   if (process.env.OPENSPRINT_DESKTOP === "1") {
     const frontendDist = process.env.OPENSPRINT_FRONTEND_DIST;
     if (frontendDist) {
-      app.use(express.static(frontendDist));
+      app.get("/__opensprint_local_session.js", (_req, res) => {
+        const token = getLocalSessionToken();
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+        // Token is process-local and rotates on restart; avoid caching across launches.
+        res.setHeader("Cache-Control", "no-store");
+        res.send(`window.__OPENSPRINT_LOCAL_SESSION__=${JSON.stringify(token)};`);
+      });
+      // Disable implicit index.html serving so every SPA document request flows
+      // through the token-injection fallback below.
+      app.use(express.static(frontendDist, { index: false }));
       app.get("*", async (req, res, next) => {
         if (req.path.startsWith("/api/") || req.path.startsWith("/ws")) {
           next();
@@ -159,8 +168,7 @@ export function createApp(services?: AppServices) {
         const indexPath = path.join(frontendDist, "index.html");
         try {
           const html = await fs.readFile(indexPath, "utf8");
-          const token = getLocalSessionToken();
-          const inject = `<script>window.__OPENSPRINT_LOCAL_SESSION__=${JSON.stringify(token)};</script>`;
+          const inject = '<script src="/__opensprint_local_session.js"></script>';
           const body = html.includes("</head>")
             ? html.replace("</head>", `${inject}</head>`)
             : `${inject}${html}`;

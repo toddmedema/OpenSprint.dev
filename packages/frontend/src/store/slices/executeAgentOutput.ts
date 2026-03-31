@@ -29,9 +29,12 @@ export const agentOutputReducers = {
       }
     }
   },
-  appendAgentOutput(state: ExecuteState, action: PayloadAction<{ taskId: string; chunk: string }>) {
+  appendAgentOutput(
+    state: ExecuteState,
+    action: PayloadAction<{ taskId: string; chunk: string; preserveCompletion?: boolean }>
+  ) {
     if (!state.agentOutput) state.agentOutput = {};
-    const { taskId, chunk } = action.payload;
+    const { taskId, chunk, preserveCompletion } = action.payload;
     if (chunk) {
       if (!state.agentOutput[taskId]) {
         state.agentOutput[taskId] = [];
@@ -42,7 +45,7 @@ export const agentOutputReducers = {
         state.agentOutput[taskId] = state.agentOutput[taskId].slice(-MAX_AGENT_OUTPUT);
       }
     }
-    if (taskId === state.selectedTaskId) {
+    if (taskId === state.selectedTaskId && !preserveCompletion) {
       delete state.completionStateByTaskId[taskId];
     }
   },

@@ -22,7 +22,10 @@ export const agentOutputFilterMiddleware: Middleware = () => {
   const buffer = new Map<string, string[]>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const flush = (next: (a: ReturnType<typeof appendAgentOutput>) => unknown) => {
+  const flush = (
+    next: (a: ReturnType<typeof appendAgentOutput>) => unknown,
+    preserveCompletion?: boolean
+  ) => {
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushTimer = null;
@@ -30,7 +33,13 @@ export const agentOutputFilterMiddleware: Middleware = () => {
     for (const [taskId, chunks] of buffer) {
       const concatenated = chunks.join("");
       if (concatenated) {
-        next(appendAgentOutput({ taskId, chunk: concatenated }));
+        next(
+          appendAgentOutput({
+            taskId,
+            chunk: concatenated,
+            ...(preserveCompletion ? { preserveCompletion: true } : {}),
+          })
+        );
       }
     }
     buffer.clear();
@@ -38,7 +47,9 @@ export const agentOutputFilterMiddleware: Middleware = () => {
 
   return (next) => (action) => {
     if (setSelectedTaskId.match(action)) {
-      flush(next);
+      // Flush runs before deselection is applied; without preserveCompletion, append would clear
+      // per-task completion state that was set after the original chunks were buffered.
+      flush(next, true);
       filter.reset();
       return next(action);
     }

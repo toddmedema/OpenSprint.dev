@@ -128,11 +128,8 @@ describe("computeWorkspacesFromFiles", () => {
 
 describe("merge-gate workflow coverage-fallback annotation", () => {
   it("outputs the affected workspace reason for coverage-fallback detection", () => {
-    const workflow = readFileSync(
-      resolve(repoRoot, ".github/workflows/merge-gate.yml"),
-      "utf-8"
-    );
-    expect(workflow).toContain('reason=$REASON');
+    const workflow = readFileSync(resolve(repoRoot, ".github/workflows/merge-gate.yml"), "utf-8");
+    expect(workflow).toContain("reason=$REASON");
     expect(workflow).toContain('"$REASON" = "coverage-fallback"');
   });
 });

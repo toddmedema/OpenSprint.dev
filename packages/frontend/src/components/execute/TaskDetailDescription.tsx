@@ -11,7 +11,11 @@ const DescriptionMarkdown = React.memo(({ content }: { content: string }) => (
     className="prose-task-description prose-execute-task"
     data-testid="task-description-markdown"
   >
-    <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
+    <ReactMarkdown
+      remarkPlugins={SAFE_REMARK_PLUGINS}
+      rehypePlugins={SAFE_REHYPE_PLUGINS}
+      components={MARKDOWN_NO_HR}
+    >
       {content}
     </ReactMarkdown>
   </div>

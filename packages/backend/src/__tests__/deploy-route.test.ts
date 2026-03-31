@@ -222,7 +222,9 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("GET /projects/:projectId/deliver/status", () => {
     it("should return deliver status for existing project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/deliver/status`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/deliver/status`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -233,7 +235,9 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/status`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/nonexistent-id/deliver/status`
+      );
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -243,14 +247,18 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("GET /projects/:projectId/deliver/history", () => {
     it("should return empty history for new project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/deliver/history`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/deliver/history`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/history`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/nonexistent-id/deliver/history`
+      );
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();

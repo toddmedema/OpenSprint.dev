@@ -15,6 +15,7 @@ import {
 import { acquireGlobalAgentSlot } from "./agent-global-concurrency.service.js";
 import { agentService } from "./agent.service.js";
 import type { CodingAgentHandle } from "./agent.service.js";
+import { activeAgentsService } from "./active-agents.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { BranchManager } from "./branch-manager.js";
 import { eventLogService } from "./event-log.service.js";
@@ -124,13 +125,18 @@ export interface AgentRunParams {
 export class AgentLifecycleManager {
   private branchManager = new BranchManager();
 
-  private assertPromptPathMatchesWorktree(wtPath: string, taskId: string, promptPath: string): void {
+  private assertPromptPathMatchesWorktree(
+    wtPath: string,
+    taskId: string,
+    promptPath: string
+  ): void {
     const resolvedWorktree = path.resolve(wtPath);
     const resolvedPrompt = path.resolve(promptPath);
     const expectedTaskRoot = path.resolve(resolvedWorktree, OPENSPRINT_PATHS.active, taskId);
     const promptBase = path.basename(resolvedPrompt);
     const insideTaskRoot =
-      resolvedPrompt === expectedTaskRoot || resolvedPrompt.startsWith(`${expectedTaskRoot}${path.sep}`);
+      resolvedPrompt === expectedTaskRoot ||
+      resolvedPrompt.startsWith(`${expectedTaskRoot}${path.sep}`);
 
     if (!insideTaskRoot || promptBase !== "prompt.md") {
       throw new Error(
@@ -153,7 +159,7 @@ export class AgentLifecycleManager {
       branchName,
       promptPath,
       agentConfig,
-      agentLabel: _agentLabel,
+      agentLabel,
       role,
       onDone,
     } = params;
@@ -211,6 +217,14 @@ export class AgentLifecycleManager {
         agentRole: role === "coder" ? "coder" : "code reviewer",
         outputLogPath,
         projectId,
+        tracking: {
+          id: taskId,
+          projectId,
+          phase,
+          role,
+          label: agentLabel,
+          branchName,
+        },
         onOutput: (chunk: string) => {
           const toolEvents = updateToolCallState(runState, chunk);
           this.recordToolActivity(params, toolEvents);
@@ -294,9 +308,12 @@ export class AgentLifecycleManager {
       recoveredLastOutputTimeMs?: number;
     }
   ): Promise<void> {
-    const { projectId, wtPath, taskId, branchName, onDone } = params;
+    const { projectId, wtPath, taskId, branchName, onDone, agentConfig } = params;
     this.assertPromptPathMatchesWorktree(wtPath, taskId, params.promptPath);
     runState.activeProcess = handle;
+    if (handle.pendingMessages) {
+      activeAgentsService.registerChannel(taskId, handle.pendingMessages, agentConfig.type);
+    }
     runState.outputLog = [];
     runState.outputLogBytes = 0;
     runState.outputParseBuffer = "";
@@ -332,6 +349,9 @@ export class AgentLifecycleManager {
     const wrappedOnDone = async (code: number | null) => {
       runState.outputTailStop?.();
       runState.outputTailStop = undefined;
+      if (handle.pendingMessages) {
+        activeAgentsService.unregister(taskId);
+      }
       await onDone(code);
     };
 

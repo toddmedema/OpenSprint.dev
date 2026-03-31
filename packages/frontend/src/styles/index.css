@@ -450,10 +450,11 @@ html[data-theme="dark"] {
   /* Execute task description markdown: prose + layout + explicit high-contrast text (feedback kutduv).
    * Uses !important to override prose-neutral/prose-invert defaults for WCAG AA contrast.
    * No border/container (feedback bwe92b) — description displays without visible box.
+   * No nested scrolling: this block must expand and rely on the sidebar's outer scroll container.
    * CollapsibleSection content wrapper uses px-4 pt-0 pb-0 to avoid left overflow clipping (feedback 2tnq0z).
    * Tight vertical spacing to match layout density (feedback ese6j4). */
   .prose-task-description {
-    @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none overflow-y-auto min-h-0 max-h-[50vh] text-xs;
+    @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-xs;
     @apply !text-gray-900 dark:!text-gray-100;
     @apply prose-headings:!text-gray-900 dark:prose-headings:!text-gray-100 prose-p:!text-gray-900 dark:prose-p:!text-gray-100 prose-li:!text-gray-900 dark:prose-li:!text-gray-100;
     @apply prose-td:!text-gray-900 dark:prose-td:!text-gray-100 prose-th:!text-gray-900 dark:prose-th:!text-gray-100;

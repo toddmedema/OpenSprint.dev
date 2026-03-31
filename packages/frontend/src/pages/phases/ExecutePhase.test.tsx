@@ -3323,7 +3323,7 @@ describe("ExecutePhase Redux integration", () => {
       timeout: 5000,
     });
     expect(descriptionContainer).toHaveTextContent("Final line");
-    // .prose-task-description (index.css) includes overflow-y-auto via @apply
+    // .prose-task-description styles the markdown block in index.css
     expect(descriptionContainer).toHaveClass("prose-task-description");
   });
 

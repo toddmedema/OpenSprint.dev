@@ -734,7 +734,9 @@ A simple marketing site for Open Sprint.
 
     expect(postRes.status).toBe(200);
 
-    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
+    const getRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/chat/history`
+    );
 
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.messages).toHaveLength(2);
@@ -754,7 +756,9 @@ A simple marketing site for Open Sprint.
   });
 
   it("POST /projects/:id/chat should return 400 when message is missing", async () => {
-    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/chat`).send({});
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/chat`)
+      .send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");

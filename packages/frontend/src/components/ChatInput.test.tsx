@@ -74,6 +74,20 @@ describe("ChatInput", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 
+  it("disables textarea when inputDisabled", () => {
+    render(
+      <ChatInput
+        value="Hello"
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        inputDisabled={true}
+        placeholder="Type..."
+      />
+    );
+    expect(screen.getByPlaceholderText("Type...")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
+
   it("keeps input enabled when sendDisabled (user can compose next message)", () => {
     render(
       <ChatInput

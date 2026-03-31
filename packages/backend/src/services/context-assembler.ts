@@ -767,7 +767,7 @@ export class ContextAssembler {
     const hasProvidedDiff = Boolean(context.branchDiff && context.branchDiff.trim().length > 0);
     const testStatusPath = getOrchestratorTestStatusPromptPath(config.taskId);
     prompt += `## Implementation\n\n`;
-    prompt += `The coding agent has produced changes on branch \`${config.branch}\`. The orchestrator has already committed them before invoking you.\n`;
+    prompt += `The coding agent may have produced changes on branch \`${config.branch}\`. The orchestrator has already committed any produced changes before invoking you.\n`;
     if (hasProvidedDiff) {
       prompt += `Review the committed changes in \`context/implementation.diff\` (do not run \`git diff\` — the diff is provided from the main repo).\n\n`;
     } else {
@@ -805,11 +805,12 @@ export class ContextAssembler {
     prompt += `3. Walk through the checklist above, checking each item.\n`;
     prompt += `4. Do NOT rerun the full repo validation or merge quality gates from this review prompt. The orchestrator runs validation in parallel and writes the result to \`${testStatusPath}\`.\n`;
     prompt += `   Before finalizing, open that file. If it says \`FAILED\` or \`ERROR\`, reject and cite the relevant failure. If it says \`PENDING\`, continue based on code quality/scope findings and do not reject solely for pending status.\n`;
-    prompt += `5. If prior reviews rejected this task, verify each previously cited issue was resolved. If not, reject and list which issues remain.\n`;
+    prompt += `5. If the implementation diff is empty (or no files changed), do NOT reject for that reason alone. Inspect the repo against the ticket scope and acceptance criteria; if the required behavior is already implemented and quality is acceptable, approve.\n`;
+    prompt += `6. If prior reviews rejected this task, verify each previously cited issue was resolved. If not, reject and list which issues remain.\n`;
     if (context.isFeedbackTask) {
       prompt += `   For feedback tasks, do not inherit unrelated requirements from the parent plan or prior review history when they conflict with the original ticket above.\n`;
     }
-    prompt += `6. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
+    prompt += `7. Write your result to \`.opensprint/active/${config.taskId}/result.json\` using this exact JSON format:\n`;
     prompt += `   If approving (do NOT merge — the orchestrator will merge after you exit):\n`;
     prompt += `   \`\`\`json\n`;
     prompt += `   { "status": "approved", "summary": "Brief description of what was reviewed", "notes": "" }\n`;
@@ -828,6 +829,7 @@ export class ContextAssembler {
 
     prompt += `## Important\n\n`;
     prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback like "improve tests" is not actionable.\n`;
+    prompt += `- Do NOT reject solely because there were no new code edits; verify whether the ticket scope is already implemented and approve when it is.\n`;
     prompt += `- Do NOT approve out of lenience. If acceptance criteria are unmet or tests fail, reject.\n`;
     prompt += `- Do NOT reject for style preferences (e.g., 2-space vs 4-space) unless the project has an explicit style guide in the repo.\n`;
     prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
@@ -890,7 +892,7 @@ export class ContextAssembler {
 
     const hasProvidedDiff = Boolean(context.branchDiff && context.branchDiff.trim().length > 0);
     prompt += `## Implementation\n\n`;
-    prompt += `The coding agent has produced changes on branch \`${config.branch}\`. The orchestrator has already committed them before invoking you.\n`;
+    prompt += `The coding agent may have produced changes on branch \`${config.branch}\`. The orchestrator has already committed any produced changes before invoking you.\n`;
     if (hasProvidedDiff) {
       prompt += `Review the committed changes in \`context/implementation.diff\` (do not run \`git diff\` — the diff is provided from the main repo).\n\n`;
     } else {
@@ -929,7 +931,8 @@ export class ContextAssembler {
     prompt += `3. Walk through the checklist above for ${angleLabel}.\n`;
     prompt += `4. Do NOT rerun the full repo validation or merge quality gates from this review prompt. The orchestrator runs validation in parallel and writes the result to \`${testStatusPath}\`.\n`;
     prompt += `   Before finalizing, open that file. If it says \`FAILED\` or \`ERROR\`, reject and cite the relevant failure. If it says \`PENDING\`, continue based on ${angleLabel} findings and do not reject solely for pending status.\n`;
-    prompt += `5. Write your result to \`.opensprint/active/${config.taskId}/review-angles/${angle}/result.json\` using this exact JSON format:\n`;
+    prompt += `5. If the implementation diff is empty (or no files changed), do NOT reject for that reason alone. Inspect the repo against this angle's checklist and ticket scope; if the required behavior is already implemented and quality is acceptable for this angle, approve.\n`;
+    prompt += `6. Write your result to \`.opensprint/active/${config.taskId}/review-angles/${angle}/result.json\` using this exact JSON format:\n`;
     prompt += `   If approving:\n`;
     prompt += `   \`\`\`json\n`;
     prompt += `   { "status": "approved", "summary": "Brief description for ${angleLabel}", "notes": "" }\n`;
@@ -948,6 +951,7 @@ export class ContextAssembler {
 
     prompt += `## Important\n\n`;
     prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback is not actionable.\n`;
+    prompt += `- Do NOT reject solely because there were no new code edits; verify whether this angle's required scope is already implemented and approve when it is.\n`;
     prompt += `- Do NOT approve out of lenience. If this angle's criteria are unmet, reject.\n`;
     prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
 

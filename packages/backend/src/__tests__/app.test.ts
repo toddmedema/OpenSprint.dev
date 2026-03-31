@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { createApp } from "../app.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
@@ -60,6 +63,45 @@ describe("App", () => {
     expect(res.status).toBe(200);
   });
 
+  it("injects local session loader script into desktop SPA document responses", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-app-test-"));
+    const indexPath = path.join(tmpDir, "index.html");
+    await fs.writeFile(
+      indexPath,
+      "<!doctype html><html><head><meta charset='utf-8'></head><body><div id='root'></div></body></html>",
+      "utf-8"
+    );
+
+    const prevDesktop = process.env.OPENSPRINT_DESKTOP;
+    const prevDist = process.env.OPENSPRINT_FRONTEND_DIST;
+    process.env.OPENSPRINT_DESKTOP = "1";
+    process.env.OPENSPRINT_FRONTEND_DIST = tmpDir;
+    try {
+      const app = createApp();
+      const res = await request(app).get("/");
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('<script src="/__opensprint_local_session.js"></script>');
+
+      const tokenScriptRes = await request(app).get("/__opensprint_local_session.js");
+      expect(tokenScriptRes.status).toBe(200);
+      expect(tokenScriptRes.headers["content-type"]).toContain("application/javascript");
+      expect(tokenScriptRes.headers["cache-control"]).toContain("no-store");
+      expect(tokenScriptRes.text).toContain("window.__OPENSPRINT_LOCAL_SESSION__=");
+    } finally {
+      if (prevDesktop === undefined) {
+        delete process.env.OPENSPRINT_DESKTOP;
+      } else {
+        process.env.OPENSPRINT_DESKTOP = prevDesktop;
+      }
+      if (prevDist === undefined) {
+        delete process.env.OPENSPRINT_FRONTEND_DIST;
+      } else {
+        process.env.OPENSPRINT_FRONTEND_DIST = prevDist;
+      }
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects API requests without Bearer token", async () => {
     const app = createApp();
     const res = await request(app).get(`${API_PREFIX}/projects`);
@@ -89,9 +131,7 @@ describe("App", () => {
       )
     );
 
-    const res = await withLocalSessionAuth(
-      request(app).get(`${API_PREFIX}/projects/proj-1/tasks`)
-    );
+    const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/projects/proj-1/tasks`));
 
     expect(res.status).toBe(503);
     expect(res.body.error).toMatchObject({

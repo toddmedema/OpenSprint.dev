@@ -10,37 +10,37 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // two incompatible plugin type trees.
 const reactPlugin = react();
 export default defineConfig({
-    plugins: [reactPlugin],
-    build: {
-        manifest: true,
-        rollupOptions: {
-            output: {
-                manualChunks(id) {
-                    return getManualChunkForModuleId(id);
-                },
-            },
+  plugins: [reactPlugin],
+  build: {
+    manifest: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          return getManualChunkForModuleId(id);
         },
+      },
     },
-    resolve: {
-        alias: {
-            "@": path.resolve(__dirname, "./src"),
-            "@opensprint/shared": path.resolve(__dirname, "../shared/src/index.ts"),
-            "@opensprint/shared/types": path.resolve(__dirname, "../shared/src/types/index.ts"),
-            "@opensprint/shared/constants": path.resolve(__dirname, "../shared/src/constants/index.ts"),
-            "@opensprint/shared/runtime": path.resolve(__dirname, "../shared/src/runtime/index.ts"),
-        },
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@opensprint/shared": path.resolve(__dirname, "../shared/src/index.ts"),
+      "@opensprint/shared/types": path.resolve(__dirname, "../shared/src/types/index.ts"),
+      "@opensprint/shared/constants": path.resolve(__dirname, "../shared/src/constants/index.ts"),
+      "@opensprint/shared/runtime": path.resolve(__dirname, "../shared/src/runtime/index.ts"),
     },
-    server: {
-        port: 5173,
-        proxy: {
-            "/api": {
-                target: "http://localhost:3100",
-                changeOrigin: true,
-            },
-            "/ws": {
-                target: "ws://localhost:3100",
-                ws: true,
-            },
-        },
+  },
+  server: {
+    port: 5173,
+    proxy: {
+      "/api": {
+        target: "http://localhost:3100",
+        changeOrigin: true,
+      },
+      "/ws": {
+        target: "ws://localhost:3100",
+        ws: true,
+      },
     },
+  },
 });

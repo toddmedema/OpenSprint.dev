@@ -99,6 +99,27 @@ describe("HomeScreen", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows session-auth banner (not first-sprint empty state) when projects fetch returns LOCAL_SESSION_AUTH_REQUIRED", async () => {
+    mockProjectsList.mockRejectedValue({
+      name: "ApiError",
+      code: "LOCAL_SESSION_AUTH_REQUIRED",
+      message:
+        "This endpoint requires Authorization: Bearer with the current server session token.",
+    });
+
+    renderHomeScreen();
+
+    await screen.findByTestId("projects-load-error");
+    expect(screen.getByText("Could not load projects")).toBeInTheDocument();
+    expect(
+      screen.getByText(/could not authenticate this window to the local backend/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("projects-empty-state")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Start your first sprint/i })
+    ).not.toBeInTheDocument();
+  });
+
   it("shows installation checklist when Git or Node.js are missing", async () => {
     mockProjectsList.mockResolvedValue([]);
     mockGetPrerequisites.mockResolvedValue({

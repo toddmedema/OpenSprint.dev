@@ -83,7 +83,11 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
         onScroll={onScroll}
       >
         {useMarkdown ? (
-          <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
+          <ReactMarkdown
+            remarkPlugins={SAFE_REMARK_PLUGINS}
+            rehypePlugins={SAFE_REHYPE_PLUGINS}
+            components={MARKDOWN_NO_HR}
+          >
             {deferredContent || ""}
           </ReactMarkdown>
         ) : (
@@ -123,7 +127,11 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
               }}
             >
               {useMarkdown ? (
-                <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
+                <ReactMarkdown
+                  remarkPlugins={SAFE_REMARK_PLUGINS}
+                  rehypePlugins={SAFE_REHYPE_PLUGINS}
+                  components={MARKDOWN_NO_HR}
+                >
                   {blockContent}
                 </ReactMarkdown>
               ) : (

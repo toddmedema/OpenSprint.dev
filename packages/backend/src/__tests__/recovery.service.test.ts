@@ -679,11 +679,7 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       "/tmp/wt-in-progress"
     );
     expect(mockDeleteBranch).not.toHaveBeenCalledWith(tmpDir, "opensprint/task-in-progress");
-    expect(mockRemoveCleanupIntent).not.toHaveBeenCalledWith(
-      tmpDir,
-      "proj-1",
-      "task-in-progress"
-    );
+    expect(mockRemoveCleanupIntent).not.toHaveBeenCalledWith(tmpDir, "proj-1", "task-in-progress");
     expect(result.cleaned).not.toContain("cleanup_intent:task-in-progress");
   });
 

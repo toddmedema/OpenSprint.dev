@@ -33,7 +33,7 @@ function makeVitestReport() {
               "ProjectSettingsPage navigating to ?tab=workflow shows Workflow tab active and workflow content",
             title: "shows Workflow tab active and workflow content",
             failureMessages: [
-              "TestingLibraryElementError: Unable to find an element by: [data-testid=\"workflow-tab-content\"]",
+              'TestingLibraryElementError: Unable to find an element by: [data-testid="workflow-tab-content"]',
             ],
           },
         ],

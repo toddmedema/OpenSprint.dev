@@ -74,7 +74,11 @@ const SessionCard = React.memo(function SessionCard({
       </div>
       {activeTab === "output" ? (
         <div className="p-4 text-xs prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg">
-          <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS} components={MARKDOWN_NO_HR}>
+          <ReactMarkdown
+            remarkPlugins={SAFE_REMARK_PLUGINS}
+            rehypePlugins={SAFE_REHYPE_PLUGINS}
+            components={MARKDOWN_NO_HR}
+          >
             {filteredOutput || "(no output)"}
           </ReactMarkdown>
         </div>

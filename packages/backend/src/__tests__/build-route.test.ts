@@ -86,7 +86,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
 
   describe("GET /projects/:projectId/execute/status", () => {
     it("should return orchestrator status for existing project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/execute/status`
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -104,7 +106,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/execute/status`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/nonexistent-id/execute/status`
+      );
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -129,7 +133,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
         setSelfImprovementRunInProgressForTest(projectId, false);
       }
 
-      const resAfter = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const resAfter = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/execute/status`
+      );
       expect(resAfter.status).toBe(200);
       expect(resAfter.body.data.selfImprovementRunInProgress).toBe(false);
     });
@@ -137,7 +143,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     it("returns selfImprovementRunMode 'audit' when audit-only run is active", async () => {
       setSelfImprovementRunInProgressForTest(projectId, { status: "running_audit" });
       try {
-        const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+        const res = await authedSupertest(app).get(
+          `${API_PREFIX}/projects/${projectId}/execute/status`
+        );
         expect(res.status).toBe(200);
         expect(res.body.data.selfImprovementRunMode).toBe("audit");
       } finally {
@@ -151,7 +159,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
         stage: "scoring",
       });
       try {
-        const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+        const res = await authedSupertest(app).get(
+          `${API_PREFIX}/projects/${projectId}/execute/status`
+        );
         expect(res.status).toBe(200);
         expect(res.body.data.selfImprovementRunMode).toBe("experiments");
       } finally {
@@ -160,7 +170,9 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("returns no selfImprovementRunMode when no run is active", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/execute/status`
+      );
       expect(res.status).toBe(200);
       expect(res.body.data.selfImprovementRunMode).toBeUndefined();
     });

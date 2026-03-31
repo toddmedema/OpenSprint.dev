@@ -7,10 +7,7 @@ interface AgentsMdPreviewProps {
 
 export function AgentsMdPreview({ content }: AgentsMdPreviewProps) {
   return (
-    <ReactMarkdown
-      remarkPlugins={SAFE_REMARK_PLUGINS}
-      rehypePlugins={SAFE_REHYPE_PLUGINS}
-    >
+    <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>
       {content}
     </ReactMarkdown>
   );

@@ -144,6 +144,7 @@ export function HomeScreen() {
   const dispatch = useAppDispatch();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [projectsLoadError, setProjectsLoadError] = useState<string | null>(null);
   const [prerequisites, setPrerequisites] = useState<{
     missing: string[];
     platform: string;
@@ -159,7 +160,8 @@ export function HomeScreen() {
   const modalTriggerRef = useRef<HTMLElement | null>(null);
   const missingPrereqCount = prerequisites?.missing.length ?? 0;
   const hasMissingPrerequisites = missingPrereqCount > 0;
-  const showProjectsEmptyState = !hasMissingPrerequisites && !loading && projects.length === 0;
+  const showProjectsEmptyState =
+    !hasMissingPrerequisites && !loading && !projectsLoadError && projects.length === 0;
 
   const handleCreateOrAddClick = async (
     route: "/projects/create-new" | "/projects/add-existing"
@@ -177,20 +179,43 @@ export function HomeScreen() {
   };
 
   const refreshProjects = () => {
-    api.projects.list().then(setProjects).catch(console.error);
+    api.projects
+      .list()
+      .then((data) => {
+        setProjects(data);
+        setProjectsLoadError(null);
+      })
+      .catch(console.error);
   };
 
   useEffect(() => {
     const ac = new AbortController();
     let cancelled = false;
     setLoading(true);
+    setProjectsLoadError(null);
     api.projects
       .list(ac.signal)
       .then((data) => {
-        if (!cancelled) setProjects(data);
+        if (!cancelled) {
+          setProjects(data);
+          setProjectsLoadError(null);
+        }
       })
       .catch((err) => {
-        if (!cancelled && err?.name !== "AbortError") console.error(err);
+        if (!cancelled && err?.name !== "AbortError") {
+          console.error(err);
+          const code =
+            typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
+          if (code === "LOCAL_SESSION_AUTH_REQUIRED") {
+            setProjectsLoadError(
+              "Open Sprint could not authenticate this window to the local backend. Restart Open Sprint to refresh the local session."
+            );
+          } else {
+            setProjectsLoadError(
+              "Open Sprint could not load your projects right now. Check the backend status and try again."
+            );
+          }
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -402,6 +427,27 @@ export function HomeScreen() {
           <>
             {loading ? (
               <div className="text-center py-20 text-theme-muted">Loading projects...</div>
+            ) : projectsLoadError ? (
+              <section
+                className="card w-full px-6 py-6 sm:px-8"
+                data-testid="projects-load-error"
+                aria-live="polite"
+              >
+                <h2 className="text-xl font-semibold text-theme-text">Could not load projects</h2>
+                <p className="mt-2 text-sm text-theme-muted">{projectsLoadError}</p>
+                {typeof window !== "undefined" && window.electron?.restartApp && (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => void window.electron?.restartApp?.()}
+                      className="btn-secondary"
+                      data-testid="restart-app-button"
+                    >
+                      Restart Open Sprint
+                    </button>
+                  </div>
+                )}
+              </section>
             ) : projects.length === 0 ? (
               <section
                 className="relative isolate overflow-hidden card w-full min-h-[clamp(30rem,68vh,48rem)] px-6 py-10 sm:px-10 lg:px-14"

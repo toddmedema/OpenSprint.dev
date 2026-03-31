@@ -5,7 +5,6 @@ import { shallowEqual } from "react-redux";
 import { useAppSelector } from "../../store";
 import { selectTaskById } from "../../store/slices/executeSlice";
 import { PriorityIcon } from "../PriorityIcon";
-import { ComplexityIcon } from "../ComplexityIcon";
 import { TaskStatusBadge, COLUMN_LABELS } from "./TaskStatusBadge";
 import { UptimeDisplay } from "../UptimeDisplay";
 import { OpenInEditorButton } from "../OpenInEditorButton";
@@ -61,7 +60,6 @@ const EpicTaskRow = memo(function EpicTaskRow({
             mergeGateState={task.mergeGateState}
           />
           <PriorityIcon priority={task.priority ?? 1} size="xs" />
-          <ComplexityIcon complexity={task.complexity} size="xs" />
           <span className="flex-1 min-w-0 truncate font-medium text-theme-text" title={task.title}>
             {task.title}
           </span>

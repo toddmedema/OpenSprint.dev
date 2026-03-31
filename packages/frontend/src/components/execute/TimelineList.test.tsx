@@ -441,24 +441,6 @@ describe("TimelineList", () => {
     expect(epicNameEl.className).toContain("min-[1000px]:max-w-[240px]");
   });
 
-  it("displays complexity icon when task has complexity", () => {
-    const tasks = [
-      createMockTask({
-        id: "task-1",
-        title: "Complex task",
-        kanbanColumn: "in_progress",
-        complexity: 7,
-      }),
-    ];
-    const plans = [createMockPlan("epic-1", "Auth")];
-
-    renderWithProviders(
-      <TimelineList tasks={tasks} plans={plans} onTaskSelect={vi.fn()} {...defaultListProps} />
-    );
-
-    expect(screen.getByRole("img", { name: "Complex complexity" })).toBeInTheDocument();
-  });
-
   it("shows Self-improvement badge for tasks with source self-improvement", () => {
     const tasks = [
       createMockTask({

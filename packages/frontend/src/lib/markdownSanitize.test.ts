@@ -15,7 +15,19 @@ describe("STRICT_MARKDOWN_SCHEMA", () => {
     const tags = STRICT_MARKDOWN_SCHEMA.tagNames!;
 
     it("allows standard markdown block elements", () => {
-      for (const tag of ["h1", "h2", "h3", "h4", "h5", "h6", "p", "blockquote", "pre", "hr", "br"]) {
+      for (const tag of [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "blockquote",
+        "pre",
+        "hr",
+        "br",
+      ]) {
         expect(tags).toContain(tag);
       }
     });
@@ -44,10 +56,26 @@ describe("STRICT_MARKDOWN_SCHEMA", () => {
 
     it("does not allow dangerous elements", () => {
       for (const tag of [
-        "script", "style", "iframe", "object", "embed", "form",
-        "textarea", "select", "button", "meta", "link", "base",
-        "applet", "svg", "math", "video", "audio", "source",
-        "canvas", "noscript",
+        "script",
+        "style",
+        "iframe",
+        "object",
+        "embed",
+        "form",
+        "textarea",
+        "select",
+        "button",
+        "meta",
+        "link",
+        "base",
+        "applet",
+        "svg",
+        "math",
+        "video",
+        "audio",
+        "source",
+        "canvas",
+        "noscript",
       ]) {
         expect(tags).not.toContain(tag);
       }

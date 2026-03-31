@@ -160,12 +160,16 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q2", text: "Q2" }],
     });
 
-    const res = await authedSupertest(app).delete(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const res = await authedSupertest(app).delete(
+      `${API_PREFIX}/projects/${projectId}/notifications`
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.deletedCount).toBe(2);
 
-    const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const listRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/notifications`
+    );
     expect(listRes.body.data).toHaveLength(0);
   });
 
@@ -202,7 +206,9 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     expect(res.body.data.status).toBe("resolved");
     expect(res.body.data.resolvedAt).toBeDefined();
 
-    const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const listRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/notifications`
+    );
     expect(listRes.body.data).toHaveLength(0);
   });
 
@@ -283,7 +289,9 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       expect(res.body.data.ok).toBe(true);
       expect(res.body.data.resolvedCount).toBeGreaterThanOrEqual(1);
 
-      const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+      const listRes = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/notifications`
+      );
       const rateLimitNotifications = listRes.body.data.filter(
         (n: { kind?: string; errorCode?: string }) =>
           n.kind === "api_blocked" && n.errorCode === "rate_limit"

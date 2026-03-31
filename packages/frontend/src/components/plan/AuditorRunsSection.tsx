@@ -72,7 +72,12 @@ function AuditorRunRow({
         <div className="px-3 pb-3 pt-0 border-t border-theme-border-subtle mt-0">
           <div className="mt-2 text-xs prose prose-sm prose-neutral dark:prose-invert max-w-none prose-pre:bg-theme-code-bg prose-pre:text-theme-code-text prose-pre:border prose-pre:border-theme-border prose-pre:rounded-lg">
             {hasContent ? (
-              <ReactMarkdown remarkPlugins={SAFE_REMARK_PLUGINS} rehypePlugins={SAFE_REHYPE_PLUGINS}>{run.assessment!}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={SAFE_REMARK_PLUGINS}
+                rehypePlugins={SAFE_REHYPE_PLUGINS}
+              >
+                {run.assessment!}
+              </ReactMarkdown>
             ) : (
               <p className="text-theme-muted italic">No assessment recorded.</p>
             )}

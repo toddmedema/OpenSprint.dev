@@ -176,7 +176,13 @@ export function ExecuteAgentChatPanel({
           {messages.length === 0 && (
             <div className="text-center py-8 text-theme-muted text-sm">
               <ChatIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p>Send a message to the agent while it works</p>
+              <p>
+                {!chatSupported
+                  ? "Live chat is not available for this agent backend."
+                  : !agentRunning
+                    ? "Chat will be available when an agent is actively working on this task."
+                    : "Send a message to the agent while it works"}
+              </p>
             </div>
           )}
           {messages.map((msg, i) => (
@@ -215,6 +221,7 @@ export function ExecuteAgentChatPanel({
           onChange={setChatInput}
           onSend={handleSend}
           sendDisabled={sendDisabled}
+          inputDisabled={inputDisabled}
           sendDisabledTooltip={sendTooltip}
           placeholder={
             !chatSupported
