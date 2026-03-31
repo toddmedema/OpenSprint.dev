@@ -19,8 +19,10 @@ function createMinimalFsApp() {
 describe("Filesystem API", () => {
   let app: ReturnType<typeof createMinimalFsApp>;
   let tempDir: string;
+  let originalCwd: string;
   let originalHome: string | undefined;
   let originalFsRoot: string | undefined;
+  let originalAllowHomeBrowse: string | undefined;
   let originalUserProfile: string | undefined;
   let originalHomeDrive: string | undefined;
   let originalHomePath: string | undefined;
@@ -28,23 +30,34 @@ describe("Filesystem API", () => {
 
   beforeEach(async () => {
     app = createMinimalFsApp();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-route-test-"));
+    const created = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-route-test-"));
+    tempDir = await fs.realpath(created);
+    originalCwd = process.cwd();
     originalHome = process.env.HOME;
     originalFsRoot = process.env.OPENSPRINT_FS_ROOT;
+    originalAllowHomeBrowse = process.env.OPENSPRINT_ALLOW_HOME_BROWSE;
     originalUserProfile = process.env.USERPROFILE;
     originalHomeDrive = process.env.HOMEDRIVE;
     originalHomePath = process.env.HOMEPATH;
     originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
     process.env.HOME = tempDir;
     delete process.env.OPENSPRINT_FS_ROOT;
+    delete process.env.OPENSPRINT_ALLOW_HOME_BROWSE;
+    process.chdir(tempDir);
   });
 
   afterEach(async () => {
+    process.chdir(originalCwd);
     process.env.HOME = originalHome;
     if (originalFsRoot === undefined) {
       delete process.env.OPENSPRINT_FS_ROOT;
     } else {
       process.env.OPENSPRINT_FS_ROOT = originalFsRoot;
+    }
+    if (originalAllowHomeBrowse === undefined) {
+      delete process.env.OPENSPRINT_ALLOW_HOME_BROWSE;
+    } else {
+      process.env.OPENSPRINT_ALLOW_HOME_BROWSE = originalAllowHomeBrowse;
     }
     if (originalUserProfile === undefined) {
       delete process.env.USERPROFILE;
@@ -67,7 +80,7 @@ describe("Filesystem API", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("browses the user's home directory by default when no path is provided", async () => {
+  it("browses cwd by default when no path is provided and FS root is not configured", async () => {
     const childDir = path.join(tempDir, "projects");
     await fs.mkdir(childDir);
 
@@ -86,7 +99,7 @@ describe("Filesystem API", () => {
     );
   });
 
-  it("allows browsing anywhere under HOME by default", async () => {
+  it("allows browsing anywhere under the default cwd root", async () => {
     const nestedDir = path.join(tempDir, "workspace", "demo");
     await fs.mkdir(nestedDir, { recursive: true });
 
@@ -96,38 +109,35 @@ describe("Filesystem API", () => {
     expect(res.body.data.current).toBe(nestedDir);
   });
 
-  it("allows browsing outside HOME when OPENSPRINT_FS_ROOT is not set", async () => {
+  it("rejects browse outside cwd when OPENSPRINT_FS_ROOT and home opt-in are unset", async () => {
     const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-outside-"));
 
     try {
       const res = await request(app).get(`${API_PREFIX}/fs/browse`).query({ path: outsideDir });
 
-      expect(res.status).toBe(200);
-      expect(res.body.data.current).toBe(outsideDir);
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toBe("Path is outside the allowed directory.");
     } finally {
       await fs.rm(outsideDir, { recursive: true, force: true });
     }
   });
 
-  it("allows create-folder outside HOME when OPENSPRINT_FS_ROOT is not set", async () => {
+  it("rejects create-folder outside cwd when OPENSPRINT_FS_ROOT and home opt-in are unset", async () => {
     const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-create-outside-"));
-    const newFolderPath = path.join(outsideDir, "new-project");
 
     try {
       const res = await request(app)
         .post(`${API_PREFIX}/fs/create-folder`)
         .send({ parentPath: outsideDir, name: "new-project" });
 
-      expect(res.status).toBe(200);
-      expect(res.body.data.path).toBe(newFolderPath);
-      const stat = await fs.stat(newFolderPath);
-      expect(stat.isDirectory()).toBe(true);
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toBe("Path is outside the allowed directory.");
     } finally {
       await fs.rm(outsideDir, { recursive: true, force: true });
     }
   });
 
-  it("allows detect-test-framework outside HOME when OPENSPRINT_FS_ROOT is not set", async () => {
+  it("rejects detect-test-framework outside cwd when OPENSPRINT_FS_ROOT and home opt-in are unset", async () => {
     const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-detect-outside-"));
 
     try {
@@ -135,10 +145,32 @@ describe("Filesystem API", () => {
         .get(`${API_PREFIX}/fs/detect-test-framework`)
         .query({ path: outsideDir });
 
-      expect(res.status).toBe(200);
-      expect(res.body.data).toBeDefined();
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toBe("Path is outside the allowed directory.");
     } finally {
       await fs.rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses HOME as allowed root when OPENSPRINT_ALLOW_HOME_BROWSE is set", async () => {
+    const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-home-opt-in-"));
+    const underHome = path.join(homeDir, "allowed-project");
+    await fs.mkdir(underHome, { recursive: true });
+    process.env.HOME = homeDir;
+    process.env.OPENSPRINT_ALLOW_HOME_BROWSE = "1";
+
+    try {
+      const allowedRes = await request(app)
+        .get(`${API_PREFIX}/fs/browse`)
+        .query({ path: underHome });
+      expect(allowedRes.status).toBe(200);
+      expect(allowedRes.body.data.current).toBe(underHome);
+
+      const blockedRes = await request(app).get(`${API_PREFIX}/fs/browse`).query({ path: tempDir });
+      expect(blockedRes.status).toBe(400);
+      expect(blockedRes.body.error?.message).toBe("Path is outside the allowed directory.");
+    } finally {
+      await fs.rm(homeDir, { recursive: true, force: true });
     }
   });
 
@@ -163,11 +195,12 @@ describe("Filesystem API", () => {
     expect(blockedRes.body.error?.message).toBe("Path is outside the allowed directory.");
   });
 
-  it("prefers USERPROFILE over HOME on Windows when loading the default folder", async () => {
+  it("prefers USERPROFILE over HOME on Windows when home browse opt-in is enabled", async () => {
     const windowsHome = path.join(tempDir, "windows-home");
     await fs.mkdir(windowsHome, { recursive: true });
     process.env.HOME = "/nonexistent-posix-home";
     process.env.USERPROFILE = windowsHome;
+    process.env.OPENSPRINT_ALLOW_HOME_BROWSE = "true";
     delete process.env.HOMEDRIVE;
     delete process.env.HOMEPATH;
     Object.defineProperty(process, "platform", {

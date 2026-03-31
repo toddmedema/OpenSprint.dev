@@ -9,13 +9,14 @@ import {
 import { readdir, stat, mkdir } from "fs/promises";
 import path from "path";
 import { join, resolve, dirname } from "path";
-import { existsSync } from "fs";
+import { existsSync, realpathSync } from "fs";
 import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { detectTestFramework } from "../services/test-framework.service.js";
 
-function getDefaultBrowseRoot(): string {
+/** Used only when OPENSPRINT_ALLOW_HOME_BROWSE opts in to home-directory browsing. */
+function resolveUserHomeDirectory(): string {
   if (process.platform === "win32") {
     const windowsHome =
       process.env.USERPROFILE?.trim() ||
@@ -34,25 +35,41 @@ function getDefaultBrowseRoot(): string {
   return path.resolve(process.cwd());
 }
 
+function isHomeBrowseOptIn(): boolean {
+  const v = process.env.OPENSPRINT_ALLOW_HOME_BROWSE?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/**
+ * Allowed tree for FS API routes. When OPENSPRINT_FS_ROOT is unset, defaults to
+ * process.cwd() unless OPENSPRINT_ALLOW_HOME_BROWSE opts in to the user home directory.
+ */
 function getFsAllowedRoot(): string {
   const configuredRoot = process.env.OPENSPRINT_FS_ROOT?.trim();
   if (configuredRoot) {
     return path.resolve(configuredRoot);
   }
 
-  return getDefaultBrowseRoot();
+  if (isHomeBrowseOptIn()) {
+    return resolveUserHomeDirectory();
+  }
+
+  return path.resolve(process.cwd());
+}
+
+function realpathOrNormalized(absPath: string): string {
+  try {
+    return realpathSync(absPath);
+  } catch {
+    return path.normalize(absPath);
+  }
 }
 
 function isPathUnderRoot(resolvedPath: string): boolean {
-  const allowedRoot = getFsAllowedRoot();
-  const normalized = path.normalize(resolvedPath);
+  const allowedRoot = realpathOrNormalized(getFsAllowedRoot());
+  const normalized = realpathOrNormalized(path.normalize(resolvedPath));
   const relative = path.relative(allowedRoot, normalized);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-/** When OPENSPRINT_FS_ROOT is set, enforce path restriction for locked-down deployments. */
-function shouldEnforcePathRestriction(): boolean {
-  return !!process.env.OPENSPRINT_FS_ROOT?.trim();
 }
 
 export const fsRouter = Router();
@@ -69,9 +86,9 @@ fsRouter.get(
   validateQuery(fsBrowseQuerySchema),
   wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
     const rawPath = (req.query as { path?: string }).path;
-    const targetPath = rawPath?.trim() ? resolve(rawPath) : getDefaultBrowseRoot();
+    const targetPath = rawPath?.trim() ? resolve(rawPath) : getFsAllowedRoot();
 
-    if (shouldEnforcePathRestriction() && !isPathUnderRoot(targetPath)) {
+    if (!isPathUnderRoot(targetPath)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
     }
     if (!existsSync(targetPath)) {
@@ -133,10 +150,7 @@ fsRouter.post(
     if (!newPath.startsWith(parentResolved)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid path");
     }
-    if (
-      shouldEnforcePathRestriction() &&
-      (!isPathUnderRoot(parentResolved) || !isPathUnderRoot(newPath))
-    ) {
+    if (!isPathUnderRoot(parentResolved) || !isPathUnderRoot(newPath)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
     }
 
@@ -170,7 +184,7 @@ fsRouter.get(
     const rawPath = (req.query as { path: string }).path.trim();
 
     const targetPath = resolve(rawPath);
-    if (shouldEnforcePathRestriction() && !isPathUnderRoot(targetPath)) {
+    if (!isPathUnderRoot(targetPath)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
     }
     if (!existsSync(targetPath)) {
