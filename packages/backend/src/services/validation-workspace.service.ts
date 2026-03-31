@@ -189,7 +189,7 @@ export class ValidationWorkspaceService {
       }
     );
     if (await this.repoHasFile(repoPath, "package.json")) {
-      await this.branchManager.symlinkNodeModules(repoPath, worktreePath);
+      await this.ensureWorktreeNodeModules(repoPath, worktreePath, "baseline");
     }
     await this.verifyWorkspaceReady(repoPath, worktreePath, "baseline");
 
@@ -234,7 +234,7 @@ export class ValidationWorkspaceService {
     );
 
     if (await this.repoHasFile(repoPath, "package.json")) {
-      await this.ensureMergedCandidateNodeModules(repoPath, worktreePath);
+      await this.ensureWorktreeNodeModules(repoPath, worktreePath, "merged_candidate");
     }
     await this.verifyWorkspaceReady(repoPath, worktreePath, "merged_candidate");
 
@@ -271,7 +271,17 @@ export class ValidationWorkspaceService {
   }
 
   /**
-   * Ensure node_modules is present and accessible in a merged_candidate worktree.
+   * Public alias kept for backward compatibility.
+   */
+  async ensureMergedCandidateNodeModules(
+    repoPath: string,
+    worktreePath: string
+  ): Promise<NodeModulesResult> {
+    return this.ensureWorktreeNodeModules(repoPath, worktreePath, "merged_candidate");
+  }
+
+  /**
+   * Ensure node_modules is present and accessible in any validation worktree.
    *
    * Strategy (ordered by cost):
    *   1. Symlink from main repo (fast path).
@@ -283,9 +293,10 @@ export class ValidationWorkspaceService {
    * Returns a result describing the outcome so callers (and the gate runner's
    * repair loop) can decide what to do next.
    */
-  async ensureMergedCandidateNodeModules(
+  private async ensureWorktreeNodeModules(
     repoPath: string,
-    worktreePath: string
+    worktreePath: string,
+    kind: ValidationWorkspaceKind
   ): Promise<NodeModulesResult> {
     const nodeModulesPath = path.join(worktreePath, "node_modules");
 
@@ -297,7 +308,7 @@ export class ValidationWorkspaceService {
 
     // --- Strategy 2: repair main repo deps, then re-symlink ---
     log.info(
-      "merged_candidate symlink target missing or empty; ensuring main repo deps are healthy",
+      `${kind} symlink target missing or empty; ensuring main repo deps are healthy`,
       { worktreePath, repoPath }
     );
     const repoRepaired = await this.branchManager.ensureRepoNodeModules(repoPath);
@@ -313,7 +324,7 @@ export class ValidationWorkspaceService {
     try {
       await fs.access(pkgPath);
     } catch {
-      log.warn("merged_candidate worktree has no package.json; cannot run npm ci fallback", {
+      log.warn(`${kind} worktree has no package.json; cannot run npm ci fallback`, {
         worktreePath,
       });
       return {
@@ -326,7 +337,7 @@ export class ValidationWorkspaceService {
     }
 
     log.info(
-      "merged_candidate symlink still broken after repo repair; running npm ci in worktree",
+      `${kind} symlink still broken after repo repair; running npm ci in worktree`,
       { worktreePath }
     );
     try {
@@ -337,7 +348,7 @@ export class ValidationWorkspaceService {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       log.warn(
-        "npm ci failed in merged_candidate worktree after symlink failure. " +
+        `npm ci failed in ${kind} worktree after symlink failure. ` +
           "Merge quality gates will attempt auto-repair. " +
           "To fix manually, run 'npm ci' in the repo root.",
         { worktreePath, err: errMsg }
@@ -346,7 +357,7 @@ export class ValidationWorkspaceService {
         ok: false,
         strategy: "npm_ci_worktree",
         error:
-          `All strategies to provide node_modules for merged_candidate failed. ` +
+          `All strategies to provide node_modules for ${kind} failed. ` +
           `npm ci error: ${errMsg}. ` +
           `Run 'npm ci' in the repo root and ensure package-lock.json is valid.`,
       };

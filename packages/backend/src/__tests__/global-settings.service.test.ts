@@ -17,15 +17,23 @@ import {
 describe("global-settings.service", () => {
   let tempDir: string;
   let originalHome: string | undefined;
+  let originalDatabaseUrl: string | undefined;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-global-settings-"));
     originalHome = process.env.HOME;
+    originalDatabaseUrl = process.env.DATABASE_URL;
     process.env.HOME = tempDir;
+    delete process.env.DATABASE_URL;
   });
 
   afterEach(async () => {
     process.env.HOME = originalHome;
+    if (originalDatabaseUrl !== undefined) {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    } else {
+      delete process.env.DATABASE_URL;
+    }
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
