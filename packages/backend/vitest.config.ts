@@ -7,6 +7,11 @@ const coverageReporters =
 
 export default defineConfig({
   test: {
+    projects: [
+      "./vitest.unit.config.ts",
+      "./vitest.env-route.config.ts",
+      "./vitest.integration.config.ts",
+    ],
     testTimeout: 30_000,
     coverage: {
       all: true,

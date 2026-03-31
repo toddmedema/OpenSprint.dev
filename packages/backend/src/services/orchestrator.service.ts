@@ -7,7 +7,6 @@ import type {
   ActiveAgent,
   CodingAgentResult,
   ReviewAgentResult,
-  TestResults,
   PendingFeedbackCategorization,
   AgentConfig,
 } from "@opensprint/shared";
@@ -69,7 +68,6 @@ import { runMergeQualityGates as runMergeQualityGatesShared } from "./merge-qual
 import {
   isTaskWorktreeMergeGateArtifactCurrent,
   runMergeQualityGatesWithArtifact,
-  type MergeGateVerificationArtifact,
 } from "./merge-verification.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import {
@@ -77,16 +75,11 @@ import {
   type TestOutcome,
   type ReviewOutcome,
 } from "./task-phase-coordinator.js";
-import { reviewSynthesizerService } from "./review-synthesizer.service.js";
 import { validateTransition } from "./task-state-machine.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { isExhausted } from "./api-key-exhausted.service.js";
 import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
-import {
-  buildTaskLastExecutionSummary,
-  compactExecutionText,
-  persistTaskLastExecutionSummary,
-} from "./task-execution-summary.js";
+import { compactExecutionText } from "./task-execution-summary.js";
 import {
   ensureGitIdentityConfigured,
   ensureBaseBranchExists,
@@ -95,10 +88,6 @@ import {
   resolveBaseBranch,
 } from "../utils/git-repo-state.js";
 import {
-  buildOrchestratorTestStatusContent,
-  getOrchestratorTestStatusFsPath,
-  getOrchestratorTestStatusStateFsPath,
-  parseOrchestratorTestStatusContent,
   type PersistedOrchestratorTestStatus,
 } from "./orchestrator-test-status.js";
 import {
@@ -123,8 +112,11 @@ import {
   type OrchestratorDispatchHost,
 } from "./orchestrator-dispatch.service.js";
 import {
+  OrchestratorReviewService,
+  type OrchestratorReviewHost,
+} from "./orchestrator-review.service.js";
+import {
   extractNoResultReasonFromLogs,
-  buildReviewNoResultFailureReason,
   synthesizeCodingResultFromOutput,
   classifyNoResultReasonCode,
 } from "./no-result-reason.service.js";
@@ -133,7 +125,6 @@ import {
   parseCodingAgentResult,
   parseReviewAgentResult,
 } from "./agent-result-validation.js";
-import { summarizeDebugArtifact } from "./agentic-repair.service.js";
 
 const log = createLogger("orchestrator");
 
@@ -144,6 +135,7 @@ import type {
   RetryQualityGateDetail,
   TaskAssignmentLike,
 } from "./orchestrator-phase-context.js";
+import type { PhaseResult } from "./orchestrator-phase-context.js";
 
 /** Loop kicker interval: 60s — restarts idle orchestrator loop (distinct from 5-min WatchdogService health patrol). */
 const LOOP_KICKER_INTERVAL_MS = 60 * 1000;
@@ -158,9 +150,6 @@ const CODING_RESULT_EXPECTED_SHAPE =
 const MAX_CONSECUTIVE_EMPTY_DIFFS = 2;
 /** Matches git-commit-queue worktree_merge rebase resolution cap. */
 const MAX_PRE_VALIDATION_REBASE_MERGER_ROUNDS = 12;
-const REVIEW_RESULT_EXPECTED_SHAPE =
-  'a JSON object like {"status":"approved","summary":"..."} or {"status":"rejected","summary":"...","issues":["..."],"notes":"..."}';
-
 /**
  * GUPP-style assignment file: everything an agent needs to self-start.
  * Written before agent spawn so crash recovery can simply re-read and re-spawn.
@@ -185,38 +174,7 @@ export interface TaskAssignment {
   };
 }
 
-/** Format review rejection result into actionable feedback for the coding agent retry prompt. Exported for testing. */
-export function formatReviewFeedback(result: ReviewAgentResult): string {
-  const parts: string[] = [];
-  if (result.summary) {
-    parts.push(result.summary);
-  }
-  if (result.issues && result.issues.length > 0) {
-    parts.push("\n\nIssues to address:");
-    for (const issue of result.issues) {
-      parts.push(`\n- ${issue}`);
-    }
-  }
-  if (result.notes?.trim()) {
-    parts.push(`\n\nNotes: ${result.notes.trim()}`);
-  }
-  if (parts.length === 0) {
-    return "Review rejected (no details provided by review agent).";
-  }
-  return parts.join("");
-}
-
-/** Results carried over from coding phase to review/merge */
-interface PhaseResult {
-  codingDiff: string;
-  codingSummary: string;
-  testResults: TestResults | null;
-  testOutput: string;
-  validationCommand?: string | null;
-  qualityGateDetail?: RetryQualityGateDetail | null;
-  /** Last successful task_worktree merge gate run (for deduping merge-coordinator). */
-  mergeGateArtifactTaskWorktree?: MergeGateVerificationArtifact | null;
-}
+export { formatReviewFeedback, type PhaseResult } from "./orchestrator-phase-context.js";
 
 interface ReviewAgentSlotState {
   angle: ReviewAngle;
@@ -317,6 +275,7 @@ export class OrchestratorService {
   private maxSlotsCache = new Map<string, number>();
   private failureHandler = new FailureHandlerService(this as unknown as FailureHandlerHost);
   private mergeCoordinator = new MergeCoordinatorService(this as unknown as MergeCoordinatorHost);
+  private reviewService = new OrchestratorReviewService(this as unknown as OrchestratorReviewHost);
   private _statusService: OrchestratorStatusService | null = null;
   private get statusService(): OrchestratorStatusService {
     if (!this._statusService)
@@ -2824,62 +2783,8 @@ export class OrchestratorService {
     return compactExecutionText(`${prefix}${commandPart}${detailPart}`, 500);
   }
 
-  private isPendingValidationFragment(text: string): boolean {
-    const normalized = text.toLowerCase();
-    const mentionsPending = normalized.includes("pending");
-    const mentionsOrchestrator = normalized.includes("orchestrator");
-    const mentionsValidation =
-      normalized.includes("validation") ||
-      normalized.includes("test status") ||
-      normalized.includes("orchestrator-test-status");
-    const mentionsStatusFile = normalized.includes("orchestrator-test-status.md");
-    if (
-      !(mentionsPending && ((mentionsOrchestrator && mentionsValidation) || mentionsStatusFile))
-    ) {
-      return false;
-    }
-
-    // Do not treat concrete code findings as pending-only.
-    return !/\bpackages\/|\.tsx?\b|\.jsx?\b|line\s+\d+/i.test(text);
-  }
-
-  private isPendingValidationOnlyRejection(result: ReviewAgentResult): boolean {
-    const summary = result.summary?.trim() ?? "";
-    const notes = result.notes?.trim() ?? "";
-    const issues = (result.issues ?? []).map((issue) => issue.trim()).filter(Boolean);
-    const fragments = [summary, ...issues, notes].filter(Boolean);
-    if (fragments.length === 0) return false;
-
-    const hasPendingMention = fragments.some((fragment) =>
-      this.isPendingValidationFragment(fragment)
-    );
-    if (!hasPendingMention) return false;
-
-    if (summary && !this.isPendingValidationFragment(summary)) return false;
-    if (issues.some((issue) => !this.isPendingValidationFragment(issue))) return false;
-
-    return true;
-  }
-
-  /**
-   * Clear rate limit notifications when system is demonstrably working
-   * (review agent starting or coding success with reviewMode=never).
-   */
   private async clearRateLimitNotifications(projectId: string): Promise<void> {
-    try {
-      const resolved = await notificationService.resolveRateLimitNotifications(projectId);
-      for (const n of resolved) {
-        broadcastToProject(projectId, {
-          type: "notification.resolved",
-          notificationId: n.id,
-          projectId,
-          source: n.source,
-          sourceId: n.sourceId,
-        });
-      }
-    } catch (err) {
-      log.warn("Failed to clear rate limit notifications", { projectId, err });
-    }
+    return this.reviewService.clearRateLimitNotifications(projectId);
   }
 
   private async startReviewCoordinatorAndTests(
@@ -2890,117 +2795,9 @@ export class OrchestratorService {
     settings: import("@opensprint/shared").ProjectSettings,
     changedFiles: string[]
   ): Promise<void> {
-    const slot = this.getState(projectId).slots.get(task.id);
-    if (!slot) return;
-    const wtPath = slot.worktreePath ?? repoPath;
-    const testCommand = resolveTestCommand(settings) || undefined;
-    const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
-    const mergeQualityGates = getMergeQualityGateCommands(settings.toolchainProfile);
-    await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
-      status: "pending",
-      testCommand,
-      mergeQualityGates,
-    });
-    const coordinator = this.createReviewPhaseCoordinator(
-      projectId,
-      repoPath,
-      task,
-      branchName,
-      settings
+    return this.reviewService.startReviewCoordinatorAndTests(
+      projectId, repoPath, task, branchName, settings, changedFiles
     );
-    slot.phaseCoordinator = coordinator;
-
-    this.runAdaptiveValidation(projectId, wtPath, changedFiles, testCommand)
-      .then(async (scopedResult) => {
-        const sl = this.getState(projectId).slots.get(task.id);
-        if (!sl) {
-          await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
-            status: "error",
-            testCommand,
-            mergeQualityGates,
-            errorMessage: "Slot removed during tests",
-          });
-          void coordinator.setTestOutcome({
-            status: "error",
-            errorMessage: "Slot removed during tests",
-          });
-          return;
-        }
-        sl.phaseResult.testOutput = scopedResult.rawOutput;
-        sl.phaseResult.validationCommand = scopedResult.executedCommand ?? testCommand ?? null;
-        this.clearQualityGateDetail(sl.phaseResult);
-        if (scopedResult.failed > 0) {
-          const validationCommand = scopedResult.executedCommand ?? testCommand;
-          await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
-            status: "failed",
-            testCommand: validationCommand,
-            mergeQualityGates,
-            results: scopedResult,
-            rawOutput: scopedResult.rawOutput,
-          });
-          void coordinator.setTestOutcome({
-            status: "failed",
-            results: scopedResult,
-            rawOutput: scopedResult.rawOutput,
-          });
-        } else {
-          sl.phaseResult.testResults = scopedResult;
-          await this.branchManager.commitWip(wtPath, task.id);
-          const qualityGateFailure = await this.runTaskWorktreeMergeGatesMaybeDeduped(
-            projectId,
-            repoPath,
-            task,
-            branchName,
-            wtPath,
-            baseBranch,
-            settings.toolchainProfile,
-            sl
-          );
-          if (qualityGateFailure) {
-            const detail = this.applyQualityGateFailure(sl.phaseResult, qualityGateFailure, wtPath);
-            await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
-              status: "failed",
-              testCommand: qualityGateFailure.command,
-              mergeQualityGates,
-              rawOutput: qualityGateFailure.outputSnippet ?? qualityGateFailure.output,
-              failureType:
-                qualityGateFailure.category === "environment_setup"
-                  ? "environment_setup"
-                  : "merge_quality_gate",
-              qualityGateDetail: detail,
-            });
-            void coordinator.setTestOutcome({
-              status: "failed",
-              failureType:
-                qualityGateFailure.category === "environment_setup"
-                  ? "environment_setup"
-                  : "merge_quality_gate",
-              rawOutput: qualityGateFailure.outputSnippet ?? qualityGateFailure.output,
-              qualityGateDetail: detail,
-            });
-            return;
-          }
-          const validationCommand = scopedResult.executedCommand ?? testCommand;
-          await this.writeReviewTestStatus(task.id, repoPath, wtPath, {
-            status: "passed",
-            testCommand: validationCommand,
-            mergeQualityGates,
-            results: scopedResult,
-            mergeGateArtifact: sl.phaseResult.mergeGateArtifactTaskWorktree ?? undefined,
-          });
-          void coordinator.setTestOutcome({ status: "passed", results: scopedResult });
-        }
-      })
-      .catch((err) => {
-        log.error("Background tests failed for task", { taskId: task.id, err });
-        void this.writeReviewTestStatus(task.id, repoPath, wtPath, {
-          status: "error",
-          testCommand,
-          mergeQualityGates,
-          errorMessage: String(err),
-        });
-        void coordinator.setTestOutcome({ status: "error", errorMessage: String(err) });
-      });
   }
 
   private createReviewPhaseCoordinator(
@@ -3010,46 +2807,8 @@ export class OrchestratorService {
     branchName: string,
     settings: import("@opensprint/shared").ProjectSettings
   ): TaskPhaseCoordinator {
-    const angles = (settings.reviewAngles ?? []).filter(Boolean);
-    return new TaskPhaseCoordinator(
-      task.id,
-      (testOutcome, reviewOutcome) =>
-        this.resolveTestAndReview(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          testOutcome,
-          reviewOutcome
-        ),
-      {
-        reviewAngles: settings.reviewAngles,
-        includeGeneralReview: settings.includeGeneralReview === true ? true : undefined,
-        ...(angles.length > 1 &&
-          !settings.includeGeneralReview && {
-            synthesizeReviewResults: async (outcomes) => {
-              const angleInputs = [...outcomes.entries()]
-                .filter(([, o]) => o.result && (o.status === "approved" || o.status === "rejected"))
-                .map(([angle, o]) => ({ angle, result: o.result! }));
-              if (angleInputs.length === 0) {
-                const first = outcomes.values().next().value;
-                return first ?? { status: "no_result" as const, result: null, exitCode: null };
-              }
-              const synthesized = await reviewSynthesizerService.synthesize(
-                projectId,
-                repoPath,
-                task,
-                angleInputs,
-                this.taskStore
-              );
-              return {
-                status: synthesized.status as "approved" | "rejected",
-                result: synthesized,
-                exitCode: 0,
-              };
-            },
-          }),
-      }
+    return this.reviewService.createReviewPhaseCoordinator(
+      projectId, repoPath, task, branchName, settings
     );
   }
 
@@ -3059,22 +2818,7 @@ export class OrchestratorService {
     wtPath: string,
     status: PersistedOrchestratorTestStatus
   ): Promise<void> {
-    const persistedStatus = {
-      ...status,
-      updatedAt: status.updatedAt ?? new Date().toISOString(),
-    } satisfies PersistedOrchestratorTestStatus;
-    const bases = new Set([repoPath, wtPath]);
-    await Promise.all(
-      [...bases].map(async (basePath) => {
-        const statusPath = getOrchestratorTestStatusFsPath(basePath, taskId);
-        const statePath = getOrchestratorTestStatusStateFsPath(basePath, taskId);
-        await fs.mkdir(path.dirname(statusPath), { recursive: true });
-        await Promise.all([
-          fs.writeFile(statusPath, buildOrchestratorTestStatusContent(persistedStatus), "utf-8"),
-          fs.writeFile(statePath, JSON.stringify(persistedStatus, null, 2), "utf-8"),
-        ]);
-      })
-    );
+    return this.reviewService.writeReviewTestStatus(taskId, repoPath, wtPath, status);
   }
 
   private async readPersistedReviewTestStatus(
@@ -3082,60 +2826,11 @@ export class OrchestratorService {
     repoPath: string,
     wtPath: string
   ): Promise<PersistedOrchestratorTestStatus | null> {
-    const bases = [wtPath, repoPath];
-    for (const basePath of bases) {
-      try {
-        const raw = await fs.readFile(
-          getOrchestratorTestStatusStateFsPath(basePath, taskId),
-          "utf-8"
-        );
-        const parsed = JSON.parse(raw) as PersistedOrchestratorTestStatus;
-        if (parsed?.status && parsed.status !== "pending") {
-          return parsed;
-        }
-      } catch {
-        // Fall back to the legacy markdown-only status file.
-      }
-
-      try {
-        const raw = await fs.readFile(getOrchestratorTestStatusFsPath(basePath, taskId), "utf-8");
-        const parsed = parseOrchestratorTestStatusContent(raw);
-        if (parsed?.status && parsed.status !== "pending") {
-          return parsed;
-        }
-      } catch {
-        // Ignore missing status files during recovery.
-      }
-    }
-    return null;
+    return this.reviewService.readPersistedReviewTestStatus(taskId, repoPath, wtPath);
   }
 
   private toRecoveredTestOutcome(status: PersistedOrchestratorTestStatus): TestOutcome | null {
-    switch (status.status) {
-      case "pending":
-        return null;
-      case "passed":
-        return {
-          status: "passed",
-          ...(status.results ? { results: status.results } : {}),
-        };
-      case "failed":
-        return {
-          status: "failed",
-          ...(status.results ? { results: status.results } : {}),
-          ...(status.rawOutput ? { rawOutput: status.rawOutput } : {}),
-          ...(status.failureType ? { failureType: status.failureType } : {}),
-          ...(status.qualityGateDetail ? { qualityGateDetail: status.qualityGateDetail } : {}),
-        };
-      case "error":
-        return {
-          status: "error",
-          ...(status.errorMessage ? { errorMessage: status.errorMessage } : {}),
-          ...(status.rawOutput ? { rawOutput: status.rawOutput } : {}),
-          ...(status.failureType ? { failureType: status.failureType } : {}),
-          ...(status.qualityGateDetail ? { qualityGateDetail: status.qualityGateDetail } : {}),
-        };
-    }
+    return this.reviewService.toRecoveredTestOutcome(status);
   }
 
   private applyRecoveredTestOutcome(
@@ -3143,23 +2838,7 @@ export class OrchestratorService {
     outcome: TestOutcome,
     status: PersistedOrchestratorTestStatus
   ): void {
-    phaseResult.validationCommand = status.testCommand ?? null;
-    phaseResult.testResults = null;
-    if (outcome.status === "passed") {
-      phaseResult.testResults = outcome.results ?? null;
-      phaseResult.testOutput = "";
-      this.clearQualityGateDetail(phaseResult);
-      if (status.mergeGateArtifact) {
-        phaseResult.mergeGateArtifactTaskWorktree = status.mergeGateArtifact;
-      }
-      return;
-    }
-
-    phaseResult.testOutput = outcome.rawOutput ?? outcome.errorMessage ?? "";
-    if (outcome.status === "failed") {
-      phaseResult.testResults = outcome.results ?? null;
-    }
-    phaseResult.qualityGateDetail = outcome.qualityGateDetail ?? null;
+    return this.reviewService.applyRecoveredTestOutcome(phaseResult, outcome, status);
   }
 
   private async executeReviewPhase(
@@ -3170,13 +2849,8 @@ export class OrchestratorService {
     retryContext?: RetryContext,
     reviewTarget?: ReviewRetryTarget
   ): Promise<void> {
-    return this.phaseExecutor.executeReviewPhase(
-      projectId,
-      repoPath,
-      task,
-      branchName,
-      retryContext,
-      reviewTarget
+    return this.reviewService.executeReviewPhase(
+      projectId, repoPath, task, branchName, retryContext, reviewTarget
     );
   }
 
@@ -3286,10 +2960,7 @@ export class OrchestratorService {
     angle?: ReviewAngle
   ): Promise<{ raw: string | null; result: ReviewAgentResult | null }> {
     const raw = await this.sessionManager.readRawResult(wtPath, taskId, angle);
-    return {
-      raw,
-      result: parseReviewAgentResult(raw),
-    };
+    return { raw, result: parseReviewAgentResult(raw) };
   }
 
   private async retryCodingStructuredOutputRepair(
@@ -3334,41 +3005,9 @@ export class OrchestratorService {
     rawResult: string | null,
     angle?: ReviewAngle
   ): Promise<boolean> {
-    const wtPath = slot.worktreePath ?? repoPath;
-    const assignment = await this.readAssignmentForRun(wtPath, task.id, angle);
-    if (assignment?.retryContext?.structuredOutputRepairAttempted) {
-      return false;
-    }
-
-    const retryContext: RetryContext = {
-      ...(assignment?.retryContext ?? {}),
-      previousFailure: describeStructuredOutputProblem({
-        fileLabel: angle
-          ? `.opensprint/active/${task.id}/review-angles/${angle}/result.json`
-          : `.opensprint/active/${task.id}/result.json`,
-        rawContent: rawResult,
-        expectedShape: REVIEW_RESULT_EXPECTED_SHAPE,
-      }),
-      useExistingBranch: true,
-      structuredOutputRepairAttempted: true,
-    };
-
-    log.warn("Retrying reviewer once to repair structured output", {
-      projectId,
-      taskId: task.id,
-      branchName: slot.branchName,
-      angle: angle ?? "general",
-    });
-
-    await this.executeReviewPhase(
-      projectId,
-      repoPath,
-      task,
-      slot.branchName,
-      retryContext,
-      angle ?? "general"
+    return this.reviewService.retryReviewStructuredOutputRepair(
+      projectId, repoPath, task, slot, rawResult, angle
     );
-    return true;
   }
 
   private async handleReviewDone(
@@ -3379,182 +3018,11 @@ export class OrchestratorService {
     exitCode: number | null,
     angle?: ReviewAngle
   ): Promise<void> {
-    const state = this.getState(projectId);
-    const slot = state.slots.get(task.id);
-    if (!slot) {
-      log.warn("handleReviewDone: no slot found for task", { taskId: task.id });
-      return;
-    }
-    if (
-      !(await this.cleanupSlotIfProjectGone(
-        projectId,
-        repoPath,
-        task.id,
-        state,
-        slot,
-        "handleReviewDone"
-      ))
-    ) {
-      return;
-    }
-    const wtPath = slot.worktreePath ?? repoPath;
-    const { raw: rawResult, result } = await this.readReviewResultWithRaw(wtPath, task.id, angle);
-
-    if (!result) {
-      const retried = await this.retryReviewStructuredOutputRepair(
-        projectId,
-        repoPath,
-        task,
-        slot,
-        rawResult,
-        angle
-      );
-      if (retried) {
-        return;
-      }
-    }
-
-    const reviewAgentState = angle ? slot.reviewAgents?.get(angle) : undefined;
-    const killedDueToTimeout =
-      reviewAgentState?.agent.killedDueToTimeout ?? slot.agent.killedDueToTimeout;
-    const status: ReviewOutcome["status"] =
-      result?.status === "approved"
-        ? "approved"
-        : result?.status === "rejected"
-          ? "rejected"
-          : "no_result";
-    const noResultReason =
-      status === "no_result"
-        ? await extractNoResultReasonFromLogs(
-            wtPath,
-            task.id,
-            angle ? (reviewAgentState?.agent.outputLog ?? []) : slot.agent.outputLog,
-            angle
-          )
-        : undefined;
-
-    // If coordinated with tests, report outcome and let the coordinator decide
-    if (slot.phaseCoordinator) {
-      if (status === "approved") {
-        const runAgent = reviewAgentState?.agent ?? slot.agent;
-        const assignment = await this.readAssignmentForRun(wtPath, task.id, angle);
-        const settings = await this.projectService.getSettings(projectId);
-        const agentConfig =
-          (assignment?.agentConfig as AgentConfig | undefined) ??
-          slot.activeAgentConfig ??
-          settings.simpleComplexityAgent;
-        slot.activeAgentConfig = agentConfig;
-        agentIdentityService
-          .recordAttempt(repoPath, {
-            taskId: task.id,
-            agentId: buildAgentAttemptId(agentConfig, "reviewer", {
-              reviewScope: angle ?? "general",
-            }),
-            role: "reviewer",
-            model: agentConfig.model ?? "unknown",
-            attempt: slot.attempt,
-            startedAt: runAgent.startedAt ?? new Date().toISOString(),
-            completedAt: new Date().toISOString(),
-            outcome: "success",
-            durationMs: Math.max(
-              0,
-              Date.now() - new Date(runAgent.startedAt ?? Date.now()).getTime()
-            ),
-          })
-          .catch((err) =>
-            log.warn("Failed to record reviewer run for Agent Log (coordinated approved)", { err })
-          );
-      }
-      await slot.phaseCoordinator.setReviewOutcome(
-        {
-          status,
-          result,
-          exitCode,
-          ...(status === "no_result" && {
-            failureContext: [
-              {
-                ...(angle && { angle }),
-                exitCode,
-                ...(noResultReason && { reason: noResultReason }),
-              },
-            ],
-          }),
-        },
-        angle
-      );
-      if (angle) {
-        slot.reviewAgents?.delete(angle as ReviewAngle);
-        if (slot.reviewAgents && slot.reviewAgents.size === 0) {
-          slot.reviewAgents = undefined;
-        }
-      }
-      return;
-    }
-
-    // Non-coordinated path (reviewMode="never" doesn't reach here, but defensive)
-    if (result && result.status === "approved") {
-      const assignment = await this.readAssignmentForRun(wtPath, task.id);
-      const settings = await this.projectService.getSettings(projectId);
-      const agentConfig =
-        (assignment?.agentConfig as AgentConfig | undefined) ??
-        slot.activeAgentConfig ??
-        settings.simpleComplexityAgent;
-      slot.activeAgentConfig = agentConfig;
-      agentIdentityService
-        .recordAttempt(repoPath, {
-          taskId: task.id,
-          agentId: buildAgentAttemptId(agentConfig, "reviewer", {
-            reviewScope: "general",
-          }),
-          role: "reviewer",
-          model: agentConfig.model ?? "unknown",
-          attempt: slot.attempt,
-          startedAt: slot.agent.startedAt ?? new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-          outcome: "success",
-          durationMs: Math.max(
-            0,
-            Date.now() - new Date(slot.agent.startedAt ?? Date.now()).getTime()
-          ),
-        })
-        .catch((err) =>
-          log.warn("Failed to record reviewer run for Agent Log (approved)", { err })
-        );
-      await this.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
-    } else if (result && result.status === "rejected") {
-      await this.handleReviewRejection(projectId, repoPath, task, branchName, result);
-    } else {
-      const failureType: FailureType = killedDueToTimeout
-        ? "timeout"
-        : exitCode === 143 || exitCode === 137
-          ? "agent_crash"
-          : "no_result";
-      const noResultReasonCode =
-        failureType === "no_result"
-          ? classifyNoResultReasonCode({ rawResult, readFailure: null })
-          : undefined;
-      slot.agent.killedDueToTimeout = false;
-      if (reviewAgentState) reviewAgentState.agent.killedDueToTimeout = false;
-      await this.failureHandler.handleTaskFailure(
-        projectId,
-        repoPath,
-        task,
-        branchName,
-        angle
-          ? `Review agent (${angle}) exited with code ${exitCode} without producing a valid result${noResultReason ? ` (${noResultReason})` : ""}`
-          : `Review agent exited with code ${exitCode} without producing a valid result${noResultReason ? ` (${noResultReason})` : ""}`,
-        null,
-        failureType,
-        undefined,
-        { reviewScope: angle ?? "general", noResultReasonCode }
-      );
-    }
+    return this.reviewService.handleReviewDone(
+      projectId, repoPath, task, branchName, exitCode, angle
+    );
   }
 
-  /**
-   * Single resolution point for coordinated test + review.
-   * Called by TaskPhaseCoordinator when both outcomes are available.
-   */
   private async resolveTestAndReview(
     projectId: string,
     repoPath: string,
@@ -3563,130 +3031,9 @@ export class OrchestratorService {
     testOutcome: TestOutcome,
     reviewOutcome: ReviewOutcome
   ): Promise<void> {
-    const state = this.getState(projectId);
-    const slot = state.slots.get(task.id);
-    if (!slot) return;
-
-    try {
-      // Test failure takes priority over review outcome
-      if (testOutcome.status === "failed") {
-        if (
-          testOutcome.failureType === "merge_quality_gate" ||
-          testOutcome.failureType === "environment_setup"
-        ) {
-          if (testOutcome.qualityGateDetail) {
-            slot.phaseResult.qualityGateDetail = testOutcome.qualityGateDetail;
-          }
-          await this.failureHandler.handleTaskFailure(
-            projectId,
-            repoPath,
-            task,
-            branchName,
-            this.formatQualityGateFailureReason(
-              slot.phaseResult.qualityGateDetail ?? testOutcome.qualityGateDetail,
-              testOutcome.failureType
-            ),
-            null,
-            testOutcome.failureType
-          );
-          return;
-        }
-        const r = testOutcome.results!;
-        await this.failureHandler.handleTaskFailure(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          `Tests failed: ${r.failed} failed, ${r.passed} passed`,
-          r,
-          "test_failure"
-        );
-        return;
-      }
-      if (testOutcome.status === "error") {
-        if (
-          testOutcome.failureType === "merge_quality_gate" ||
-          testOutcome.failureType === "environment_setup"
-        ) {
-          if (testOutcome.qualityGateDetail) {
-            slot.phaseResult.qualityGateDetail = testOutcome.qualityGateDetail;
-          }
-          await this.failureHandler.handleTaskFailure(
-            projectId,
-            repoPath,
-            task,
-            branchName,
-            this.formatQualityGateFailureReason(
-              slot.phaseResult.qualityGateDetail ?? testOutcome.qualityGateDetail,
-              testOutcome.failureType
-            ),
-            null,
-            testOutcome.failureType
-          );
-          return;
-        }
-        await this.failureHandler.handleTaskFailure(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          testOutcome.errorMessage ?? "Test runner error",
-          null,
-          "test_failure"
-        );
-        return;
-      }
-
-      // Tests passed — decide based on review
-      if (reviewOutcome.status === "approved") {
-        await this.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
-      } else if (reviewOutcome.status === "rejected") {
-        if (this.isPendingValidationOnlyRejection(reviewOutcome.result!)) {
-          log.warn("Ignoring review rejection caused only by pending validation status", {
-            projectId,
-            taskId: task.id,
-          });
-          await this.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
-          return;
-        }
-        await this.handleReviewRejection(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          reviewOutcome.result!
-        );
-      } else {
-        const failureType: FailureType = "no_result";
-        const noResultReason = buildReviewNoResultFailureReason(reviewOutcome);
-        await this.failureHandler.handleTaskFailure(
-          projectId,
-          repoPath,
-          task,
-          branchName,
-          noResultReason,
-          null,
-          failureType
-        );
-      }
-    } catch (err) {
-      const reason = `Failed to finalize review/test outcome: ${getErrorMessage(err)}`;
-      log.error("resolveTestAndReview failed", {
-        projectId,
-        taskId: task.id,
-        branchName,
-        err: getErrorMessage(err),
-      });
-      await this.failureHandler.handleTaskFailure(
-        projectId,
-        repoPath,
-        task,
-        branchName,
-        reason,
-        null,
-        "agent_crash"
-      );
-    }
+    return this.reviewService.resolveTestAndReview(
+      projectId, repoPath, task, branchName, testOutcome, reviewOutcome
+    );
   }
 
   private async handleReviewRejection(
@@ -3696,106 +3043,13 @@ export class OrchestratorService {
     branchName: string,
     result: ReviewAgentResult
   ): Promise<void> {
-    const state = this.getState(projectId);
-    const slot = state.slots.get(task.id);
-    if (!slot) return;
-    const wtPath = slot.worktreePath ?? repoPath;
-
-    const reason = `Review rejected: ${result.issues?.join("; ") || result.summary || "No details provided"}`;
-    const reviewFeedback = formatReviewFeedback(result);
-    const rejectionSummary = buildTaskLastExecutionSummary({
-      attempt: slot.attempt,
-      outcome: "rejected",
-      phase: "review",
-      failureType: "review_rejection",
-      summary: compactExecutionText(reason, 500),
-    });
-
-    const settings = await this.projectService.getSettings(projectId);
-    const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
-    let gitDiff = "";
-    try {
-      const branchDiff = await this.branchManager.captureBranchDiff(
-        repoPath,
-        branchName,
-        baseBranch
-      );
-      const uncommittedDiff = await this.branchManager.captureUncommittedDiff(wtPath);
-      gitDiff = [branchDiff, uncommittedDiff]
-        .filter(Boolean)
-        .join("\n\n--- Uncommitted changes ---\n\n");
-    } catch {
-      // Best-effort capture
-    }
-    const session = await this.sessionManager.createSession(repoPath, {
-      taskId: task.id,
-      attempt: slot.attempt,
-      agentType: settings.simpleComplexityAgent.type,
-      agentModel: settings.simpleComplexityAgent.model || "",
-      gitBranch: branchName,
-      status: "rejected",
-      outputLog: slot.agent.outputLog.join(""),
-      failureReason: result.summary || "Review rejected (no summary provided)",
-      gitDiff: gitDiff || undefined,
-      startedAt: slot.agent.startedAt,
-      debugArtifactSummary: summarizeDebugArtifact(result.debugArtifact),
-      repairIterations: result.debugArtifact ? 1 : 0,
-      rootCauseCategory: result.debugArtifact?.rootCauseCategory ?? null,
-    });
-    await this.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
-    await persistTaskLastExecutionSummary(this.taskStore, projectId, task.id, rejectionSummary);
-    eventLogService
-      .append(repoPath, {
-        timestamp: new Date().toISOString(),
-        projectId,
-        taskId: task.id,
-        event: "review.rejected",
-        data: {
-          attempt: slot.attempt,
-          phase: "review",
-          failureType: "review_rejection",
-          model: settings.simpleComplexityAgent.model ?? null,
-          summary: rejectionSummary.summary,
-          reason,
-          nextAction: "Retry coding with review feedback",
-        },
-      })
-      .catch(() => {});
-
-    await this.failureHandler.handleTaskFailure(
-      projectId,
-      repoPath,
-      task,
-      branchName,
-      reason,
-      null,
-      "review_rejection",
-      reviewFeedback,
-      { agentDebugArtifact: result.debugArtifact, reviewScope: "general" }
+    return this.reviewService.handleReviewRejection(
+      projectId, repoPath, task, branchName, result
     );
   }
 
   private async buildReviewHistory(repoPath: string, taskId: string): Promise<string> {
-    try {
-      const sessions = await this.sessionManager.listSessions(repoPath, taskId);
-      const rejections = sessions
-        .filter((s) => s.status === "rejected")
-        .sort((a, b) => a.attempt - b.attempt);
-
-      if (rejections.length === 0) return "";
-
-      const parts: string[] = [];
-      for (const session of rejections) {
-        parts.push(`### Attempt ${session.attempt} — Rejected`);
-        if (session.failureReason) {
-          parts.push(`\n**Reason:** ${session.failureReason}`);
-        }
-        parts.push("");
-      }
-      return parts.join("\n");
-    } catch {
-      return "";
-    }
+    return this.reviewService.buildReviewHistory(repoPath, taskId);
   }
 
   // ─── Helpers ───

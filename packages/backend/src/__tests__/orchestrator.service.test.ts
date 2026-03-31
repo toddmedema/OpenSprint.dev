@@ -796,11 +796,12 @@ describe("OrchestratorService (slot-based model)", () => {
 
   describe("pending validation review rejection handling", () => {
     it("detects pending-only orchestrator status rejection", () => {
-      const isPendingOnly = (
+      const reviewService = (
         orchestrator as unknown as {
-          isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
+          reviewService: { isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean };
         }
-      ).isPendingValidationOnlyRejection.bind(orchestrator);
+      ).reviewService;
+      const isPendingOnly = reviewService.isPendingValidationOnlyRejection.bind(reviewService);
 
       expect(
         isPendingOnly({

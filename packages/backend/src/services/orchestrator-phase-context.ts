@@ -4,7 +4,8 @@
  */
 
 import type { StoredTask } from "./task-store.service.js";
-import type { AgentConfig, ApiKeyProvider, ReviewAngle, TestResults } from "@opensprint/shared";
+import type { AgentConfig, ApiKeyProvider, ReviewAgentResult, ReviewAngle, TestResults } from "@opensprint/shared";
+import type { MergeGateVerificationArtifact } from "./merge-verification.service.js";
 
 export type FailureType =
   | "test_failure"
@@ -98,6 +99,38 @@ export interface AgentSlotLike {
 }
 
 export type ReviewRetryTarget = "general" | ReviewAngle;
+
+/** Results carried over from coding phase to review/merge */
+export interface PhaseResult {
+  codingDiff: string;
+  codingSummary: string;
+  testResults: TestResults | null;
+  testOutput: string;
+  validationCommand?: string | null;
+  qualityGateDetail?: RetryQualityGateDetail | null;
+  mergeGateArtifactTaskWorktree?: MergeGateVerificationArtifact | null;
+}
+
+/** Format review rejection result into actionable feedback for the coding agent retry prompt. */
+export function formatReviewFeedback(result: ReviewAgentResult): string {
+  const parts: string[] = [];
+  if (result.summary) {
+    parts.push(result.summary);
+  }
+  if (result.issues && result.issues.length > 0) {
+    parts.push("\n\nIssues to address:");
+    for (const issue of result.issues) {
+      parts.push(`\n- ${issue}`);
+    }
+  }
+  if (result.notes?.trim()) {
+    parts.push(`\n\nNotes: ${result.notes.trim()}`);
+  }
+  if (parts.length === 0) {
+    return "Review rejected (no details provided by review agent).";
+  }
+  return parts.join("");
+}
 
 /** Callbacks PhaseExecutor needs from ResultHandler (passed from Orchestrator) */
 export interface PhaseExecutorCallbacks {
