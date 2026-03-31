@@ -26,7 +26,10 @@ vi.mock("../../api/client", () => ({
     },
   },
   isApiError: (err: unknown) =>
-    err != null && typeof err === "object" && "name" in err && (err as { name: string }).name === "ApiError",
+    err != null &&
+    typeof err === "object" &&
+    "name" in err &&
+    (err as { name: string }).name === "ApiError",
   ApiError: class ApiError extends Error {
     code: string;
     constructor(message: string, code: string) {
@@ -54,7 +57,10 @@ describe("TodoistIntegrationCard", () => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mockListProjects.mockResolvedValue({ projects: [] });
-    mockSelectProject.mockResolvedValue({ success: true, selectedProject: { id: "tp-1", name: "Project" } });
+    mockSelectProject.mockResolvedValue({
+      success: true,
+      selectedProject: { id: "tp-1", name: "Project" },
+    });
     openSpy = vi.spyOn(window, "open").mockReturnValue({
       closed: false,
       close: vi.fn(),
@@ -117,9 +123,7 @@ describe("TodoistIntegrationCard", () => {
     const connectBtn = await screen.findByTestId("todoist-connect-btn");
     await user.click(connectBtn);
 
-    expect(
-      await screen.findByText("Failed to start OAuth. Please try again.")
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Failed to start OAuth. Please try again.")).toBeInTheDocument();
   });
 
   // ---------- Not configured state ----------
@@ -579,7 +583,9 @@ describe("TodoistIntegrationCard", () => {
     await user.click(screen.getByTestId("todoist-save-project-btn"));
 
     expect(await screen.findByTestId("todoist-save-error")).toBeInTheDocument();
-    expect(screen.getByText("Failed to save project selection. Please try again.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Failed to save project selection. Please try again.")
+    ).toBeInTheDocument();
   });
 
   // ---------- Project picker (project already selected) ----------

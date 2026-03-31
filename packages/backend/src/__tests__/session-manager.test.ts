@@ -457,6 +457,35 @@ describe.skipIf(!sessionPostgresOk)("SessionManager", () => {
       expect(archived![0].outputLog.endsWith("\n\n... [truncated]")).toBe(true);
     });
 
+    it("sanitizes NUL bytes in persisted session text fields", async () => {
+      const taskId = "task-nul-bytes";
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, taskId);
+      await fs.mkdir(activeDir, { recursive: true });
+
+      await manager.archiveSession(repoPath, taskId, 1, {
+        taskId,
+        attempt: 1,
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-01T00:00:00Z",
+        completedAt: "2024-01-01T00:05:00Z",
+        status: "failed",
+        outputLog: "review output with \u0000 embedded byte",
+        gitBranch: "opensprint/task-nul-bytes",
+        gitDiff: "diff with \u0000 byte",
+        testResults: null,
+        failureReason: "Failed to finalize \u0000 review/test outcome",
+        summary: "summary \u0000 text",
+      });
+
+      const sessions = await manager.listSessions(repoPath, taskId);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].outputLog).toBe("review output with  embedded byte");
+      expect(sessions[0].gitDiff).toBe("diff with  byte");
+      expect(sessions[0].failureReason).toBe("Failed to finalize  review/test outcome");
+      expect(sessions[0].summary).toBe("summary  text");
+    });
+
     it("archives nested review-angles artifacts recursively", async () => {
       const taskId = "task-nested";
       const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active, taskId);

@@ -41,8 +41,8 @@ interface OrchestratorEvent {
 
 ### Integrity / circuit breakers
 
-| Event                               | When                                                                                                                              | data                                                                                    |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Event                                | When                                                                                                                                                                            | data                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `circuit_breaker.empty_diff_blocked` | Coder reported `success` but `captureBranchDiff` was empty on **N** consecutive attempts (see orchestrator `MAX_CONSECUTIVE_EMPTY_DIFFS`). Task is blocked as `coding_failure`. | `projectId`, `attempt`, `branchName`, `consecutiveEmptyDiffs`, `threshold` |
 
 #### Runbook: `circuit_breaker.empty_diff_blocked`

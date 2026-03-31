@@ -206,8 +206,9 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
   }, [projectId]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
+    function handleClickOutside(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
       if ((target as Element).closest?.("[data-kill-agent-dialog]")) return;
       if (
         dropdownRef.current &&
@@ -219,8 +220,8 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
       }
     }
     if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      document.addEventListener("pointerdown", handleClickOutside, true);
+      return () => document.removeEventListener("pointerdown", handleClickOutside, true);
     }
   }, [open]);
 
@@ -310,7 +311,7 @@ export function ActiveAgentsList({ projectId }: ActiveAgentsListProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border-none ring-0 bg-transparent hover:bg-theme-border-subtle focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 text-theme-text transition-colors w-fit select-none"
+        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border-none ring-0 bg-transparent hover:bg-theme-border-subtle focus-visible:bg-theme-border-subtle focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-theme-text transition-colors w-fit select-none"
         aria-expanded={open}
         aria-haspopup="listbox"
         title="Active agents"

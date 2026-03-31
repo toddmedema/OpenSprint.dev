@@ -4,7 +4,17 @@ import ReactMarkdown from "react-markdown";
 import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../../lib/markdownSanitize";
 
 /** Execute sidebar: no horizontal rules (task feedback x5cqqc) */
-const MARKDOWN_NO_HR = { hr: () => null };
+const LIVE_OUTPUT_MARKDOWN_COMPONENTS = {
+  hr: () => null,
+  // Live streaming text can contain accidental markdown heading syntax.
+  // Render headings as regular paragraphs to keep typography stable.
+  h1: (props: React.ComponentProps<"p">) => <p {...props} />,
+  h2: (props: React.ComponentProps<"p">) => <p {...props} />,
+  h3: (props: React.ComponentProps<"p">) => <p {...props} />,
+  h4: (props: React.ComponentProps<"p">) => <p {...props} />,
+  h5: (props: React.ComponentProps<"p">) => <p {...props} />,
+  h6: (props: React.ComponentProps<"p">) => <p {...props} />,
+};
 
 const LINES_PER_BLOCK = 30;
 /** Initial estimate; virtualizer measures actual height via measureElement (ResizeObserver). */
@@ -86,7 +96,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
           <ReactMarkdown
             remarkPlugins={SAFE_REMARK_PLUGINS}
             rehypePlugins={SAFE_REHYPE_PLUGINS}
-            components={MARKDOWN_NO_HR}
+            components={LIVE_OUTPUT_MARKDOWN_COMPONENTS}
           >
             {deferredContent || ""}
           </ReactMarkdown>
@@ -130,7 +140,7 @@ export const VirtualizedAgentOutput = React.memo(function VirtualizedAgentOutput
                 <ReactMarkdown
                   remarkPlugins={SAFE_REMARK_PLUGINS}
                   rehypePlugins={SAFE_REHYPE_PLUGINS}
-                  components={MARKDOWN_NO_HR}
+                  components={LIVE_OUTPUT_MARKDOWN_COMPONENTS}
                 >
                   {blockContent}
                 </ReactMarkdown>

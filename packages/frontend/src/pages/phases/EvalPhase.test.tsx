@@ -469,7 +469,7 @@ describe("EvalPhase feedback form", () => {
     expect(screen.getByTestId("eval-feedback-filter-toolbar")).toBeInTheDocument();
   });
 
-  it("filter toolbar has flex-wrap and responsive layout (flex-col on mobile, sm:flex-row)", () => {
+  it("filter toolbar aligns controls to the right", () => {
     const store = createStore({ evalFeedback: mockFeedbackItems });
     const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
     renderWithProviders(
@@ -479,7 +479,7 @@ describe("EvalPhase feedback form", () => {
       { store, queryClient }
     );
     const toolbar = screen.getByTestId("eval-feedback-filter-toolbar");
-    expect(toolbar).toHaveClass("flex", "flex-col", "sm:flex-row", "sm:flex-wrap");
+    expect(toolbar).toHaveClass("flex", "items-center", "justify-end");
   });
 
   describe("EvalPhase expandable search", () => {
@@ -1627,7 +1627,7 @@ describe("EvalPhase feedback form", () => {
       expect(filterSelect.value).toBe("pending");
     });
 
-    it("title does not display a count", async () => {
+    it("does not render a header title label in the toolbar", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(
@@ -1638,14 +1638,11 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(
-          screen.getByRole("heading", { name: "Feedback & plan reviews" })
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
       });
-
-      const heading = screen.getByRole("heading", { name: "Feedback & plan reviews" });
-      expect(heading.textContent).toBe("Feedback & plan reviews");
-      expect(heading.textContent).not.toMatch(/\(\d+\)/);
+      expect(
+        screen.queryByRole("heading", { name: /feedback & plan reviews/i })
+      ).not.toBeInTheDocument();
     });
 
     it("each dropdown option displays its count (All, Pending = pending + in_review plans, Resolved = resolved + complete plans)", async () => {

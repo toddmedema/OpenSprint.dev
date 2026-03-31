@@ -69,7 +69,8 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
     },
   });
 
-  const shouldShowPicker = pickerOpen || (!!statusQuery.data?.connected && !statusQuery.data?.selectedProject);
+  const shouldShowPicker =
+    pickerOpen || (!!statusQuery.data?.connected && !statusQuery.data?.selectedProject);
 
   const projectsQuery = useQuery({
     queryKey: queryKeys.integrations.todoistProjects(projectId),
@@ -206,11 +207,7 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
                 Failed to load Todoist status. Please try again.
               </p>
             </div>
-            <button
-              type="button"
-              className="btn-secondary text-sm mt-3"
-              onClick={refreshStatus}
-            >
+            <button type="button" className="btn-secondary text-sm mt-3" onClick={refreshStatus}>
               Retry
             </button>
           </div>
@@ -338,7 +335,10 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
               selectProjectMutation={selectProjectMutation}
               selectedProject={selectedProject ?? null}
               onOpen={() => setPickerOpen(true)}
-              onCancel={() => { setPickerOpen(false); setSelectedPickerProjectId(selectedProject?.id ?? ""); }}
+              onCancel={() => {
+                setPickerOpen(false);
+                setSelectedPickerProjectId(selectedProject?.id ?? "");
+              }}
               onSelectChange={setSelectedPickerProjectId}
               onImportToggle={setImportExistingTasks}
               onRetryFetch={() => void projectsQuery.refetch()}
@@ -347,20 +347,27 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
             <div className="mt-3" data-testid="todoist-project-info">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-theme-muted">
-                  Project: <span className="font-medium text-theme-text">{selectedProject.name}</span>
+                  Project:{" "}
+                  <span className="font-medium text-theme-text">{selectedProject.name}</span>
                   <span className="ml-1 text-theme-muted">({selectedProject.id})</span>
                 </span>
                 <button
                   type="button"
                   className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                  onClick={() => { setPickerOpen(true); setSelectedPickerProjectId(selectedProject.id); }}
+                  onClick={() => {
+                    setPickerOpen(true);
+                    setSelectedPickerProjectId(selectedProject.id);
+                  }}
                   data-testid="todoist-change-project-btn"
                 >
                   Change
                 </button>
               </div>
               {saveSuccess && (
-                <p className="text-xs text-green-600 dark:text-green-400 mt-1" data-testid="todoist-save-success">
+                <p
+                  className="text-xs text-green-600 dark:text-green-400 mt-1"
+                  data-testid="todoist-save-success"
+                >
                   Project saved successfully.
                 </p>
               )}
@@ -486,7 +493,10 @@ function ProjectPicker({
 
   return (
     <div className="mt-3" data-testid="todoist-project-picker">
-      <label htmlFor="todoist-project-select" className="block text-xs font-medium text-theme-text mb-1">
+      <label
+        htmlFor="todoist-project-select"
+        className="block text-xs font-medium text-theme-text mb-1"
+      >
         {selectedProject ? "Change Todoist project" : "Select a Todoist project"}
       </label>
 
@@ -498,7 +508,10 @@ function ProjectPicker({
       )}
 
       {isError && !hasProjects && (
-        <div className="p-3 rounded-lg bg-theme-error-bg border border-theme-error-border" data-testid="todoist-projects-error">
+        <div
+          className="p-3 rounded-lg bg-theme-error-bg border border-theme-error-border"
+          data-testid="todoist-projects-error"
+        >
           <p className="text-xs text-theme-error-text">Failed to load Todoist projects.</p>
           <button
             type="button"
@@ -524,13 +537,17 @@ function ProjectPicker({
             <option value="">Select a project…</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}{p.taskCount != null ? ` (${p.taskCount} tasks)` : ""}
+                {p.name}
+                {p.taskCount != null ? ` (${p.taskCount} tasks)` : ""}
               </option>
             ))}
           </select>
 
           <div className="mt-2">
-            <label className="flex items-center gap-2 cursor-pointer" data-testid="todoist-import-toggle">
+            <label
+              className="flex items-center gap-2 cursor-pointer"
+              data-testid="todoist-import-toggle"
+            >
               <input
                 type="checkbox"
                 checked={importExistingTasks}

@@ -44,6 +44,15 @@ describe("DbClient (createPostgresDbClient with mock Pool)", () => {
     expect(pool.query).toHaveBeenCalledWith("SELECT * FROM t WHERE x = $1", ["val"]);
   });
 
+  it("strips NUL bytes from string params before query", async () => {
+    const pool = createMockPool({ queryRows: [] });
+    const client = createPostgresDbClient(pool);
+
+    await client.query("SELECT $1::text as txt", ["abc\u0000def"]);
+
+    expect(pool.query).toHaveBeenCalledWith("SELECT $1::text as txt", ["abcdef"]);
+  });
+
   it("query with no params passes empty array", async () => {
     const pool = createMockPool({ queryRows: [] });
     const client = createPostgresDbClient(pool);
@@ -135,6 +144,24 @@ describe("DbClient (createPostgresDbClient with mock Pool)", () => {
     });
 
     expect(mockQuery).toHaveBeenCalledWith("INSERT INTO t (a, b) VALUES ($1, $2)", ["x", 123]);
+  });
+
+  it("runInTransaction strips NUL bytes from nested params", async () => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
+    const mockClient: PoolClient = {
+      query: mockQuery,
+      release: vi.fn(),
+    } as unknown as PoolClient;
+
+    const pool = createMockPool({ connectClient: mockClient });
+    (pool.connect as ReturnType<typeof vi.fn>).mockResolvedValue(mockClient);
+
+    const client = createPostgresDbClient(pool);
+    await client.runInTransaction(async (tx) => {
+      await tx.execute("INSERT INTO t (a) VALUES ($1)", ["left\u0000right"]);
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith("INSERT INTO t (a) VALUES ($1)", ["leftright"]);
   });
 });
 

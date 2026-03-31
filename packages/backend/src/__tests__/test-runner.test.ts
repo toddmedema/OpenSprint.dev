@@ -293,6 +293,44 @@ describe("TestRunner", () => {
       expect(result.rawOutput).toContain("The CJS build of Vite's Node API is deprecated.");
     });
 
+    it("repairs dependencies and retries once on vitest tinypool worker module crash", async () => {
+      mockSpawn
+        .mockReturnValueOnce(
+          createMockChild(
+            "",
+            "Error: Cannot find module '/tmp/repo/node_modules/tinypool/dist/entry/process.js'\nTypeError: emitter.removeListener is not a function",
+            1
+          )
+        )
+        .mockReturnValueOnce(createMockChild("added 100 packages", "", 0))
+        .mockReturnValueOnce(
+          createMockChild("Tests: 1 passed, 0 failed, 0 skipped, 1 total\n✓ recovered test", "", 0)
+        );
+
+      const result = await runner.runTestsWithOutput(
+        "/tmp/repo",
+        "node ./node_modules/vitest/vitest.mjs run"
+      );
+
+      expect(result.failed).toBe(0);
+      expect(result.passed).toBe(1);
+      expect(mockSpawn).toHaveBeenCalledTimes(3);
+      expect((mockSpawn.mock.calls[1]?.[1] as string[] | undefined)?.[1]).toBe("npm ci");
+      expect(result.rawOutput).toContain("Running one-time dependency repair: npm ci");
+    });
+
+    it("does not run dependency repair when failure is unrelated to vitest worker dependencies", async () => {
+      mockSpawn.mockReturnValue(createMockChild("", "AssertionError: expected 1 to be 2", 1));
+
+      const result = await runner.runTestsWithOutput(
+        "/tmp/repo",
+        "node ./node_modules/vitest/vitest.mjs run"
+      );
+
+      expect(result.failed).toBe(1);
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+    });
+
     it("returns empty results when no test command is provided and no package.json", async () => {
       mockSpawn.mockClear();
       const emptyDir = path.join(os.tmpdir(), `opensprint-test-runner-${Date.now()}`);

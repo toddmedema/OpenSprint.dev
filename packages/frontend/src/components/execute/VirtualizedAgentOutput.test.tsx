@@ -70,6 +70,26 @@ describe("VirtualizedAgentOutput", () => {
     expect(el).toHaveClass("prose-execute-task");
   });
 
+  it("renders markdown headings as regular body text in live output", () => {
+    const containerRef = { current: null as HTMLDivElement | null };
+    render(
+      <VirtualizedAgentOutput
+        content={"# Big heading\n\n## Another heading\n\nRegular paragraph"}
+        mode="markdown"
+        containerRef={containerRef}
+        data-testid="output"
+      />
+    );
+
+    const el = screen.getByTestId("output");
+    expect(el).toHaveTextContent("Big heading");
+    expect(el).toHaveTextContent("Another heading");
+    expect(el).toHaveTextContent("Regular paragraph");
+    expect(el.querySelector("h1")).not.toBeInTheDocument();
+    expect(el.querySelector("h2")).not.toBeInTheDocument();
+    expect(el.querySelectorAll("p").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("calls onScroll when user scrolls", () => {
     const containerRef = React.createRef<HTMLDivElement>();
     const onScroll = vi.fn();

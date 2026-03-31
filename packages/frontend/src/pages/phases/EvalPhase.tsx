@@ -33,7 +33,11 @@ import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { api } from "../../api/client";
-import { CONTENT_CONTAINER_CLASS, MOBILE_BREAKPOINT } from "../../lib/constants";
+import {
+  CONTENT_CONTAINER_CLASS,
+  MOBILE_BREAKPOINT,
+  PHASE_TOOLBAR_HEIGHT,
+} from "../../lib/constants";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
@@ -2189,11 +2193,106 @@ export function EvalPhase({
 
   return (
     <div className="flex flex-1 flex-col min-h-0 min-w-0 h-full overflow-hidden">
-      <div className="shrink-0 bg-theme-surface border-b border-theme-border">
+      <div
+        className="phase-toolbar w-full px-4 sm:px-6 flex items-center py-0.5 bg-theme-surface shrink-0 border-b border-theme-border"
+        style={{ height: PHASE_TOOLBAR_HEIGHT }}
+      >
         <div
-          className={`${CONTENT_CONTAINER_CLASS} pt-4 sm:pt-8 pb-4 w-full`}
-          data-testid="eval-feedback-content"
+          className={`${CONTENT_CONTAINER_CLASS} w-full flex items-center justify-end`}
+          data-testid="eval-feedback-filter-toolbar"
         >
+          {(feedback.length > 0 || plans.length > 0) && (
+            <div className="flex items-center gap-2">
+              {evalSearchExpanded ? (
+                <div
+                  className="flex items-center gap-1 animate-fade-in"
+                  data-testid="eval-search-expanded"
+                >
+                  <input
+                    ref={evalSearchInputRef}
+                    type="text"
+                    value={evalSearchInputValue}
+                    onChange={(e) => setEvalSearchInputValue(e.target.value)}
+                    onKeyDown={handleEvalSearchKeyDown}
+                    placeholder="Search feedback…"
+                    className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:border-brand-500 transition-all"
+                    aria-label="Search feedback"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleEvalSearchClose}
+                    className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+                    aria-label="Close search"
+                    data-testid="eval-search-close"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleEvalSearchExpand}
+                  className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
+                  aria-label="Expand search"
+                  data-testid="eval-search-expand"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                </button>
+              )}
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  const value = e.target.value as FeedbackStatusFilter;
+                  setStatusFilter(value);
+                  saveFeedbackStatusFilter(value);
+                }}
+                className="input text-sm min-h-[40px] py-1 pl-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
+                aria-label="Filter feedback and plan reviews by status"
+                data-testid="feedback-status-filter"
+              >
+                <option value="all">
+                  All ({countAll(feedback, plansInReview, plansComplete)})
+                </option>
+                <option value="pending">Pending ({countPending(feedback, plansInReview)})</option>
+                <option value="resolved">
+                  Resolved ({countResolved(feedback, plansComplete)})
+                </option>
+                {feedback.some((f) => f.status === "cancelled") && (
+                  <option value="cancelled">
+                    Cancelled ({countByStatus(feedback, "cancelled")})
+                  </option>
+                )}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div
+        ref={feedbackFeedRef}
+        className="flex-1 min-h-0 min-w-0 overflow-y-auto pt-3 sm:pt-4 pb-4 sm:pb-6 w-full"
+        data-testid="eval-feedback-feed-scroll"
+      >
+        <div className={`${CONTENT_CONTAINER_CLASS} w-full`} data-testid="eval-feedback-content">
           {/* Feedback Input */}
           <ImageDropZone
             variant="main"
@@ -2307,110 +2406,6 @@ export function EvalPhase({
               </KeyboardShortcutTooltip>
             </div>
           </ImageDropZone>
-
-          {/* Feedback Feed */}
-          <div
-            className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4"
-            data-testid="eval-feedback-filter-toolbar"
-          >
-            <h3 className="text-sm font-semibold text-theme-text">Feedback &amp; plan reviews</h3>
-            {(feedback.length > 0 || plans.length > 0) && (
-              <div className="flex items-center gap-2">
-                {evalSearchExpanded ? (
-                  <div
-                    className="flex items-center gap-1 animate-fade-in"
-                    data-testid="eval-search-expanded"
-                  >
-                    <input
-                      ref={evalSearchInputRef}
-                      type="text"
-                      value={evalSearchInputValue}
-                      onChange={(e) => setEvalSearchInputValue(e.target.value)}
-                      onKeyDown={handleEvalSearchKeyDown}
-                      placeholder="Search feedback…"
-                      className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:border-brand-500 transition-all"
-                      aria-label="Search feedback"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleEvalSearchClose}
-                      className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
-                      aria-label="Close search"
-                      data-testid="eval-search-close"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleEvalSearchExpand}
-                    className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
-                    aria-label="Expand search"
-                    data-testid="eval-search-expand"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <path d="m21 21-4.35-4.35" />
-                    </svg>
-                  </button>
-                )}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    const value = e.target.value as FeedbackStatusFilter;
-                    setStatusFilter(value);
-                    saveFeedbackStatusFilter(value);
-                  }}
-                  className="input text-sm min-h-[44px] min-w-[44px] py-1.5 pl-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
-                  aria-label="Filter feedback and plan reviews by status"
-                  data-testid="feedback-status-filter"
-                >
-                  <option value="all">
-                    All ({countAll(feedback, plansInReview, plansComplete)})
-                  </option>
-                  <option value="pending">Pending ({countPending(feedback, plansInReview)})</option>
-                  <option value="resolved">
-                    Resolved ({countResolved(feedback, plansComplete)})
-                  </option>
-                  {feedback.some((f) => f.status === "cancelled") && (
-                    <option value="cancelled">
-                      Cancelled ({countByStatus(feedback, "cancelled")})
-                    </option>
-                  )}
-                </select>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div
-        ref={feedbackFeedRef}
-        className="flex-1 min-h-0 min-w-0 overflow-y-auto pt-2 sm:pt-3 pb-4 sm:pb-6 w-full"
-        data-testid="eval-feedback-feed-scroll"
-      >
-        <div className={`${CONTENT_CONTAINER_CLASS} w-full`}>
           {showFeedbackEmptyState && plans.length === 0 ? (
             <PhaseEmptyState
               title={EMPTY_STATE_COPY.eval.title}

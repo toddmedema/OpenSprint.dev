@@ -10,6 +10,7 @@ import { signalProcessGroup } from "../utils/process-group.js";
 const TEST_TIMEOUT_MS = 300_000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
 const SIGKILL_GRACE_MS = 3_000;
+const DEPENDENCY_REPAIR_TIMEOUT_MS = 20 * 60 * 1000;
 const VITEST_CONFIG_FILES = [
   "vitest.workspace.ts",
   "vitest.workspace.js",
@@ -65,6 +66,11 @@ interface VitestJsonReport {
  * Parses test output into TestResults structure.
  */
 export class TestRunner {
+  private static readonly VITEST_DEPENDENCY_FAILURE_PATTERNS: RegExp[] = [
+    /Cannot find module ['"][^'"]*node_modules\/tinypool\/dist\/entry\/process\.js['"]/i,
+    /TypeError:\s+emitter\.removeListener is not a function/i,
+  ];
+
   private getShellCommand(command: string): { executable: string; args: string[] } {
     if (process.platform === "win32") {
       return { executable: "cmd.exe", args: ["/d", "/s", "/c", command] };
@@ -141,15 +147,62 @@ export class TestRunner {
       command,
       repoPath
     );
-    const { stdout, stderr, exitCode, timedOut } = await this.execWithProcessGroup(
+    let { stdout, stderr, exitCode, timedOut } = await this.execWithProcessGroup(
       preparedCommand,
       repoPath,
       timeoutMs
     );
-    const timeoutError = `Test command timed out after ${Math.round(timeoutMs / 1000)}s`;
-    const rawOutput = [timedOut ? `Error: ${timeoutError}` : null, stdout, stderr]
+
+    let timeoutError = `Test command timed out after ${Math.round(timeoutMs / 1000)}s`;
+    let rawOutput = [timedOut ? `Error: ${timeoutError}` : null, stdout, stderr]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join("\n");
+
+    const shouldRepairAndRetry =
+      !timedOut &&
+      exitCode !== 0 &&
+      this.shouldRetryVitestAfterDependencyRepair(preparedCommand, rawOutput);
+    if (shouldRepairAndRetry) {
+      const repair = await this.execWithProcessGroup(
+        "npm ci",
+        repoPath,
+        DEPENDENCY_REPAIR_TIMEOUT_MS
+      );
+      const repairTimeoutError = `Dependency repair timed out after ${Math.round(
+        DEPENDENCY_REPAIR_TIMEOUT_MS / 1000
+      )}s`;
+      const repairOutput = [
+        "[opensprint] Detected Vitest dependency worker crash. Running one-time dependency repair: npm ci",
+        repair.timedOut ? `Error: ${repairTimeoutError}` : null,
+        repair.stdout,
+        repair.stderr,
+      ]
+        .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+        .join("\n");
+
+      if (!repair.timedOut && repair.exitCode === 0) {
+        const rerun = await this.execWithProcessGroup(preparedCommand, repoPath, timeoutMs);
+        stdout = rerun.stdout;
+        stderr = rerun.stderr;
+        exitCode = rerun.exitCode;
+        timedOut = rerun.timedOut;
+        timeoutError = `Test command timed out after ${Math.round(timeoutMs / 1000)}s`;
+        rawOutput = [
+          rawOutput,
+          repairOutput,
+          rerun.timedOut ? `Error: ${timeoutError}` : null,
+          rerun.stdout,
+          rerun.stderr,
+        ]
+          .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+          .join("\n");
+      } else {
+        rawOutput = [rawOutput, repairOutput]
+          .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+          .join("\n");
+      }
+    }
+
     const parsedVitestJson = await this.parseVitestJsonReport(vitestJsonReportPath);
 
     if (!timedOut && exitCode === 0) {
@@ -434,6 +487,11 @@ export class TestRunner {
 
   private isVitestCommand(command: string): boolean {
     return /\bvitest\b|vitest\.mjs/.test(command);
+  }
+
+  private shouldRetryVitestAfterDependencyRepair(command: string, output: string): boolean {
+    if (!this.isVitestCommand(command)) return false;
+    return TestRunner.VITEST_DEPENDENCY_FAILURE_PATTERNS.some((pattern) => pattern.test(output));
   }
 
   private extractOutputFileArg(command: string): string | null {

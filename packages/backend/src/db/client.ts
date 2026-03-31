@@ -10,6 +10,23 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
 import { classifyDbConnectionError, isDbConnectionError } from "./db-errors.js";
 
+function sanitizeStringParam(value: string): string {
+  // Postgres text/json fields reject NUL bytes (0x00). Strip them at the DB boundary
+  // so one bad chunk in agent output cannot break task finalization.
+  return value.includes("\u0000") ? value.split("\u0000").join("") : value;
+}
+
+function sanitizeDbParam(value: unknown): unknown {
+  if (typeof value === "string") return sanitizeStringParam(value);
+  if (Array.isArray(value)) return value.map((item) => sanitizeDbParam(item));
+  return value;
+}
+
+function sanitizeDbParams(params?: unknown[]): unknown[] {
+  if (!params || params.length === 0) return [];
+  return params.map((param) => sanitizeDbParam(param));
+}
+
 function rethrowDatabaseError(err: unknown): never {
   if (err instanceof AppError && err.code === ErrorCodes.DATABASE_UNAVAILABLE) {
     throw err;
@@ -72,20 +89,20 @@ export function createPostgresDbClient(pool: Pool): DbClient {
   const clientFromPool = (client: PoolClient): DbClient => ({
     async query(sql: string, params?: unknown[]): Promise<DbRow[]> {
       return withDatabaseErrorHandling(async () => {
-        const result = await client.query(sql, params ?? []);
+        const result = await client.query(sql, sanitizeDbParams(params));
         return (result.rows as DbRow[]) ?? [];
       });
     },
     async queryOne(sql: string, params?: unknown[]): Promise<DbRow | undefined> {
       return withDatabaseErrorHandling(async () => {
-        const result = await client.query(sql, params ?? []);
+        const result = await client.query(sql, sanitizeDbParams(params));
         const rows = result.rows as DbRow[];
         return rows.length > 0 ? rows[0] : undefined;
       });
     },
     async execute(sql: string, params?: unknown[]): Promise<number> {
       return withDatabaseErrorHandling(async () => {
-        const result = await client.query(sql, params ?? []);
+        const result = await client.query(sql, sanitizeDbParams(params));
         return result.rowCount ?? 0;
       });
     },
@@ -98,20 +115,20 @@ export function createPostgresDbClient(pool: Pool): DbClient {
   return {
     async query(sql: string, params?: unknown[]): Promise<DbRow[]> {
       return withDatabaseErrorHandling(async () => {
-        const result = await pool.query(sql, params ?? []);
+        const result = await pool.query(sql, sanitizeDbParams(params));
         return (result.rows as DbRow[]) ?? [];
       });
     },
     async queryOne(sql: string, params?: unknown[]): Promise<DbRow | undefined> {
       return withDatabaseErrorHandling(async () => {
-        const result = await pool.query(sql, params ?? []);
+        const result = await pool.query(sql, sanitizeDbParams(params));
         const rows = result.rows as DbRow[];
         return rows.length > 0 ? rows[0] : undefined;
       });
     },
     async execute(sql: string, params?: unknown[]): Promise<number> {
       return withDatabaseErrorHandling(async () => {
-        const result = await pool.query(sql, params ?? []);
+        const result = await pool.query(sql, sanitizeDbParams(params));
         return result.rowCount ?? 0;
       });
     },
