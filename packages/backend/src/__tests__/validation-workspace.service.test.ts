@@ -151,6 +151,43 @@ describe("ValidationWorkspaceService.ensureMergedCandidateNodeModules", () => {
     expect(runCommand).not.toHaveBeenCalled();
   });
 
+  it("triggers repo repair when initial symlink produces empty node_modules", async () => {
+    const { repoPath, worktreePath } = await makeTempDirs();
+    const symlinkNodeModules = vi.fn(async (_repo: string, wt: string) => {
+      const nm = path.join(wt, "node_modules");
+      await fs.mkdir(nm, { recursive: true });
+      // Empty — simulates symlink to empty repo node_modules
+    });
+    let repairCalled = false;
+    const ensureRepoNodeModules = vi.fn(async () => {
+      repairCalled = true;
+      return true;
+    });
+    let secondSymlinkCall = false;
+    symlinkNodeModules.mockImplementation(async (_repo: string, wt: string) => {
+      if (repairCalled && !secondSymlinkCall) {
+        secondSymlinkCall = true;
+        const nm = path.join(wt, "node_modules");
+        await fs.rm(nm, { recursive: true, force: true });
+        await fs.mkdir(nm, { recursive: true });
+        await fs.writeFile(path.join(nm, ".package-lock.json"), "{}");
+      } else {
+        const nm = path.join(wt, "node_modules");
+        await fs.mkdir(nm, { recursive: true });
+      }
+    });
+    const runCommand = vi.fn();
+    const branchManager = { symlinkNodeModules, ensureRepoNodeModules } as unknown as BranchManager;
+    const service = new ValidationWorkspaceService({ runCommand, branchManager });
+
+    const result = await service.ensureMergedCandidateNodeModules(repoPath, worktreePath);
+
+    expect(result.ok).toBe(true);
+    expect(result.strategy).toBe("repo_repair_then_symlink");
+    expect(ensureRepoNodeModules).toHaveBeenCalledWith(repoPath);
+    expect(symlinkNodeModules).toHaveBeenCalledTimes(2);
+  });
+
   it("detects empty node_modules as unusable (symlink race)", async () => {
     const { repoPath, worktreePath } = await makeTempDirs();
     const symlinkNodeModules = vi.fn(async (_repo: string, wt: string) => {

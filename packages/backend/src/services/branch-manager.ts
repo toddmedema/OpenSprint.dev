@@ -1369,6 +1369,17 @@ export class BranchManager {
     return this.ensureNodeModules(repoPath);
   }
 
+  private async isNodeModulesUsable(nodeModulesPath: string): Promise<boolean> {
+    try {
+      const stat = await fs.stat(nodeModulesPath);
+      if (!stat.isDirectory()) return false;
+      const entries = await fs.readdir(nodeModulesPath, { withFileTypes: true });
+      return entries.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Ensure node_modules exists in the main repo. If missing and package.json exists,
    * runs dependency repair commands. Used before symlinking so worktrees have dependencies.
@@ -1380,11 +1391,8 @@ export class BranchManager {
       return true;
     }
     const srcRoot = path.join(repoPath, "node_modules");
-    try {
-      await fs.access(srcRoot);
+    if (await this.isNodeModulesUsable(srcRoot)) {
       return true;
-    } catch {
-      // node_modules missing — try npm ci if package.json exists
     }
 
     const pkgPath = path.join(repoPath, "package.json");
@@ -1719,24 +1727,16 @@ export class BranchManager {
       return;
     }
 
-    // Symlink root node_modules (ensure it exists first)
+    // Symlink root node_modules (ensure it exists and is non-empty first)
     const srcRoot = path.join(repoPath, "node_modules");
     const destRoot = path.join(wtPath, "node_modules");
-    try {
-      await fs.access(srcRoot);
-    } catch (err) {
-      const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
-      if (code === "ENOENT") {
-        const ensured = await this.ensureNodeModules(repoPath);
-        if (!ensured) {
-          log.warn("Skipping root node_modules symlink: does not exist", {
-            srcRoot,
-            reason: "no package.json or npm ci failed",
-          });
-          return;
-        }
-      } else {
-        log.warn("Skipping root node_modules symlink", { code: code ?? err });
+    if (!(await this.isNodeModulesUsable(srcRoot))) {
+      const ensured = await this.ensureNodeModules(repoPath);
+      if (!ensured) {
+        log.warn("Skipping root node_modules symlink: not usable after repair attempt", {
+          srcRoot,
+          reason: "no package.json or npm ci failed",
+        });
         return;
       }
     }

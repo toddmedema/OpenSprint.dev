@@ -948,6 +948,53 @@ describe("BranchManager", () => {
       expect(pkgStat.isSymbolicLink()).toBe(true);
     });
 
+    it("runs dependency repair when source node_modules exists but is empty", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(
+        path.join(repoPath, "package.json"),
+        JSON.stringify({ name: "test-repo", version: "1.0.0" })
+      );
+      await execAsync('git add -A && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-empty-nm-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      worktreePaths.push(wtPath);
+
+      const srcNodeModules = path.join(repoPath, "node_modules");
+      await fs.rm(srcNodeModules, { recursive: true, force: true });
+      await fs.mkdir(srcNodeModules, { recursive: true });
+
+      const wtNodeModules = path.join(wtPath, "node_modules");
+      await fs.rm(wtNodeModules, { recursive: true, force: true });
+
+      const runCommandSpy = vi.spyOn(commandRunnerModule, "runCommand").mockImplementation(
+        async (spec: CommandSpec, opts: { cwd: string }) => {
+          if (spec.command === "npm" && spec.args?.includes("ci")) {
+            await fs.writeFile(path.join(srcNodeModules, ".package-lock.json"), "{}");
+            return { ...mockRunSuccess, cwd: opts.cwd };
+          }
+          return { ...mockRunSuccess, cwd: opts.cwd };
+        }
+      );
+
+      try {
+        await branchManager.symlinkNodeModules(repoPath, wtPath);
+
+        expect(runCommandSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ command: "npm" }),
+          expect.objectContaining({ cwd: repoPath })
+        );
+
+        const stat = await fs.lstat(wtNodeModules);
+        expect(stat.isSymbolicLink()).toBe(true);
+      } finally {
+        runCommandSpy.mockRestore();
+      }
+    });
+
     it("refuses to delete the repo root when passed as an unsafe worktree path", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
