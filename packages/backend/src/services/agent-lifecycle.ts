@@ -682,7 +682,6 @@ export class AgentLifecycleManager {
                 void params.onStateChange?.();
               }
             }
-            return;
           }
 
           const suspendThresholdMs = effectiveTimeout + SUSPEND_TRANSITION_DELAY_MS;

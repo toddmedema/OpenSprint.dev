@@ -366,7 +366,7 @@ describe("AgentLifecycleManager", () => {
       vi.useRealTimers();
     });
 
-    it("does not remain suspended while a tool call is active", async () => {
+    it("suspends and eventually times out when a tool call stays active without output", async () => {
       vi.useFakeTimers();
       const handle = { kill: vi.fn(), pid: 9999 };
       let capturedOnOutput: ((chunk: string) => void) | undefined;
@@ -397,10 +397,16 @@ describe("AgentLifecycleManager", () => {
       await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 5 * 60 * 1000);
       await Promise.resolve();
 
-      expect(runState.lifecycleState).toBe("running");
-      expect(runState.suspendReason).toBeUndefined();
+      expect(runState.lifecycleState).toBe("suspended");
+      expect(runState.suspendReason).toBe("output_gap");
       expect(runState.killedDueToTimeout).toBe(false);
       expect(handle.kill).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(AGENT_SUSPEND_GRACE_MS + 30_000);
+      await Promise.resolve();
+
+      expect(runState.killedDueToTimeout).toBe(true);
+      expect(handle.kill).toHaveBeenCalled();
 
       killSpy.mockRestore();
       vi.useRealTimers();

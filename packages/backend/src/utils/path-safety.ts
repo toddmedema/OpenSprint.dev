@@ -71,6 +71,16 @@ function realpathSyncSafe(p: string): string {
   }
 }
 
+function getTempRoots(): string[] {
+  const candidates = [os.tmpdir(), "/tmp", "/private/tmp"];
+  const roots = new Set<string>();
+  for (const candidate of candidates) {
+    roots.add(path.resolve(candidate));
+    roots.add(realpathSyncSafe(candidate));
+  }
+  return [...roots];
+}
+
 export function assertSafeTaskWorktreePath(
   repoPath: string,
   taskId: string,
@@ -88,9 +98,10 @@ export function assertSafeTaskWorktreePath(
   }
 
   /** Git-registered worktrees may live under the OS temp dir (tests, alternate layouts). Never delete paths inside the main repo. */
-  const tmpRoot = realpathSyncSafe(path.resolve(os.tmpdir()));
   const normCandidate = realpathSyncSafe(resolvedCandidate);
-  const insideTmp = isPathInside(tmpRoot, normCandidate, { allowEqual: false });
+  const insideTmp = getTempRoots().some((tmpRoot) =>
+    isPathInside(tmpRoot, normCandidate, { allowEqual: false })
+  );
   const insideRepo = isPathInside(resolvedRepo, normCandidate, { allowEqual: true });
   if (insideTmp && !insideRepo) {
     return candidatePath;

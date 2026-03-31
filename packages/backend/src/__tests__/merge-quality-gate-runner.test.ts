@@ -969,6 +969,59 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       expect(failure!.autoRepairOutput).toContain("registry.npmjs.org");
     });
 
+    it("retries npm test after tinypool/emitter worker crash fingerprint", async () => {
+      const repoPath = await makeTempWorktree({ test: "vitest run" }, true);
+      const worktreePath = await makeTempWorktree({ test: "vitest run" }, true);
+      let testAttempts = 0;
+      const runCommand = vi.fn(
+        async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+          const label = commandLabel(spec);
+          if (label === "git rev-parse --verify HEAD") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm run test") {
+            testAttempts += 1;
+            if (testAttempts === 1) {
+              throw makeCommandFailure(spec, options.cwd, {
+                message: "Command failed with exit code 1",
+                stderr:
+                  "Error: Cannot find module '/tmp/repo/node_modules/tinypool/dist/entry/process.js'\nTypeError: emitter.removeListener is not a function",
+              });
+            }
+            return makeCommandResult(spec, options.cwd);
+          }
+          if (label === "npm ci") {
+            return makeCommandResult(spec, options.cwd);
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+      );
+      const symlinkNodeModules = vi.fn(async () => undefined);
+
+      const failure = await runMergeQualityGates(
+        {
+          projectId: "proj-mc-tinypool",
+          repoPath,
+          worktreePath,
+          taskId: "os-mc-tinypool-1",
+          branchName: "opensprint/os-mc-tinypool-1",
+          baseBranch: "main",
+          validationWorkspace: "task_worktree",
+        },
+        {
+          commands: ["npm run test"],
+          runCommand,
+          symlinkNodeModules,
+        }
+      );
+
+      expect(failure).toBeNull();
+      const gateCommands = getExecutedCommands(runCommand);
+      expect(gateCommands).toContain("npm ci");
+      expect(gateCommands.filter((label) => label === "npm run test")).toHaveLength(2);
+      expect(symlinkNodeModules).toHaveBeenCalledTimes(1);
+    });
+
     it("lockfile missing triggers different precheck than node_modules missing", async () => {
       const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
       await fs.rm(path.join(worktreePath, "package-lock.json"), { force: true });

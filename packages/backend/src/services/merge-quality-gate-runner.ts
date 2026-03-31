@@ -35,6 +35,8 @@ const QUALITY_GATE_ENV_FINGERPRINTS: RegExp[] = [
   /\beacces\b/i,
   /\bmissing script:\b/i,
   /\bnode_modules\b/i,
+  /\bnode_modules[\\/]+tinypool[\\/]+dist[\\/]+entry[\\/]+process\.js\b/i,
+  /\bemitter\.removeListener is not a function\b/i,
   /\bnative addon\b/i,
   /\bcould not locate the bindings file\b/i,
   /\bwas compiled against a different node\.js version\b/i,

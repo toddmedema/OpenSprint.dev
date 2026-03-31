@@ -1009,6 +1009,28 @@ describe("BranchManager", () => {
       await expect(fs.access(path.join(repoPath, ".git"))).resolves.toBeUndefined();
     });
 
+    it("allows cleanup of legacy task worktree paths under system temp aliases", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-legacy-${Date.now()}`;
+      const branchName = `opensprint/${taskId}`;
+      await execAsync(`git branch ${branchName} main`, { cwd: repoPath });
+
+      const legacyTmpRoot = process.platform === "darwin" ? "/private/tmp" : "/tmp";
+      const wtPath = path.join(legacyTmpRoot, `${taskId}-work`);
+      await fs.rm(wtPath, { recursive: true, force: true });
+      await execAsync(`git worktree add ${wtPath} ${branchName}`, { cwd: repoPath });
+      worktreePaths.push(wtPath);
+
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+      await expect(fs.access(wtPath)).rejects.toThrow();
+    });
+
     it("should treat an unregistered task worktree as a no-op cleanup", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
