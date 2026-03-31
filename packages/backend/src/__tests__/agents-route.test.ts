@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -13,7 +12,7 @@ import {
   pinOpenSprintPathsForTesting,
   resetOpenSprintPathsForTesting,
 } from "./opensprint-path-test-helper.js";
-import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("../services/database-runtime.service.js", () => ({
   databaseRuntime: {
@@ -100,14 +99,14 @@ describe("Agents API", () => {
 
   describe("GET /projects/:projectId/agents/active", () => {
     it("should return empty array when no agent is running", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/agents/active`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/active`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/agents/active`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/agents/active`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -125,7 +124,7 @@ describe("Agents API", () => {
         "opensprint/task-123"
       );
 
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/agents/active`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/active`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -151,7 +150,7 @@ describe("Agents API", () => {
         "utf-8"
       );
 
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ content: "# Agent Instructions\n\nUse bd for tasks." });
@@ -161,14 +160,14 @@ describe("Agents API", () => {
       const repoPath = path.join(tempDir, "my-project");
       await fs.unlink(path.join(repoPath, "AGENTS.md"));
 
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/agents/instructions`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ content: "" });
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/nonexistent-id/agents/instructions`
       );
 
@@ -183,7 +182,7 @@ describe("Agents API", () => {
       const repoPath = path.join(tempDir, "my-project");
       await fs.mkdir(repoPath, { recursive: true });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions`)
         .send({ content: "# New Instructions\n\nHello world." });
 
@@ -195,7 +194,7 @@ describe("Agents API", () => {
     });
 
     it("should return 400 when content is missing", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions`)
         .send({});
 
@@ -205,7 +204,7 @@ describe("Agents API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/nonexistent-id/agents/instructions`)
         .send({ content: "test" });
 
@@ -224,7 +223,7 @@ describe("Agents API", () => {
         [projectId, "coder", "# Coder Instructions\n\nPrefer TypeScript.", new Date().toISOString()]
       );
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/agents/instructions/coder`
       );
 
@@ -240,7 +239,7 @@ describe("Agents API", () => {
       await fs.mkdir(agentsDir, { recursive: true });
       await fs.writeFile(path.join(agentsDir, "coder.md"), "# Legacy Coder", "utf-8");
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/agents/instructions/coder`
       );
 
@@ -249,7 +248,7 @@ describe("Agents API", () => {
     });
 
     it("should return empty content when role file is missing", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/agents/instructions/reviewer`
       );
 
@@ -258,7 +257,7 @@ describe("Agents API", () => {
     });
 
     it("should return 400 for invalid role", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/agents/instructions/invalid`
       );
 
@@ -268,7 +267,7 @@ describe("Agents API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/nonexistent-id/agents/instructions/coder`
       );
 
@@ -279,7 +278,7 @@ describe("Agents API", () => {
 
   describeIfDb("PUT /projects/:projectId/agents/instructions/:role", () => {
     it("should write role instructions to DB", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions/coder`)
         .send({ content: "# Coder\n\nUse strict mode." });
 
@@ -295,7 +294,7 @@ describe("Agents API", () => {
     });
 
     it("should return 400 when content is missing", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions/planner`)
         .send({});
 
@@ -304,7 +303,7 @@ describe("Agents API", () => {
     });
 
     it("should return 400 for invalid role", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/agents/instructions/badrole`)
         .send({ content: "test" });
 
@@ -313,7 +312,7 @@ describe("Agents API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/nonexistent-id/agents/instructions/coder`)
         .send({ content: "test" });
 
@@ -333,8 +332,8 @@ describe("Agents API", () => {
         "2026-02-16T10:00:00.000Z"
       );
 
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/${projectId}/agents/plan-agent-1/kill`)
+      const res = await authedSupertest(app).post(
+        `${API_PREFIX}/projects/${projectId}/agents/plan-agent-1/kill`
       );
 
       expect(res.status).toBe(404);
@@ -344,8 +343,8 @@ describe("Agents API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/nonexistent-id/agents/task-123/kill`)
+      const res = await authedSupertest(app).post(
+        `${API_PREFIX}/projects/nonexistent-id/agents/task-123/kill`
       );
 
       expect(res.status).toBe(404);

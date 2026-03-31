@@ -5,6 +5,7 @@ import { API_PREFIX } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
+import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
 
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
@@ -55,16 +56,24 @@ describe("App", () => {
 
   it("should serve API under /api/v1 prefix", async () => {
     const app = createApp();
-    const res = await request(app).get(`${API_PREFIX}/projects`);
+    const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/projects`));
     expect(res.status).toBe(200);
+  });
+
+  it("rejects API requests without Bearer token", async () => {
+    const app = createApp();
+    const res = await request(app).get(`${API_PREFIX}/projects`);
+    expect(res.status).toBe(403);
   });
 
   it("should parse JSON request bodies", async () => {
     const app = createApp();
-    const res = await request(app)
-      .post(`${API_PREFIX}/projects`)
-      .set("Content-Type", "application/json")
-      .send({ name: "Test" });
+    const res = await withLocalSessionAuth(
+      request(app)
+        .post(`${API_PREFIX}/projects`)
+        .set("Content-Type", "application/json")
+        .send({ name: "Test" })
+    );
     // Projects create may return 400/500 without valid setup, but body parsing works
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.body).toBeDefined();
@@ -80,7 +89,9 @@ describe("App", () => {
       )
     );
 
-    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks`);
+    const res = await withLocalSessionAuth(
+      request(app).get(`${API_PREFIX}/projects/proj-1/tasks`)
+    );
 
     expect(res.status).toBe(503);
     expect(res.body.error).toMatchObject({

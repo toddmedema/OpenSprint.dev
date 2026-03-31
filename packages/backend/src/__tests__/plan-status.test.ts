@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
-import request from "supertest";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -156,7 +156,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     await writeSpec(project.repoPath, { executive_summary: { content: "A todo app" } });
 
     const app = createApp();
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({
@@ -183,7 +183,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     );
 
     const app = createApp();
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
 
     expect(res.status).toBe(409);
     expect(res.body.error?.code).toBe("MIGRATION_REQUIRED");
@@ -216,7 +216,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
 
       const app = createApp();
 
-      const decomposeRes = await request(app).post(
+      const decomposeRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/decompose`
       );
       expect(
@@ -231,7 +231,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       );
       expect(rows.length).toBe(1);
 
-      const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+      const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
       expect(statusRes.status).toBe(200);
       expect(statusRes.body.data).toEqual({
         hasPlanningRun: true,
@@ -262,13 +262,13 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     await writeSpec(project.repoPath, { executive_summary: { content: "A todo app" } });
 
     const app = createApp();
-    await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/decompose`);
+    await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/decompose`);
 
     await writeSpec(project.repoPath, {
       executive_summary: { content: "A todo app with new features" },
     });
 
-    const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.data).toEqual({
       hasPlanningRun: true,
@@ -303,7 +303,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       });
 
       const app = createApp();
-      const decomposeRes = await request(app).post(
+      const decomposeRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/decompose`
       );
       expect(
@@ -364,14 +364,14 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
       });
 
       const app = createApp();
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/decompose`);
+      await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/decompose`);
 
       await writeSpec(project.repoPath, {
         executive_summary: { content: "Section A modified" },
         goals_and_metrics: { content: "Section B" },
       });
 
-      const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+      const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
       expect(statusRes.status).toBe(200);
       expect(statusRes.body.data.action).toBe("replan");
       expect(statusRes.body.data.prdChangedSinceLastRun).toBe(true);
@@ -429,7 +429,7 @@ describe.skipIf(!planStatusPostgresOk)("Plan status endpoint and planning run cr
     );
 
     const app = createApp();
-    const statusRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
+    const statusRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plan-status`);
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.data.hasPlanningRun).toBe(true);
     expect(statusRes.body.data.action).toBe("none");

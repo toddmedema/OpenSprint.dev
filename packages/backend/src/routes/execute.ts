@@ -1,5 +1,4 @@
 import { Router, Request } from "express";
-import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
 import { wrapAsync } from "../middleware/wrap-async.js";
 import { validateParams, validateBody, validateQuery } from "../middleware/validate.js";
 import {
@@ -45,7 +44,6 @@ export function createExecuteRouter(
   // POST /projects/:projectId/execute/tasks/:taskId/prepare — Create task directory and prompt (PRD §12.2)
   router.post(
     "/tasks/:taskId/prepare",
-    requireLocalSessionAuth,
     validateParams(taskIdParamSchema),
     validateBody(executePrepareBodySchema),
     wrapAsync(async (req: Request<PrepareParams>, res) => {
@@ -68,7 +66,6 @@ export function createExecuteRouter(
   // POST /projects/:projectId/execute/nudge — Event-driven dispatch trigger (PRDv2 §5.7)
   router.post(
     "/nudge",
-    requireLocalSessionAuth,
     validateParams(projectIdParamSchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const { projectId } = req.params;
@@ -165,7 +162,6 @@ export function createExecuteRouter(
   // POST /projects/:projectId/execute/pause — Pause orchestrator (placeholder; PRD §5.7 always-on)
   router.post(
     "/pause",
-    requireLocalSessionAuth,
     validateParams(projectIdParamSchema),
     wrapAsync(async (_req: Request<ProjectParams>, res) => {
       res.status(501).json({

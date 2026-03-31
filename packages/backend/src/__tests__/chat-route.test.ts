@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import { createApp } from "../app.js";
@@ -13,6 +12,7 @@ import {
   specMarkdownToPrd,
 } from "@opensprint/shared";
 import { createReusedProjectFixture, type ReusedProjectFixture } from "./reused-project-fixture.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 // Stub for legacy beads.service path (module removed; task store used instead). No importOriginal — file is gone.
 vi.mock("../services/beads.service.js", () => ({
@@ -180,7 +180,7 @@ describe.skipIf(!chatRoutePostgresOk)("Chat REST API", () => {
   });
 
   it("GET /projects/:id/chat/history should return empty conversation when none exists", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -190,7 +190,7 @@ describe.skipIf(!chatRoutePostgresOk)("Chat REST API", () => {
   });
 
   it("GET /projects/:id/chat/history should accept context query param", async () => {
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/chat/history?context=plan:auth-plan`
     );
 
@@ -223,14 +223,14 @@ Updated auth flow with OAuth support.
 
     mockInvokePlanningAgent.mockResolvedValue({ content: planUpdateResponse });
 
-    const sendRes = await request(app)
+    const sendRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Add OAuth support", context: "plan:auth-plan" });
 
     expect(sendRes.status).toBe(200);
     expect(sendRes.body.data.message).toBe("Plan updated");
 
-    const historyRes = await request(app).get(
+    const historyRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/chat/history?context=plan:auth-plan`
     );
 
@@ -279,7 +279,7 @@ Updated description for second task.
 
     mockInvokePlanningAgent.mockResolvedValue({ content: planUpdateWithTasks });
 
-    const sendRes = await request(app)
+    const sendRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Add OAuth and refine tasks", context: "plan:auth-plan" });
 
@@ -324,7 +324,7 @@ OAuth support added.
 Let me know if you want to refine further.`,
     });
 
-    const sendRes = await request(app)
+    const sendRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Add OAuth", context: "plan:auth-plan" });
 
@@ -340,14 +340,14 @@ Let me know if you want to refine further.`,
       content: "I can help refine this plan. What would you like to change?",
     });
 
-    const sendRes = await request(app)
+    const sendRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Add more detail to the auth section", context: "plan:auth-plan" });
 
     expect(sendRes.status).toBe(200);
     expect(sendRes.body.data.message).toBeDefined();
 
-    const historyRes = await request(app).get(
+    const historyRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/chat/history?context=plan:auth-plan`
     );
 
@@ -367,7 +367,7 @@ Let me know if you want to refine further.`,
       { id: "q1", text: "Which volunteer roles should be supported?" },
     ]);
 
-    const historyRes = await request(app).get(
+    const historyRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/chat/history?context=plan-draft:draft-1`
     );
 
@@ -395,7 +395,7 @@ Let me know if you want to refine further.`,
       }),
     });
 
-    const sendRes = await request(app)
+    const sendRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Support general volunteers and mentors", context: "plan-draft:draft-2" });
 
@@ -411,7 +411,7 @@ Let me know if you want to refine further.`,
     expect(planRow).not.toBeNull();
     expect(planRow!.content).toContain("Volunteer Signup Form");
 
-    const historyRes = await request(app).get(
+    const historyRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/chat/history?context=plan-draft:draft-2`
     );
     expect(historyRes.body.data.messages.at(-1).content).toBe("Plan generated");
@@ -430,7 +430,7 @@ Let me know if you want to refine further.`,
       }),
     });
 
-    const sendRes = await request(app)
+    const sendRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Support all volunteers", context: "plan-draft:draft-3" });
 
@@ -451,7 +451,7 @@ Let me know if you want to refine further.`,
   });
 
   it("POST /projects/:id/chat should send message and return agent response", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "I want to build a todo app" });
 
@@ -463,7 +463,7 @@ Let me know if you want to refine further.`,
 
   it("POST /projects/:id/chat passes body.images to invokePlanningAgent when present", async () => {
     const images = ["data:image/png;base64,abc123"];
-    await request(app)
+    await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Describe this screenshot", context: "sketch", images });
 
@@ -475,7 +475,7 @@ Let me know if you want to refine further.`,
   it("POST execute chat stores message with task context and does not invoke planning agent", async () => {
     const callCountBefore = mockInvokePlanningAgent.mock.calls.length;
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({
         message: "Use PostgreSQL for the database",
@@ -501,7 +501,7 @@ Let me know if you want to refine further.`,
       })
     );
 
-    const historyRes = await request(app).get(
+    const historyRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/chat/history?context=execute:os-abc.1`
     );
     expect(historyRes.status).toBe(200);
@@ -527,7 +527,7 @@ Let me know if you'd like to refine this further.`;
 
     mockInvokePlanningAgent.mockResolvedValue({ content: agentResponseWithPrdUpdate });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Help me write an executive summary", context: "sketch" });
 
@@ -539,7 +539,7 @@ Let me know if you'd like to refine this further.`;
     expect(res.body.data.prdChanges).toHaveLength(1);
     expect(res.body.data.prdChanges[0].section).toBe("executive_summary");
 
-    const prdRes = await request(app).get(
+    const prdRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
     );
     expect(prdRes.status).toBe(200);
@@ -583,7 +583,7 @@ Let me know if you'd like to expand any section.`;
 
     mockInvokePlanningAgent.mockResolvedValue({ content: agentResponse });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "I want to build a todo app", context: "sketch" });
 
@@ -594,12 +594,12 @@ Let me know if you'd like to expand any section.`;
     expect(sections).toContain("problem_statement");
     expect(sections).toContain("feature_list");
 
-    const execRes = await request(app).get(
+    const execRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
     );
     expect(execRes.body.data.content).toContain("task management app");
 
-    const problemRes = await request(app).get(
+    const problemRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/problem_statement`
     );
     expect(problemRes.status).toBe(200);
@@ -625,7 +625,7 @@ Hope that helps!`;
 
     mockInvokePlanningAgent.mockResolvedValue({ content: agentResponse });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Update both sections", context: "sketch" });
 
@@ -635,12 +635,12 @@ Hope that helps!`;
     expect(sections).toContain("executive_summary");
     expect(sections).toContain("problem_statement");
 
-    const execRes = await request(app).get(
+    const execRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
     );
     expect(execRes.body.data.content).toContain("Product A helps users do X");
 
-    const problemRes = await request(app).get(
+    const problemRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/problem_statement`
     );
     expect(problemRes.body.data.content).toContain("Users currently face Y");
@@ -651,7 +651,7 @@ Hope that helps!`;
       content: "That's a great question! Could you tell me more about your target users?",
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "What should I include?", context: "sketch" });
 
@@ -671,7 +671,7 @@ Our main competitors are X, Y, and Z. We differentiate by offering simpler onboa
 Let me know if you'd like to expand this.`,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Add a competitive landscape section", context: "sketch" });
 
@@ -680,7 +680,7 @@ Let me know if you'd like to expand this.`,
     expect(res.body.data.prdChanges[0].section).toBe("competitive_landscape");
 
     // Simulate refresh: fetch full PRD (as frontend does on load)
-    const prdRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+    const prdRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
     expect(prdRes.status).toBe(200);
     expect(prdRes.body.data.sections.competitive_landscape).toBeDefined();
     expect(prdRes.body.data.sections.competitive_landscape.content).toContain(
@@ -714,27 +714,27 @@ A simple marketing site for Open Sprint.
 [/PRD_UPDATE]`,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Sketch it", context: "sketch" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.prdChanges).toHaveLength(2);
 
-    const prdRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+    const prdRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
     expect(prdRes.status).toBe(200);
     expect(prdRes.body.data.sections.api_contracts.content).toContain("No APIs");
     expect(prdRes.body.data.sections.executive_summary.content).toContain("marketing site");
   });
 
   it("POST /projects/:id/chat should persist conversation; GET history returns it", async () => {
-    const postRes = await request(app)
+    const postRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Hello, help me design my product" });
 
     expect(postRes.status).toBe(200);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/chat/history`);
 
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.messages).toHaveLength(2);
@@ -745,7 +745,7 @@ A simple marketing site for Open Sprint.
   });
 
   it("POST /projects/:id/chat should return 400 when message is empty", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "" });
 
@@ -754,7 +754,7 @@ A simple marketing site for Open Sprint.
   });
 
   it("POST /projects/:id/chat should return 400 when message is missing", async () => {
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/chat`).send({});
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/chat`).send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -770,7 +770,7 @@ A simple marketing site for Open Sprint.
     );
 
     try {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/chat`)
         .send({ message: "hello from migrated app" });
 
@@ -782,7 +782,7 @@ A simple marketing site for Open Sprint.
   });
 
   it("conversation should be stored in project_conversations table", async () => {
-    const postRes = await request(app)
+    const postRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/chat`)
       .send({ message: "Test message" });
 
@@ -803,7 +803,7 @@ A simple marketing site for Open Sprint.
 
   describe("Design phase agent registry", () => {
     it("should register and unregister Sketch chat agent when context is sketch", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/chat`)
         .send({ message: "Help me design my product", context: "sketch" });
 
@@ -831,7 +831,7 @@ A simple marketing site for Open Sprint.
         content: "I can help refine this plan. What would you like to change?",
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/chat`)
         .send({ message: "Refine the acceptance criteria", context: "plan:auth-plan" });
 
@@ -857,7 +857,7 @@ A simple marketing site for Open Sprint.
     it("surfaces a user-visible error when Sketch Dreamer returns an empty response", async () => {
       mockInvokePlanningAgent.mockResolvedValueOnce({ content: "   " });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/chat`)
         .send({ message: "Help me sketch my product", context: "sketch" });
 
@@ -872,7 +872,7 @@ A simple marketing site for Open Sprint.
     it("should unregister even when agent invocation throws", async () => {
       mockInvokePlanningAgent.mockRejectedValueOnce(new Error("Agent unavailable"));
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/chat`)
         .send({ message: "Help me", context: "sketch" });
 
@@ -892,7 +892,7 @@ A simple marketing site for Open Sprint.
         content: "Thanks for clarifying. I'll use PostgreSQL for the database.",
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/chat`)
         .send({ message: "Use PostgreSQL", context: `execute:${task.id}` });
 

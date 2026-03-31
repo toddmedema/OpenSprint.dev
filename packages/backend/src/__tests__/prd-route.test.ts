@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -11,6 +10,7 @@ import {
   pinOpenSprintPathsForTesting,
   resetOpenSprintPathsForTesting,
 } from "./opensprint-path-test-helper.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -116,7 +116,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("GET /projects/:id/prd should return full PRD", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -128,25 +128,25 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("GET /projects/:id/prd should return 404 when project not found", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/prd`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/prd`);
 
     expect(res.status).toBe(404);
     expect(res.body.error?.code).toBe("PROJECT_NOT_FOUND");
   });
 
   it("GET /projects/:id/prd/history should return empty change log when no changes", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
   });
 
   it("GET /projects/:id/prd/history should return change log after updates", async () => {
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
       .send({ content: "Updated summary" });
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -160,15 +160,15 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
 
   describe("GET /projects/:id/prd/diff", () => {
     it("returns diff between fromVersion and current after PRD update", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "First version" });
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "Second version" });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1`
       );
 
@@ -193,7 +193,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 404 when fromVersion has no snapshot", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=99`
       );
 
@@ -203,7 +203,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 400 when fromVersion is missing", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/diff`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/diff`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -211,7 +211,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 400 when fromVersion is not a valid integer", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=abc`
       );
 
@@ -220,11 +220,11 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 200 with no add/remove lines when from and to are identical (same snapshot)", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "Stable body" });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&toVersion=1`
       );
 
@@ -240,11 +240,11 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 404 when toVersion snapshot is missing", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "Only v1" });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&toVersion=5`
       );
 
@@ -254,14 +254,14 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("treats omitted toVersion like current (same as explicit current)", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "Once" });
 
-      const omitted = await request(app).get(
+      const omitted = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1`
       );
-      const explicit = await request(app).get(
+      const explicit = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&toVersion=current`
       );
 
@@ -275,7 +275,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
 
   describe("GET /projects/:id/prd/proposed-diff", () => {
     it("returns 200 and diff when hil_approval notification has scopeChangeMetadata", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
         .send({ content: "Current content" });
 
@@ -298,7 +298,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
         },
       });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
       );
 
@@ -322,7 +322,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 404 for invalid requestId", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=hil-nonexistent`
       );
 
@@ -339,7 +339,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
         questions: [{ id: "q1", text: "Clarification?" }],
       });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${openQuestion.id}`
       );
 
@@ -349,7 +349,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     });
 
     it("returns 400 when requestId is missing", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/proposed-diff`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/proposed-diff`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -392,7 +392,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     // Do not write legacy spec-metadata.json: PrdService reads metadata from DB; if no row
     // and legacy file exists, assertMigrationCompleteForResource throws.
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.content).toBe("Our product solves X");
@@ -401,7 +401,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("GET /projects/:id/prd/:section should return 404 when project not found", async () => {
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/nonexistent-id/prd/executive_summary`
     );
 
@@ -410,14 +410,14 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("GET /projects/:id/prd/:section should return 400 for invalid section key", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/InvalidSection`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/InvalidSection`);
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("INVALID_SECTION");
   });
 
   it("PUT /projects/:id/prd/:section should update section and return version info", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
       .send({ content: "New executive summary content" });
 
@@ -427,26 +427,26 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     expect(res.body.data.previousVersion).toBe(0);
     expect(res.body.data.newVersion).toBe(1);
 
-    const getRes = await request(app).get(
+    const getRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/prd/executive_summary`
     );
     expect(getRes.body.data.content).toBe("New executive summary content");
   });
 
   it("PUT /projects/:id/prd/:section should accept source parameter", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/prd/problem_statement`)
       .send({ content: "Users face challenges", source: "plan" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.newVersion).toBe(1);
 
-    const historyRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
+    const historyRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd/history`);
     expect(historyRes.body.data[0].source).toBe("plan");
   });
 
   it("PUT /projects/:id/prd/:section should return 404 when project not found", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/nonexistent-id/prd/executive_summary`)
       .send({ content: "Some content" });
 
@@ -455,7 +455,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("PUT /projects/:id/prd/:section should return 400 for invalid section key", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/prd/InvalidSection`)
       .send({ content: "Some content" });
 
@@ -464,7 +464,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("PUT /projects/:id/prd/:section should return 400 when content is missing", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
       .send({});
 
@@ -473,7 +473,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("PUT /projects/:id/prd/:section should allow empty string content", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
       .send({ content: "" });
 
@@ -485,7 +485,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
     const mdContent = "# My Product PRD\n\n## Overview\n\nA task management app.";
     const buffer = Buffer.from(mdContent, "utf-8");
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/prd/upload`)
       .attach("file", buffer, "spec.md");
 
@@ -496,7 +496,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   });
 
   it("POST /projects/:id/prd/upload should return 400 when no file provided", async () => {
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/prd/upload`);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/prd/upload`);
 
     expect(res.status).toBe(400);
     expect(res.body.error?.message).toContain("No file");
@@ -505,7 +505,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
   it("POST /projects/:id/prd/upload should return 400 for unsupported file type", async () => {
     const buffer = Buffer.from("content", "utf-8");
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/prd/upload`)
       .attach("file", buffer, "document.txt");
 
@@ -528,14 +528,14 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
         content: `[PRD_UPDATE:executive_summary]\n${prdUpdateContent}\n[/PRD_UPDATE]`,
       });
 
-      const res = await request(app).post(
+      const res = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/prd/generate-from-codebase`
       );
 
       expect(res.status).toBe(204);
       expect(mockInvokePlanningAgent).toHaveBeenCalled();
 
-      const prdRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+      const prdRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
       expect(prdRes.status).toBe(200);
       expect(prdRes.body.data.sections.executive_summary?.content).toBe(prdUpdateContent);
     });
@@ -546,7 +546,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
 
       mockInvokePlanningAgent.mockResolvedValue({ content: "I could not infer a PRD." });
 
-      const res = await request(app).post(
+      const res = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/prd/generate-from-codebase`
       );
 

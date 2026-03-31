@@ -4,7 +4,7 @@
  * Settings are stored in global DB at ~/.opensprint/settings.json keyed by project_id.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import fs from "fs/promises";
 import path from "path";
@@ -364,7 +364,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("GET /api/v1/projects/:id/settings returns two-tier shape, gitWorkingMode, mergeStrategy, and self-improvement fields", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -392,7 +392,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
       selfImprovementLastCommitSha: "abc123def",
     });
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.selfImprovementLastRunAt).toBe("2025-02-01T10:00:00Z");
@@ -405,27 +405,27 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
     vi.useFakeTimers();
     vi.setSystemTime(anchor);
     try {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ selfImprovementFrequency: "daily" });
 
-      const resDaily = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const resDaily = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(resDaily.status).toBe(200);
       expect(resDaily.body.data.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("daily"));
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ selfImprovementFrequency: "weekly" });
 
-      const resWeekly = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const resWeekly = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(resWeekly.status).toBe(200);
       expect(resWeekly.body.data.nextRunAt).toBe(getNextScheduledSelfImprovementRunAt("weekly"));
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ selfImprovementFrequency: "never" });
 
-      const resNever = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const resNever = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(resNever.status).toBe(200);
       expect(resNever.body.data.nextRunAt).toBeUndefined();
     } finally {
@@ -434,7 +434,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings with new field names succeeds", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({
         simpleComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
@@ -449,7 +449,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings triggers orchestrator nudge so changes take effect immediately", async () => {
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ maxConcurrentCoders: 3 });
 
@@ -458,14 +458,14 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
 
   it("PUT /api/v1/projects/:id/settings accepts and persists teamMembers; GET returns it", async () => {
     const teamMembers = [{ id: "alice", name: "Alice" }];
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ teamMembers });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.teamMembers).toEqual(teamMembers);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.teamMembers).toEqual(teamMembers);
 
@@ -475,14 +475,14 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
 
   it("PUT /api/v1/projects/:id/settings accepts teamMembers with empty name (add-then-edit flow)", async () => {
     const teamMembers = [{ id: "uuid-new-member", name: "" }];
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ teamMembers });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.teamMembers).toEqual(teamMembers);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.teamMembers).toEqual(teamMembers);
 
@@ -491,42 +491,42 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings accepts and persists autoExecutePlans; GET returns it", async () => {
-    const getRes0 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes0 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes0.status).toBe(200);
     expect(getRes0.body.data.autoExecutePlans).toBe(false);
 
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ autoExecutePlans: true });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.autoExecutePlans).toBe(true);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.autoExecutePlans).toBe(true);
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
     expect(settings.autoExecutePlans).toBe(true);
 
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ autoExecutePlans: false });
-    const getRes2 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes2 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes2.body.data.autoExecutePlans).toBe(false);
   });
 
   it("PUT /api/v1/projects/:id/settings accepts and persists enableHumanTeammates; GET returns it", async () => {
-    const getRes0 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes0 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes0.body.data.enableHumanTeammates).toBe(false);
 
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ enableHumanTeammates: true });
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.enableHumanTeammates).toBe(true);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.body.data.enableHumanTeammates).toBe(true);
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
@@ -534,14 +534,14 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings accepts and persists gitWorkingMode", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ gitWorkingMode: "branches" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.gitWorkingMode).toBe("branches");
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.body.data.gitWorkingMode).toBe("branches");
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
@@ -549,18 +549,18 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("GET /api/v1/projects/:id/settings returns mergeStrategy; PUT accepts and persists mergeStrategy (round-trip)", async () => {
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.mergeStrategy).toBe("per_task");
 
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ mergeStrategy: "per_epic" });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.mergeStrategy).toBe("per_epic");
 
-    const getRes2 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes2 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes2.body.data.mergeStrategy).toBe("per_epic");
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
@@ -568,7 +568,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings rejects invalid mergeStrategy with 400", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ mergeStrategy: "invalid" });
 
@@ -578,7 +578,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings returns refreshing runtime status when worktreeBaseBranch changes", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ worktreeBaseBranch: "develop" });
 
@@ -589,7 +589,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings forces maxConcurrentCoders to 1 when gitWorkingMode is branches", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ gitWorkingMode: "branches", maxConcurrentCoders: 5 });
 
@@ -603,12 +603,12 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
 
   it("PUT /api/v1/projects/:id/settings rejects invalid gitWorkingMode and keeps current", async () => {
     // First set to branches
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ gitWorkingMode: "branches" });
 
     // Send invalid value — should keep branches (not persist invalid)
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ gitWorkingMode: "invalid" });
 
@@ -632,7 +632,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
       hilConfig: DEFAULT_HIL_CONFIG,
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects`).send(body);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects`).send(body);
 
     expect(res.status).toBe(201);
     expect(res.body.data.id).toBeDefined();
@@ -648,7 +648,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("GET/PUT /api/v1/projects/:id/settings do not accept or return apiKeys (global-only)", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({
         apiKeys: {
@@ -659,7 +659,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
     expect(res.status).toBe(200);
     expect(res.body.data).not.toHaveProperty("apiKeys");
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data).not.toHaveProperty("apiKeys");
 
@@ -670,7 +670,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   it("PUT /api/v1/projects/:id/settings returns 400 when agent config requires API keys but global store has none", async () => {
     await setGlobalSettings({ apiKeys: {} });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({
         simpleComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
@@ -694,7 +694,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
       gitWorkingMode: "branches",
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects`).send(body);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects`).send(body);
 
     expect(res.status).toBe(201);
 
@@ -703,17 +703,17 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings accepts and persists selfImprovementFrequency; GET returns it", async () => {
-    const getRes0 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes0 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes0.body.data.selfImprovementFrequency).toBe("never");
 
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ selfImprovementFrequency: "daily" });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.selfImprovementFrequency).toBe("daily");
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.selfImprovementFrequency).toBe("daily");
 
@@ -749,14 +749,14 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
 
     await Promise.all(
       projectIds.flatMap((id, idx) => [
-        request(app)
+        authedSupertest(app)
           .put(`${API_PREFIX}/projects/${id}/settings`)
           .send({
             maxConcurrentCoders: 2 + idx,
             mergeStrategy: idx % 2 === 0 ? "per_epic" : "per_task",
           })
           .expect(200),
-        request(app)
+        authedSupertest(app)
           .put(`${API_PREFIX}/projects/${id}/settings`)
           .send({
             selfImprovementFrequency: idx % 2 === 0 ? "daily" : "weekly",
@@ -775,7 +775,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
           unknownScopeStrategy: idx % 2 === 0 ? "optimistic" : "conservative",
         } as const;
         finalByProject.set(id, finalExpected);
-        return request(app)
+        return authedSupertest(app)
           .put(`${API_PREFIX}/projects/${id}/settings`)
           .send(finalExpected)
           .expect(200);
@@ -784,7 +784,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
 
     for (const id of projectIds) {
       const expected = finalByProject.get(id)!;
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${id}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${id}/settings`);
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.mergeStrategy).toBe(expected.mergeStrategy);
       expect(getRes.body.data.selfImprovementFrequency).toBe(expected.selfImprovementFrequency);
@@ -800,7 +800,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings ignores selfImprovementLastRunAt and selfImprovementLastCommitSha from client", async () => {
-    const putRes = await request(app).put(`${API_PREFIX}/projects/${projectId}/settings`).send({
+    const putRes = await authedSupertest(app).put(`${API_PREFIX}/projects/${projectId}/settings`).send({
       selfImprovementFrequency: "weekly",
       selfImprovementLastRunAt: "2025-01-15T12:00:00Z",
       selfImprovementLastCommitSha: "client-set-sha",
@@ -818,7 +818,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings rejects invalid selfImprovementFrequency with 400", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ selfImprovementFrequency: "invalid" });
 
@@ -830,33 +830,33 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings accepts and persists runAgentEnhancementExperiments; GET returns it", async () => {
-    const getRes0 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes0 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes0.status).toBe(200);
     expect(getRes0.body.data.runAgentEnhancementExperiments).toBe(false);
 
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ runAgentEnhancementExperiments: true });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.runAgentEnhancementExperiments).toBe(true);
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.runAgentEnhancementExperiments).toBe(true);
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
     expect(settings.runAgentEnhancementExperiments).toBe(true);
 
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ runAgentEnhancementExperiments: false });
-    const getRes2 = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes2 = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes2.body.data.runAgentEnhancementExperiments).toBe(false);
   });
 
   it("PUT /api/v1/projects/:id/settings rejects invalid runAgentEnhancementExperiments with 400", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ runAgentEnhancementExperiments: "yes" });
 
@@ -866,7 +866,7 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT /api/v1/projects/:id/settings persists deployment mode=expo through round-trip (save → reload → verify)", async () => {
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({
         deployment: {
@@ -878,14 +878,14 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.deployment.mode).toBe("expo");
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.deployment.mode).toBe("expo");
 
     const settings = await readProjectFromGlobalStore(tempDir, projectId);
     expect((settings.deployment as Record<string, unknown>).mode).toBe("expo");
 
-    const putAgain = await request(app)
+    const putAgain = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({ maxConcurrentCoders: 2 });
     expect(putAgain.status).toBe(200);
@@ -893,14 +893,14 @@ describe("Settings API lifecycle", { retry: 2 }, () => {
   });
 
   it("PUT deliver/settings mode=expo persists and GET project settings returns it unchanged", async () => {
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
       .send({ mode: "expo" });
 
     expect(putRes.status).toBe(200);
     expect(putRes.body.data.deployment.mode).toBe("expo");
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.deployment.mode).toBe("expo");
   });

@@ -48,21 +48,21 @@ describe("requireLocalSessionAuth middleware (CSRF)", () => {
     ensureLocalSessionToken();
   });
 
-  // ── GET (safe) ──
+  // ── GET (now requires Bearer, same as mutating methods) ──
 
   it("GET with bearer passes", async () => {
     const res = await request(app).get("/safe").set("Authorization", `Bearer ${TOKEN}`);
     expect(res.status).toBe(200);
   });
 
-  it("GET with localhost Origin (no bearer) passes", async () => {
+  it("GET with localhost Origin (no bearer) is rejected", async () => {
     const res = await request(app).get("/safe").set("Origin", "http://localhost:5173");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
-  it("GET with localhost Referer (no bearer) passes", async () => {
+  it("GET with localhost Referer (no bearer) is rejected", async () => {
     const res = await request(app).get("/safe").set("Referer", "http://127.0.0.1:3100/app");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
   it("GET with no credentials is rejected", async () => {

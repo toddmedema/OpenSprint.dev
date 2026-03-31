@@ -16,5 +16,8 @@ export function authedSupertest(app: Parameters<typeof request>[0]) {
   return {
     get: (url: string): Test => withLocalSessionAuth(r.get(url)),
     post: (url: string): Test => withLocalSessionAuth(r.post(url)),
+    put: (url: string): Test => withLocalSessionAuth(r.put(url)),
+    delete: (url: string): Test => withLocalSessionAuth(r.delete(url)),
+    patch: (url: string): Test => withLocalSessionAuth(r.patch(url)),
   };
 }

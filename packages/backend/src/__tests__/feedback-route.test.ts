@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -13,6 +12,7 @@ import {
   pinOpenSprintPathsForTesting,
   resetOpenSprintPathsForTesting,
 } from "./opensprint-path-test-helper.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -121,7 +121,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("GET /projects/:id/feedback should return empty list when no feedback", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/feedback`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/feedback`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
@@ -142,7 +142,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/feedback`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/feedback`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -151,7 +151,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should create feedback and return 201", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/feedback`)
       .send({ text: "Add dark mode toggle" });
 
@@ -166,7 +166,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should return 400 when text is empty", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/feedback`)
       .send({ text: "" });
 
@@ -175,7 +175,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should return 400 when text is missing", async () => {
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/feedback`).send({});
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/feedback`).send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -184,7 +184,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   it("POST /projects/:id/feedback should accept and store image attachments", async () => {
     const base64Image =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/feedback`)
       .send({
         text: "Bug with screenshot",
@@ -212,7 +212,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/feedback/fb-get-1`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/feedback/fb-get-1`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe("fb-get-1");
@@ -221,7 +221,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should preserve submittedPlanId and planVersionNumber for Reply-to-Plan", async () => {
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/feedback`).send({
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/feedback`).send({
       text: "Add login validation tasks",
       planId: "auth-plan",
       planVersionNumber: 2,
@@ -250,7 +250,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/feedback`)
       .send({ text: "Reply to original", parent_id: "parent1" });
 
@@ -260,7 +260,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback should return 404 when parent_id not found", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/feedback`)
       .send({ text: "Reply to missing", parent_id: "nonexistent" });
 
@@ -269,7 +269,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("GET /projects/:id/feedback/:feedbackId should return 404 when not found", async () => {
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/feedback/nonexistent-id`
     );
 
@@ -292,7 +292,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app).post(
+    const res = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/feedback/fb-resolve-1/resolve`
     );
 
@@ -305,7 +305,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback/:feedbackId/resolve should return 404 when not found", async () => {
-    const res = await request(app).post(
+    const res = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/feedback/nonexistent-id/resolve`
     );
 
@@ -343,7 +343,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app).post(
+    const res = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/feedback/fb-cascade-parent/resolve`
     );
 
@@ -369,7 +369,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app).post(
+    const res = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/feedback/fb-cancel-1/cancel`
     );
 
@@ -383,7 +383,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
   });
 
   it("POST /projects/:id/feedback/:feedbackId/cancel should return 404 when not found", async () => {
-    const res = await request(app).post(
+    const res = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/feedback/nonexistent-id/cancel`
     );
 
@@ -409,7 +409,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app).post(
+    const res = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/feedback/fb-cancel-done/cancel`
     );
 
@@ -436,7 +436,7 @@ describe.skipIf(!feedbackRoutePostgresOk)("Feedback REST API", () => {
       null
     );
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/feedback/fb-recat-1/recategorize`)
       .send({ answer: "It happens on the login screen" });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
-import request from "supertest";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import fs from "fs/promises";
 import path from "path";
@@ -98,7 +98,7 @@ async function waitForHistory(
     minRecords: number;
   }
 ) {
-  let historyRes = await request(app).get(
+  let historyRes = await authedSupertest(app).get(
     `${API_PREFIX}/projects/${projectId}/deliver/history?limit=${limit}`
   );
   for (
@@ -107,7 +107,7 @@ async function waitForHistory(
     i++
   ) {
     await new Promise((r) => setTimeout(r, HISTORY_POLL_INTERVAL_MS));
-    historyRes = await request(app).get(
+    historyRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/deliver/history?limit=${limit}`
     );
   }
@@ -122,7 +122,7 @@ async function getWithTransientParseRetry(
   let attempt = 0;
   while (true) {
     try {
-      return await request(app).get(route);
+      return await authedSupertest(app).get(route);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const isTransientParseError = message.includes("Parse Error: Expected HTTP/, RTSP/ or ICE/");
@@ -222,7 +222,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("GET /projects/:projectId/deliver/status", () => {
     it("should return deliver status for existing project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/deliver/status`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/deliver/status`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -233,7 +233,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/status`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/status`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -243,14 +243,14 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("GET /projects/:projectId/deliver/history", () => {
     it("should return empty history for new project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/deliver/history`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/deliver/history`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/history`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/deliver/history`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -260,7 +260,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("POST /projects/:projectId/deliver", () => {
     it("should accept deploy and return deployId", async () => {
-      const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
 
       expect(res.status).toBe(202);
       expect(res.body.data).toBeDefined();
@@ -269,7 +269,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).post(`${API_PREFIX}/projects/nonexistent-id/deliver`);
+      const res = await authedSupertest(app).post(`${API_PREFIX}/projects/nonexistent-id/deliver`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -278,7 +278,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("PUT /projects/:projectId/deliver/settings", () => {
     it("should update deployment settings", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "custom", customCommand: "npm run deploy" });
 
@@ -291,7 +291,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should trigger orchestrator refreshMaxSlotsAndNudge so changes take effect immediately", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "custom", customCommand: "npm run deploy" });
 
@@ -299,7 +299,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should accept and persist autoDeployTrigger per target and autoResolveFeedbackOnTaskCompletion (PRD §7.5.3, §10.2)", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
@@ -323,7 +323,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       });
       expect(res.body.data.deployment.autoResolveFeedbackOnTaskCompletion).toBe(true);
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.body.data.deployment.targets).toHaveLength(2);
       expect(getRes.body.data.deployment.targets[0]).toMatchObject({
         name: "staging",
@@ -337,7 +337,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should accept and persist targets with per-target envVars (PRD §7.5.2/7.5.4)", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
@@ -370,7 +370,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
         envVars: { NODE_ENV: "production", API_URL: "https://api.example.com" },
       });
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.body.data.deployment.targets).toHaveLength(2);
       expect(getRes.body.data.deployment.targets[0].envVars).toEqual({
         NODE_ENV: "staging",
@@ -383,7 +383,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should accept and persist nightlyDeployTime", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
@@ -398,13 +398,13 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
         autoDeployTrigger: "nightly",
       });
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.body.data.deployment.nightlyDeployTime).toBe("03:30");
       expect(getRes.body.data.deployment.targets[0].autoDeployTrigger).toBe("nightly");
     });
 
     it("should migrate legacy autoDeployOnEpicCompletion to per-target autoDeployTrigger", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
@@ -421,7 +421,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       );
       expect(stagingTarget?.autoDeployTrigger).toBe("each_epic");
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.body.data.deployment.autoDeployOnEpicCompletion).toBeUndefined();
       expect(
         getRes.body.data.deployment.targets?.find((t: { name: string }) => t.name === "staging")
@@ -430,7 +430,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should migrate legacy autoDeployOnEvalResolution to per-target autoDeployTrigger", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
@@ -445,7 +445,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       );
       expect(prodTarget?.autoDeployTrigger).toBe("eval_resolution");
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.body.data.deployment.autoDeployOnEvalResolution).toBeUndefined();
       expect(
         getRes.body.data.deployment.targets?.find((t: { name: string }) => t.name === "production")
@@ -454,7 +454,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should accept and persist easProjectId when mode is expo", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "expo",
@@ -465,7 +465,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       expect(res.body.data.deployment.mode).toBe("expo");
       expect(res.body.data.deployment.easProjectId).toBe("abc123-eas-project-id");
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.deployment.easProjectId).toBe("abc123-eas-project-id");
     });
@@ -473,7 +473,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("POST /projects/:projectId/deliver - record fields", () => {
     it("should create deploy record with commitHash, target, mode from settings", async () => {
-      const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
       expect(res.status).toBe(202);
       // Poll for history because deploy completion can be async under load/CI.
       const historyRes = await waitForHistory(app, projectId, { limit: 1, minRecords: 1 });
@@ -488,7 +488,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should deploy to specified target when body.target provided (PRD §7.5.4)", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({
           mode: "custom",
@@ -498,7 +498,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
           ],
         });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver`)
         .send({ target: "production" });
 
@@ -528,7 +528,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should return 400 when deployment mode is not expo", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "beta" });
 
@@ -537,11 +537,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should return 400 when variant is invalid", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "invalid" });
 
@@ -559,11 +559,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
         prompt: authPrompt,
       });
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "beta" });
 
@@ -575,11 +575,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should accept beta variant and return deployId when mode is expo", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "beta" });
 
@@ -589,11 +589,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should accept prod variant and return deployId when mode is expo", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "prod" });
 
@@ -602,11 +602,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should create deploy record with target staging for beta", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      await request(app)
+      await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "beta" });
 
@@ -617,11 +617,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
     });
 
     it("should create deploy record with target production for prod", async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
-      await request(app)
+      await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/deliver/expo-deploy`)
         .send({ variant: "prod" });
 
@@ -645,7 +645,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       vi.mocked(checkExpoAuth).mockResolvedValue({ ok: true });
       vi.mocked(isEasProjectLinked).mockResolvedValue(true);
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
@@ -679,7 +679,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       });
       vi.mocked(isEasProjectLinked).mockResolvedValue(true);
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
@@ -724,7 +724,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       vi.mocked(checkExpoAuth).mockResolvedValue({ ok: true });
       vi.mocked(isEasProjectLinked).mockResolvedValue(false);
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/deliver/settings`)
         .send({ mode: "expo" });
 
@@ -747,11 +747,11 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
 
   describe("POST /projects/:projectId/deliver/:deployId/rollback", () => {
     it("should mark original deploy as rolled_back on success", { timeout: 30000 }, async () => {
-      const res1 = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      const res1 = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
       expect(res1.status).toBe(202);
       const firstDeployId = res1.body.data.deployId as string;
 
-      const res2 = await request(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
+      const res2 = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/deliver`);
       expect(res2.status).toBe(202);
       const secondDeployId = res2.body.data.deployId as string;
 
@@ -770,7 +770,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       const restoreId = deployToRestore!.id;
       const currentId = currentDeploy!.id;
 
-      const rollbackRes = await request(app).post(
+      const rollbackRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/deliver/${restoreId}/rollback`
       );
       expect(rollbackRes.status).toBe(202);
@@ -780,7 +780,7 @@ describe.skipIf(!deployRoutePostgresOk)("Deliver API (phase routes for deploymen
       let records: { id: string; status?: string; rolledBackBy?: string }[] = [];
       for (let i = 0; i < HISTORY_POLL_ATTEMPTS; i++) {
         await new Promise((r) => setTimeout(r, HISTORY_POLL_INTERVAL_MS));
-        historyRes = await request(app).get(
+        historyRes = await authedSupertest(app).get(
           `${API_PREFIX}/projects/${projectId}/deliver/history?limit=5`
         );
         expect(historyRes.status).toBe(200);

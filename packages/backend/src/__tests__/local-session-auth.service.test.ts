@@ -73,72 +73,44 @@ describe("local-session-auth.service", () => {
     expect(requestHasLocalSessionCredential(undefined, undefined, undefined)).toBe(false);
   });
 
-  // ── requestIsAuthenticated (method-aware CSRF protection) ──
+  // ── requestIsAuthenticated (Bearer required for all methods) ──
 
   describe("requestIsAuthenticated", () => {
-    const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
-    const MUTATING_METHODS = ["POST", "PUT", "DELETE", "PATCH"];
+    const ALL_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"];
 
-    describe("safe methods (GET/HEAD/OPTIONS)", () => {
-      for (const method of SAFE_METHODS) {
-        it(`${method} — accepts bearer token`, () => {
-          expect(requestIsAuthenticated(method, BEARER, undefined, undefined)).toBe(true);
-        });
+    for (const method of ALL_METHODS) {
+      it(`${method} — accepts valid bearer token`, () => {
+        expect(requestIsAuthenticated(method, BEARER, undefined, undefined)).toBe(true);
+      });
 
-        it(`${method} — accepts localhost Origin without bearer`, () => {
-          expect(requestIsAuthenticated(method, undefined, LOCALHOST_ORIGIN, undefined)).toBe(true);
-        });
+      it(`${method} — accepts bearer even with localhost origin`, () => {
+        expect(requestIsAuthenticated(method, BEARER, LOCALHOST_ORIGIN, undefined)).toBe(true);
+      });
 
-        it(`${method} — accepts localhost Referer without bearer`, () => {
-          expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(
-            true
-          );
-        });
+      it(`${method} — rejects localhost Origin without bearer`, () => {
+        expect(requestIsAuthenticated(method, undefined, LOCALHOST_ORIGIN, undefined)).toBe(false);
+      });
 
-        it(`${method} — rejects when no credentials at all`, () => {
-          expect(requestIsAuthenticated(method, undefined, undefined, undefined)).toBe(false);
-        });
-      }
-    });
+      it(`${method} — rejects localhost Referer without bearer`, () => {
+        expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(false);
+      });
 
-    describe("mutating methods (POST/PUT/DELETE/PATCH)", () => {
-      for (const method of MUTATING_METHODS) {
-        it(`${method} — accepts valid bearer token`, () => {
-          expect(requestIsAuthenticated(method, BEARER, undefined, undefined)).toBe(true);
-        });
+      it(`${method} — rejects wrong bearer even with localhost origin`, () => {
+        expect(requestIsAuthenticated(method, "Bearer wrong", LOCALHOST_ORIGIN, undefined)).toBe(
+          false
+        );
+      });
 
-        it(`${method} — accepts bearer even with localhost origin`, () => {
-          expect(requestIsAuthenticated(method, BEARER, LOCALHOST_ORIGIN, undefined)).toBe(true);
-        });
-
-        it(`${method} — rejects localhost Origin without bearer (CSRF protection)`, () => {
-          expect(requestIsAuthenticated(method, undefined, LOCALHOST_ORIGIN, undefined)).toBe(
-            false
-          );
-        });
-
-        it(`${method} — rejects localhost Referer without bearer (CSRF protection)`, () => {
-          expect(requestIsAuthenticated(method, undefined, undefined, LOCALHOST_REFERER)).toBe(
-            false
-          );
-        });
-
-        it(`${method} — rejects wrong bearer even with localhost origin`, () => {
-          expect(requestIsAuthenticated(method, "Bearer wrong", LOCALHOST_ORIGIN, undefined)).toBe(
-            false
-          );
-        });
-
-        it(`${method} — rejects no credentials`, () => {
-          expect(requestIsAuthenticated(method, undefined, undefined, undefined)).toBe(false);
-        });
-      }
-    });
+      it(`${method} — rejects no credentials`, () => {
+        expect(requestIsAuthenticated(method, undefined, undefined, undefined)).toBe(false);
+      });
+    }
 
     it("is case-insensitive for method names", () => {
       expect(requestIsAuthenticated("post", BEARER, undefined, undefined)).toBe(true);
       expect(requestIsAuthenticated("post", undefined, LOCALHOST_ORIGIN, undefined)).toBe(false);
-      expect(requestIsAuthenticated("get", undefined, LOCALHOST_ORIGIN, undefined)).toBe(true);
+      expect(requestIsAuthenticated("get", BEARER, undefined, undefined)).toBe(true);
+      expect(requestIsAuthenticated("get", undefined, LOCALHOST_ORIGIN, undefined)).toBe(false);
     });
   });
 });

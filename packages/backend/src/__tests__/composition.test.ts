@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import request from "supertest";
 import { API_PREFIX } from "@opensprint/shared";
 import { createApp } from "../app.js";
 import { createAppServices, type AppServices } from "../composition.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
 import { orchestratorService } from "../services/orchestrator.service.js";
 import { agentInstructionsService } from "../services/agent-instructions.service.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 function createInjectedServices(): AppServices {
   const project = {
@@ -74,11 +74,11 @@ describe("composition", () => {
     const services = createInjectedServices();
     const app = createApp(services);
 
-    await request(app).get(`${API_PREFIX}/projects/proj-1`).expect(200);
-    await request(app).get(`${API_PREFIX}/projects/proj-1/prd`).expect(200);
-    await request(app).get(`${API_PREFIX}/projects/proj-1/chat/history?context=sketch`).expect(200);
-    await request(app).get(`${API_PREFIX}/projects/proj-1/agents/instructions`).expect(200);
-    await request(app).get(`${API_PREFIX}/projects/proj-1/feedback`).expect(200);
+    await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1`).expect(200);
+    await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/prd`).expect(200);
+    await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/chat/history?context=sketch`).expect(200);
+    await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/agents/instructions`).expect(200);
+    await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/feedback`).expect(200);
 
     expect(services.projectService.getProject).toHaveBeenCalledWith("proj-1");
     expect(services.prdService.getPrd).toHaveBeenCalledWith("proj-1");

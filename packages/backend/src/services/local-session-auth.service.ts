@@ -103,26 +103,20 @@ export function requestHasLocalSessionCredential(
   return false;
 }
 
-const MUTATING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
-
 /**
  * For the given HTTP method, decide whether the request is authenticated.
  *
- * - **Mutating methods** (POST, PUT, DELETE, PATCH): require a valid Bearer
- *   token. A localhost Origin/Referer alone is not sufficient because another
- *   app on localhost could forge cross-site requests that the browser would
- *   send with a matching Origin header.
- * - **Safe methods** (GET, HEAD, OPTIONS): accept Bearer **or** localhost
- *   Origin/Referer (backward-compatible).
+ * **All methods** require a valid `Authorization: Bearer <token>`. Accepting a
+ * localhost Origin/Referer alone for GET/HEAD/OPTIONS was removed because
+ * another app on the same machine could exfiltrate data via the victim's
+ * browser — the browser attaches a matching `Origin: http://localhost:…`
+ * header on cross-origin fetches from any local web page.
  */
 export function requestIsAuthenticated(
-  method: string,
+  _method: string,
   authorization: string | undefined,
-  origin: string | undefined,
-  referer: string | undefined
+  _origin: string | undefined,
+  _referer: string | undefined
 ): boolean {
-  if (MUTATING_METHODS.has(method.toUpperCase())) {
-    return requestHasValidBearerToken(authorization);
-  }
-  return requestHasLocalSessionCredential(authorization, origin, referer);
+  return requestHasValidBearerToken(authorization);
 }

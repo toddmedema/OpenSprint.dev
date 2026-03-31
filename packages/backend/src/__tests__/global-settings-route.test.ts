@@ -7,6 +7,7 @@ import os from "os";
 import { globalSettingsRouter } from "../routes/global-settings.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
+import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
 import {
   setGlobalSettings,
   getGlobalSettings,
@@ -17,7 +18,7 @@ import {
   setLocalSessionTokenForTesting,
   VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
 } from "../services/local-session-auth.service.js";
-import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("../db/app-db.js", () => ({
   initAppDb: vi.fn().mockResolvedValue({
@@ -64,6 +65,7 @@ function createGlobalSettingsApp() {
   ensureLocalSessionToken();
   const app = express();
   app.use(express.json());
+  app.use(API_PREFIX, requireLocalSessionAuth);
   app.use(`${API_PREFIX}/global-settings`, globalSettingsRouter);
   app.use(errorHandler);
   return app;
@@ -96,7 +98,7 @@ describe("Global Settings API", () => {
 
   describe("GET /global-settings", () => {
     it("returns masked default databaseUrl when not configured", async () => {
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(res.body.data.databaseUrl).toContain("opensprint.sqlite");
@@ -104,7 +106,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns preferredEditor defaulting to 'auto' when not configured", async () => {
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.preferredEditor).toBe("auto");
     });
@@ -114,7 +116,7 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://user:secret123@db.example.com:5432/mydb",
       });
 
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toBe("postgresql://user:***@db.example.com:5432/mydb");
       expect(res.body.data.databaseUrl).not.toContain("secret123");
@@ -125,7 +127,7 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://admin:xyz@remote.host:15432/prod",
       });
 
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toContain("remote.host");
       expect(res.body.data.databaseUrl).toContain("15432");
@@ -136,9 +138,7 @@ describe("Global Settings API", () => {
 
   describe("PUT /global-settings", () => {
     it("updates databaseUrl and returns masked value", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         databaseUrl: "postgresql://myuser:mypass@supabase.example.com:5432/db",
       });
 
@@ -147,16 +147,14 @@ describe("Global Settings API", () => {
         "postgresql://myuser:***@supabase.example.com:5432/db"
       );
 
-      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.databaseUrl).toBe(
         "postgresql://myuser:***@supabase.example.com:5432/db"
       );
     });
 
     it("accepts postgres:// scheme", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         databaseUrl: "postgres://u:secret@localhost:5432/test",
       });
 
@@ -172,18 +170,14 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://a:b@host:5432/db",
       });
 
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({});
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({});
 
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toBe("postgresql://a:***@host:5432/db");
     });
 
     it("returns 400 when databaseUrl is not a string", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({ databaseUrl: 123 });
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({ databaseUrl: 123 });
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
@@ -191,9 +185,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl is empty", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({ databaseUrl: "   " });
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({ databaseUrl: "   " });
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
@@ -201,18 +193,14 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl has invalid scheme", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({ databaseUrl: "mysql://localhost/db" });
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({ databaseUrl: "mysql://localhost/db" });
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
     });
 
     it("returns 400 when databaseUrl has no host", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({ databaseUrl: "postgresql://" });
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({ databaseUrl: "postgresql://" });
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
@@ -221,9 +209,7 @@ describe("Global Settings API", () => {
     it("round-trips global agent defaults on PUT and GET", async () => {
       const simple = { type: "cursor", model: "global-simple", cliCommand: null };
       const complex = { type: "cursor", model: "global-complex", cliCommand: null };
-      const putRes = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const putRes = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         simpleComplexityAgent: simple,
         complexComplexityAgent: complex,
       });
@@ -231,7 +217,7 @@ describe("Global Settings API", () => {
       expect(putRes.body.data.simpleComplexityAgent).toEqual(simple);
       expect(putRes.body.data.complexComplexityAgent).toEqual(complex);
 
-      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.simpleComplexityAgent).toEqual(simple);
       expect(getRes.body.data.complexComplexityAgent).toEqual(complex);
@@ -242,21 +228,17 @@ describe("Global Settings API", () => {
     });
 
     it("round-trips preferredEditor on PUT and GET", async () => {
-      const putRes = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const putRes = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: "cursor",
       });
       expect(putRes.status).toBe(200);
       expect(putRes.body.data.preferredEditor).toBe("cursor");
-      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.preferredEditor).toBe("cursor");
     });
 
     it("returns 400 for invalid preferredEditor", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: "vim",
       });
       expect(res.status).toBe(400);
@@ -264,12 +246,10 @@ describe("Global Settings API", () => {
     });
 
     it("clears preferredEditor when null (reverts to default auto)", async () => {
-      await withLocalSessionAuth(request(app).put(`${API_PREFIX}/global-settings`)).send({
+      await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: "vscode",
       });
-      const clear = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const clear = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: null,
       });
       expect(clear.status).toBe(200);
@@ -280,9 +260,7 @@ describe("Global Settings API", () => {
 
     it("accepts all valid preferredEditor values", async () => {
       for (const editor of ["vscode", "cursor", "auto"]) {
-        const res = await withLocalSessionAuth(
-          request(app).put(`${API_PREFIX}/global-settings`)
-        ).send({
+        const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
           preferredEditor: editor,
         });
         expect(res.status).toBe(200);
@@ -295,18 +273,14 @@ describe("Global Settings API", () => {
         simpleComplexityAgent: { type: "cursor", model: "x", cliCommand: null },
         complexComplexityAgent: { type: "cursor", model: "y", cliCommand: null },
       });
-      const putRes = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({ simpleComplexityAgent: null, complexComplexityAgent: null });
+      const putRes = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({ simpleComplexityAgent: null, complexComplexityAgent: null });
       expect(putRes.status).toBe(200);
       expect(putRes.body.data.simpleComplexityAgent).toBeUndefined();
       expect(putRes.body.data.complexComplexityAgent).toBeUndefined();
     });
 
     it("returns 400 for invalid global agent config", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         simpleComplexityAgent: { type: "cursor", model: "ok", cliCommand: null },
         complexComplexityAgent: { type: "invalid-type", model: null, cliCommand: null },
       });
@@ -324,7 +298,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys).toBeDefined();
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([{ id: "k1", masked: "••••••••" }]);
@@ -334,7 +308,7 @@ describe("Global Settings API", () => {
     });
 
     it("omits apiKeys when not configured", async () => {
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toBeDefined();
       expect(res.body.data.apiKeys).toBeUndefined();
@@ -348,7 +322,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await request(app).get(`${API_PREFIX}/global-settings`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
         { id: "k1", masked: "••••••••", limitHitAt },
@@ -359,9 +333,7 @@ describe("Global Settings API", () => {
 
   describe("PUT /global-settings with apiKeys", () => {
     it("accepts and persists apiKeys, returns masked", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         apiKeys: {
           ANTHROPIC_API_KEY: [{ id: "k1", value: "sk-ant-new-key" }],
         },
@@ -373,7 +345,7 @@ describe("Global Settings API", () => {
       });
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY[0]).not.toContain("sk-ant-new-key");
 
-      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
         { id: "k1", masked: "••••••••" },
       ]);
@@ -386,9 +358,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         apiKeys: {
           ANTHROPIC_API_KEY: [{ id: "k1" }],
         },
@@ -397,16 +367,14 @@ describe("Global Settings API", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([{ id: "k1", masked: "••••••••" }]);
 
-      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
         { id: "k1", masked: "••••••••" },
       ]);
     });
 
     it("accepts databaseUrl and apiKeys together", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         databaseUrl: "postgresql://u:p@localhost:5432/db",
         apiKeys: {
           CURSOR_API_KEY: [{ id: "c1", value: "cursor-key" }],
@@ -434,16 +402,14 @@ describe("Global Settings API", () => {
         { id: "k1", value: "sk-ant-1" },
         { id: "k2", value: "sk-ant-2" },
       ];
-      const putRes = await withLocalSessionAuth(
-        request(app).put(`${API_PREFIX}/global-settings`)
-      ).send({
+      const putRes = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
         apiKeys: { ANTHROPIC_API_KEY: reordered },
       });
       expect(putRes.status).toBe(200);
       const putIds = putRes.body.data.apiKeys.ANTHROPIC_API_KEY.map((e: { id: string }) => e.id);
       expect(putIds).toEqual(["k3", "k1", "k2"]);
 
-      const getRes = await request(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.status).toBe(200);
       const getIds = getRes.body.data.apiKeys.ANTHROPIC_API_KEY.map((e: { id: string }) => e.id);
       expect(getIds).toEqual(["k3", "k1", "k2"]);
@@ -458,27 +424,21 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await withLocalSessionAuth(
-        request(app).get(`${API_PREFIX}/global-settings/reveal-key/ANTHROPIC_API_KEY/k1`)
-      );
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings/reveal-key/ANTHROPIC_API_KEY/k1`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ value: "sk-ant-secret-123" });
     });
 
     it("returns 404 when key not found", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).get(`${API_PREFIX}/global-settings/reveal-key/ANTHROPIC_API_KEY/nonexistent`)
-      );
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings/reveal-key/ANTHROPIC_API_KEY/nonexistent`);
 
       expect(res.status).toBe(404);
       expect(res.body.error?.code).toBe("NOT_FOUND");
     });
 
     it("returns 400 for invalid provider", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).get(`${API_PREFIX}/global-settings/reveal-key/INVALID_PROVIDER/k1`)
-      );
+      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings/reveal-key/INVALID_PROVIDER/k1`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -494,9 +454,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`)
-      );
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`);
 
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([{ id: "k1", masked: "••••••••" }]);
@@ -507,9 +465,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 for invalid provider", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/INVALID_PROVIDER/k1`)
-      );
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/INVALID_PROVIDER/k1`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -522,9 +478,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/CURSOR_API_KEY/c1`)
-      );
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/CURSOR_API_KEY/c1`);
 
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.CURSOR_API_KEY).toEqual([{ id: "c1", masked: "••••••••" }]);
@@ -542,9 +496,7 @@ describe("Global Settings API", () => {
         { id: "proj-b", name: "B", repoPath: "/b", createdAt: new Date().toISOString() },
       ]);
 
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`)
-      );
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`);
 
       expect(res.status).toBe(200);
       expect(mockNudge).toHaveBeenCalledTimes(2);
@@ -555,9 +507,7 @@ describe("Global Settings API", () => {
 
   describe("POST /global-settings/setup-tables", () => {
     it("returns 400 when databaseUrl is missing", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/setup-tables`)
-      ).send({});
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/setup-tables`).send({});
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -565,9 +515,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl is empty", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/setup-tables`)
-      ).send({ databaseUrl: "   " });
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/setup-tables`).send({ databaseUrl: "   " });
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -575,9 +523,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl has invalid scheme", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/setup-tables`)
-      ).send({ databaseUrl: "mysql://localhost/db" });
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/setup-tables`).send({ databaseUrl: "mysql://localhost/db" });
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("INVALID_INPUT");
@@ -592,9 +538,7 @@ describe("Global Settings API", () => {
         return; // Skip if test DB not available
       }
 
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/global-settings/setup-tables`)
-      ).send({ databaseUrl: testUrl });
+      const res = await authedSupertest(app).post(`${API_PREFIX}/global-settings/setup-tables`).send({ databaseUrl: testUrl });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ ok: true });

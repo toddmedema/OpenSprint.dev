@@ -1,5 +1,4 @@
 import { Router, Request } from "express";
-import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
 import { wrapAsync } from "../middleware/wrap-async.js";
 import { validateParams, validateBody } from "../middleware/validate.js";
 import {
@@ -104,7 +103,6 @@ export function createAgentsRouter({
   // POST /projects/:projectId/agents/:agentId/kill — Terminate agent process (Execute phase only)
   agentsRouter.post(
     "/:agentId/kill",
-    requireLocalSessionAuth,
     validateParams(agentKillParamsSchema),
     wrapAsync(async (req: Request<KillParams>, res) => {
       const { projectId, agentId } = req.params;
