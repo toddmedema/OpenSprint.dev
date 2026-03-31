@@ -182,7 +182,7 @@ export function SidebarSectionNav({
           id="sidebar-section-nav-select"
           value={activeSectionId ?? sections[0]?.id ?? ""}
           onChange={(e) => jumpToSection(e.target.value)}
-          className="min-w-0 flex-1 text-xs bg-theme-surface border border-theme-border rounded px-2 py-1 text-theme-text"
+          className="input min-w-0 flex-1 text-xs"
           aria-label="Jump to section"
           data-testid="sidebar-section-nav-select"
         >
