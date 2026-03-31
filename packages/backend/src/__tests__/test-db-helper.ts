@@ -101,10 +101,27 @@ function sanitizeSchemaPart(value: string, maxLen = 32): string {
   return (sanitized || "x").slice(0, maxLen);
 }
 
+/**
+ * When Vitest runs multiple projects in parallel (e.g. backend-unit + backend-integration),
+ * workers in different projects can share the same VITEST_POOL_ID (often "0"). Without a
+ * per-project disambiguator they would use the same Postgres schema and TRUNCATE races cause
+ * flaky integration tests (e.g. PRD snapshot missing → 404).
+ *
+ * Set `OPENSPRINT_VITEST_SCHEMA_SCOPE` in each Vitest project config (`test.env`).
+ */
+const VITEST_SCHEMA_SCOPE_ENV = "OPENSPRINT_VITEST_SCHEMA_SCOPE";
+
+function vitestSchemaScopePrefix(): string {
+  const raw = process.env[VITEST_SCHEMA_SCOPE_ENV]?.trim();
+  if (!raw) return "";
+  return `${sanitizeSchemaPart(raw, 12)}_`;
+}
+
 export function buildVitestSchemaName(runId: string, workerId: string): string {
   const runPart = sanitizeSchemaPart(runId, 20);
   const workerPart = sanitizeSchemaPart(workerId, 20);
-  return `vitest_${runPart}_${workerPart}`;
+  const scope = vitestSchemaScopePrefix();
+  return `vitest_${scope}${runPart}_${workerPart}`;
 }
 
 export function createTestProjectId(prefix = "test-project"): string {
@@ -128,7 +145,7 @@ function withWorkerScopedSchema(url: string): { url: string; schema: string | nu
   try {
     const schema = runId
       ? buildVitestSchemaName(runId, workerId ?? "main")
-      : `vitest_${sanitizeSchemaPart(workerId ?? "main")}`;
+      : `vitest_${vitestSchemaScopePrefix()}${sanitizeSchemaPart(workerId ?? "main")}`;
     const u = new URL(url);
     const options = u.searchParams.get("options") ?? "";
     if (!options.includes("search_path=")) {

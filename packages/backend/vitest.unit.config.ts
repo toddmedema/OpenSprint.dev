@@ -16,6 +16,7 @@ export default defineProject({
     name: "backend-unit",
     include: backendTestInclude,
     exclude: backendUnitExclude,
+    env: { OPENSPRINT_VITEST_SCHEMA_SCOPE: "unit" },
     pool: "forks",
     minWorkers: 1,
     maxWorkers: unitWorkers,

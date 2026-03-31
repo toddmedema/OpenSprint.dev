@@ -24,6 +24,7 @@ export default defineProject({
     ...backendCommonTestConfig,
     name: "backend-env-route",
     include: ["src/__tests__/env-route.test.ts"],
+    env: { OPENSPRINT_VITEST_SCHEMA_SCOPE: "env" },
     pool: "forks",
     fileParallelism: false,
     maxWorkers: 1,
