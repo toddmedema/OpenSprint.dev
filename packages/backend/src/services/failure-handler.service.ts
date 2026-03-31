@@ -6,7 +6,7 @@
  * Delegates retry execution back to the host via callbacks.
  */
 
-import type { AgentConfig, ServerEvent, TestResults } from "@opensprint/shared";
+import type { AgentConfig, DebugArtifact, ServerEvent, TestResults } from "@opensprint/shared";
 import {
   AGENT_INACTIVITY_TIMEOUT_MS,
   BACKOFF_FAILURE_THRESHOLD,
@@ -44,6 +44,10 @@ import {
   extractNoResultReasonFromOutput,
   type NoResultReasonCode,
 } from "./no-result-reason.service.js";
+import {
+  suggestPolicyFromArtifact,
+  summarizeDebugArtifact,
+} from "./agentic-repair.service.js";
 
 const log = createLogger("failure-handler");
 
@@ -151,6 +155,7 @@ export interface FailureHandlerHost {
       complexComplexityAgent: { type: string; model?: string | null };
       gitWorkingMode?: "worktree" | "branches";
       worktreeBaseBranch?: string;
+      agenticRepairEnabled?: boolean;
     }>;
   };
   persistCounters(projectId: string, repoPath: string): Promise<void>;
@@ -665,6 +670,7 @@ export class FailureHandlerService {
     options?: {
       reviewScope?: string;
       noResultReasonCode?: NoResultReasonCode;
+      agentDebugArtifact?: DebugArtifact;
     }
   ): Promise<void> {
     const state = this.host.getState(projectId);
@@ -725,6 +731,10 @@ export class FailureHandlerService {
       effectiveReason
     );
     const failSettings = await this.host.projectService.getSettings(projectId);
+    const artifact = options?.agentDebugArtifact ?? null;
+    const artifactSummary = summarizeDebugArtifact(artifact);
+    const artifactPolicyDecision =
+      failSettings.agenticRepairEnabled !== false ? suggestPolicyFromArtifact(artifact) : null;
     const agentConfig = slot.activeAgentConfig ?? failSettings.simpleComplexityAgent;
     const agentProvider = getProviderForAgentType(
       agentConfig.type as import("@opensprint/shared").AgentType
@@ -766,7 +776,15 @@ export class FailureHandlerService {
       providerOutageUntil: providerOutageBackoff?.until ?? null,
       providerOutageAttempts: providerOutageBackoff?.attempts ?? null,
       provider: agentProvider ?? null,
+      debugArtifactSummary: artifactSummary,
+      debugArtifactRootCause: artifact?.rootCauseCategory ?? null,
+      debugArtifactNextAction: artifact?.nextAction ?? null,
     };
+    if (artifactPolicyDecision === "escalate") {
+      nextAction = "Escalated based on agent diagnosis";
+    } else if (artifactPolicyDecision === "block") {
+      nextAction = "Blocked pending user or maintainer intervention";
+    }
     // Surface failures in the notification system only when not a review-phase failure, or when
     // we will block (review notifications are created in blockTask when retries exceed limit).
     if (slot.phase !== "review") {
@@ -848,7 +866,7 @@ export class FailureHandlerService {
           reason: effectiveReason.slice(0, 500),
           summary: failureSummary,
           nextAction,
-          policyDecision: null,
+          policyDecision: artifactPolicyDecision,
           ...commonFailureContext,
           ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },
@@ -960,6 +978,9 @@ export class FailureHandlerService {
         testResults: testResults ?? undefined,
         gitDiff: gitDiff || undefined,
         startedAt: slot.agent.startedAt,
+        debugArtifactSummary: artifactSummary,
+        repairIterations: artifact ? 1 : 0,
+        rootCauseCategory: artifact?.rootCauseCategory ?? null,
       });
       await this.host.sessionManager.archiveSession(
         repoPath,
@@ -982,6 +1003,40 @@ export class FailureHandlerService {
     await this.host.taskStore
       .comment(projectId, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));
+
+    if (artifactPolicyDecision === "block" || artifactPolicyDecision === "escalate") {
+      await this.host.taskStore.setCumulativeAttempts(projectId, task.id, cumulativeAttempts, {
+        currentLabels: (task.labels ?? []) as string[],
+      });
+      await this.revertOrRemoveWorktree(repoPath, task.id, branchName, slot, gitWorkingMode, {
+        baseBranch,
+        deleteBranch: true,
+      });
+      await this.host.deleteAssignment(repoPath, task.id);
+      await this.blockTask(
+        projectId,
+        repoPath,
+        task,
+        cumulativeAttempts,
+        artifactSummary
+          ? `${effectiveReason} | Agent diagnosis: ${artifactSummary}`
+          : effectiveReason,
+        failureType,
+        slot.phase,
+        agentConfig.model ?? null,
+        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+        persistedRetryContext,
+        undefined,
+        {
+          blockReason:
+            artifactPolicyDecision === "escalate"
+              ? "Escalated by agent diagnosis"
+              : "Blocked by agent diagnosis",
+          diagnostics: commonFailureContext,
+        }
+      );
+      return;
+    }
 
     if (
       failureType === "no_result" &&

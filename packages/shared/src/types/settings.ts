@@ -877,6 +877,13 @@ export interface ProjectSettings {
    * the success path. Set false to rely on prompt-only gate guidance (legacy / tests).
    */
   enforceMergeGatesOnCodingSuccess?: boolean;
+  /**
+   * When true, agents are empowered to diagnose and repair failures (gate, test, dependency)
+   * directly instead of relying on hardcoded error-fingerprint remediation branches.
+   * Agents receive a FailureDebugPacket and return a DebugArtifact with root-cause taxonomy.
+   * Default: true.
+   */
+  agenticRepairEnabled?: boolean;
   /** When true, Plan phase supports single-step Execute (generate tasks and run); when false, two-step flow (Generate Tasks then Execute). Default: false. */
   autoExecutePlans?: boolean;
   /** When true, self-improvement runs execute the experiment/promote pipeline; when false, runs are audit-only. Default: false. */
@@ -1263,6 +1270,7 @@ export function parseSettings(raw: unknown): ProjectSettings {
     ...(maxTotalConcurrentAgents != null && { maxTotalConcurrentAgents }),
     unknownScopeStrategy,
     enforceMergeGatesOnCodingSuccess: r?.enforceMergeGatesOnCodingSuccess === false ? false : true,
+    agenticRepairEnabled: r?.agenticRepairEnabled === false ? false : true,
     enableHumanTeammates,
     teamMembers: parseTeamMembers(r?.teamMembers),
     selfImprovementFrequency,

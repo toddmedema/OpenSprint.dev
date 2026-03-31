@@ -47,6 +47,8 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
     "- If you add or change dependencies, run the repo’s package-manager install from the repository root, update lockfiles, and commit those changes with the code that imports the new packages.",
     "- Commit logical units as you go so partial progress is recoverable.",
     "- Follow the required completion payload exactly, and do not push, merge, or perform broad destructive cleanup unless the prompt explicitly directs it.",
+    "- When a build, test, lint, or dependency command fails, diagnose the root cause from the error output before attempting a fix. Run the failing command again after your fix to verify. Do not guess at solutions without reading the error.",
+    "- If your result includes a `debugArtifact` field, populate it honestly: categorize the root cause, describe what you found and what you changed, and report whether verification passed.",
   ].join("\n"),
   reviewer: [
     "- Review against the task, acceptance criteria, and provided implementation context first.",
@@ -56,11 +58,15 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
     "- Treat nondeterministic failure signatures (e.g. intermittent socket hang up/parse errors, pass-then-fail without code changes) as potential test-infrastructure defects; request isolation controls (single worker/fileParallelism off), deterministic setup/teardown, and mock/timer restoration where needed.",
     "- When approving, confirm test changes preserve determinism: no hidden network dependence, no wall-clock/date race assumptions, no persistent filesystem residue, and no cross-suite coupling through globals.",
     "- Return only findings and approval state supported by the code and the requested review contract.",
+    "- When a review-phase gate fails, diagnose from orchestrator-provided status/output first. If the defect is in the reviewed code, reject with an actionable fix description. Only rerun a targeted gate when the prompt explicitly allows local reruns for this review task.",
+    "- Include a `debugArtifact` in your result when you encounter and diagnose a gate or test failure, even if you ultimately approve.",
   ].join("\n"),
   merger: [
     "- Resolve only the merge or rebase problem in front of you. Preserve user and task intent from both sides of the conflict.",
     "- Prefer targeted verification for the conflicted area and avoid unrelated refactors while resolving conflicts.",
     "- Do not push, publish, or take ownership of repo-wide cleanup outside the merge-resolution contract.",
+    "- When post-merge quality gates fail, diagnose the root cause from gate output. Fix dependency drift, missing installs, or config mismatches directly. Run the failing gate again to verify before reporting.",
+    "- Include a `debugArtifact` in your result describing what broke and how you fixed it.",
   ].join("\n"),
 };
 

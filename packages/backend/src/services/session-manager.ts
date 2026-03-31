@@ -9,6 +9,7 @@ import type {
   TestResults,
   AgentType,
   ReviewAngle,
+  RootCauseCategory,
 } from "@opensprint/shared";
 import { ensureRuntimeDir, getRuntimePath } from "../utils/runtime-dir.js";
 import { getSafeTaskActiveDir } from "../utils/path-safety.js";
@@ -169,6 +170,9 @@ export class SessionManager {
       testResults?: TestResults;
       failureReason?: string;
       startedAt: string;
+      debugArtifactSummary?: string | null;
+      repairIterations?: number | null;
+      rootCauseCategory?: RootCauseCategory | null;
     }
   ): Promise<AgentSession> {
     const session: AgentSession = {
@@ -185,6 +189,9 @@ export class SessionManager {
       testResults: params.testResults ?? null,
       failureReason: params.failureReason ?? null,
       summary: params.summary,
+      debugArtifactSummary: params.debugArtifactSummary ?? null,
+      repairIterations: params.repairIterations ?? null,
+      rootCauseCategory: params.rootCauseCategory ?? null,
     };
 
     return session;
@@ -212,8 +219,8 @@ export class SessionManager {
     const truncatedGitDiff = truncateToThreshold(session.gitDiff, LOG_DIFF_TRUNCATE_AT_CHARS);
     await taskStore.runWrite(async (client) => {
       await client.execute(
-        `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary, debug_artifact_summary, repair_iterations, root_cause_category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
         [
           projectId,
           taskId,
@@ -229,6 +236,9 @@ export class SessionManager {
           session.testResults ? JSON.stringify(session.testResults) : null,
           session.failureReason ?? null,
           session.summary ?? null,
+          session.debugArtifactSummary ?? null,
+          session.repairIterations ?? null,
+          session.rootCauseCategory ?? null,
         ]
       );
     });
@@ -305,7 +315,7 @@ export class SessionManager {
     const projectId = await this.repoPathToProjectId(repoPath);
     const client = await taskStore.getDb();
     const row = await client.queryOne(
-      "SELECT task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary FROM agent_sessions WHERE project_id = $1 AND task_id = $2 AND attempt = $3",
+      "SELECT task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary, debug_artifact_summary, repair_iterations, root_cause_category FROM agent_sessions WHERE project_id = $1 AND task_id = $2 AND attempt = $3",
       [projectId, taskId, attempt]
     );
     if (!row) return null;
@@ -319,7 +329,7 @@ export class SessionManager {
     const projectId = await this.repoPathToProjectId(repoPath);
     const client = await taskStore.getDb();
     const rows = await client.query(
-      "SELECT task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary FROM agent_sessions WHERE project_id = $1 AND task_id = $2 ORDER BY attempt ASC",
+      "SELECT task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary, debug_artifact_summary, repair_iterations, root_cause_category FROM agent_sessions WHERE project_id = $1 AND task_id = $2 ORDER BY attempt ASC",
       [projectId, taskId]
     );
     return rows.map((r) => rowToSession(r as Record<string, unknown>));
@@ -332,7 +342,7 @@ export class SessionManager {
     const projectId = await this.repoPathToProjectId(repoPath);
     const client = await taskStore.getDb();
     const rows = await client.query(
-      "SELECT task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary FROM agent_sessions WHERE project_id = $1 ORDER BY task_id, attempt ASC",
+      "SELECT task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary, debug_artifact_summary, repair_iterations, root_cause_category FROM agent_sessions WHERE project_id = $1 ORDER BY task_id, attempt ASC",
       [projectId]
     );
     const result = new Map<string, AgentSession[]>();
@@ -399,5 +409,8 @@ function rowToSession(row: Record<string, unknown>): AgentSession {
       : null,
     failureReason: (row.failure_reason as string) ?? null,
     summary: row.summary as string | undefined,
+    debugArtifactSummary: (row.debug_artifact_summary as string) ?? null,
+    repairIterations: (row.repair_iterations as number) ?? null,
+    rootCauseCategory: (row.root_cause_category as AgentSession["rootCauseCategory"]) ?? null,
   };
 }

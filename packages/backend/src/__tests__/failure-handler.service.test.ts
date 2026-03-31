@@ -542,6 +542,112 @@ describe("FailureHandlerService", () => {
     });
   });
 
+  describe("agentic debug artifact policy routing", () => {
+    it("blocks immediately when debugArtifact requests block", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.attempt = 1;
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Tests failed: 1 failed, 0 passed",
+        null,
+        "test_failure",
+        undefined,
+        {
+          agentDebugArtifact: {
+            rootCauseCategory: "requirements_ambiguous",
+            evidence: "Need product clarification before proceeding safely",
+            fixApplied: null,
+            verificationCommand: null,
+            verificationPassed: null,
+            residualRisk: "Could implement wrong behavior without clarification",
+            nextAction: "block",
+          },
+        }
+      );
+
+      expect(mockHost.executeCodingPhase).not.toHaveBeenCalled();
+      expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "blocked",
+          block_reason: "Blocked by agent diagnosis",
+        })
+      );
+      expect(eventLogService.append).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({
+          event: "task.failed",
+          data: expect.objectContaining({
+            policyDecision: "block",
+            debugArtifactNextAction: "block",
+            debugArtifactRootCause: "requirements_ambiguous",
+          }),
+        })
+      );
+    });
+
+    it("blocks immediately when debugArtifact requests escalate", async () => {
+      const slot = makeSlot("/tmp/worktree");
+      slot.attempt = 1;
+      mockHost.getState = vi.fn().mockReturnValue({
+        slots: new Map([[taskId, slot]]),
+        status: { totalFailed: 0, queueDepth: 0 },
+      });
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        "Merge quality gate failed",
+        null,
+        "merge_quality_gate",
+        undefined,
+        {
+          agentDebugArtifact: {
+            rootCauseCategory: "external_blocker",
+            evidence: "Remote package registry outage blocked installs",
+            fixApplied: null,
+            verificationCommand: "npm ci",
+            verificationPassed: false,
+            residualRisk: "Cannot restore dependency install until outage clears",
+            nextAction: "escalate",
+          },
+        }
+      );
+
+      expect(mockHost.executeCodingPhase).not.toHaveBeenCalled();
+      expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+        projectId,
+        taskId,
+        expect.objectContaining({
+          status: "blocked",
+          block_reason: "Escalated by agent diagnosis",
+        })
+      );
+      expect(eventLogService.append).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({
+          event: "task.failed",
+          data: expect.objectContaining({
+            policyDecision: "escalate",
+            debugArtifactNextAction: "escalate",
+            debugArtifactRootCause: "external_blocker",
+          }),
+        })
+      );
+    });
+  });
+
   it("passes highlighted test failures into coder retry context", async () => {
     const slot = makeSlot("/tmp/worktree");
     slot.phaseResult.validationCommand =

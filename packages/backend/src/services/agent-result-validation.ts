@@ -1,10 +1,12 @@
 import type { CodingAgentResult, ReviewAgentResult } from "@opensprint/shared";
 import { normalizeCodingStatus, normalizeReviewStatus } from "./result-normalizers.js";
+import { parseDebugArtifact } from "./agentic-repair.service.js";
 
 export interface MergerAgentResult {
   status: "success" | "failed";
   summary: string;
   notes?: string;
+  debugArtifact?: import("@opensprint/shared").DebugArtifact;
 }
 
 function parseJsonRecord(raw: string): Record<string, unknown> | null {
@@ -59,6 +61,9 @@ export function parseCodingAgentResult(raw: string | null | undefined): CodingAg
     }),
   };
 
+  const debugArtifact = parseDebugArtifact(record);
+  if (debugArtifact) candidate.debugArtifact = debugArtifact;
+
   (candidate as { status: string }).status = record.status;
 
   normalizeCodingStatus(candidate);
@@ -92,6 +97,9 @@ export function parseReviewAgentResult(raw: string | null | undefined): ReviewAg
     notes: typeof record.notes === "string" ? record.notes : "",
   };
 
+  const debugArtifact = parseDebugArtifact(record);
+  if (debugArtifact) candidate.debugArtifact = debugArtifact;
+
   (candidate as { status: string }).status = record.status;
 
   normalizeReviewStatus(candidate);
@@ -118,12 +126,14 @@ export function parseMergerAgentResult(raw: string | null | undefined): MergerAg
     return null;
   }
 
+  const mergerDebugArtifact = parseDebugArtifact(record);
   return {
     status,
     summary,
     ...(typeof record.notes === "string" && record.notes.trim() !== ""
       ? { notes: record.notes.trim() }
       : {}),
+    ...(mergerDebugArtifact ? { debugArtifact: mergerDebugArtifact } : {}),
   };
 }
 

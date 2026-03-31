@@ -18,6 +18,10 @@ import { notificationService } from "./notification.service.js";
 import { getRuntimePath } from "../utils/runtime-dir.js";
 import { getSafeTaskActiveDir } from "../utils/path-safety.js";
 import { getOrchestratorTestStatusPromptPath } from "./orchestrator-test-status.js";
+import {
+  buildFailureDebugPacket,
+  formatDebugPacketForPrompt,
+} from "./agentic-repair.service.js";
 import { buildPromptEnvelope } from "../utils/prompt-cache.js";
 
 /** Short checklist items per review angle for angle-specific prompts. Exported for epic final review. */
@@ -427,6 +431,36 @@ export class ContextAssembler {
   }
 
   /**
+   * Build a language-agnostic agentic repair section for retry prompts.
+   * Instead of hardcoded framework-specific remediation instructions,
+   * this gives the agent structured failure context and asks it to
+   * diagnose, fix, verify, and report a debugArtifact.
+   */
+  private buildAgenticRepairSection(config: ActiveTaskConfig): string {
+    if (config.agenticRepairEnabled === false) {
+      return "";
+    }
+    const qg = config.qualityGateDetail;
+    const packet = buildFailureDebugPacket({
+      phase: config.phase === "review" ? "review" : "coding",
+      attempt: config.attempt,
+      command: qg?.command ?? null,
+      cwd: qg?.cwd ?? null,
+      exitCode: qg?.exitCode ?? null,
+      signal: qg?.signal ?? null,
+      stdout: qg?.outputSnippet ?? null,
+      stderr: qg?.reason ?? config.previousFailure ?? null,
+      changedFiles: [],
+      gitDiffSummary: config.previousDiff?.slice(0, 500) ?? null,
+      failureType: config.qualityGateDetail?.category ?? "unknown",
+      previousAttemptSummaries: (config.failureHistory ?? []).map(
+        (h) => `[${h.failureType}] ${h.summary}`
+      ),
+    });
+    return formatDebugPacketForPrompt(packet);
+  }
+
+  /**
    * Collect diffs/summaries from completed dependency tasks for context assembly (PRD §7.3.2).
    * Only uses approved sessions (tasks that reached Done); skips gating tasks and failed attempts.
    * Sessions are stored at .opensprint/sessions/<task-id>-<attempt>/session.json
@@ -614,6 +648,8 @@ export class ContextAssembler {
         prompt += `Here is the diff from your previous attempt. Use it to understand what you tried before and avoid repeating the same mistakes:\n\n`;
         prompt += `\`\`\`diff\n${config.previousDiff.trim().slice(0, 4000)}\n\`\`\`\n\n`;
       }
+
+      prompt += this.buildAgenticRepairSection(config);
     }
 
     prompt += this.buildStructuredOutputRepairSection({
@@ -827,12 +863,19 @@ export class ContextAssembler {
       previousFailure: config.previousFailure,
     });
 
+    if (config.previousFailure && config.qualityGateDetail && config.agenticRepairEnabled !== false) {
+      prompt += this.buildAgenticRepairSection(config);
+    }
+
     prompt += `## Important\n\n`;
     prompt += `- In rejection feedback, cite file:line or snippet. Vague feedback like "improve tests" is not actionable.\n`;
     prompt += `- Do NOT reject solely because there were no new code edits; verify whether the ticket scope is already implemented and approve when it is.\n`;
     prompt += `- Do NOT approve out of lenience. If acceptance criteria are unmet or tests fail, reject.\n`;
     prompt += `- Do NOT reject for style preferences (e.g., 2-space vs 4-space) unless the project has an explicit style guide in the repo.\n`;
     prompt += `- Do NOT merge the branch — the orchestrator handles merging after approval.\n`;
+    if (config.agenticRepairEnabled !== false) {
+      prompt += `- When you diagnose and repair a gate failure, include a \`debugArtifact\` in your result JSON (see Failure Context section if present).\n`;
+    }
 
     return prompt;
   }

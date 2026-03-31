@@ -121,6 +121,11 @@ ALTER TABLE agent_stats ADD COLUMN IF NOT EXISTS prompt_fingerprint TEXT;
 ALTER TABLE agent_stats ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER;
 ALTER TABLE agent_stats ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER;
 
+-- Agentic repair telemetry (debug artifact summary, repair iteration count)
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS debug_artifact_summary TEXT;
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS repair_iterations INTEGER;
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS root_cause_category TEXT;
+
 -- Orchestrator events (SQL-only)
 CREATE TABLE IF NOT EXISTS orchestrator_events (
     id         SERIAL PRIMARY KEY,
@@ -808,6 +813,11 @@ CREATE TABLE IF NOT EXISTS integration_import_ledger (
     UNIQUE (project_id, provider, external_item_id)
 );
 CREATE INDEX IF NOT EXISTS idx_integration_import_ledger_project_provider_status ON integration_import_ledger(project_id, provider, import_status);
+
+-- Agentic repair telemetry (debug artifact summary, repair iteration count)
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS debug_artifact_summary TEXT;
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS repair_iterations INTEGER;
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS root_cause_category TEXT;
 `;
 
 /** Strip leading comment-only and empty lines so statements starting with "-- Comment\nCREATE ..." are executed. */

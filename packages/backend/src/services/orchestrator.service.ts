@@ -133,6 +133,7 @@ import {
   parseCodingAgentResult,
   parseReviewAgentResult,
 } from "./agent-result-validation.js";
+import { summarizeDebugArtifact } from "./agentic-repair.service.js";
 
 const log = createLogger("orchestrator");
 
@@ -2545,7 +2546,9 @@ export class OrchestratorService {
         branchName,
         reason,
         null,
-        "coding_failure"
+        "coding_failure",
+        undefined,
+        { agentDebugArtifact: result.debugArtifact }
       );
     }
   }
@@ -3735,6 +3738,9 @@ export class OrchestratorService {
       failureReason: result.summary || "Review rejected (no summary provided)",
       gitDiff: gitDiff || undefined,
       startedAt: slot.agent.startedAt,
+      debugArtifactSummary: summarizeDebugArtifact(result.debugArtifact),
+      repairIterations: result.debugArtifact ? 1 : 0,
+      rootCauseCategory: result.debugArtifact?.rootCauseCategory ?? null,
     });
     await this.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
     await persistTaskLastExecutionSummary(this.taskStore, projectId, task.id, rejectionSummary);
@@ -3764,7 +3770,8 @@ export class OrchestratorService {
       reason,
       null,
       "review_rejection",
-      reviewFeedback
+      reviewFeedback,
+      { agentDebugArtifact: result.debugArtifact, reviewScope: "general" }
     );
   }
 

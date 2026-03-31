@@ -47,6 +47,7 @@ import {
   type AgentCacheUsageMetrics,
   type PromptCacheContext,
 } from "../utils/prompt-cache.js";
+import { summarizeDebugArtifact } from "./agentic-repair.service.js";
 
 const log = createLogger("agent-service");
 
@@ -278,6 +279,7 @@ type MergerSessionRecordParams = {
   completedAt: string;
   outputLog: string;
   outcome: "success" | "failed";
+  debugArtifact?: import("@opensprint/shared").DebugArtifact | null;
 };
 
 const MERGER_RESULT_EXPECTED_SHAPE =
@@ -635,12 +637,15 @@ export class AgentService {
       params.outcome === "success"
         ? `Merger resolved ${params.phase} conflicts for ${taskLabel} on ${params.branchName}.`
         : `Merger failed to resolve ${params.phase} conflicts for ${taskLabel} on ${params.branchName}.`;
+    const debugArtifactSummary = summarizeDebugArtifact(params.debugArtifact);
+    const repairIterations = params.debugArtifact ? 1 : 0;
+    const rootCauseCategory = params.debugArtifact?.rootCauseCategory ?? null;
 
     try {
       await taskStore.runWrite(async (client) => {
         await client.execute(
-          `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          `INSERT INTO agent_sessions (project_id, task_id, attempt, agent_type, agent_model, started_at, completed_at, status, output_log, git_branch, git_diff, test_results, failure_reason, summary, debug_artifact_summary, repair_iterations, root_cause_category)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
             params.projectId,
             params.runId,
@@ -656,6 +661,9 @@ export class AgentService {
             null,
             failureReason,
             summary,
+            debugArtifactSummary,
+            repairIterations,
+            rootCauseCategory,
           ]
         );
       });
@@ -745,6 +753,22 @@ ${repairSection}## Your Task
    { "status": "failed", "summary": "Why the conflicts could not be resolved" }
    \`\`\`
    The \`status\` field MUST be exactly \`"success"\` or \`"failed"\`.
+   You may optionally include a \`"debugArtifact"\` field to report diagnosis of any issues you encountered:
+   \`\`\`json
+   {
+     "status": "success",
+     "summary": "...",
+     "debugArtifact": {
+       "rootCauseCategory": "code_defect | env_defect | dependency_defect | ...",
+       "evidence": "What you found",
+       "fixApplied": "What you changed",
+       "verificationCommand": "Command you ran to verify",
+       "verificationPassed": true,
+       "residualRisk": null,
+       "nextAction": "continue"
+     }
+   }
+   \`\`\`
 
 ## Rules
 
@@ -752,6 +776,7 @@ ${repairSection}## Your Task
 - Resolve conflicts by editing files; do not delete files unless that is clearly correct.
 - Do NOT run destructive cleanup commands such as \`rm -rf\`, \`find ... -delete\`, or \`git clean -fdx\`.
 - Run \`git diff --check\` before exiting.
+- If post-resolution quality gates fail, diagnose the root cause from their output. Fix dependency drift, missing installs, or config issues directly. Re-run the failing gate to verify before reporting.
 - Exit with code 0 only when all conflicted files are resolved and staged.
 - Exit non-zero if you cannot produce a correct resolution.
 `;
@@ -912,6 +937,7 @@ ${repairSection}## Your Task
         completedAt,
         outputLog: outputChunks.join(""),
         outcome: verified ? "success" : "failed",
+        debugArtifact: attemptResult.parsed?.debugArtifact ?? null,
       });
       return verified;
     } finally {

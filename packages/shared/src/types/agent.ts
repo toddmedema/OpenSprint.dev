@@ -1,4 +1,5 @@
 import type { ReviewAngle } from "./settings.js";
+import type { DebugArtifact } from "./agentic-repair.js";
 
 /** Supported agent backends */
 export type AgentType =
@@ -208,6 +209,8 @@ export interface ActiveTaskConfig {
   } | null;
   /** Whether this retry reuses an existing branch with prior commits */
   useExistingBranch?: boolean;
+  /** Enables FailureDebugPacket + debugArtifact retry guidance in prompts/policy routing. */
+  agenticRepairEnabled?: boolean;
   /** True when this rerun exists only to repair invalid structured output from the previous attempt. */
   structuredOutputRepairAttempted?: boolean;
   /** Human-in-the-loop config: agents use this to know when to ask (confirm all vs major only vs full autonomy) */
@@ -240,6 +243,12 @@ export interface AgentSession {
   failureReason: string | null;
   /** Coding agent summary (for approved sessions); used for dependency context propagation (PRD §7.3.2) */
   summary?: string;
+  /** One-line debug artifact summary, if the agent reported one. */
+  debugArtifactSummary?: string | null;
+  /** Number of repair iterations the agent reported/executed (currently 0/1). */
+  repairIterations?: number | null;
+  /** Root cause category extracted from debugArtifact, if present. */
+  rootCauseCategory?: import("./agentic-repair.js").RootCauseCategory | null;
 }
 
 /** Test execution results */
@@ -277,6 +286,8 @@ export interface CodingAgentResult {
   /** When task spec is ambiguous: emit questions and pause rather than guessing (agent question protocol) */
   open_questions?: AgentOpenQuestion[];
   openQuestions?: AgentOpenQuestion[];
+  /** Structured diagnosis from the agent when it encountered and repaired (or could not repair) a failure. */
+  debugArtifact?: DebugArtifact;
 }
 
 /** Review agent result (result.json) */
@@ -285,6 +296,8 @@ export interface ReviewAgentResult {
   summary: string;
   issues?: string[];
   notes: string;
+  /** Structured diagnosis from the agent when it encountered and repaired (or could not repair) a failure. */
+  debugArtifact?: DebugArtifact;
 }
 
 /** Union type for agent results */
