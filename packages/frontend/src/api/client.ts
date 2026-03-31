@@ -416,13 +416,26 @@ export const api = {
       }),
     getHistory: (projectId: string) =>
       request<PrdChangeLogEntry[]>(`/projects/${projectId}/prd/history`),
-    getProposedDiff: (projectId: string, requestId: string) =>
-      request<PrdProposedDiffResponse>(
-        `/projects/${projectId}/prd/proposed-diff?requestId=${encodeURIComponent(requestId)}`
-      ),
-    getVersionDiff: (projectId: string, fromVersion: string, toVersion?: string) => {
+    getProposedDiff: (
+      projectId: string,
+      requestId: string,
+      opts?: { includeContent?: boolean },
+    ) => {
+      const params = new URLSearchParams({ requestId });
+      if (opts?.includeContent === false) params.set("includeContent", "false");
+      return request<PrdProposedDiffResponse>(
+        `/projects/${projectId}/prd/proposed-diff?${params.toString()}`
+      );
+    },
+    getVersionDiff: (
+      projectId: string,
+      fromVersion: string,
+      toVersion?: string,
+      opts?: { includeContent?: boolean },
+    ) => {
       const params = new URLSearchParams({ fromVersion });
       if (toVersion != null && toVersion !== "") params.set("toVersion", toVersion);
+      if (opts?.includeContent === false) params.set("includeContent", "false");
       return request<PrdVersionDiffResponse>(
         `/projects/${projectId}/prd/diff?${params.toString()}`
       );

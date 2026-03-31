@@ -17,15 +17,19 @@ export interface PrdDiffResult {
 
 export interface PrdProposedDiffResponse {
   requestId: string;
-  fromContent: string;
-  toContent: string;
+  /** Omitted when includeContent=false */
+  fromContent?: string;
+  /** Omitted when includeContent=false */
+  toContent?: string;
   diff: PrdDiffResult;
 }
 
 export interface PrdVersionDiffResponse {
   fromVersion: string;
   toVersion: string;
-  fromContent: string;
-  toContent: string;
+  /** Omitted when includeContent=false */
+  fromContent?: string;
+  /** Omitted when includeContent=false */
+  toContent?: string;
   diff: PrdDiffResult;
 }

@@ -99,8 +99,14 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
     validateQuery(prdDiffQuerySchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const { projectId } = req.params;
-      const fromVersion = (req.query as unknown as { fromVersion: number }).fromVersion;
-      const toVersionParam = (req.query as { toVersion?: string }).toVersion;
+      const query = req.query as unknown as {
+        fromVersion: number;
+        toVersion?: string;
+        includeContent: boolean;
+      };
+      const fromVersion = query.fromVersion;
+      const toVersionParam = query.toVersion;
+      const includeContent = query.includeContent;
 
       const fromContent = await prdService.getSnapshot(projectId, fromVersion);
       if (fromContent === null) {
@@ -142,22 +148,16 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
       }
 
       const diff = computeLineDiff(fromContent, toContent);
-      const body: ApiResponse<{
-        fromVersion: string;
-        toVersion: string;
-        fromContent: string;
-        toContent: string;
-        diff: { lines: typeof diff.lines; summary: typeof diff.summary };
-      }> = {
-        data: {
-          fromVersion: String(fromVersion),
-          toVersion: resolvedToVersion,
-          fromContent,
-          toContent,
-          diff: { lines: diff.lines, summary: diff.summary },
-        },
+      const data: Record<string, unknown> = {
+        fromVersion: String(fromVersion),
+        toVersion: resolvedToVersion,
+        diff: { lines: diff.lines, summary: diff.summary },
       };
-      res.json(body);
+      if (includeContent) {
+        data.fromContent = fromContent;
+        data.toContent = toContent;
+      }
+      res.json({ data });
     })
   );
 
@@ -169,7 +169,9 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
     validateQuery(prdProposedDiffQuerySchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const { projectId } = req.params;
-      const requestId = (req.query as { requestId: string }).requestId;
+      const query = req.query as unknown as { requestId: string; includeContent: boolean };
+      const requestId = query.requestId;
+      const includeContent = query.includeContent;
 
       const notification = await notificationService.getById(projectId, requestId);
       if (
@@ -207,20 +209,15 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
       const proposedSpec = prdToSpecMarkdown(proposedPrd);
       const diff = computeLineDiff(currentSpec, proposedSpec);
 
-      const body: ApiResponse<{
-        requestId: string;
-        fromContent: string;
-        toContent: string;
-        diff: { lines: typeof diff.lines; summary: typeof diff.summary };
-      }> = {
-        data: {
-          requestId,
-          fromContent: currentSpec,
-          toContent: proposedSpec,
-          diff: { lines: diff.lines, summary: diff.summary },
-        },
+      const data: Record<string, unknown> = {
+        requestId,
+        diff: { lines: diff.lines, summary: diff.summary },
       };
-      res.json(body);
+      if (includeContent) {
+        data.fromContent = currentSpec;
+        data.toContent = proposedSpec;
+      }
+      res.json({ data });
     })
   );
 

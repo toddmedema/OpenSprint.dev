@@ -271,6 +271,109 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(explicit.body.data.toVersion).toBe("current");
       expect(omitted.body.data.toContent).toBe(explicit.body.data.toContent);
     });
+
+    it("includes fromContent and toContent by default (includeContent omitted)", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Content v1" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1`
+      );
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.fromContent).toBe("string");
+      expect(typeof res.body.data.toContent).toBe("string");
+    });
+
+    it("includes fromContent and toContent when includeContent=true", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Content v1" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&includeContent=true`
+      );
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.fromContent).toBe("string");
+      expect(typeof res.body.data.toContent).toBe("string");
+    });
+
+    it("omits fromContent and toContent when includeContent=false", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Content v1" });
+
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Content v2" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&includeContent=false`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.fromContent).toBeUndefined();
+      expect(res.body.data.toContent).toBeUndefined();
+      expect(res.body.data.fromVersion).toBe("1");
+      expect(res.body.data.toVersion).toBe("current");
+      expect(res.body.data.diff).toBeDefined();
+      expect(res.body.data.diff.lines).toBeDefined();
+      expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
+      expect(res.body.data.diff.summary).toBeDefined();
+      expect(res.body.data.diff.summary.additions).toBeGreaterThan(0);
+    });
+
+    it("accepts includeContent=0 as false", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Content v1" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&includeContent=0`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.fromContent).toBeUndefined();
+      expect(res.body.data.toContent).toBeUndefined();
+      expect(res.body.data.diff).toBeDefined();
+    });
+
+    it("accepts includeContent=1 as true", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Content v1" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&includeContent=1`
+      );
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.fromContent).toBe("string");
+      expect(typeof res.body.data.toContent).toBe("string");
+    });
+
+    it("still returns diff lines even when includeContent=false with toVersion", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Snapshot A" });
+
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Snapshot B" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&toVersion=2&includeContent=false`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.fromContent).toBeUndefined();
+      expect(res.body.data.toContent).toBeUndefined();
+      expect(res.body.data.fromVersion).toBe("1");
+      expect(res.body.data.toVersion).toBe("2");
+      expect(res.body.data.diff.lines.length).toBeGreaterThan(0);
+    });
   });
 
   describe("GET /projects/:id/prd/proposed-diff", () => {
@@ -354,6 +457,77 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
       expect(res.body.error?.message).toMatch(/requestId|string|undefined/i);
+    });
+
+    it("omits fromContent and toContent when includeContent=false", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Current content" });
+
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-2",
+        description: "Approve scope change?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "Update executive summary",
+          scopeChangeProposedUpdates: [
+            {
+              section: "executive_summary",
+              changeLogEntry: "Proposed update",
+              content: "Proposed content for slim test",
+            },
+          ],
+        },
+      });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}&includeContent=false`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.requestId).toBe(notif.id);
+      expect(res.body.data.fromContent).toBeUndefined();
+      expect(res.body.data.toContent).toBeUndefined();
+      expect(res.body.data.diff).toBeDefined();
+      expect(res.body.data.diff.lines).toBeDefined();
+      expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
+      expect(res.body.data.diff.summary).toBeDefined();
+    });
+
+    it("includes content by default in proposed-diff", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Current content" });
+
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-3",
+        description: "Approve scope change?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "Update executive summary",
+          scopeChangeProposedUpdates: [
+            {
+              section: "executive_summary",
+              changeLogEntry: "Proposed update",
+              content: "Proposed content default",
+            },
+          ],
+        },
+      });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.fromContent).toBe("string");
+      expect(typeof res.body.data.toContent).toBe("string");
     });
   });
 
