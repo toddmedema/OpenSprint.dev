@@ -15,6 +15,9 @@ import { WebSocket } from "ws";
 import express from "express";
 import request from "supertest";
 import { setupWebSocket, closeWebSocket, sendAgentChatResponse } from "../websocket/index.js";
+import { VITEST_DEFAULT_LOCAL_SESSION_TOKEN } from "../services/local-session-auth.service.js";
+
+const WS_AUTH = { headers: { Authorization: `Bearer ${VITEST_DEFAULT_LOCAL_SESSION_TOKEN}` } };
 import { AgentChatService } from "../services/agent-chat.service.js";
 import { ActiveAgentsService } from "../services/active-agents.service.js";
 import { PendingMessageQueue } from "../services/agentic-loop.js";
@@ -197,7 +200,7 @@ describe("agent-chat integration (WebSocket)", () => {
     const queue = new PendingMessageQueue();
     activeAgents.registerChannel("task-api", queue, "openai");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-integ`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-integ`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     const receivedPromise = waitForEvent(ws, "agent.chat.received");
@@ -244,7 +247,7 @@ describe("agent-chat integration (WebSocket)", () => {
     const queue = new PendingMessageQueue();
     activeAgents.registerChannel("task-cli", queue, "claude-cli");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-cli`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-cli`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     const unsupportedPromise = waitForEvent(ws, "agent.chat.unsupported");
@@ -266,7 +269,7 @@ describe("agent-chat integration (WebSocket)", () => {
     const queue = new PendingMessageQueue();
     activeAgents.registerChannel("task-cursor", queue, "cursor");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-cursor`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-cursor`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     const unsupportedPromise = waitForEvent(ws, "agent.chat.unsupported");
@@ -282,7 +285,7 @@ describe("agent-chat integration (WebSocket)", () => {
   });
 
   it("returns unsupported when no agent is active for the task", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-ghost`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-ghost`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     const unsupportedPromise = waitForEvent(ws, "agent.chat.unsupported");
@@ -301,7 +304,7 @@ describe("agent-chat integration (WebSocket)", () => {
     const queue = new PendingMessageQueue();
     activeAgents.registerChannel("task-multi", queue, "google");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     const receivedPromise = collectEvents(ws, "agent.chat.received", 3);
@@ -328,7 +331,7 @@ describe("agent-chat integration (WebSocket)", () => {
     const queue = new PendingMessageQueue();
     activeAgents.registerChannel("task-round", queue, "claude");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-round`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-round`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
 
     // User sends chat

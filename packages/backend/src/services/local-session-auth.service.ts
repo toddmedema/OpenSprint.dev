@@ -71,19 +71,23 @@ export function refererIsTrustedLocalhost(referer: string | undefined): boolean 
 }
 
 /**
+ * Returns true when the value matches the current local session token (timing-safe).
+ */
+export function isValidLocalSessionToken(token: string | undefined | null): boolean {
+  if (token == null) return false;
+  const trimmed = token.trim();
+  if (trimmed.length === 0) return false;
+  ensureLocalSessionToken();
+  return tokensEqual(trimmed, getLocalSessionToken());
+}
+
+/**
  * Returns true when the Authorization header carries a valid Bearer session token.
  */
 export function requestHasValidBearerToken(authorization: string | undefined): boolean {
-  const auth = authorization;
-  if (auth?.startsWith("Bearer ")) {
-    const token = auth.slice("Bearer ".length).trim();
-    if (
-      token.length > 0 &&
-      (tokensEqual(token, getLocalSessionToken()) ||
-        (isTestProcess() && tokensEqual(token, VITEST_DEFAULT_LOCAL_SESSION_TOKEN)))
-    ) {
-      return true;
-    }
+  if (authorization?.startsWith("Bearer ")) {
+    const token = authorization.slice("Bearer ".length).trim();
+    return isValidLocalSessionToken(token);
   }
   return false;
 }

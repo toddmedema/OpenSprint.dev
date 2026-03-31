@@ -122,6 +122,8 @@ vi.mock("../../api/client", () => ({
   },
 }));
 
+const TEST_WEBSOCKET_SESSION = "test-ws-session-token";
+
 describe("websocketMiddleware", () => {
   let MockWS: typeof MockWebSocket;
   let wsInstance: MockWebSocket | null = null;
@@ -129,6 +131,7 @@ describe("websocketMiddleware", () => {
   function setCurrentPath(pathname: string) {
     vi.stubGlobal("window", {
       ...globalThis.window,
+      __OPENSPRINT_LOCAL_SESSION__: TEST_WEBSOCKET_SESSION,
       location: {
         ...(globalThis.window as { location?: Record<string, unknown> } | undefined)?.location,
         protocol:
@@ -177,6 +180,7 @@ describe("websocketMiddleware", () => {
     vi.stubGlobal("WebSocket", MockWS);
     vi.stubGlobal("window", {
       ...globalThis.window,
+      __OPENSPRINT_LOCAL_SESSION__: TEST_WEBSOCKET_SESSION,
       location: { protocol: "http:", host: "localhost:3100" },
       addEventListener: (event: string, handler: () => void) => {
         if (event === "focus") focusListeners.push(handler);
@@ -224,18 +228,23 @@ describe("websocketMiddleware", () => {
       store.dispatch(wsConnect({ projectId: "proj-123" }));
 
       expect(wsInstance).toBeTruthy();
-      expect(wsInstance!.url).toBe("ws://localhost:3100/ws/projects/proj-123");
+      expect(wsInstance!.url).toBe(
+        `ws://localhost:3100/ws/projects/proj-123?token=${encodeURIComponent(TEST_WEBSOCKET_SESSION)}`
+      );
     });
 
     it("uses wss when protocol is https", () => {
       vi.stubGlobal("window", {
         ...globalThis.window,
+        __OPENSPRINT_LOCAL_SESSION__: TEST_WEBSOCKET_SESSION,
         location: { protocol: "https:", host: "localhost:3100" },
       });
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-456" }));
 
-      expect(wsInstance!.url).toBe("wss://localhost:3100/ws/projects/proj-456");
+      expect(wsInstance!.url).toBe(
+        `wss://localhost:3100/ws/projects/proj-456?token=${encodeURIComponent(TEST_WEBSOCKET_SESSION)}`
+      );
     });
 
     it("dispatches setConnected(true) when socket opens", async () => {

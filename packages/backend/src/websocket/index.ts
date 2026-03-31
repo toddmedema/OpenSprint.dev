@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
-import type { Server } from "http";
+import type { IncomingMessage, Server } from "http";
 import type {
   ServerEvent,
   ClientEvent,
@@ -16,8 +16,35 @@ import {
   AgentChatService,
   agentChatService as defaultAgentChatService,
 } from "../services/agent-chat.service.js";
+import {
+  isValidLocalSessionToken,
+  requestHasValidBearerToken,
+} from "../services/local-session-auth.service.js";
 
 const log = createLogger("websocket");
+
+/** WebSocket upgrade must present the same Bearer session as mutating HTTP routes (header or `token` query). */
+function webSocketUpgradeAuthenticated(req: IncomingMessage, url: URL): boolean {
+  if (requestHasValidBearerToken(req.headers.authorization)) return true;
+  const q = url.searchParams.get("token");
+  return isValidLocalSessionToken(q);
+}
+
+function verifyWebSocketUpgrade(info: { req: IncomingMessage }): boolean {
+  const req = info.req;
+  let url: URL;
+  try {
+    url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
+  } catch {
+    return false;
+  }
+  const pathname = url.pathname;
+  const match = pathname.match(/^\/ws\/projects\/([^/]+)$/);
+  if (pathname !== "/ws" && !match) {
+    return false;
+  }
+  return webSocketUpgradeAuthenticated(req, url);
+}
 
 /** Map of projectId → Set of connected clients */
 const projectClients = new Map<string, Set<WebSocket>>();
@@ -52,21 +79,14 @@ export function setupWebSocket(server: Server, options?: WebSocketOptions): void
   chatService = options?.agentChatService ?? defaultAgentChatService;
   eventRelay.init(projectClients, agentSubscriptions, planAgentSubscriptions);
 
-  // No path filter — we accept /ws and /ws/projects/:id; path matching is done in the handler
-  wss = new WebSocketServer({ server });
+  wss = new WebSocketServer({ server, verifyClient: verifyWebSocketUpgrade });
 
   wss.on("connection", (ws, req) => {
     // Extract projectId from URL: /ws/projects/:id (PRD §11.2)
-    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+    const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
     const path = url.pathname;
     const match = path.match(/^\/ws\/projects\/([^/]+)$/);
     const projectId = match?.[1];
-
-    // Reject connections that don't match expected paths
-    if (path !== "/ws" && !match) {
-      ws.close(1008, "Invalid path: use /ws or /ws/projects/:id");
-      return;
-    }
 
     clientHasConnected = true;
 

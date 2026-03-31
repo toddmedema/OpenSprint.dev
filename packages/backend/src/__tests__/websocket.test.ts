@@ -10,6 +10,9 @@ import {
 } from "../websocket/index.js";
 import { AgentChatService } from "../services/agent-chat.service.js";
 import { ActiveAgentsService } from "../services/active-agents.service.js";
+import { VITEST_DEFAULT_LOCAL_SESSION_TOKEN } from "../services/local-session-auth.service.js";
+
+const WS_AUTH = { headers: { Authorization: `Bearer ${VITEST_DEFAULT_LOCAL_SESSION_TOKEN}` } };
 
 vi.mock("../services/hil-service.js", () => ({
   hilService: {
@@ -54,8 +57,55 @@ describe("WebSocket server and connection handling", () => {
     await new Promise((r) => setTimeout(r, 50)); // Allow sockets to fully close
   });
 
+  it("rejects connections without session credentials", async () => {
+    await expect(
+      Promise.race([
+        new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(`ws://localhost:${port}/ws`);
+          ws.on("open", () => reject(new Error("unexpected open without credentials")));
+          ws.on("error", () => resolve());
+        }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("handshake timeout")), 5000)
+        ),
+      ])
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects connections with invalid bearer token", async () => {
+    await expect(
+      Promise.race([
+        new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(`ws://localhost:${port}/ws`, {
+            headers: { Authorization: "Bearer wrong-token" },
+          });
+          ws.on("open", () => reject(new Error("unexpected open with bad token")));
+          ws.on("error", () => resolve());
+        }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("handshake timeout")), 5000)
+        ),
+      ])
+    ).resolves.toBeUndefined();
+  });
+
+  it("accepts connections with token query parameter", async () => {
+    const q = new URLSearchParams({
+      token: VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
+    });
+    const ws = new WebSocket(`ws://localhost:${port}/ws?${q.toString()}`);
+    await new Promise<void>((resolve) => {
+      ws.on("open", () => {
+        expect(ws.readyState).toBe(WebSocket.OPEN);
+        ws.close();
+        resolve();
+      });
+    });
+    await waitForClose(ws);
+  });
+
   it("accepts connections to /ws/projects/:id", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-123`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-123`, WS_AUTH);
     await new Promise<void>((resolve) => {
       ws.on("open", () => {
         expect(ws.readyState).toBe(WebSocket.OPEN);
@@ -67,7 +117,7 @@ describe("WebSocket server and connection handling", () => {
   });
 
   it("accepts connections to bare /ws", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, WS_AUTH);
     await new Promise<void>((resolve) => {
       ws.on("open", () => {
         expect(ws.readyState).toBe(WebSocket.OPEN);
@@ -79,7 +129,7 @@ describe("WebSocket server and connection handling", () => {
   });
 
   it("broadcasts events to project-scoped clients", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-456`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-456`, WS_AUTH);
     const msgPromise = new Promise<void>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -102,7 +152,7 @@ describe("WebSocket server and connection handling", () => {
   });
 
   it("sends agent output to subscribed clients", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-789`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-789`, WS_AUTH);
     const msgPromise = new Promise<void>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -123,7 +173,7 @@ describe("WebSocket server and connection handling", () => {
   });
 
   it("handles agent.unsubscribe", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-sub`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-sub`, WS_AUTH);
     let receivedOutput = false;
     ws.on("message", (data) => {
       const event = JSON.parse(data.toString());
@@ -141,7 +191,7 @@ describe("WebSocket server and connection handling", () => {
   });
 
   it("ignores malformed JSON messages without crashing", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-malformed`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-malformed`, WS_AUTH);
     await new Promise<void>((resolve) => ws.on("open", () => resolve()));
     ws.send("not valid json");
     ws.send("{");
@@ -199,7 +249,7 @@ describe("WebSocket agent.chat event handling", () => {
     const queue = makePendingQueue();
     activeAgents.registerChannel("task-1", queue, "openai");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat`, WS_AUTH);
     const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -225,7 +275,7 @@ describe("WebSocket agent.chat event handling", () => {
     const queue = makePendingQueue();
     activeAgents.registerChannel("task-cli", queue, "claude-cli");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-cli`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-cli`, WS_AUTH);
     const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -247,7 +297,7 @@ describe("WebSocket agent.chat event handling", () => {
   });
 
   it("broadcasts agent.chat.unsupported when no active agent exists", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-none`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-none`, WS_AUTH);
     const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -271,7 +321,7 @@ describe("WebSocket agent.chat event handling", () => {
     const queue = makePendingQueue(0);
     activeAgents.registerChannel("task-full", queue, "claude");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-full`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-full`, WS_AUTH);
     const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -295,7 +345,7 @@ describe("WebSocket agent.chat event handling", () => {
     const queue = makePendingQueue();
     activeAgents.registerChannel("task-2", queue, "openai");
 
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, WS_AUTH);
     const messages: Record<string, unknown>[] = [];
     ws.on("message", (data) => {
       messages.push(JSON.parse(data.toString()));
@@ -313,7 +363,7 @@ describe("WebSocket agent.chat event handling", () => {
   });
 
   it("silently ignores agent.chat.send with missing taskId or message", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-bad`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-bad`, WS_AUTH);
     const messages: Record<string, unknown>[] = [];
     ws.on("message", (data) => {
       messages.push(JSON.parse(data.toString()));
@@ -332,7 +382,7 @@ describe("WebSocket agent.chat event handling", () => {
   });
 
   it("sendAgentChatResponse broadcasts agent.chat.response to project clients", async () => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-resp`);
+    const ws = new WebSocket(`ws://localhost:${port}/ws/projects/proj-chat-resp`, WS_AUTH);
     const msgPromise = new Promise<Record<string, unknown>>((resolve) => {
       ws.on("message", (data) => {
         const event = JSON.parse(data.toString());
@@ -357,8 +407,8 @@ describe("WebSocket agent.chat event handling", () => {
     const queue = makePendingQueue();
     activeAgents.registerChannel("task-multi", queue, "google");
 
-    const ws1 = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`);
-    const ws2 = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`);
+    const ws1 = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`, WS_AUTH);
+    const ws2 = new WebSocket(`ws://localhost:${port}/ws/projects/proj-multi`, WS_AUTH);
     await Promise.all([
       new Promise<void>((resolve) => ws1.on("open", () => resolve())),
       new Promise<void>((resolve) => ws2.on("open", () => resolve())),

@@ -128,6 +128,19 @@ const HOME_SENTINEL = "__home__";
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
+/**
+ * Browsers cannot set WebSocket upgrade headers; append the same local session token used for
+ * `Authorization: Bearer` on API fetch (see `api/client.ts`).
+ */
+function buildWebSocketUrl(pathFromHost: string): string {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const base = `${protocol}//${window.location.host}${pathFromHost}`;
+  const token =
+    typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
+  if (!token) return base;
+  return `${base}?${new URLSearchParams({ token }).toString()}`;
+}
+
 export const websocketMiddleware: Middleware = (storeApi) => {
   const dispatch = storeApi.dispatch as StoreDispatch;
   let ws: WebSocket | null = null;
@@ -169,8 +182,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     intentionalClose = false;
     currentProjectId = projectId;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${window.location.host}/ws/projects/${projectId}`;
+    const url = buildWebSocketUrl(`/ws/projects/${projectId}`);
 
     const socket = new WebSocket(url);
     ws = socket;
@@ -246,8 +258,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     cleanup();
     intentionalClose = false;
     currentProjectId = HOME_SENTINEL;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${window.location.host}/ws`;
+    const url = buildWebSocketUrl("/ws");
     const socket = new WebSocket(url);
     ws = socket;
     socket.onopen = () => {

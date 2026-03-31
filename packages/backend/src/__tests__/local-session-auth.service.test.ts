@@ -8,6 +8,7 @@ import {
   requestHasLocalSessionCredential,
   requestHasValidBearerToken,
   requestIsAuthenticated,
+  isValidLocalSessionToken,
 } from "../services/local-session-auth.service.js";
 
 const VALID_TOKEN = "unit-test-session-token";
@@ -58,6 +59,20 @@ describe("local-session-auth.service", () => {
     expect(requestHasValidBearerToken(undefined)).toBe(false);
     expect(requestHasValidBearerToken("")).toBe(false);
     expect(requestHasValidBearerToken("Bearer ")).toBe(false);
+  });
+
+  // ── isValidLocalSessionToken ──
+
+  it("isValidLocalSessionToken accepts the configured raw token", () => {
+    expect(isValidLocalSessionToken(VALID_TOKEN)).toBe(true);
+  });
+
+  it("isValidLocalSessionToken rejects wrong or empty values", () => {
+    expect(isValidLocalSessionToken("wrong")).toBe(false);
+    expect(isValidLocalSessionToken("")).toBe(false);
+    expect(isValidLocalSessionToken("   ")).toBe(false);
+    expect(isValidLocalSessionToken(undefined)).toBe(false);
+    expect(isValidLocalSessionToken(null)).toBe(false);
   });
 
   // ── requestHasLocalSessionCredential (backward compat) ──
