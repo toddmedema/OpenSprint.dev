@@ -457,14 +457,14 @@ describe("Cross-service quality-gate regression integration", () => {
     );
 
     const diagnostics = await diagnosticsService.getDiagnostics(projectId, taskId);
-    expect(diagnostics.latestSummary).toContain("npm run lint: Cannot find module 'eslint'");
+    expect(diagnostics.latestSummary).toContain("Missing dependency:");
     const mergeFailedTimelineEntry = diagnostics.timeline.find((item) =>
       item.summary.includes("repair:")
     );
     expect(mergeFailedTimelineEntry?.summary).toContain(
       "repair: npm ci -> symlinkNodeModules (failed)"
     );
-    expect(mergeFailedTimelineEntry?.summary).toContain("category: environment_setup");
+    expect(mergeFailedTimelineEntry?.summary).not.toContain("category: environment_setup");
     expect(diagnostics.latestQualityGateDetail).toEqual(
       expect.objectContaining({
         command: "npm run lint",
@@ -476,6 +476,8 @@ describe("Cross-service quality-gate regression integration", () => {
         validationWorkspace: "task_worktree",
         repairAttempted: true,
         repairSucceeded: false,
+        userTitle: "Missing dependency",
+        userSummary: expect.stringMatching(/required package could not be loaded/i),
       })
     );
   });

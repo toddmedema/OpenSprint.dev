@@ -1,4 +1,8 @@
-import { getFailureTypeTitle, getQualityGateTitle } from "@opensprint/shared";
+import {
+  getFailureTypeTitle,
+  getQualityGateTitle,
+  humanizeEnvironmentSetupQualityGate,
+} from "@opensprint/shared";
 import type {
   AgentSession,
   TaskExecutionAttemptItem,
@@ -28,6 +32,8 @@ type QualityGateDetail = {
   cwd?: string | null;
   exitCode?: number | null;
   signal?: string | null;
+  userTitle?: string | null;
+  userSummary?: string | null;
 };
 type TaskExecutionEventItemWithQualityGate = TaskExecutionEventItem & {
   qualityGateDetail?: QualityGateDetail | null;
@@ -96,6 +102,20 @@ function extractConflictFilesFromTask(task: StoredTask): string[] {
   }
 }
 
+function attachEnvironmentSetupHumanLabels(detail: QualityGateDetail | null): QualityGateDetail | null {
+  if (!detail || detail.category !== "environment_setup") return detail;
+  const labels = humanizeEnvironmentSetupQualityGate({
+    category: detail.category,
+    reason: detail.reason,
+    outputSnippet: detail.outputSnippet,
+    validationWorkspace: detail.validationWorkspace,
+    repairAttempted: detail.repairAttempted,
+    repairSucceeded: detail.repairSucceeded,
+  });
+  if (!labels) return detail;
+  return { ...detail, userTitle: labels.userTitle, userSummary: labels.userSummary };
+}
+
 function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
   const nested = asRecord(data.qualityGateDetail);
   const command =
@@ -154,7 +174,7 @@ function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
   ) {
     return null;
   }
-  return {
+  return attachEnvironmentSetupHumanLabels({
     command: command ?? null,
     reason: reason ?? null,
     outputSnippet: outputSnippet ?? null,
@@ -168,7 +188,7 @@ function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
     cwd: cwd ?? null,
     exitCode: exitCode ?? null,
     signal: signal ?? null,
-  };
+  });
 }
 
 function withQualityGateDetail(
@@ -212,10 +232,22 @@ function buildActionableFailureSummary(
 ): string | null {
   const command = detail?.command ?? null;
   const errorMessage = detail?.firstErrorLine ?? detail?.reason ?? null;
-  if (!command && !errorMessage) return null;
+  const envHumanized =
+    detail?.category === "environment_setup" &&
+    Boolean(detail.userTitle?.trim()) &&
+    Boolean(detail.userSummary?.trim());
+  if (!command && !errorMessage && !envHumanized) return null;
   const summaryParts: string[] = [];
 
-  if (command && errorMessage) {
+  if (
+    detail?.category === "environment_setup" &&
+    detail.userTitle?.trim() &&
+    detail.userSummary?.trim()
+  ) {
+    summaryParts.push(
+      `${detail.userTitle}: ${compactExecutionText(detail.userSummary, 220)}`
+    );
+  } else if (command && errorMessage) {
     summaryParts.push(`${command}: ${compactExecutionText(errorMessage, 220)}`);
   } else if (command) {
     summaryParts.push(command);
@@ -232,11 +264,18 @@ function buildActionableFailureSummary(
     const status = repairSucceeded ? "succeeded; retry still failed" : "failed";
     summaryParts.push(`repair: ${commands} (${status})`);
   }
-  if ((options?.category ?? detail?.category) === "environment_setup") {
+  if (
+    (options?.category ?? detail?.category) === "environment_setup" &&
+    !envHumanized
+  ) {
     summaryParts.push("category: environment_setup");
   }
   if (detail?.validationWorkspace) {
-    summaryParts.push(`workspace: ${detail.validationWorkspace}`);
+    const hideWorkspaceLabel =
+      envHumanized && detail.validationWorkspace === "merged_candidate";
+    if (!hideWorkspaceLabel) {
+      summaryParts.push(`workspace: ${detail.validationWorkspace}`);
+    }
   }
 
   return compactExecutionText(summaryParts.join(" | "), 500);

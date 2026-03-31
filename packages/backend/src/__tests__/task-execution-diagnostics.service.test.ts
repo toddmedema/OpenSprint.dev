@@ -217,9 +217,9 @@ describe("TaskExecutionDiagnosticsService", () => {
       attempts: Array<{ qualityGateDetail?: unknown }>;
     };
 
-    expect(diagnostics.latestSummary).toContain("npm run build: Cannot find module");
+    expect(diagnostics.latestSummary).toContain("Missing dependency:");
     expect(diagnostics.latestSummary).toContain("repair: npm ci -> npm install (failed)");
-    expect(diagnostics.latestSummary).toContain("category: environment_setup");
+    expect(diagnostics.latestSummary).not.toContain("category: environment_setup");
     expect(diagnosticsQualityGate.latestQualityGateDetail).toEqual(
       expect.objectContaining({
         command: "npm run build",
@@ -230,6 +230,8 @@ describe("TaskExecutionDiagnosticsService", () => {
         category: "environment_setup",
         repairAttempted: true,
         repairSucceeded: false,
+        userTitle: "Missing dependency",
+        userSummary: expect.stringMatching(/required package could not be loaded/i),
       })
     );
     expect(diagnosticsQualityGate.timeline[0]?.qualityGateDetail).toEqual(
