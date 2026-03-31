@@ -20,7 +20,31 @@ if [ ! -d "$ELECTRON_APP" ]; then
   exit 0
 fi
 
-echo "==> Fixing macOS Electron dev binary: $ELECTRON_APP"
-xattr -cr "$ELECTRON_APP"
-codesign --force --deep --sign - "$ELECTRON_APP"
+has_quarantine_attrs=0
+if xattr -r "$ELECTRON_APP" 2>/dev/null | rg -q "com\\.apple\\.(quarantine|provenance)"; then
+  has_quarantine_attrs=1
+fi
+
+signature_ok=0
+if codesign --verify --deep --strict "$ELECTRON_APP" >/dev/null 2>&1; then
+  signature_ok=1
+fi
+
+if [ "$has_quarantine_attrs" -eq 0 ] && [ "$signature_ok" -eq 1 ]; then
+  echo "==> Electron dev binary already healthy; skipping re-sign."
+  exit 0
+fi
+
+echo "==> Repairing macOS Electron dev binary: $ELECTRON_APP"
+
+if [ "$has_quarantine_attrs" -eq 1 ]; then
+  echo "==> Removing quarantine/provenance attributes"
+  xattr -cr "$ELECTRON_APP"
+fi
+
+if [ "$signature_ok" -eq 0 ]; then
+  echo "==> Re-signing Electron.app ad-hoc (one-time per changed binary)"
+  codesign --force --deep --sign - "$ELECTRON_APP"
+fi
+
 echo "==> Done."

@@ -65,7 +65,7 @@ describe("AgentLifecycleManager", () => {
     phase: "coding",
     wtPath: "/tmp/repo",
     branchName: "main",
-    promptPath: "/tmp/prompt.md",
+    promptPath: "/tmp/repo/.opensprint/active/task-1/prompt.md",
     agentConfig: { type: "cursor", model: "gpt-4" },
     attempt: 1,
     agentLabel: "Coder",
@@ -150,6 +150,23 @@ describe("AgentLifecycleManager", () => {
 
       expect(mockInvokeReviewAgent).toHaveBeenCalled();
       expect(mockInvokeCodingAgent).not.toHaveBeenCalled();
+    });
+
+    it("fails fast when promptPath is outside the task worktree layout", async () => {
+      await expect(
+        manager.run(
+          {
+            ...baseParams,
+            wtPath: "/tmp/repo-a",
+            promptPath: "/tmp/repo-b/.opensprint/active/task-1/prompt.md",
+          },
+          runState,
+          timers
+        )
+      ).rejects.toThrow("Prompt path does not match task worktree layout");
+
+      expect(mockInvokeCodingAgent).not.toHaveBeenCalled();
+      expect(mockInvokeReviewAgent).not.toHaveBeenCalled();
     });
 
     it("preserves startedAt when already set (e.g. by phase-executor before spawn)", async () => {
@@ -265,9 +282,10 @@ describe("AgentLifecycleManager", () => {
     it("finalizes the run when terminal result.json appears even if the agent never exits", async () => {
       vi.useFakeTimers();
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "agent-lifecycle-run-"));
-      const promptPath = path.join(tmpDir, "prompt.md");
+      const promptPath = path.join(tmpDir, ".opensprint", "active", "task-1", "prompt.md");
       const onDone = vi.fn().mockResolvedValue(undefined);
       const handle = { kill: vi.fn(), pid: 9999 };
+      await fs.mkdir(path.dirname(promptPath), { recursive: true });
       await fs.writeFile(promptPath, "prompt", "utf-8");
 
       mockInvokeCodingAgent.mockImplementation(() => handle);
@@ -285,7 +303,7 @@ describe("AgentLifecycleManager", () => {
       );
 
       await fs.writeFile(
-        path.join(tmpDir, "result.json"),
+        path.join(path.dirname(promptPath), "result.json"),
         JSON.stringify({ status: "approved" }),
         "utf-8"
       );
@@ -567,12 +585,13 @@ describe("AgentLifecycleManager", () => {
     it("finalizes recovered runs from terminal result.json even if the process stays alive", async () => {
       vi.useFakeTimers();
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "agent-lifecycle-recover-"));
-      const promptPath = path.join(tmpDir, "prompt.md");
+      const promptPath = path.join(tmpDir, ".opensprint", "active", "task-1", "prompt.md");
       const handle = { kill: vi.fn(), pid: 9999 };
       const onDone = vi.fn().mockResolvedValue(undefined);
+      await fs.mkdir(path.dirname(promptPath), { recursive: true });
       await fs.writeFile(promptPath, "prompt", "utf-8");
       await fs.writeFile(
-        path.join(tmpDir, "result.json"),
+        path.join(path.dirname(promptPath), "result.json"),
         JSON.stringify({ status: "approved" }),
         "utf-8"
       );

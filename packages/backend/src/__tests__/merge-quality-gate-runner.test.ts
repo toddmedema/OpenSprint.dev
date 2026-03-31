@@ -535,6 +535,70 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     expect(commands).toEqual(["npm ls --depth=0 --include=dev", "npm run build"]);
   });
 
+  it("merged_candidate repair runs npm ci when repo deps are unhealthy even if node_modules exists", async () => {
+    const repoPath = await makeTempWorktree({ build: "tsc -b" }, true);
+    const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
+    let buildAttempts = 0;
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ls --depth=0 --include=dev") {
+          if (options.cwd === repoPath) {
+            throw makeCommandFailure(spec, options.cwd, {
+              message: "Dependency setup check failed",
+              stderr: "Error: Cannot find module 'better-sqlite3'",
+            });
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run build") {
+          buildAttempts += 1;
+          if (buildAttempts === 1) {
+            throw makeCommandFailure(spec, options.cwd, {
+              message: "Command failed with exit code 1",
+              stderr: "Error: Cannot find module 'better-sqlite3'",
+            });
+          }
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm ci") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+    const symlinkNodeModules = vi.fn(async () => undefined);
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath,
+        worktreePath,
+        taskId: "os-mc-repo-health",
+        branchName: "opensprint/os-mc-repo-health",
+        baseBranch: "main",
+        validationWorkspace: "merged_candidate",
+      },
+      {
+        commands: ["npm run build"],
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
+
+    expect(failure).toBeNull();
+    expect(symlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
+    const npmCiCalls = runCommand.mock.calls.filter(
+      (call) =>
+        commandLabel(call[0] as { command: string; args?: string[] }) === "npm ci" &&
+        (call[1] as { cwd: string }).cwd === repoPath
+    );
+    expect(npmCiCalls).toHaveLength(1);
+  });
+
   it("marks ambiguous environment fingerprints with low confidence", async () => {
     const worktreePath = await makeTempWorktree({ build: "tsc -b" });
     const runCommand = vi.fn(

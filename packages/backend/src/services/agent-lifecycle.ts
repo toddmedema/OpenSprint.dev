@@ -124,6 +124,21 @@ export interface AgentRunParams {
 export class AgentLifecycleManager {
   private branchManager = new BranchManager();
 
+  private assertPromptPathMatchesWorktree(wtPath: string, taskId: string, promptPath: string): void {
+    const resolvedWorktree = path.resolve(wtPath);
+    const resolvedPrompt = path.resolve(promptPath);
+    const expectedTaskRoot = path.resolve(resolvedWorktree, OPENSPRINT_PATHS.active, taskId);
+    const promptBase = path.basename(resolvedPrompt);
+    const insideTaskRoot =
+      resolvedPrompt === expectedTaskRoot || resolvedPrompt.startsWith(`${expectedTaskRoot}${path.sep}`);
+
+    if (!insideTaskRoot || promptBase !== "prompt.md") {
+      throw new Error(
+        `Prompt path does not match task worktree layout: prompt=${resolvedPrompt}, expectedRoot=${expectedTaskRoot}, taskId=${taskId}`
+      );
+    }
+  }
+
   /**
    * Spawn an agent process with full monitoring (heartbeat + inactivity).
    * The caller's onDone callback is invoked exactly once when the agent
@@ -142,6 +157,7 @@ export class AgentLifecycleManager {
       role,
       onDone,
     } = params;
+    this.assertPromptPathMatchesWorktree(wtPath, taskId, promptPath);
 
     runState.killedDueToTimeout = false;
     runState.exitHandled = false;
@@ -279,6 +295,7 @@ export class AgentLifecycleManager {
     }
   ): Promise<void> {
     const { projectId, wtPath, taskId, branchName, onDone } = params;
+    this.assertPromptPathMatchesWorktree(wtPath, taskId, params.promptPath);
     runState.activeProcess = handle;
     runState.outputLog = [];
     runState.outputLogBytes = 0;

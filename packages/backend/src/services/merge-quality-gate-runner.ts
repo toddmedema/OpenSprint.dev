@@ -797,6 +797,7 @@ async function repairQualityGateEnvironment(
 
   let npmCiSucceeded = !npmGate;
   let symlinkSucceeded = true;
+  let worktreeDependencyHealthy = !npmGate;
 
   if (!npmGate) {
     commands.push("skip npm-specific auto-repair (non-npm gate)");
@@ -810,12 +811,26 @@ async function repairQualityGateEnvironment(
     const repoNodeModulesHealthy = await isNodeModulesUsable(
       path.join(options.repoPath, "node_modules")
     );
-
+    let repoDependencyHealthy = false;
     if (repoNodeModulesHealthy) {
-      commands.push("repo node_modules already healthy (skip npm ci)");
+      const repoDependencyHealth = await runDependencyHealthCheck(
+        options.repoPath,
+        deps.runCommand,
+        options.toolchainProfile
+      );
+      repoDependencyHealthy = repoDependencyHealth.healthy;
+      if (!repoDependencyHealth.healthy) {
+        outputParts.push(
+          `[repo dependency health @ ${options.repoPath}] ${repoDependencyHealth.output}`
+        );
+      }
+    }
+
+    if (repoNodeModulesHealthy && repoDependencyHealthy) {
+      commands.push("repo node_modules + dependency health already healthy (skip npm ci)");
       npmCiSucceeded = true;
       outputParts.push(
-        `[repo check] node_modules already present and non-empty at ${options.repoPath}`
+        `[repo check] node_modules and dependency health already healthy at ${options.repoPath}`
       );
     } else {
       commands.push("npm ci (repo root)");
@@ -854,8 +869,23 @@ async function repairQualityGateEnvironment(
     }
 
     const nodeModulesUsable = await isNodeModulesUsable(path.join(worktreePath, "node_modules"));
+    if (nodeModulesUsable) {
+      const worktreeDependencyHealth = await runDependencyHealthCheck(
+        worktreePath,
+        deps.runCommand,
+        options.toolchainProfile
+      );
+      worktreeDependencyHealthy = worktreeDependencyHealth.healthy;
+      if (!worktreeDependencyHealthy) {
+        outputParts.push(
+          `[worktree dependency health @ ${worktreePath}] ${worktreeDependencyHealth.output}`
+        );
+      }
+    } else {
+      worktreeDependencyHealthy = false;
+    }
 
-    if (!nodeModulesUsable) {
+    if (!nodeModulesUsable || !worktreeDependencyHealthy) {
       commands.push("npm ci (worktree fallback)");
       try {
         const result = await deps.runCommand(
@@ -869,6 +899,7 @@ async function repairQualityGateEnvironment(
         npmCiSucceeded = true;
         const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
         if (out) outputParts.push(`[npm ci @ ${worktreePath}] ${out}`);
+        worktreeDependencyHealthy = true;
 
         // After successful worktree install, re-symlink from host if its deps
         // are now healthy so future validations can use the fast symlink path.
@@ -890,6 +921,7 @@ async function repairQualityGateEnvironment(
         });
         const out = [fail.reason, fail.output].filter(Boolean).join("\n").trim();
         if (out) outputParts.push(`[npm ci @ ${worktreePath}] ${out}`);
+        worktreeDependencyHealthy = false;
       }
     }
   } else {
@@ -932,8 +964,7 @@ async function repairQualityGateEnvironment(
 
   let succeeded: boolean;
   if (validationWorkspace === "merged_candidate") {
-    // For merged_candidate: either npm ci (repo root or worktree) or symlink must work.
-    succeeded = recreateSucceeded && (npmCiSucceeded || symlinkSucceeded);
+    succeeded = recreateSucceeded && worktreeDependencyHealthy;
   } else {
     succeeded = recreateSucceeded && npmCiSucceeded && symlinkSucceeded;
   }

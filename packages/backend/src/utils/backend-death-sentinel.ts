@@ -211,7 +211,7 @@ export function startLaunchdBackendWitness(params: {
     "        backendPid,",
     "        parentPid,",
     "        payload: payload || {},",
-    '      }) + "\\\\n",',
+    '      }) + "\\n",',
     '      "utf-8"',
     "    );",
     "  } catch {}",
