@@ -11,34 +11,42 @@ const mockStartOAuth = vi.fn();
 const mockDisconnect = vi.fn();
 const mockListProjects = vi.fn();
 const mockSelectProject = vi.fn();
+const mockSyncNow = vi.fn();
 
-vi.mock("../../api/client", () => ({
-  api: {
-    integrations: {
-      todoist: {
-        getStatus: (...args: unknown[]) => mockGetStatus(...args),
-        startOAuth: (...args: unknown[]) => mockStartOAuth(...args),
-        disconnect: (...args: unknown[]) => mockDisconnect(...args),
-        listProjects: (...args: unknown[]) => mockListProjects(...args),
-        selectProject: (...args: unknown[]) => mockSelectProject(...args),
-        syncNow: vi.fn().mockResolvedValue({ imported: 0, errors: 0 }),
-      },
-    },
-  },
-  isApiError: (err: unknown) =>
-    err != null &&
-    typeof err === "object" &&
-    "name" in err &&
-    (err as { name: string }).name === "ApiError",
-  ApiError: class ApiError extends Error {
+vi.mock("../../api/client", () => {
+  class ApiErrorImpl extends Error {
     code: string;
     constructor(message: string, code: string) {
       super(message);
       this.name = "ApiError";
       this.code = code;
     }
-  },
-}));
+  }
+  return {
+    api: {
+      integrations: {
+        todoist: {
+          getStatus: (...args: unknown[]) => mockGetStatus(...args),
+          startOAuth: (...args: unknown[]) => mockStartOAuth(...args),
+          disconnect: (...args: unknown[]) => mockDisconnect(...args),
+          listProjects: (...args: unknown[]) => mockListProjects(...args),
+          selectProject: (...args: unknown[]) => mockSelectProject(...args),
+          syncNow: (...args: unknown[]) => mockSyncNow(...args),
+        },
+      },
+    },
+    isApiError: (err: unknown) =>
+      err != null && typeof err === "object" && "name" in err && (err as { name: string }).name === "ApiError",
+    ApiError: ApiErrorImpl,
+  };
+});
+
+function createApiError(message: string, code: string): Error {
+  const err = new Error(message);
+  err.name = "ApiError";
+  (err as Error & { code: string }).code = code;
+  return err;
+}
 
 function renderCard(ui: ReactElement) {
   const queryClient = new QueryClient({
@@ -61,6 +69,7 @@ describe("TodoistIntegrationCard", () => {
       success: true,
       selectedProject: { id: "tp-1", name: "Project" },
     });
+    mockSyncNow.mockResolvedValue({ imported: 0, errors: 0 });
     openSpy = vi.spyOn(window, "open").mockReturnValue({
       closed: false,
       close: vi.fn(),
@@ -129,8 +138,7 @@ describe("TodoistIntegrationCard", () => {
   // ---------- Not configured state ----------
 
   it("renders not-configured state when TODOIST_CLIENT_ID is missing", async () => {
-    const { ApiError } = await import("../../api/client");
-    mockGetStatus.mockRejectedValue(new ApiError("not configured", "INTEGRATION_NOT_CONFIGURED"));
+    mockGetStatus.mockRejectedValue(createApiError("not configured", "INTEGRATION_NOT_CONFIGURED"));
 
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
@@ -708,5 +716,225 @@ describe("TodoistIntegrationCard", () => {
 
     await user.click(checkbox);
     expect(checkbox).not.toBeChecked();
+  });
+
+  // ---------- Sync Now button ----------
+
+  it("shows Sync Now button when project is selected", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-sync-now-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-sync-now-btn")).toHaveTextContent("Sync Now");
+  });
+
+  it("does not show Sync Now when no project is selected", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await screen.findByTestId("todoist-integration-card");
+    expect(screen.queryByTestId("todoist-sync-now-btn")).not.toBeInTheDocument();
+  });
+
+  it("calls syncNow and shows success message with item count", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockSyncNow.mockResolvedValue({ imported: 3, errors: 0 });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const syncBtn = await screen.findByTestId("todoist-sync-now-btn");
+    await user.click(syncBtn);
+
+    await waitFor(() => {
+      expect(mockSyncNow).toHaveBeenCalledWith("proj-1");
+    });
+
+    expect(await screen.findByTestId("todoist-sync-message")).toHaveTextContent("3 items imported");
+  });
+
+  it("shows singular 'item' when exactly 1 imported", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockSyncNow.mockResolvedValue({ imported: 1, errors: 0 });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await user.click(await screen.findByTestId("todoist-sync-now-btn"));
+
+    expect(await screen.findByTestId("todoist-sync-message")).toHaveTextContent("1 item imported");
+  });
+
+  it("shows loading spinner while syncing", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockSyncNow.mockReturnValue(new Promise(() => {}));
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await user.click(await screen.findByTestId("todoist-sync-now-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("todoist-sync-spinner")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("todoist-sync-now-btn")).toHaveTextContent("Syncing…");
+    expect(screen.getByTestId("todoist-sync-now-btn")).toBeDisabled();
+  });
+
+  it("shows rate limit message on 429 (SYNC_RATE_LIMITED)", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockSyncNow.mockRejectedValue(createApiError("Rate limited", "SYNC_RATE_LIMITED"));
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await user.click(await screen.findByTestId("todoist-sync-now-btn"));
+
+    expect(await screen.findByTestId("todoist-sync-message")).toHaveTextContent(
+      "Please wait before syncing again"
+    );
+  });
+
+  it("shows rate limit message on RATE_LIMITED code", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockSyncNow.mockRejectedValue(createApiError("Rate limited", "RATE_LIMITED"));
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await user.click(await screen.findByTestId("todoist-sync-now-btn"));
+
+    expect(await screen.findByTestId("todoist-sync-message")).toHaveTextContent(
+      "Please wait before syncing again"
+    );
+  });
+
+  it("shows generic error message on sync failure", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockSyncNow.mockRejectedValue(new Error("Network error"));
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await user.click(await screen.findByTestId("todoist-sync-now-btn"));
+
+    expect(await screen.findByTestId("todoist-sync-message")).toHaveTextContent("Network error");
+  });
+
+  // ---------- Dismissible error banner ----------
+
+  it("shows dismissible error banner with suggestion text", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: { id: "tp-1", name: "Project" },
+      lastSyncAt: null,
+      lastError: "Rate limit exceeded",
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const banner = await screen.findByTestId("todoist-error-banner");
+    expect(banner).toHaveTextContent("Rate limit exceeded");
+    expect(banner).toHaveTextContent("Check your Todoist connection or try syncing again.");
+    expect(screen.getByTestId("todoist-error-dismiss-btn")).toBeInTheDocument();
+  });
+
+  it("dismisses error banner when dismiss button is clicked", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: { id: "tp-1", name: "Project" },
+      lastSyncAt: null,
+      lastError: "Something went wrong",
+    });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-error-banner")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("todoist-error-dismiss-btn"));
+
+    expect(screen.queryByTestId("todoist-error-banner")).not.toBeInTheDocument();
+  });
+
+  // ---------- Helper text (permanent deletion warning) ----------
+
+  it("shows permanent deletion warning when project is selected", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-delete-warning")).toHaveTextContent(
+      "Tasks will be permanently deleted from Todoist after successful import."
+    );
   });
 });
