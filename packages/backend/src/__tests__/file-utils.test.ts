@@ -74,10 +74,13 @@ describe("writeJsonAtomic", () => {
     expect(parsed).toEqual(data);
   });
 
-  it("throws when parent directory does not exist", async () => {
+  it("creates parent directories when they do not exist", async () => {
     const filePath = path.join(tempDir, "nonexistent", "subdir", "data.json");
     const data = { test: true };
 
-    await expect(writeJsonAtomic(filePath, data)).rejects.toThrow();
+    await writeJsonAtomic(filePath, data);
+
+    const raw = await fs.readFile(filePath, "utf-8");
+    expect(JSON.parse(raw)).toEqual(data);
   });
 });
