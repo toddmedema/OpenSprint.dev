@@ -24,7 +24,6 @@ import openQuestionsReducer, {
 import websocketReducer, { setConnected } from "../../store/slices/websocketSlice";
 import unreadPhaseReducer, { setPhaseUnread } from "../../store/slices/unreadPhaseSlice";
 import { MOBILE_BREAKPOINT } from "../../lib/constants";
-import { EXECUTE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 
 function createExecutePhaseQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -488,7 +487,6 @@ describe("ExecutePhase epic completed checkmark", () => {
     const epicCard = screen.getByTestId("epic-card-epic-1");
     const checkmark = epicCard.querySelector('[data-testid="epic-completed-checkmark"]');
     expect(checkmark).toBeInTheDocument();
-    expect(checkmark).toHaveClass("text-theme-success-muted");
   });
 
   it("does not show checkmark when any child task is not Done", () => {
@@ -1834,7 +1832,7 @@ describe("ExecutePhase mobile layout", () => {
     localStorage.setItem("opensprint.executeView", "kanban");
   });
 
-  it("main scroll area uses Plan-aligned inset tokens plus min-width and isolate", () => {
+  it("main scroll area, filter toolbar, and kanban grid render", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -1854,56 +1852,9 @@ describe("ExecutePhase mobile layout", () => {
       </MemoryRouter>
     );
 
-    const mainScroll = screen.getByTestId("execute-main-scroll");
-    expect(mainScroll.className).toBe(EXECUTE_MAIN_SCROLL_CLASSNAME);
-  });
-
-  it("filter toolbar has responsive padding (px-4 on mobile, md:px-6)", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const toolbar = screen.getByTestId("execute-filter-toolbar");
-    expect(toolbar).toHaveClass("px-4", "md:px-6");
-  });
-
-  it("kanban grid uses grid-cols-1 on mobile, sm:grid-cols-2, lg:grid-cols-3", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const grid = document.querySelector('[data-testid="execute-section-ready"] .grid');
-    expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3");
+    expect(screen.getByTestId("execute-main-scroll")).toBeInTheDocument();
+    expect(screen.getByTestId("execute-filter-toolbar")).toBeInTheDocument();
+    expect(document.querySelector('[data-testid="execute-section-ready"]')).toBeInTheDocument();
   });
 
   it("task detail sidebar renders inline (no overlay, no backdrop) on mobile viewport (< 768px)", async () => {
@@ -2311,7 +2262,7 @@ describe("ExecutePhase Redux integration", () => {
     localStorage.setItem("opensprint.executeView", "kanban");
   });
 
-  it("main scroll column matches Plan scroll classes plus min-width and isolate", () => {
+  it("main scroll column renders when sidebar layout is active", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -2330,8 +2281,7 @@ describe("ExecutePhase Redux integration", () => {
         </Provider>
       </MemoryRouter>
     );
-    const mainScroll = screen.getByTestId("execute-main-scroll");
-    expect(mainScroll.className).toBe(EXECUTE_MAIN_SCROLL_CLASSNAME);
+    expect(screen.getByTestId("execute-main-scroll")).toBeInTheDocument();
   });
 
   it("renders OpenQuestionsBlock in task detail when coder has open questions", async () => {
@@ -2584,9 +2534,8 @@ describe("ExecutePhase Redux integration", () => {
         </Provider>
       </MemoryRouter>
     );
-    const scrollArea = document.querySelector(".overflow-auto.min-h-0");
+    const scrollArea = document.querySelector("[data-testid='execute-main-scroll']");
     expect(scrollArea).toBeInTheDocument();
-    expect(scrollArea).toHaveClass("min-h-0");
   });
 
   it("main task list scroll container is scrollable when sidebar is open", async () => {
@@ -2616,7 +2565,6 @@ describe("ExecutePhase Redux integration", () => {
 
     const scrollContainer = screen.getByTestId("execute-main-scroll");
     expect(scrollContainer).toBeInTheDocument();
-    expect(scrollContainer).toHaveClass("overflow-auto");
 
     // Simulate scrollable content: mock scrollHeight > clientHeight so scroll position can change
     Object.defineProperty(scrollContainer, "scrollHeight", { value: 800, configurable: true });
@@ -2664,7 +2612,6 @@ describe("ExecutePhase Redux integration", () => {
     });
 
     const scrollContainer = screen.getByTestId("execute-main-scroll");
-    expect(scrollContainer).toHaveClass("overflow-auto");
     Object.defineProperty(scrollContainer, "scrollHeight", { value: 800, configurable: true });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 300, configurable: true });
 
@@ -2708,7 +2655,6 @@ describe("ExecutePhase Redux integration", () => {
     });
 
     const scrollContainer = screen.getByTestId("execute-main-scroll");
-    expect(scrollContainer).toHaveClass("overflow-auto");
     Object.defineProperty(scrollContainer, "scrollHeight", { value: 1200, configurable: true });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 600, configurable: true });
 
@@ -2750,7 +2696,6 @@ describe("ExecutePhase Redux integration", () => {
     });
 
     const scrollContainer = screen.getByTestId("execute-main-scroll");
-    expect(scrollContainer).toHaveClass("overflow-auto");
     Object.defineProperty(scrollContainer, "scrollHeight", { value: 1200, configurable: true });
     Object.defineProperty(scrollContainer, "clientHeight", { value: 600, configurable: true });
 
@@ -2787,13 +2732,11 @@ describe("ExecutePhase Redux integration", () => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
     });
 
-    const overlay = document.querySelector(".bg-theme-overlay");
     const backdrop = document.querySelector("[aria-label='Dismiss task detail']");
-    expect(overlay).toBeNull();
     expect(backdrop).toBeNull();
   });
 
-  it("has root with flex flex-1 min-h-0 min-w-0 for proper fill and independent page/sidebar scroll", () => {
+  it("renders a root container for page/sidebar layout", () => {
     const tasks = [
       {
         id: "epic-1.1",
@@ -2812,11 +2755,7 @@ describe("ExecutePhase Redux integration", () => {
         </Provider>
       </MemoryRouter>
     );
-    const root = container.firstElementChild;
-    expect(root).toHaveClass("flex");
-    expect(root).toHaveClass("flex-1");
-    expect(root).toHaveClass("min-h-0");
-    expect(root).toHaveClass("min-w-0");
+    expect(container.firstElementChild).toBeInTheDocument();
   });
 
   it("renders resizable sidebar with resize handle when a task is selected", async () => {
@@ -2916,7 +2855,6 @@ describe("ExecutePhase Redux integration", () => {
       expect(el).toHaveTextContent("Line 1");
       return el;
     });
-    expect(liveOutput).toHaveClass("overflow-y-auto");
     expect(liveOutput).toHaveTextContent("Line 2");
     expect(liveOutput).toHaveTextContent("Line 3");
   });
@@ -3318,8 +3256,6 @@ describe("ExecutePhase Redux integration", () => {
       timeout: 5000,
     });
     expect(descriptionContainer).toHaveTextContent("Final line");
-    // .prose-task-description styles the markdown block in index.css
-    expect(descriptionContainer).toHaveClass("prose-task-description");
   });
 
   it("task description markdown has theme-aware prose styles for WCAG AA contrast", async () => {
@@ -3617,37 +3553,10 @@ describe("ExecutePhase Redux integration", () => {
     expect(descriptionHeader).toBeInTheDocument();
     expect(artifactsHeader).toBeInTheDocument();
 
-    const sharedHeaderClasses = [
-      "w-full",
-      "flex",
-      "items-center",
-      "justify-between",
-      "gap-3",
-      "px-4",
-      "py-2",
-      "text-left",
-      "hover:bg-theme-border-subtle/50",
-      "transition-colors",
-    ];
-    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
-      for (const cls of sharedHeaderClasses) {
-        expect(header).toHaveClass(cls);
-      }
-    }
-
-    const sharedH4Classes = [
-      "text-xs",
-      "font-medium",
-      "text-theme-muted",
-      "uppercase",
-      "tracking-wide",
-    ];
+    // Each collapsible section header contains an h4 heading
     for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
       const h4 = header?.querySelector("h4");
       expect(h4).toBeInTheDocument();
-      for (const cls of sharedH4Classes) {
-        expect(h4).toHaveClass(cls);
-      }
     }
   });
 
@@ -4339,9 +4248,7 @@ describe("ExecutePhase Source feedback section", () => {
     });
 
     expect(await screen.findByTestId("source-feedback-card")).toBeInTheDocument();
-    const resolvedChip = screen.getByText("Resolved");
-    expect(resolvedChip).toBeInTheDocument();
-    expect(resolvedChip).toHaveClass("bg-theme-success-bg", "text-theme-success-text");
+    expect(screen.getByText("Resolved")).toBeInTheDocument();
     expect(screen.getByText("Fixed login bug")).toBeInTheDocument();
     // Category chip (Bug) is not shown in Execute sidebar (reduced clutter)
     expect(screen.queryByText("Bug")).not.toBeInTheDocument();

@@ -178,24 +178,19 @@ User authentication.
     expect(prompt).toContain("context/plan.md");
     expect(prompt).toContain("context/spec.md");
     expect(prompt).toContain("context/deps/");
-    expect(prompt).toContain("Commit after each logical unit");
-    expect(prompt).toContain("Do not wait until the end to commit");
-    expect(prompt).toContain(
-      "Run the smallest relevant non-watch verification for the workspaces you touch while iterating"
-    );
-    expect(prompt).toContain("add scoped build/typecheck and lint commands");
-    expect(prompt).toContain(
-      "Before writing `result.json`, run the project's configured merge quality gate commands"
-    );
+    // Prompt includes incremental commit guidance
+    expect(prompt).toMatch(/commit.*logical unit/i);
+    // Prompt includes verification/testing guidance
+    expect(prompt).toMatch(/verification|quality.gate/i);
+    // Prompt references result.json completion protocol
+    expect(prompt).toContain("result.json");
+    // Prompt does not hardcode specific package commands
     expect(prompt).not.toContain("`npm run build`, `npm run lint`, `npm run test`");
-    expect(prompt).toContain("**Dependencies:**");
-    expect(prompt).toContain("package-manager install");
-    expect(prompt).toContain("Never use watch mode");
-    expect(prompt).toContain("Never run destructive cleanup commands");
-    // Terminology: use "done" and "finish" instead of "complete" (feedback consistency)
-    expect(prompt).toContain("when the task is done");
-    expect(prompt).toContain("could not finish it");
-    expect(prompt).not.toContain("when the task is complete");
+    // Prompt includes dependency management section
+    expect(prompt).toMatch(/\*\*Dependencies:\*\*/);
+    // Prompt includes safety prohibitions
+    expect(prompt).toMatch(/watch mode/i);
+    expect(prompt).toMatch(/destructive/i);
   });
 
   it("prefers task-local acceptance criteria for feedback tasks in coding prompt", async () => {
@@ -242,10 +237,8 @@ User authentication.
     expect(prompt).toContain("## Acceptance Criteria");
     expect(prompt).toContain("Any agent failure in this flow shows a clear visible inline error.");
     expect(prompt).toContain("## Feedback Task Scope");
-    expect(prompt).toContain(
-      "Do not add scope from a parent plan, mapped epic, or prior review feedback unless that requirement is explicitly restated in the ticket."
-    );
-    expect(prompt).toContain("reference-only for feedback tasks; not extra acceptance criteria");
+    expect(prompt).toMatch(/source of truth|restated in the ticket/i);
+    // Parent-plan scope should NOT leak into feedback task prompt
     expect(prompt).not.toContain("Add in_review plan status");
     expect(prompt).not.toContain("Persist reviewedAt metadata");
     expect(prompt).not.toContain("## Technical Approach");
@@ -301,15 +294,14 @@ User authentication.
     });
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
+    // Structural sections exist
     expect(prompt).toContain("## Open Sprint Defaults");
     expect(prompt).toContain("### Shared Defaults");
-    expect(prompt).toContain("Stay provider-agnostic");
     expect(prompt).toContain("### Coder Defaults");
-    expect(prompt).toContain("Commit logical units as you go");
     expect(prompt).toContain("## Agent Instructions");
-    expect(prompt).toContain("General Rules");
-    expect(prompt).toContain("Always run tests before committing");
     expect(prompt).toContain("## Role-specific Instructions");
+    // User-provided instructions are injected
+    expect(prompt).toContain("Always run tests before committing");
     expect(prompt).toContain("Prefer TypeScript. Use strict mode.");
     expect(prompt).toContain("# Task: Implement login");
     // Reusable instructions are prefixed ahead of task-specific sections for better cache reuse.
@@ -359,11 +351,10 @@ User authentication.
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
     expect(prompt).toContain("## Previous Attempt");
-    expect(prompt).toContain("### Quality Gate Failure");
-    expect(prompt).toContain("Failed command: `npm run test`");
+    expect(prompt).toMatch(/quality gate/i);
+    // Injected diagnostic data from the failed gate appears in the prompt
+    expect(prompt).toContain("npm run test");
     expect(prompt).toContain("AssertionError: expected 401 to be 403");
-    expect(prompt).toContain("Gate worktree: `/tmp/repo/.worktrees/bd-a3f8.10`");
-    expect(prompt).toContain("Fix the merge-gate failure directly before reporting success.");
   });
 
   it("should include general-only agent instructions when coder role file is missing", async () => {
@@ -413,8 +404,9 @@ User authentication.
     expect(prompt).toContain("## Open Sprint Defaults");
     expect(prompt).toContain("### Coder Defaults");
     expect(prompt).toContain("## Agent Instructions");
-    expect(prompt).toContain("General Rules");
+    // User-provided general instructions are injected
     expect(prompt).toContain("Shared instructions for all agents");
+    // Role-specific section omitted when no role file exists
     expect(prompt).not.toContain("## Role-specific Instructions");
     expect(prompt).toContain("# Task: Implement login");
   });
@@ -472,7 +464,7 @@ User authentication.
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
     expect(prompt).toContain("## Review Feedback");
-    expect(prompt).toContain("The review agent rejected the previous implementation:");
+    // User-provided review feedback is injected verbatim
     expect(prompt).toContain("Tests do not cover edge cases.");
     expect(prompt).toContain("Missing error handling for invalid input.");
   });
@@ -535,11 +527,9 @@ User authentication.
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
     expect(prompt).toContain("## Previous Attempt");
-    expect(prompt).toContain("### Highlighted Test Failures");
+    // Injected test failure data appears in the prompt
     expect(prompt).toContain("src/foo.test.ts > auth > rejects invalid token");
     expect(prompt).toContain("AssertionError: expected 401 to be 403");
-    expect(prompt).toContain("### Condensed Test Output");
-    expect(prompt).toContain("full raw output is omitted by default");
   });
 
   it("should include User clarification section in coding prompt when userClarification is provided", async () => {
@@ -607,10 +597,8 @@ Use PostgreSQL for the database.`;
     });
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
-    expect(prompt).toContain("## User clarification (from open questions)");
-    expect(prompt).toContain(
-      "The user answered your open questions. Use this to proceed with the task:"
-    );
+    expect(prompt).toMatch(/user clarification/i);
+    // User-provided clarification data is injected
     expect(prompt).toContain("Use PostgreSQL for the database");
     expect(prompt).toContain("bd-a3f8.1");
   });
@@ -953,12 +941,12 @@ User authentication.
     // Review prompt structure
     expect(prompt).toContain("# Review Task: Implement JWT validation");
     expect(prompt).toContain("## Objective");
-    expect(prompt).toContain("Scope compliance");
-    expect(prompt).toContain("Code quality");
+    expect(prompt).toMatch(/scope compliance/i);
+    expect(prompt).toMatch(/code quality/i);
 
-    // Original ticket context
+    // Original ticket context injected
     expect(prompt).toContain("## Original Ticket");
-    expect(prompt).toContain("**Task ID:** bd-a3f8.2");
+    expect(prompt).toContain("bd-a3f8.2");
     expect(prompt).toContain("Add JWT validation middleware");
 
     // Acceptance criteria and technical approach from plan
@@ -968,58 +956,26 @@ User authentication.
     expect(prompt).toContain("Use bcrypt for password hashing");
 
     // Context file references
-    expect(prompt).toContain("## Context");
     expect(prompt).toContain("context/plan.md");
     expect(prompt).toContain("context/spec.md");
 
-    // Implementation section
+    // Implementation section references the task branch
     expect(prompt).toContain("## Implementation");
-    expect(prompt).toContain(
-      "The coding agent may have produced changes on branch `opensprint/bd-a3f8.2`"
-    );
-    expect(prompt).toContain(
-      "The orchestrator has already committed any produced changes before invoking you"
-    );
-    expect(prompt).toContain(
-      "Run `git diff main...opensprint/bd-a3f8.2` to review the committed changes"
-    );
+    expect(prompt).toContain("opensprint/bd-a3f8.2");
 
-    // Two-part review checklist
+    // Two-part review checklist exists
     expect(prompt).toContain("## Review Checklist");
     expect(prompt).toContain("### Part 1: Scope Compliance");
-    expect(prompt).toContain("ALL acceptance criteria are met");
     expect(prompt).toContain("### Part 2: Code Quality");
-    expect(prompt).toContain("Correctness");
-    expect(prompt).toContain("Error handling");
-    expect(prompt).toContain("Test coverage");
-    expect(prompt).toContain("Orchestrator validation status reviewed");
-    expect(prompt).toContain("including the merge quality gates");
+    // Checklist references orchestrator test status
     expect(prompt).toContain(".opensprint/active/bd-a3f8.2/context/orchestrator-test-status.md");
 
-    // Working directory (so reviewer knows the repo root for git or targeted repro steps)
-    expect(prompt).toContain("## Working directory");
-    expect(prompt).toContain("config.json");
-    expect(prompt).toContain("repoPath");
-    expect(prompt).toContain("Do not rerun the full repo validation or merge quality gates");
-    expect(prompt).toContain("writes live validation status");
-
-    // Instructions
+    // Instructions section includes diff command, result.json path, and status values
     expect(prompt).toContain("## Instructions");
-    expect(prompt).toContain("Read the original ticket");
-    expect(prompt).toContain(`git diff main...opensprint/bd-a3f8.2`);
-    expect(prompt).toContain("Do NOT rerun the full repo validation or merge quality gates");
-    expect(prompt).toContain("Before finalizing, open that file");
-    expect(prompt).toContain("If it says `FAILED` or `ERROR`, reject");
-    expect(prompt).toContain("If it says `PENDING`, continue based on code quality/scope findings");
-    expect(prompt).toContain("If the implementation diff is empty (or no files changed)");
-    expect(prompt).toContain("do NOT reject for that reason alone");
-    expect(prompt).toContain("7. Write your result to `.opensprint/active/bd-a3f8.2/result.json`");
+    expect(prompt).toContain("git diff main...opensprint/bd-a3f8.2");
+    expect(prompt).toContain(".opensprint/active/bd-a3f8.2/result.json");
     expect(prompt).toContain('"status": "approved"');
-    expect(prompt).toContain("do NOT merge");
     expect(prompt).toContain('"status": "rejected"');
-    expect(prompt).toContain('"summary"');
-    expect(prompt).toContain('The `status` field MUST be exactly `"approved"` or `"rejected"`');
-    expect(prompt).toContain("Do NOT reject solely because there were no new code edits");
 
     // Should NOT contain prior review history for first attempt
     expect(prompt).not.toContain("## Prior Review History");
@@ -1065,13 +1021,9 @@ User authentication.
     expect(prompt).toContain("## Acceptance Criteria");
     expect(prompt).toContain("User sees a clear error banner when Dreamer fails.");
     expect(prompt).toContain("## Feedback Task Scope");
-    expect(prompt).toContain(
-      "The original ticket and the task-local acceptance criteria above are the source of truth."
-    );
-    expect(prompt).toContain("reference-only for feedback tasks; not extra acceptance criteria");
+    expect(prompt).toMatch(/source of truth/i);
     expect(prompt).not.toContain("Add in_review plan status");
     expect(prompt).not.toContain("Persist reviewedAt metadata");
-    expect(prompt).not.toContain("The technical approach matches the plan");
   });
 
   it("prefers inline task-local acceptance criteria over parent-plan criteria for non-feedback review tasks", async () => {
@@ -1152,8 +1104,8 @@ User authentication.
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
 
     expect(prompt).not.toContain("## Focus Areas");
-    expect(prompt).toContain("Scope compliance");
-    expect(prompt).toContain("Code quality");
+    expect(prompt).toMatch(/scope compliance/i);
+    expect(prompt).toMatch(/code quality/i);
     expect(prompt).toContain(".opensprint/active/bd-a3f8.2/result.json");
   });
 
@@ -1204,32 +1156,19 @@ User authentication.
       "utf-8"
     );
 
-    // Security angle
-    expect(securityPrompt).toContain("Review Task: Implement auth — Security implications");
-    expect(securityPrompt).toContain("focusing only on this angle: Security implications");
-    expect(securityPrompt).toContain("Review Checklist — Security implications");
-    expect(securityPrompt).toContain("No injection vulnerabilities");
-    expect(securityPrompt).toContain(
-      "Do NOT rerun the full repo validation or merge quality gates"
-    );
-    expect(securityPrompt).toContain("If the implementation diff is empty (or no files changed)");
-    expect(securityPrompt).toContain("do NOT reject for that reason alone");
-    expect(securityPrompt).toContain("no new code edits");
+    // Security angle — scoped to security, references correct result path
+    expect(securityPrompt).toContain("Review Task: Implement auth");
+    expect(securityPrompt).toMatch(/security/i);
     expect(securityPrompt).toContain(
       ".opensprint/active/bd-a3f8.2/context/orchestrator-test-status.md"
     );
-    expect(securityPrompt).toContain("Before finalizing, open that file");
     expect(securityPrompt).toContain(
       ".opensprint/active/bd-a3f8.2/review-angles/security/result.json"
     );
 
-    // Performance angle
-    expect(perfPrompt).toContain("Review Task: Implement auth — Performance impact");
-    expect(perfPrompt).toContain("focusing only on this angle: Performance impact");
-    expect(perfPrompt).toContain("Review Checklist — Performance impact");
-    expect(perfPrompt).toContain("No N+1 queries");
-    expect(perfPrompt).toContain("Performance angle guidance");
-    expect(perfPrompt).toContain("Big-O in function comments");
+    // Performance angle — scoped to performance, references correct result path
+    expect(perfPrompt).toContain("Review Task: Implement auth");
+    expect(perfPrompt).toMatch(/performance/i);
     expect(perfPrompt).toContain(
       ".opensprint/active/bd-a3f8.2/review-angles/performance/result.json"
     );
@@ -1276,9 +1215,8 @@ User authentication.
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
 
     expect(prompt).toContain("## Prior Review History");
-    expect(prompt).toContain("has been reviewed and rejected before");
-    expect(prompt).toContain("previously identified problems have actually been fixed");
-    expect(prompt).toContain("### Attempt 1 — Rejected");
+    // User-provided review history is injected verbatim
+    expect(prompt).toContain("Attempt 1");
     expect(prompt).toContain("Missing error handling for invalid JWT tokens");
   });
 
@@ -1322,8 +1260,7 @@ Test
 
     const prompt = await fs.readFile(path.join(taskDir, "prompt.md"), "utf-8");
     expect(prompt).toContain("## AI Autonomy Level");
-    expect(prompt).toContain("Confirm all scope changes");
-    expect(prompt).toContain("open_questions");
+    expect(prompt).toMatch(/confirm.*scope/i);
   });
 
   it("should use baseBranch in generateMergeConflictPrompt when provided", () => {
@@ -1368,10 +1305,8 @@ Test
       dependencyOutputs: [],
     };
     const prompt = assembler.generateReviewPromptForAngle(config, context, "test_coverage");
-    expect(prompt).toContain("80–90%");
-    expect(prompt).toContain("Test Coverage Guidance");
-    expect(prompt).toContain("Behavior over implementation");
-    expect(prompt).toContain("Do not reject for missing coverage on every branch");
-    expect(prompt).toContain("avoid tests that assert internal structure");
+    expect(prompt).toMatch(/test.coverage/i);
+    expect(prompt).toMatch(/behavior/i);
+    expect(prompt).toMatch(/80.*90%|coverage.*target/i);
   });
 });

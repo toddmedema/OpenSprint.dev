@@ -18,10 +18,7 @@ import { notificationService } from "./notification.service.js";
 import { getRuntimePath } from "../utils/runtime-dir.js";
 import { getSafeTaskActiveDir } from "../utils/path-safety.js";
 import { getOrchestratorTestStatusPromptPath } from "./orchestrator-test-status.js";
-import {
-  buildFailureDebugPacket,
-  formatDebugPacketForPrompt,
-} from "./agentic-repair.service.js";
+import { buildFailureDebugPacket, formatDebugPacketForPrompt } from "./agentic-repair.service.js";
 import { buildPromptEnvelope } from "../utils/prompt-cache.js";
 
 /** Short checklist items per review angle for angle-specific prompts. Exported for epic final review. */
@@ -863,7 +860,11 @@ export class ContextAssembler {
       previousFailure: config.previousFailure,
     });
 
-    if (config.previousFailure && config.qualityGateDetail && config.agenticRepairEnabled !== false) {
+    if (
+      config.previousFailure &&
+      config.qualityGateDetail &&
+      config.agenticRepairEnabled !== false
+    ) {
       prompt += this.buildAgenticRepairSection(config);
     }
 

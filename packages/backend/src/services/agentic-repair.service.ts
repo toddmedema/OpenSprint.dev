@@ -130,7 +130,7 @@ export function formatDebugPacketForPrompt(packet: FailureDebugPacket): string {
     "}",
     "```",
     "",
-    "The `debugArtifact` is optional but strongly encouraged. If you cannot diagnose the issue, set `rootCauseCategory` to `\"unknown\"` and `nextAction` to `\"escalate\"`.",
+    'The `debugArtifact` is optional but strongly encouraged. If you cannot diagnose the issue, set `rootCauseCategory` to `"unknown"` and `nextAction` to `"escalate"`.',
     ""
   );
 
@@ -176,9 +176,7 @@ export function parseDebugArtifact(
     .trim()
     .toLowerCase();
   const validNextActions = ["continue", "retry", "escalate", "block"] as const;
-  const nextAction = (
-    validNextActions as readonly string[]
-  ).includes(rawNextAction)
+  const nextAction = (validNextActions as readonly string[]).includes(rawNextAction)
     ? (rawNextAction as DebugArtifact["nextAction"])
     : "escalate";
 

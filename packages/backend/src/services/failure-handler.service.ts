@@ -44,10 +44,7 @@ import {
   extractNoResultReasonFromOutput,
   type NoResultReasonCode,
 } from "./no-result-reason.service.js";
-import {
-  suggestPolicyFromArtifact,
-  summarizeDebugArtifact,
-} from "./agentic-repair.service.js";
+import { suggestPolicyFromArtifact, summarizeDebugArtifact } from "./agentic-repair.service.js";
 
 const log = createLogger("failure-handler");
 
