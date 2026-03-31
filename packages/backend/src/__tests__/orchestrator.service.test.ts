@@ -2419,78 +2419,196 @@ describe("OrchestratorService (slot-based model)", () => {
       );
     });
 
-    it("emits circuit_breaker.empty_diff_blocked when consecutive empty diffs trip the breaker", async () => {
-      const { task } = setupSingleTaskFlow("task-empty-diff-breaker");
-      Object.assign(task, { consecutiveEmptyDiffs: 1 });
-      mockTaskStoreReady.mockResolvedValueOnce([task]);
-      mockReadResult.mockResolvedValue({
-        status: "success",
-        summary: "No changes",
-      });
-      mockCaptureBranchDiff.mockResolvedValue("");
-
-      await orchestrator.ensureRunning(projectId);
-      await vi.waitFor(() => {
-        expect(mockWriteJsonAtomic).toHaveBeenCalled();
-      });
-
-      const appendSpy = vi.spyOn(eventLogService, "append").mockResolvedValue(undefined);
-      const failureSpy = vi
-        .spyOn(
-          (
-            orchestrator as unknown as {
-              failureHandler: {
-                handleTaskFailure: (...args: unknown[]) => Promise<void>;
-              };
-            }
-          ).failureHandler,
-          "handleTaskFailure"
-        )
-        .mockResolvedValue(undefined);
-
-      const invokeHandleCodingDone = orchestrator as unknown as {
+    describe("empty-diff circuit breaker (regression)", () => {
+      type HandleCodingDone = {
         handleCodingDone(
           projectId: string,
           repoPath: string,
-          task: typeof task,
+          task: ReturnType<typeof makeTask>,
           branchName: string,
           exitCode: number | null
         ): Promise<void>;
       };
 
-      await invokeHandleCodingDone.handleCodingDone(
-        projectId,
-        repoPath,
-        task,
-        `opensprint/${task.id}`,
-        0
-      );
+      it("increments extra.consecutiveEmptyDiffs on first success with empty diff without blocking", async () => {
+        const { task } = setupSingleTaskFlow("task-empty-diff-first");
+        mockTaskStoreReady.mockResolvedValueOnce([task]);
+        mockReadResult.mockResolvedValue({
+          status: "success",
+          summary: "No changes",
+        });
+        mockCaptureBranchDiff.mockResolvedValue("");
+        vi.spyOn(orchestrator, "runMergeQualityGates").mockResolvedValue(null);
+        vi.spyOn(
+          (
+            orchestrator as unknown as {
+              mergeCoordinator: { performMergeAndDone: (...args: unknown[]) => Promise<void> };
+            }
+          ).mergeCoordinator,
+          "performMergeAndDone"
+        ).mockResolvedValue(undefined);
+        const failureSpy = vi
+          .spyOn(
+            (
+              orchestrator as unknown as {
+                failureHandler: { handleTaskFailure: (...args: unknown[]) => Promise<void> };
+              }
+            ).failureHandler,
+            "handleTaskFailure"
+          )
+          .mockResolvedValue(undefined);
 
-      expect(appendSpy).toHaveBeenCalledWith(
-        repoPath,
-        expect.objectContaining({
-          taskId: task.id,
-          event: "circuit_breaker.empty_diff_blocked",
-          data: expect.objectContaining({
-            projectId,
-            branchName: `opensprint/${task.id}`,
-            consecutiveEmptyDiffs: 2,
-            threshold: 2,
-            attempt: expect.any(Number),
-          }),
-        })
-      );
-      expect(failureSpy).toHaveBeenCalledWith(
-        projectId,
-        repoPath,
-        task,
-        `opensprint/${task.id}`,
-        expect.stringContaining("no code changes"),
-        null,
-        "coding_failure"
-      );
+        await orchestrator.ensureRunning(projectId);
+        await vi.waitFor(() => {
+          expect(mockWriteJsonAtomic).toHaveBeenCalled();
+        });
 
-      appendSpy.mockRestore();
+        await (orchestrator as unknown as HandleCodingDone).handleCodingDone(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          0
+        );
+
+        const emptyDiffCounterUpdate = mockTaskStoreUpdate.mock.calls.find(
+          (call) =>
+            call[0] === projectId &&
+            call[1] === task.id &&
+            call[2] &&
+            typeof call[2] === "object" &&
+            "extra" in call[2] &&
+            (call[2] as { extra?: { consecutiveEmptyDiffs?: number } }).extra
+              ?.consecutiveEmptyDiffs === 1
+        );
+        expect(emptyDiffCounterUpdate).toBeDefined();
+
+        const emptyDiffCodingFailures = failureSpy.mock.calls.filter(
+          (c) =>
+            c[5] === "coding_failure" &&
+            String(c[4]).includes("no code changes") &&
+            String(c[4]).includes("consecutive attempts")
+        );
+        expect(emptyDiffCodingFailures).toHaveLength(0);
+      });
+
+      it("calls handleTaskFailure with coding_failure on second consecutive empty diff", async () => {
+        const { task } = setupSingleTaskFlow("task-empty-diff-breaker");
+        Object.assign(task, { consecutiveEmptyDiffs: 1 });
+        mockTaskStoreReady.mockResolvedValueOnce([task]);
+        mockReadResult.mockResolvedValue({
+          status: "success",
+          summary: "No changes",
+        });
+        mockCaptureBranchDiff.mockResolvedValue("");
+
+        await orchestrator.ensureRunning(projectId);
+        await vi.waitFor(() => {
+          expect(mockWriteJsonAtomic).toHaveBeenCalled();
+        });
+
+        const appendSpy = vi.spyOn(eventLogService, "append").mockResolvedValue(undefined);
+        const failureSpy = vi
+          .spyOn(
+            (
+              orchestrator as unknown as {
+                failureHandler: {
+                  handleTaskFailure: (...args: unknown[]) => Promise<void>;
+                };
+              }
+            ).failureHandler,
+            "handleTaskFailure"
+          )
+          .mockResolvedValue(undefined);
+
+        await (orchestrator as unknown as HandleCodingDone).handleCodingDone(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          0
+        );
+
+        expect(appendSpy).toHaveBeenCalledWith(
+          repoPath,
+          expect.objectContaining({
+            taskId: task.id,
+            event: "circuit_breaker.empty_diff_blocked",
+            data: expect.objectContaining({
+              projectId,
+              branchName: `opensprint/${task.id}`,
+              consecutiveEmptyDiffs: 2,
+              threshold: 2,
+              attempt: expect.any(Number),
+            }),
+          })
+        );
+        expect(failureSpy).toHaveBeenCalledWith(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          expect.stringContaining("no code changes"),
+          null,
+          "coding_failure"
+        );
+        expect(failureSpy).toHaveBeenCalledWith(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          expect.stringContaining("consecutive attempts"),
+          null,
+          "coding_failure"
+        );
+
+        appendSpy.mockRestore();
+      });
+
+      it("resets consecutiveEmptyDiffs via taskStore.update when diff is non-empty after a prior streak", async () => {
+        const { task } = setupSingleTaskFlow("task-empty-diff-reset");
+        Object.assign(task, { consecutiveEmptyDiffs: 1 });
+        mockTaskStoreReady.mockResolvedValueOnce([task]);
+        mockReadResult.mockResolvedValue({
+          status: "success",
+          summary: "Implemented",
+        });
+        mockCaptureBranchDiff.mockResolvedValue("diff --git a/foo.ts b/foo.ts\n+change");
+        vi.spyOn(orchestrator, "runMergeQualityGates").mockResolvedValue(null);
+        vi.spyOn(
+          (
+            orchestrator as unknown as {
+              mergeCoordinator: { performMergeAndDone: (...args: unknown[]) => Promise<void> };
+            }
+          ).mergeCoordinator,
+          "performMergeAndDone"
+        ).mockResolvedValue(undefined);
+
+        await orchestrator.ensureRunning(projectId);
+        await vi.waitFor(() => {
+          expect(mockWriteJsonAtomic).toHaveBeenCalled();
+        });
+
+        await (orchestrator as unknown as HandleCodingDone).handleCodingDone(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          0
+        );
+
+        const resetCall = mockTaskStoreUpdate.mock.calls.find(
+          (call) =>
+            call[0] === projectId &&
+            call[1] === task.id &&
+            call[2] &&
+            typeof call[2] === "object" &&
+            "extra" in call[2] &&
+            (call[2] as { extra?: { consecutiveEmptyDiffs?: number } }).extra
+              ?.consecutiveEmptyDiffs === 0
+        );
+        expect(resetCall).toBeDefined();
+      });
     });
 
     it("caps dispatch to one new coder per loop even when multiple slots are available", async () => {
