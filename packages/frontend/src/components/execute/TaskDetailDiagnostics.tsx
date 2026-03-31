@@ -76,6 +76,15 @@ interface DiagnosticsFailurePresentation {
   worktreePath: string | null;
   remediation: string | null;
   hasStructuredDetail: boolean;
+  userTitle: string | null;
+  userSummary: string | null;
+  validationWorkspace:
+    | "baseline"
+    | "merged_candidate"
+    | "task_worktree"
+    | "repo_root"
+    | null;
+  humanHeadlineId: string | null;
 }
 
 function useFailurePresentation(
@@ -91,6 +100,10 @@ function useFailurePresentation(
         worktreePath: null,
         remediation: null,
         hasStructuredDetail: false,
+        userTitle: null,
+        userSummary: null,
+        validationWorkspace: null,
+        humanHeadlineId: null,
       };
     }
 
@@ -101,20 +114,41 @@ function useFailurePresentation(
     const worktreePath = detail?.worktreePath?.trim() || null;
     const remediation = diagnostics.latestNextAction?.trim() || null;
     const detailFirstErrorLine = detail?.firstErrorLine?.trim() || null;
+    const userTitle = detail?.userTitle?.trim() || null;
+    const userSummary = detail?.userSummary?.trim() || null;
+    const validationWorkspace = detail?.validationWorkspace ?? null;
     const firstErrorLine =
       detailFirstErrorLine || firstNonEmptyLine(outputSnippet) || firstNonEmptyLine(reason);
     const hasStructuredPayload = Boolean(
-      detail && (command || reason || outputSnippet || worktreePath || detailFirstErrorLine)
+      detail &&
+        (command ||
+          reason ||
+          outputSnippet ||
+          worktreePath ||
+          detailFirstErrorLine ||
+          userTitle ||
+          userSummary)
     );
+    const humanEnvironmentHeadline =
+      detail?.category === "environment_setup" && (userTitle || userSummary)
+        ? [userTitle, userSummary].filter(Boolean).join(" — ")
+        : null;
     const primaryMessage = hasStructuredPayload
-      ? command && firstErrorLine
-        ? `${command} | ${firstErrorLine}`
-        : command || firstErrorLine
+      ? humanEnvironmentHeadline
+        ? humanEnvironmentHeadline
+        : command && firstErrorLine
+          ? `${command} | ${firstErrorLine}`
+          : command || firstErrorLine
       : null;
 
     const hasStructuredDetail = Boolean(
       hasStructuredPayload && (outputSnippet || worktreePath || remediation || reason)
     );
+
+    const humanHeadlineId =
+      humanEnvironmentHeadline && primaryMessage?.trim()
+        ? "execution-diagnostics-human-headline"
+        : null;
 
     return {
       primaryMessage: primaryMessage?.trim() || null,
@@ -124,6 +158,10 @@ function useFailurePresentation(
       worktreePath,
       remediation,
       hasStructuredDetail,
+      userTitle,
+      userSummary,
+      validationWorkspace,
+      humanHeadlineId,
     };
   }, [diagnostics]);
 }
@@ -182,6 +220,18 @@ export function TaskDetailDiagnostics({
   const failurePresentation = useFailurePresentation(diagnostics);
   const [detailsExpanded, setDetailsExpanded] = React.useState(false);
 
+  const mergedCandidateWorktreeDescribedBy =
+    failurePresentation.validationWorkspace === "merged_candidate"
+      ? [
+          failurePresentation.userTitle || failurePresentation.userSummary
+            ? "execution-diagnostics-detail-human-preface"
+            : null,
+          failurePresentation.humanHeadlineId,
+        ]
+          .filter((id): id is string => Boolean(id))
+          .join(" ") || undefined
+      : undefined;
+
   React.useEffect(() => {
     setDetailsExpanded(false);
   }, [diagnostics?.taskId, diagnostics?.cumulativeAttempts]);
@@ -208,7 +258,10 @@ export function TaskDetailDiagnostics({
               </div>
             )}
             {failurePresentation.primaryMessage && (
-              <div data-testid="execution-diagnostics-primary-message">
+              <div
+                data-testid="execution-diagnostics-primary-message"
+                id={failurePresentation.humanHeadlineId ?? undefined}
+              >
                 <span className="text-theme-muted">Latest failure:</span>{" "}
                 <span className="text-theme-text">{failurePresentation.primaryMessage}</span>
               </div>
@@ -226,6 +279,13 @@ export function TaskDetailDiagnostics({
                 </button>
                 {detailsExpanded && (
                   <div className="mt-2 space-y-2" data-testid="execution-diagnostics-details">
+                    {(failurePresentation.userTitle || failurePresentation.userSummary) && (
+                      <p className="sr-only" id="execution-diagnostics-detail-human-preface">
+                        {[failurePresentation.userTitle, failurePresentation.userSummary]
+                          .filter(Boolean)
+                          .join(". ")}
+                      </p>
+                    )}
                     {failurePresentation.reason && (
                       <div data-testid="execution-diagnostics-details-reason">
                         <span className="text-theme-muted">Reason:</span>{" "}
@@ -241,8 +301,15 @@ export function TaskDetailDiagnostics({
                       </div>
                     )}
                     {failurePresentation.worktreePath && (
-                      <div data-testid="execution-diagnostics-details-worktree">
-                        <span className="text-theme-muted">Worktree:</span>{" "}
+                      <div
+                        data-testid="execution-diagnostics-details-worktree"
+                        aria-describedby={mergedCandidateWorktreeDescribedBy}
+                      >
+                        <span className="text-theme-muted">
+                          {failurePresentation.validationWorkspace === "merged_candidate"
+                            ? "Internal validation folder (not your project path):"
+                            : "Worktree:"}
+                        </span>{" "}
                         <span className="text-theme-text">{failurePresentation.worktreePath}</span>
                       </div>
                     )}

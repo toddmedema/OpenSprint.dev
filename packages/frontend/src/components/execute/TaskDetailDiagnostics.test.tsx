@@ -240,6 +240,73 @@ describe("TaskDetailDiagnostics", () => {
     );
   });
 
+  it("shows human environment headline before technical command line and labels merged_candidate paths", async () => {
+    const user = userEvent.setup();
+    const validationPath =
+      "/var/folders/xx/opensprint-validation/merged_candidate-abc123/wt";
+    render(
+      <TaskDetailDiagnostics
+        task={null}
+        diagnostics={{
+          taskId: "task-env",
+          taskStatus: "blocked",
+          cumulativeAttempts: 1,
+          latestSummary: "Merge check environment: …",
+          latestOutcome: "blocked",
+          latestNextAction: "Retry merge",
+          latestQualityGateDetail: {
+            category: "environment_setup",
+            validationWorkspace: "merged_candidate",
+            command: "npm run test",
+            reason: `Validation workspace node_modules is missing or empty at ${validationPath}/node_modules`,
+            worktreePath: validationPath,
+            firstErrorLine: `Validation workspace node_modules is missing or empty at ${validationPath}/node_modules`,
+            userTitle: "Dependencies missing in merge check",
+            userSummary:
+              "Dependencies were not installed in the temporary merge preview folder Open Sprint uses to validate merges.",
+          },
+          timeline: [],
+          attempts: [
+            {
+              attempt: 1,
+              finalPhase: "merge",
+              finalOutcome: "blocked",
+              finalSummary: "Quality gate environment failure",
+              sessionAttemptStatuses: [],
+            },
+          ],
+        }}
+        diagnosticsLoading={false}
+      />
+    );
+
+    expect(screen.getByTestId("execution-diagnostics-primary-message")).toHaveTextContent(
+      "Dependencies missing in merge check"
+    );
+    expect(screen.getByTestId("execution-diagnostics-primary-message")).toHaveTextContent(
+      "temporary merge preview"
+    );
+    expect(screen.getByTestId("execution-diagnostics-primary-message")).not.toHaveTextContent(
+      "npm run test"
+    );
+
+    await user.click(screen.getByTestId("execution-diagnostics-details-toggle"));
+    expect(screen.getByTestId("execution-diagnostics-details-reason")).toHaveTextContent(
+      validationPath
+    );
+    expect(screen.getByTestId("execution-diagnostics-details-worktree")).toHaveTextContent(
+      "Internal validation folder (not your project path):"
+    );
+    expect(screen.getByTestId("execution-diagnostics-details-worktree")).toHaveTextContent(
+      validationPath
+    );
+    const describedBy = screen
+      .getByTestId("execution-diagnostics-details-worktree")
+      .getAttribute("aria-describedby");
+    expect(describedBy).toContain("execution-diagnostics-detail-human-preface");
+    expect(describedBy).toContain("execution-diagnostics-human-headline");
+  });
+
   it("keeps legacy summary rendering when structured detail payload is missing", () => {
     render(
       <TaskDetailDiagnostics
