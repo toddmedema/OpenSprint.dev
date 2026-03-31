@@ -9,6 +9,8 @@ import { TodoistIntegrationCard } from "./TodoistIntegrationCard";
 const mockGetStatus = vi.fn();
 const mockStartOAuth = vi.fn();
 const mockDisconnect = vi.fn();
+const mockListProjects = vi.fn();
+const mockSelectProject = vi.fn();
 
 vi.mock("../../api/client", () => ({
   api: {
@@ -17,8 +19,8 @@ vi.mock("../../api/client", () => ({
         getStatus: (...args: unknown[]) => mockGetStatus(...args),
         startOAuth: (...args: unknown[]) => mockStartOAuth(...args),
         disconnect: (...args: unknown[]) => mockDisconnect(...args),
-        listProjects: vi.fn().mockResolvedValue({ projects: [] }),
-        selectProject: vi.fn().mockResolvedValue({ success: true }),
+        listProjects: (...args: unknown[]) => mockListProjects(...args),
+        selectProject: (...args: unknown[]) => mockSelectProject(...args),
         syncNow: vi.fn().mockResolvedValue({ imported: 0, errors: 0 }),
       },
     },
@@ -51,6 +53,8 @@ describe("TodoistIntegrationCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockListProjects.mockResolvedValue({ projects: [] });
+    mockSelectProject.mockResolvedValue({ success: true, selectedProject: { id: "tp-1", name: "Project" } });
     openSpy = vi.spyOn(window, "open").mockReturnValue({
       closed: false,
       close: vi.fn(),
@@ -159,7 +163,7 @@ describe("TodoistIntegrationCard", () => {
     const statusLine = await screen.findByTestId("todoist-status-line");
     expect(statusLine).toHaveTextContent("Connected to user@example.com");
     expect(screen.getByTestId("todoist-status-badge")).toHaveTextContent("Connected");
-    expect(screen.getByTestId("todoist-project-picker-placeholder")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-project-picker")).toBeInTheDocument();
     expect(screen.getByTestId("todoist-disconnect-btn")).toBeInTheDocument();
   });
 
@@ -198,7 +202,7 @@ describe("TodoistIntegrationCard", () => {
     expect(statusLine).toHaveTextContent("Connected to dev@test.io");
     expect(statusLine).toHaveTextContent("Project: My Todoist Project");
     expect(statusLine).toHaveTextContent("Last sync: 2m ago");
-    expect(screen.queryByTestId("todoist-project-picker-placeholder")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("todoist-project-picker")).not.toBeInTheDocument();
   });
 
   // ---------- Error banner ----------
@@ -371,5 +375,332 @@ describe("TodoistIntegrationCard", () => {
     await user.click(screen.getByText("Retry"));
 
     expect(await screen.findByTestId("todoist-connect-btn")).toBeInTheDocument();
+  });
+
+  // ---------- Project picker (no project selected) ----------
+
+  it("auto-opens project picker when connected with no project", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [
+        { id: "tp-1", name: "Inbox", taskCount: 5 },
+        { id: "tp-2", name: "Work", taskCount: 12 },
+      ],
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-project-picker")).toBeInTheDocument();
+    expect(await screen.findByTestId("todoist-project-select")).toBeInTheDocument();
+    expect(screen.getByText("Select a Todoist project")).toBeInTheDocument();
+  });
+
+  it("fetches and displays Todoist projects in dropdown", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [
+        { id: "tp-1", name: "Inbox", taskCount: 5 },
+        { id: "tp-2", name: "Work", taskCount: 12 },
+        { id: "tp-3", name: "Personal" },
+      ],
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await waitFor(() => {
+      expect(mockListProjects).toHaveBeenCalledWith("proj-1");
+    });
+
+    const select = await screen.findByTestId("todoist-project-select");
+    expect(select).toBeInTheDocument();
+
+    const options = select.querySelectorAll("option");
+    expect(options).toHaveLength(4);
+    expect(options[0]).toHaveTextContent("Select a project…");
+    expect(options[1]).toHaveTextContent("Inbox (5 tasks)");
+    expect(options[2]).toHaveTextContent("Work (12 tasks)");
+    expect(options[3]).toHaveTextContent("Personal");
+  });
+
+  it("shows loading state while fetching projects", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockReturnValue(new Promise(() => {}));
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-projects-loading")).toBeInTheDocument();
+    expect(screen.getByText("Loading projects…")).toBeInTheDocument();
+  });
+
+  it("shows error with retry when project fetch fails", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockRejectedValue(new Error("Network error"));
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    // Advance past react-query retry delay (retry: 1 with exponential backoff)
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(await screen.findByTestId("todoist-projects-error")).toBeInTheDocument();
+    expect(screen.getByText("Failed to load Todoist projects.")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-projects-retry-btn")).toBeInTheDocument();
+  });
+
+  it("retries fetching projects when retry button is clicked", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockRejectedValue(new Error("Network error"));
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await screen.findByTestId("todoist-projects-error");
+
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "Inbox" }],
+    });
+    await user.click(screen.getByTestId("todoist-projects-retry-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("todoist-project-select")).toBeInTheDocument();
+    });
+  });
+
+  it("save button is disabled when no project is selected", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "Inbox" }],
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const saveBtn = await screen.findByTestId("todoist-save-project-btn");
+    expect(saveBtn).toBeDisabled();
+  });
+
+  it("calls selectProject API when save is clicked with a project selected", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [
+        { id: "tp-1", name: "Inbox" },
+        { id: "tp-2", name: "Work" },
+      ],
+    });
+    mockSelectProject.mockResolvedValue({
+      success: true,
+      selectedProject: { id: "tp-2", name: "Work" },
+    });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const select = await screen.findByTestId("todoist-project-select");
+    await user.selectOptions(select, "tp-2");
+
+    const saveBtn = screen.getByTestId("todoist-save-project-btn");
+    expect(saveBtn).not.toBeDisabled();
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockSelectProject).toHaveBeenCalledWith("proj-1", { todoistProjectId: "tp-2" });
+    });
+  });
+
+  it("shows save error when selectProject fails", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "Inbox" }],
+    });
+    mockSelectProject.mockRejectedValue(new Error("Server error"));
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const select = await screen.findByTestId("todoist-project-select");
+    await user.selectOptions(select, "tp-1");
+
+    await user.click(screen.getByTestId("todoist-save-project-btn"));
+
+    expect(await screen.findByTestId("todoist-save-error")).toBeInTheDocument();
+    expect(screen.getByText("Failed to save project selection. Please try again.")).toBeInTheDocument();
+  });
+
+  // ---------- Project picker (project already selected) ----------
+
+  it("shows project info with Change button when project is selected", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const info = await screen.findByTestId("todoist-project-info");
+    expect(info).toBeInTheDocument();
+    expect(info).toHaveTextContent("My Project");
+    expect(info).toHaveTextContent("tp-1");
+    expect(screen.getByTestId("todoist-change-project-btn")).toBeInTheDocument();
+  });
+
+  it("opens picker when Change button is clicked", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [
+        { id: "tp-1", name: "My Project" },
+        { id: "tp-2", name: "Other" },
+      ],
+    });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await screen.findByTestId("todoist-project-info");
+    await user.click(screen.getByTestId("todoist-change-project-btn"));
+
+    expect(await screen.findByTestId("todoist-project-picker")).toBeInTheDocument();
+    expect(screen.getByText("Change Todoist project")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-cancel-picker-btn")).toBeInTheDocument();
+  });
+
+  it("closes picker when Cancel button is clicked", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: { id: "tp-1", name: "My Project" },
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "My Project" }],
+    });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    await screen.findByTestId("todoist-project-info");
+    await user.click(screen.getByTestId("todoist-change-project-btn"));
+
+    expect(await screen.findByTestId("todoist-project-picker")).toBeInTheDocument();
+    await user.click(screen.getByTestId("todoist-cancel-picker-btn"));
+
+    expect(await screen.findByTestId("todoist-project-info")).toBeInTheDocument();
+    expect(screen.queryByTestId("todoist-project-picker")).not.toBeInTheDocument();
+  });
+
+  // ---------- Import existing tasks toggle ----------
+
+  it("renders import existing tasks checkbox", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "Inbox" }],
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-import-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-import-checkbox")).not.toBeChecked();
+    expect(screen.getByText("Import existing open tasks (one-time)")).toBeInTheDocument();
+  });
+
+  it("toggles import existing tasks checkbox", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "Inbox" }],
+    });
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const checkbox = await screen.findByTestId("todoist-import-checkbox");
+    expect(checkbox).not.toBeChecked();
+
+    await user.click(checkbox);
+    expect(checkbox).toBeChecked();
+
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
   });
 });

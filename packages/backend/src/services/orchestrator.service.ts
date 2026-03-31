@@ -2262,6 +2262,21 @@ export class OrchestratorService {
             taskId: task.id,
             consecutiveEmptyDiffs,
           });
+          void eventLogService
+            .append(repoPath, {
+              timestamp: new Date().toISOString(),
+              projectId,
+              taskId: task.id,
+              event: "circuit_breaker.empty_diff_blocked",
+              data: {
+                projectId,
+                attempt: slot.attempt,
+                branchName,
+                consecutiveEmptyDiffs,
+                threshold: MAX_CONSECUTIVE_EMPTY_DIFFS,
+              },
+            })
+            .catch(() => {});
           await this.failureHandler.handleTaskFailure(
             projectId,
             repoPath,

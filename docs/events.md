@@ -39,6 +39,18 @@ interface OrchestratorEvent {
 | ---------------- | ------------------------ | ---- |
 | `push.succeeded` | Push to remote completed | —    |
 
+### Integrity / circuit breakers
+
+| Event                               | When                                                                                                                              | data                                                                                    |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `circuit_breaker.empty_diff_blocked` | Coder reported `success` but `captureBranchDiff` was empty on **N** consecutive attempts (see orchestrator `MAX_CONSECUTIVE_EMPTY_DIFFS`). Task is blocked as `coding_failure`. | `projectId`, `attempt`, `branchName`, `consecutiveEmptyDiffs`, `threshold` |
+
+#### Runbook: `circuit_breaker.empty_diff_blocked`
+
+- **What it means:** The orchestrator stopped retrying because the agent kept claiming success without any committed diff vs the base branch. This is **not** proof of malicious behavior; it usually indicates a bad or underspecified prompt, missing context, or the agent only changing ignored/untracked paths.
+- **Integrity vs prompts:** Treat as a **workflow / prompt-quality** signal first. Escalate to an integrity review only if the same task or project shows a pattern of empty diffs alongside suspicious API or git activity elsewhere.
+- **Where it is stored:** `orchestrator_events` (queried via `eventLogService.readForTask`, `readSince`, `readSinceByProjectId`, or the execute API that exposes the event log).
+
 ### Watchdog (Witness pattern)
 
 | Event                         | When                            | data                    |

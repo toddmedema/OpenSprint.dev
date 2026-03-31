@@ -26,6 +26,10 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   const queryClient = useQueryClient();
   const [oauthPolling, setOauthPolling] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedPickerProjectId, setSelectedPickerProjectId] = useState<string>("");
+  const [importExistingTasks, setImportExistingTasks] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const pollCountRef = useRef(0);
   const oauthWindowRef = useRef<Window | null>(null);
 
@@ -65,11 +69,40 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
     },
   });
 
+  const shouldShowPicker = pickerOpen || (!!statusQuery.data?.connected && !statusQuery.data?.selectedProject);
+
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.integrations.todoistProjects(projectId),
+    queryFn: () => api.integrations.todoist.listProjects(projectId),
+    enabled: shouldShowPicker,
+    retry: 1,
+    staleTime: 30_000,
+  });
+
+  const selectProjectMutation = useMutation({
+    mutationFn: (todoistProjectId: string) =>
+      api.integrations.todoist.selectProject(projectId, { todoistProjectId }),
+    onSuccess: () => {
+      setSaveSuccess(true);
+      setPickerOpen(false);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.integrations.todoistStatus(projectId),
+      });
+      setTimeout(() => setSaveSuccess(false), 3_000);
+    },
+  });
+
   const refreshStatus = useCallback(() => {
     void queryClient.invalidateQueries({
       queryKey: queryKeys.integrations.todoistStatus(projectId),
     });
   }, [queryClient, projectId]);
+
+  useEffect(() => {
+    if (pickerOpen && !selectedPickerProjectId && statusQuery.data?.selectedProject?.id) {
+      setSelectedPickerProjectId(statusQuery.data.selectedProject.id);
+    }
+  }, [pickerOpen, selectedPickerProjectId, statusQuery.data?.selectedProject?.id]);
 
   useEffect(() => {
     if (!oauthPolling) return;
@@ -295,25 +328,44 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
             </div>
           )}
 
-          {/* Project picker placeholder */}
-          {!selectedProject && (
-            <div className="mt-3" data-testid="todoist-project-picker-placeholder">
-              <label htmlFor="todoist-project-select" className="block text-xs font-medium text-theme-text mb-1">
-                Select a Todoist project
-              </label>
-              <select
-                id="todoist-project-select"
-                className="w-full text-sm rounded border border-theme-border bg-theme-bg px-2 py-1.5 text-theme-text"
-                disabled
-                data-testid="todoist-project-select"
-              >
-                <option>Select a project…</option>
-              </select>
-              <p className="text-xs text-theme-muted mt-1">
-                Project picker will be available in a future update.
-              </p>
+          {/* Project picker */}
+          {shouldShowPicker ? (
+            <ProjectPicker
+              pickerOpen={shouldShowPicker}
+              projectsQuery={projectsQuery}
+              selectedPickerProjectId={selectedPickerProjectId}
+              importExistingTasks={importExistingTasks}
+              selectProjectMutation={selectProjectMutation}
+              selectedProject={selectedProject ?? null}
+              onOpen={() => setPickerOpen(true)}
+              onCancel={() => { setPickerOpen(false); setSelectedPickerProjectId(selectedProject?.id ?? ""); }}
+              onSelectChange={setSelectedPickerProjectId}
+              onImportToggle={setImportExistingTasks}
+              onRetryFetch={() => void projectsQuery.refetch()}
+            />
+          ) : selectedProject ? (
+            <div className="mt-3" data-testid="todoist-project-info">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-theme-muted">
+                  Project: <span className="font-medium text-theme-text">{selectedProject.name}</span>
+                  <span className="ml-1 text-theme-muted">({selectedProject.id})</span>
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                  onClick={() => { setPickerOpen(true); setSelectedPickerProjectId(selectedProject.id); }}
+                  data-testid="todoist-change-project-btn"
+                >
+                  Change
+                </button>
+              </div>
+              {saveSuccess && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1" data-testid="todoist-save-success">
+                  Project saved successfully.
+                </p>
+              )}
             </div>
-          )}
+          ) : null}
 
           {/* Disconnect */}
           <div className="mt-3 flex items-center gap-2">
@@ -371,6 +423,156 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
             )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface ProjectPickerProps {
+  pickerOpen: boolean;
+  projectsQuery: {
+    data?: { projects: Array<{ id: string; name: string; taskCount?: number }> };
+    isLoading: boolean;
+    isFetching: boolean;
+    isError: boolean;
+    refetch: () => unknown;
+  };
+  selectedPickerProjectId: string;
+  importExistingTasks: boolean;
+  selectProjectMutation: {
+    isPending: boolean;
+    isError: boolean;
+    mutate: (projectId: string) => void;
+  };
+  selectedProject: { id: string; name: string } | null;
+  onOpen: () => void;
+  onCancel: () => void;
+  onSelectChange: (value: string) => void;
+  onImportToggle: (value: boolean) => void;
+  onRetryFetch: () => void;
+}
+
+function ProjectPicker({
+  pickerOpen,
+  projectsQuery,
+  selectedPickerProjectId,
+  importExistingTasks,
+  selectProjectMutation,
+  selectedProject,
+  onOpen,
+  onCancel,
+  onSelectChange,
+  onImportToggle,
+  onRetryFetch,
+}: ProjectPickerProps) {
+  const projects = projectsQuery.data?.projects ?? [];
+  const isLoading = projectsQuery.isLoading || projectsQuery.isFetching;
+  const isError = projectsQuery.isError;
+  const hasProjects = projects.length > 0;
+
+  if (!pickerOpen) {
+    return (
+      <div className="mt-3">
+        <button
+          type="button"
+          className="btn-secondary text-sm"
+          onClick={onOpen}
+          data-testid="todoist-open-picker-btn"
+        >
+          Select a Todoist project
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3" data-testid="todoist-project-picker">
+      <label htmlFor="todoist-project-select" className="block text-xs font-medium text-theme-text mb-1">
+        {selectedProject ? "Change Todoist project" : "Select a Todoist project"}
+      </label>
+
+      {isLoading && !hasProjects && (
+        <div className="flex items-center gap-2 py-2" data-testid="todoist-projects-loading">
+          <div className="w-4 h-4 border-2 border-theme-border border-t-blue-500 rounded-full animate-spin" />
+          <span className="text-xs text-theme-muted">Loading projects…</span>
+        </div>
+      )}
+
+      {isError && !hasProjects && (
+        <div className="p-3 rounded-lg bg-theme-error-bg border border-theme-error-border" data-testid="todoist-projects-error">
+          <p className="text-xs text-theme-error-text">Failed to load Todoist projects.</p>
+          <button
+            type="button"
+            className="text-xs text-theme-error-text font-medium hover:underline mt-1"
+            onClick={onRetryFetch}
+            data-testid="todoist-projects-retry-btn"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {(hasProjects || (!isLoading && !isError)) && (
+        <>
+          <select
+            id="todoist-project-select"
+            className="w-full text-sm rounded border border-theme-border bg-theme-bg px-2 py-1.5 text-theme-text"
+            value={selectedPickerProjectId}
+            onChange={(e) => onSelectChange(e.target.value)}
+            disabled={selectProjectMutation.isPending}
+            data-testid="todoist-project-select"
+          >
+            <option value="">Select a project…</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.taskCount != null ? ` (${p.taskCount} tasks)` : ""}
+              </option>
+            ))}
+          </select>
+
+          <div className="mt-2">
+            <label className="flex items-center gap-2 cursor-pointer" data-testid="todoist-import-toggle">
+              <input
+                type="checkbox"
+                checked={importExistingTasks}
+                onChange={(e) => onImportToggle(e.target.checked)}
+                disabled={selectProjectMutation.isPending}
+                className="rounded border-theme-border"
+                data-testid="todoist-import-checkbox"
+              />
+              <span className="text-xs text-theme-text">Import existing open tasks (one-time)</span>
+            </label>
+          </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              disabled={!selectedPickerProjectId || selectProjectMutation.isPending}
+              onClick={() => selectProjectMutation.mutate(selectedPickerProjectId)}
+              data-testid="todoist-save-project-btn"
+            >
+              {selectProjectMutation.isPending ? "Saving…" : "Save"}
+            </button>
+            {selectedProject && (
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                onClick={onCancel}
+                disabled={selectProjectMutation.isPending}
+                data-testid="todoist-cancel-picker-btn"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+
+          {selectProjectMutation.isError && (
+            <p className="text-xs text-theme-error-text mt-2" data-testid="todoist-save-error">
+              Failed to save project selection. Please try again.
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

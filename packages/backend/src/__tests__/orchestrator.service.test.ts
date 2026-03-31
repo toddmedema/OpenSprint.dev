@@ -4,6 +4,7 @@ import path from "path";
 import os from "os";
 import { randomUUID } from "node:crypto";
 import { OrchestratorService, formatReviewFeedback } from "../services/orchestrator.service.js";
+import { eventLogService } from "../services/event-log.service.js";
 import { sessionManager as mockSessionManager } from "../services/session-manager.js";
 import {
   buildReviewNoResultFailureReason,
@@ -2415,6 +2416,80 @@ describe("OrchestratorService (slot-based model)", () => {
           branchName: `opensprint/${task.id}`,
         })
       );
+    });
+
+    it("emits circuit_breaker.empty_diff_blocked when consecutive empty diffs trip the breaker", async () => {
+      const { task } = setupSingleTaskFlow("task-empty-diff-breaker");
+      Object.assign(task, { consecutiveEmptyDiffs: 1 });
+      mockTaskStoreReady.mockResolvedValueOnce([task]);
+      mockReadResult.mockResolvedValue({
+        status: "success",
+        summary: "No changes",
+      });
+      mockCaptureBranchDiff.mockResolvedValue("");
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const appendSpy = vi.spyOn(eventLogService, "append").mockResolvedValue(undefined);
+      const failureSpy = vi
+        .spyOn(
+          (
+            orchestrator as unknown as {
+              failureHandler: {
+                handleTaskFailure: (...args: unknown[]) => Promise<void>;
+              };
+            }
+          ).failureHandler,
+          "handleTaskFailure"
+        )
+        .mockResolvedValue(undefined);
+
+      const invokeHandleCodingDone = orchestrator as unknown as {
+        handleCodingDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null
+        ): Promise<void>;
+      };
+
+      await invokeHandleCodingDone.handleCodingDone(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        0
+      );
+
+      expect(appendSpy).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({
+          taskId: task.id,
+          event: "circuit_breaker.empty_diff_blocked",
+          data: expect.objectContaining({
+            projectId,
+            branchName: `opensprint/${task.id}`,
+            consecutiveEmptyDiffs: 2,
+            threshold: 2,
+            attempt: expect.any(Number),
+          }),
+        })
+      );
+      expect(failureSpy).toHaveBeenCalledWith(
+        projectId,
+        repoPath,
+        task,
+        `opensprint/${task.id}`,
+        expect.stringContaining("no code changes"),
+        null,
+        "coding_failure"
+      );
+
+      appendSpy.mockRestore();
     });
 
     it("caps dispatch to one new coder per loop even when multiple slots are available", async () => {
