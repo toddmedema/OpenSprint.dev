@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ApiErrorResponse } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
+import { ErrorCodes } from "./error-codes.js";
 
 const log = createLogger("error-handler");
 
@@ -21,8 +22,13 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     if (err.code === "DATABASE_UNAVAILABLE") {
       res.setHeader("Retry-After", "5");
     }
-    // 4xx are expected client errors (e.g. not found); log at debug to avoid noise
-    if (err.statusCode < 500) {
+    // 4xx are expected client errors (e.g. not found); log at debug to avoid noise.
+    // Optional local model servers (LM Studio / Ollama) often return 502 when not running;
+    // that is an expected outcome for model-list probes, not an application fault.
+    const localModelProbeUnreachable =
+      err.statusCode === 502 &&
+      (err.code === ErrorCodes.LM_STUDIO_UNREACHABLE || err.code === ErrorCodes.OLLAMA_UNREACHABLE);
+    if (err.statusCode < 500 || localModelProbeUnreachable) {
       log.debug("Request client error", {
         statusCode: err.statusCode,
         code: err.code,
