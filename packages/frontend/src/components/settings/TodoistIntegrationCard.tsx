@@ -30,6 +30,9 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   const [selectedPickerProjectId, setSelectedPickerProjectId] = useState<string>("");
   const [importExistingTasks, setImportExistingTasks] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ text: string; severity: "success" | "error" | "warning" } | null>(null);
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [, setTick] = useState(0);
   const pollCountRef = useRef(0);
   const oauthWindowRef = useRef<Window | null>(null);
 
@@ -93,6 +96,25 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
     },
   });
 
+  const syncNowMutation = useMutation({
+    mutationFn: () => api.integrations.todoist.syncNow(projectId),
+    onSuccess: (data) => {
+      setSyncMessage({ text: `${data.imported} item${data.imported === 1 ? "" : "s"} imported`, severity: "success" });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.integrations.todoistStatus(projectId),
+      });
+      setTimeout(() => setSyncMessage(null), 5_000);
+    },
+    onError: (error) => {
+      if (isApiError(error) && (error.code === "RATE_LIMITED" || error.code === "SYNC_RATE_LIMITED")) {
+        setSyncMessage({ text: "Please wait before syncing again", severity: "warning" });
+      } else {
+        setSyncMessage({ text: error instanceof Error ? error.message : "Sync failed", severity: "error" });
+      }
+      setTimeout(() => setSyncMessage(null), 5_000);
+    },
+  });
+
   const refreshStatus = useCallback(() => {
     void queryClient.invalidateQueries({
       queryKey: queryKeys.integrations.todoistStatus(projectId),
@@ -104,6 +126,18 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
       setSelectedPickerProjectId(statusQuery.data.selectedProject.id);
     }
   }, [pickerOpen, selectedPickerProjectId, statusQuery.data?.selectedProject?.id]);
+
+  // Periodically re-render to keep relative time fresh
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Reset error dismissed state when lastError changes
+  const lastError = statusQuery.data?.lastError;
+  useEffect(() => {
+    setErrorDismissed(false);
+  }, [lastError]);
 
   useEffect(() => {
     if (!oauthPolling) return;
@@ -316,12 +350,30 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
           )}
 
           {/* Error banner (non-reconnect) */}
-          {status.lastError && !needsReconnect && (
+          {status.lastError && !needsReconnect && !errorDismissed && (
             <div
               className="mt-3 p-3 rounded-lg bg-theme-error-bg border border-theme-error-border"
               data-testid="todoist-error-banner"
             >
-              <p className="text-xs text-theme-error-text">{status.lastError}</p>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-theme-error-text">{status.lastError}</p>
+                  <p className="text-xs text-theme-error-text mt-1 opacity-75">
+                    Check your Todoist connection or try syncing again.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-theme-error-text hover:opacity-70 flex-shrink-0"
+                  onClick={() => setErrorDismissed(true)}
+                  aria-label="Dismiss error"
+                  data-testid="todoist-error-dismiss-btn"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
 
@@ -373,6 +425,46 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
               )}
             </div>
           ) : null}
+
+          {/* Sync Now + helper text */}
+          {selectedProject && (
+            <div className="mt-3" data-testid="todoist-sync-section">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary text-sm inline-flex items-center gap-1.5"
+                  onClick={() => syncNowMutation.mutate()}
+                  disabled={syncNowMutation.isPending}
+                  data-testid="todoist-sync-now-btn"
+                >
+                  {syncNowMutation.isPending && (
+                    <span
+                      className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"
+                      data-testid="todoist-sync-spinner"
+                    />
+                  )}
+                  {syncNowMutation.isPending ? "Syncing…" : "Sync Now"}
+                </button>
+              </div>
+              {syncMessage && (
+                <p
+                  className={`text-xs mt-1.5 ${
+                    syncMessage.severity === "success"
+                      ? "text-green-600 dark:text-green-400"
+                      : syncMessage.severity === "warning"
+                        ? "text-theme-warning-text"
+                        : "text-theme-error-text"
+                  }`}
+                  data-testid="todoist-sync-message"
+                >
+                  {syncMessage.text}
+                </p>
+              )}
+              <p className="text-xs text-theme-muted mt-2" data-testid="todoist-delete-warning">
+                Tasks will be permanently deleted from Todoist after successful import.
+              </p>
+            </div>
+          )}
 
           {/* Disconnect */}
           <div className="mt-3 flex items-center gap-2">
