@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -103,7 +103,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
   });
 
   it("GET /projects/:id/notifications returns empty list when no notifications", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
@@ -117,7 +117,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q1", text: "What is the scope?" }],
     });
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -136,7 +136,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q1", text: "Clarify requirements?" }],
     });
 
-    const res = await request(app).get(`${API_PREFIX}/notifications`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/notifications`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeInstanceOf(Array);
@@ -160,12 +160,12 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q2", text: "Q2" }],
     });
 
-    const res = await request(app).delete(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const res = await authedSupertest(app).delete(`${API_PREFIX}/projects/${projectId}/notifications`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.deletedCount).toBe(2);
 
-    const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
     expect(listRes.body.data).toHaveLength(0);
   });
 
@@ -177,12 +177,12 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q1", text: "Q1" }],
     });
 
-    const res = await request(app).delete(`${API_PREFIX}/notifications`);
+    const res = await authedSupertest(app).delete(`${API_PREFIX}/notifications`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.deletedCount).toBeGreaterThanOrEqual(1);
 
-    const listRes = await request(app).get(`${API_PREFIX}/notifications`);
+    const listRes = await authedSupertest(app).get(`${API_PREFIX}/notifications`);
     expect(listRes.body.data).toHaveLength(0);
   });
 
@@ -194,7 +194,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q1", text: "Confirm deadline?" }],
     });
 
-    const res = await request(app).patch(
+    const res = await authedSupertest(app).patch(
       `${API_PREFIX}/projects/${projectId}/notifications/${created.id}`
     );
 
@@ -202,7 +202,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     expect(res.body.data.status).toBe("resolved");
     expect(res.body.data.resolvedAt).toBeDefined();
 
-    const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+    const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
     expect(listRes.body.data).toHaveLength(0);
   });
 
@@ -220,7 +220,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       questions: [{ id: "q1", text: "Clarify scope?" }],
     });
 
-    const res = await request(app).patch(
+    const res = await authedSupertest(app).patch(
       `${API_PREFIX}/projects/${projectId}/notifications/${created.id}`
     );
 
@@ -247,7 +247,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       { questionId: "q1", answer: "Use the existing API" },
       { questionId: "q2", answer: "This sprint" },
     ];
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/notifications/${created.id}`)
       .send({ responses });
 
@@ -275,7 +275,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
         errorCode: "rate_limit",
       });
 
-      const res = await request(app).post(
+      const res = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/notifications/${created.id}/retry-rate-limit`
       );
 
@@ -283,7 +283,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
       expect(res.body.data.ok).toBe(true);
       expect(res.body.data.resolvedCount).toBeGreaterThanOrEqual(1);
 
-      const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
+      const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/notifications`);
       const rateLimitNotifications = listRes.body.data.filter(
         (n: { kind?: string; errorCode?: string }) =>
           n.kind === "api_blocked" && n.errorCode === "rate_limit"
@@ -307,7 +307,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
         errorCode: "rate_limit",
       });
 
-      const res = await request(app).post(
+      const res = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/notifications/${created.id}/retry-rate-limit`
       );
 
@@ -316,7 +316,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     });
 
     it("returns 404 when notification not found", async () => {
-      const res = await request(app).post(
+      const res = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/notifications/nonexistent-id/retry-rate-limit`
       );
 
@@ -332,7 +332,7 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
         errorCode: "auth",
       });
 
-      const res = await request(app).post(
+      const res = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/notifications/${created.id}/retry-rate-limit`
       );
 

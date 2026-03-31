@@ -6,10 +6,9 @@ import { requestIsAuthenticated } from "../services/local-session-auth.service.j
 /**
  * Guards local-only API routes.
  *
- * - **Mutating methods** (POST/PUT/DELETE/PATCH) require a valid
- *   `Authorization: Bearer <token>` to prevent CSRF from other localhost apps.
- * - **Safe methods** (GET/HEAD/OPTIONS) accept either the bearer token or a
- *   trusted localhost Origin / Referer.
+ * **All methods** require a valid `Authorization: Bearer <token>`.
+ * Accepting a localhost Origin/Referer alone for safe methods was removed to
+ * prevent data exfiltration by other local web apps via the victim's browser.
  */
 export function requireLocalSessionAuth(req: Request, _res: Response, next: NextFunction): void {
   if (

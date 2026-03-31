@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import { createApp } from "../app.js";
@@ -8,7 +7,7 @@ import { TaskStoreService } from "../services/task-store.service.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 import { createReusedProjectFixture, type ReusedProjectFixture } from "./reused-project-fixture.js";
-import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -105,7 +104,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
     { timeout: 20000 },
     async () => {
       // Create plan with tasks (epic blocked + 2 tasks)
-      const planRes = await request(app)
+      const planRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send({
           title: "Kanban Test Feature",
@@ -123,7 +122,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       expect(epicId).toBeDefined();
 
       // Before Execute!: epic blocked -> tasks show planning
-      const tasksBeforeRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksBeforeRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       expect(tasksBeforeRes.status).toBe(200);
       const tasksBefore = tasksBeforeRes.body.data ?? [];
 
@@ -148,7 +147,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       });
 
       // After ship: epic open; Task A has no blockers -> ready; Task B blocks on A (open) -> backlog
-      const tasksAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksAfterRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       expect(tasksAfterRes.status).toBe(200);
       const tasksAfter = tasksAfterRes.body.data ?? [];
 
@@ -161,7 +160,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       await taskStore.close(projectId, taskAAfter.id, "Done");
 
       // Task B should now be ready (only blocker is done)
-      const tasksFinalRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksFinalRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       const tasksFinal = tasksFinalRes.body.data ?? [];
       const taskAFinal = tasksFinal.find((t: { id: string }) => t.id === taskAAfter.id);
       const taskBFinal = tasksFinal.find((t: { id: string }) => t.id === taskBAfter.id);
@@ -171,7 +170,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
   );
 
   it("GET /tasks with limit and offset returns paginated { items, total }", async () => {
-    const planRes = await request(app)
+    const planRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send({
         title: "Pagination Test",
@@ -187,7 +186,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
     const epicId = plan.metadata.epicId;
     await taskStore.update(projectId, epicId, { status: "open" });
 
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/tasks?limit=1&offset=0`
     );
     expect(res.status).toBe(200);
@@ -203,7 +202,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
     "GET /tasks/ready excludes tasks in blocked epic (epic-blocked model)",
     { timeout: 20000 },
     async () => {
-      const planRes = await request(app)
+      const planRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send({
           title: "Ready Exclude Test",
@@ -220,7 +219,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
       const epicId = plan.metadata.epicId;
 
       // Epic blocked: GET /tasks/ready should return empty (no tasks ready)
-      const readyBeforeRes = await request(app).get(
+      const readyBeforeRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/ready`
       );
       expect(readyBeforeRes.status).toBe(200);
@@ -245,7 +244,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
         shippedAt: new Date().toISOString(),
       });
 
-      const readyAfterRes = await request(app).get(
+      const readyAfterRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/ready`
       );
       expect(readyAfterRes.status).toBe(200);
@@ -265,7 +264,7 @@ describe.skipIf(!postgresAvailable)("Tasks REST - task-to-kanban-column mapping"
     },
     async () => {
       // Create plan with tasks
-      const planRes = await request(app)
+      const planRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send({
           title: "Prepare Test Feature",
@@ -291,14 +290,13 @@ Test task directory creation.
       const _project = await projectService.getProject(projectId);
       await taskStore.update(projectId, epicId, { status: "open" });
 
-      const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       const tasks = tasksRes.body.data ?? [];
       const taskX = tasks.find((t: { title: string }) => t.title === "Task X");
       expect(taskX).toBeDefined();
 
-      const prepareRes = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskX.id}/prepare`)
-      )
+      const prepareRes = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskX.id}/prepare`)
         .set("Content-Type", "application/json")
         .send({ createBranch: false });
 
@@ -335,7 +333,7 @@ Test task directory creation.
       retry: 2,
     },
     async () => {
-      const planRes = await request(app)
+      const planRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send({
           title: "Review Prompt Test",
@@ -361,14 +359,13 @@ Test review prompt generation.
       const _project = await projectService.getProject(projectId);
       await taskStore.update(projectId, epicId, { status: "open" });
 
-      const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       const tasks = tasksRes.body.data ?? [];
       const taskY = tasks.find((t: { title: string }) => t.title === "Task Y");
       expect(taskY).toBeDefined();
 
-      const prepareRes = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskY.id}/prepare`)
-      )
+      const prepareRes = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskY.id}/prepare`)
         .set("Content-Type", "application/json")
         .send({ phase: "review", createBranch: false });
 
@@ -394,10 +391,10 @@ Test review prompt generation.
     "POST /tasks/:taskId/prepare with mergeStrategy per_epic uses epic branch in config.json",
     { timeout: 20000 },
     async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .send({ mergeStrategy: "per_epic" });
-      const planRes = await request(app)
+      const planRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send({
           title: "Epic Branch Prepare Test",
@@ -412,14 +409,13 @@ Test review prompt generation.
       expect(epicId).toBeDefined();
       await taskStore.update(projectId, epicId, { status: "open" });
 
-      const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const tasksRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       const tasks = tasksRes.body.data ?? [];
       const taskE1 = tasks.find((t: { title: string }) => t.title === "Task E1");
       expect(taskE1).toBeDefined();
 
-      const prepareRes = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskE1.id}/prepare`)
-      )
+      const prepareRes = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/execute/tasks/${taskE1.id}/prepare`)
         .set("Content-Type", "application/json")
         .send({ createBranch: false });
 
@@ -433,7 +429,7 @@ Test review prompt generation.
   );
 
   it("POST /tasks/:taskId/unblock sets task status to open", { timeout: 20000 }, async () => {
-    const planRes = await request(app)
+    const planRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send({
         title: "Unblock Test Feature",
@@ -448,20 +444,20 @@ Test review prompt generation.
     const _project = await projectService.getProject(projectId);
     await taskStore.update(projectId, epicId, { status: "open" });
 
-    const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasksRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
     const tasks = tasksRes.body.data ?? [];
     const taskZ = tasks.find((t: { title: string }) => t.title === "Task Z");
     expect(taskZ).toBeDefined();
 
     await taskStore.update(projectId, taskZ.id, { status: "blocked" });
 
-    const tasksBlockedRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasksBlockedRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
     const taskBlocked = (tasksBlockedRes.body.data ?? []).find(
       (t: { id: string }) => t.id === taskZ.id
     );
     expect(taskBlocked.kanbanColumn).toBe("blocked");
 
-    const unblockRes = await request(app)
+    const unblockRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/tasks/${taskZ.id}/unblock`)
       .set("Content-Type", "application/json")
       .send({});
@@ -469,7 +465,7 @@ Test review prompt generation.
     expect(unblockRes.status).toBe(200);
     expect(unblockRes.body.data.taskUnblocked).toBe(true);
 
-    const tasksAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasksAfterRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
     const taskAfter = (tasksAfterRes.body.data ?? []).find(
       (t: { id: string }) => t.id === taskZ.id
     );
@@ -477,7 +473,7 @@ Test review prompt generation.
   });
 
   it("POST /tasks/:taskId/unblock accepts resetAttempts option", { timeout: 20000 }, async () => {
-    const planRes = await request(app)
+    const planRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send({
         title: "Unblock Reset Test",
@@ -492,14 +488,14 @@ Test review prompt generation.
     const _project = await projectService.getProject(projectId);
     await taskStore.update(projectId, epicId, { status: "open" });
 
-    const tasksRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+    const tasksRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
     const tasks = tasksRes.body.data ?? [];
     const taskW = tasks.find((t: { title: string }) => t.title === "Task W");
     expect(taskW).toBeDefined();
 
     await taskStore.update(projectId, taskW.id, { status: "blocked" });
 
-    const unblockRes = await request(app)
+    const unblockRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/tasks/${taskW.id}/unblock`)
       .set("Content-Type", "application/json")
       .send({ resetAttempts: true });
@@ -518,7 +514,7 @@ Test review prompt generation.
         extra: { source: "self-improvement" },
       });
 
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       expect(res.status).toBe(200);
       const data = res.body.data;
       const list = Array.isArray(data) ? data : (data?.items ?? []);
@@ -538,7 +534,7 @@ Test review prompt generation.
       });
       await taskStore.addLabel(projectId, wtmTask.id, "merge_stage:quality_gate");
 
-      let res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      let res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       expect(res.status).toBe(200);
       const data = res.body.data;
       const list = Array.isArray(data) ? data : (data?.items ?? []);
@@ -548,7 +544,7 @@ Test review prompt generation.
       expect(found.mergePausedUntil).toBeUndefined();
       expect(found.mergeWaitingOnMain).toBeUndefined();
 
-      let detailRes = await request(app).get(
+      let detailRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/${wtmTask.id}`
       );
       expect(detailRes.status).toBe(200);
@@ -561,7 +557,7 @@ Test review prompt generation.
         extra: { merge_quality_gate_paused_until: futureIso },
       });
 
-      res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
+      res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks`);
       expect(res.status).toBe(200);
       const data2 = res.body.data;
       const list2 = Array.isArray(data2) ? data2 : (data2?.items ?? []);
@@ -571,7 +567,7 @@ Test review prompt generation.
       expect(found2.mergePausedUntil).toBe(futureIso);
       expect(found2.mergeWaitingOnMain).toBe(true);
 
-      detailRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${wtmTask.id}`);
+      detailRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${wtmTask.id}`);
       expect(detailRes.status).toBe(200);
       expect(detailRes.body.data.kanbanColumn).toBe("waiting_to_merge");
       expect(detailRes.body.data.mergePausedUntil).toBe(futureIso);
@@ -607,7 +603,7 @@ Test review prompt generation.
       // Add discovered-from dependency: child -> feedback source
       await taskStore.addDependency(projectId, childTask.id, sourceTask.id, "discovered-from");
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/${childTask.id}`
       );
       expect(res.status).toBe(200);
@@ -632,7 +628,7 @@ Test review prompt generation.
         description: "Feedback ID: fb-direct-source",
       });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/tasks/${sourceTask.id}`
       );
       expect(res.status).toBe(200);
@@ -656,7 +652,7 @@ Test review prompt generation.
         description: "Test task for Server-Timing header",
       });
 
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
       expect(res.status).toBe(200);
       const serverTiming = res.headers["server-timing"];
       expect(serverTiming).toBeDefined();
@@ -707,7 +703,7 @@ Test review prompt generation.
       }),
     });
 
-    const res = await request(app).delete(
+    const res = await authedSupertest(app).delete(
       `${API_PREFIX}/projects/${projectId}/tasks/${targetTask.id}`
     );
     expect(res.status).toBe(200);
@@ -737,7 +733,7 @@ Test review prompt generation.
   });
 
   it("DELETE /tasks/:taskId returns 404 when task does not exist", async () => {
-    const res = await request(app).delete(
+    const res = await authedSupertest(app).delete(
       `${API_PREFIX}/projects/${projectId}/tasks/non-existent-task`
     );
     expect(res.status).toBe(404);
@@ -753,7 +749,7 @@ Test review prompt generation.
       description: "Task to test priority update",
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ priority: 0 });
@@ -776,7 +772,7 @@ Test review prompt generation.
       priority: 2,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ priority: 5 });
@@ -793,7 +789,7 @@ Test review prompt generation.
       priority: 1,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ complexity: 7 });
@@ -816,7 +812,7 @@ Test review prompt generation.
       complexity: 3,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ priority: 0, complexity: 4 });
@@ -830,7 +826,7 @@ Test review prompt generation.
     const _project = await projectService.getProject(projectId);
     const task = await taskStore.create(projectId, "Task", { type: "task", priority: 1 });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ complexity: 11 });
@@ -843,7 +839,7 @@ Test review prompt generation.
     const _project = await projectService.getProject(projectId);
     const task = await taskStore.create(projectId, "Task", { type: "task", priority: 1 });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({});
@@ -853,7 +849,7 @@ Test review prompt generation.
   });
 
   it("PATCH /tasks/:taskId updates assignee and GET returns it", async () => {
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .set("Content-Type", "application/json")
       .send({ enableHumanTeammates: true });
@@ -868,7 +864,7 @@ Test review prompt generation.
     });
     await taskStore.addDependency(projectId, task.id, blocker.id);
 
-    const patchRes = await request(app)
+    const patchRes = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ assignee: "Alice" });
@@ -878,7 +874,7 @@ Test review prompt generation.
     expect(patchRes.body.data.id).toBe(task.id);
     expect(patchRes.body.data.assignee).toBe("Alice");
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.assignee).toBe("Alice");
 
@@ -894,7 +890,7 @@ Test review prompt generation.
     });
     await taskStore.update(projectId, task.id, { assignee: "Bob" });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ assignee: null });
@@ -902,7 +898,7 @@ Test review prompt generation.
     expect(res.status).toBe(200);
     expect(res.body.data.assignee).toBeNull();
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.assignee).toBeNull();
   });
@@ -915,7 +911,7 @@ Test review prompt generation.
     });
     await taskStore.update(projectId, task.id, { assignee: "Carol" });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ assignee: "" });
@@ -923,7 +919,7 @@ Test review prompt generation.
     expect(res.status).toBe(200);
     expect(res.body.data.assignee).toBeNull();
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.assignee).toBeNull();
   });
@@ -932,7 +928,7 @@ Test review prompt generation.
     "PATCH /tasks/:taskId returns 400 when changing assignee on in-progress task",
     { timeout: 20000, retry: 2 },
     async () => {
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/settings`)
         .set("Content-Type", "application/json")
         .send({ enableHumanTeammates: true });
@@ -943,7 +939,7 @@ Test review prompt generation.
       });
       await taskStore.update(projectId, task.id, { status: "in_progress", assignee: "Frodo" });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
         .set("Content-Type", "application/json")
         .send({ assignee: "Alice" });
@@ -960,7 +956,7 @@ Test review prompt generation.
       type: "task",
       priority: 1,
     });
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .patch(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`)
       .set("Content-Type", "application/json")
       .send({ assignee: "Alice" });
@@ -977,7 +973,7 @@ Test review prompt generation.
       complexity: 5,
     });
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}`);
     expect(res.status).toBe(200);
     expect(res.body.data.complexity).toBe(5);
   });
@@ -992,7 +988,7 @@ Test review prompt generation.
       priority: 1,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/tasks/${childTask.id}/dependencies`)
       .set("Content-Type", "application/json")
       .send({ parentTaskId: parentTask.id, type: "blocks" });
@@ -1009,7 +1005,7 @@ Test review prompt generation.
   it("POST /tasks/:taskId/dependencies returns 400 when parentTaskId missing", async () => {
     const task = await taskStore.create(projectId, "Task", { type: "task", priority: 1 });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/tasks/${task.id}/dependencies`)
       .set("Content-Type", "application/json")
       .send({});
@@ -1029,7 +1025,7 @@ Test review prompt generation.
     });
     await taskStore.addDependency(projectId, childTask.id, parentTask.id, "blocks");
 
-    const res = await request(app).delete(
+    const res = await authedSupertest(app).delete(
       `${API_PREFIX}/projects/${projectId}/tasks/${childTask.id}/dependencies/${parentTask.id}`
     );
 
@@ -1055,7 +1051,7 @@ Test review prompt generation.
     await taskStore.close(projectId, t1.id, "Done");
     await taskStore.close(projectId, t2.id, "Done");
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/tasks/analytics`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/tasks/analytics`);
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(res.body.data.byComplexity).toBeDefined();
@@ -1071,7 +1067,7 @@ Test review prompt generation.
   });
 
   it("GET /tasks/analytics returns global analytics", async () => {
-    const res = await request(app).get(`${API_PREFIX}/tasks/analytics`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/tasks/analytics`);
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
     expect(res.body.data.byComplexity).toBeDefined();

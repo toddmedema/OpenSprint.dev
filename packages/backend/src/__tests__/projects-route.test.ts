@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -16,6 +15,7 @@ import { notificationService } from "../services/notification.service.js";
 import { setSelfImprovementRunInProgressForTest } from "../services/self-improvement-runner.service.js";
 import { setProjectIndexPathForTesting } from "../services/project-index.js";
 import { setSettingsStorePathForTesting } from "../services/settings-store.service.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -111,7 +111,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   });
 
   it("GET /projects/:id/sketch should return project (Sketch phase canonical endpoint)", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/sketch`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/sketch`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -121,7 +121,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   });
 
   it("GET /projects/:id/sketch-context returns hasExistingCode false when repo has no source files", async () => {
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/sketch-context`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/sketch-context`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toBeDefined();
@@ -132,14 +132,14 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     const repoPath = path.join(tempDir, "my-project");
     await fs.writeFile(path.join(repoPath, "index.ts"), "console.log('hello');");
 
-    const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/sketch-context`);
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/sketch-context`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.hasExistingCode).toBe(true);
   });
 
   it("GET /projects/:id/self-improvement/history returns empty list when no runs", async () => {
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/self-improvement/history`
     );
 
@@ -163,7 +163,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       promotedVersionId: "bv-promo",
     });
 
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/self-improvement/history`
     );
 
@@ -182,7 +182,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   });
 
   it("POST /projects/:id/self-improvement/run returns run result (tasksCreated or skipped)", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/run`)
       .send();
 
@@ -206,7 +206,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       deepLinkPath: `/projects/${projectId}/settings`,
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/approve`)
       .send();
 
@@ -238,7 +238,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       candidateId: "bv-candidate-2",
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/reject`)
       .send({ candidateId: "bv-candidate-2" });
 
@@ -266,7 +266,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       ],
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/rollback`)
       .send({ behaviorVersionId: "bv-previous" });
 
@@ -279,7 +279,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   });
 
   it("POST /projects/:id/self-improvement/approve returns 404 when no pending candidate", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/approve`)
       .send();
 
@@ -290,7 +290,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     await projectService.updateSettings(projectId, {
       selfImprovementPendingCandidateId: "bv-candidate-3",
     });
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/reject`)
       .send({ candidateId: "wrong-id" });
 
@@ -302,7 +302,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       selfImprovementBehaviorVersions: [{ id: "bv-a", promotedAt: "2025-03-10T00:00:00.000Z" }],
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/self-improvement/rollback`)
       .send({ behaviorVersionId: "bv-missing" });
 
@@ -310,7 +310,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   });
 
   it("GET /projects/:id/self-improvement/status returns idle when no run in progress", async () => {
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/self-improvement/status`
     );
 
@@ -324,7 +324,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
   it("GET /projects/:id/self-improvement/status returns running_audit when run in progress", async () => {
     setSelfImprovementRunInProgressForTest(projectId, { status: "running_audit" });
     try {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/self-improvement/status`
       );
 
@@ -341,7 +341,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       stage: "scoring",
     });
     try {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/self-improvement/status`
       );
 
@@ -358,7 +358,7 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
       selfImprovementPendingCandidateId: "bv-candidate-status",
     });
 
-    const res = await request(app).get(
+    const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/self-improvement/status`
     );
 
@@ -372,13 +372,13 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     const repoPath = path.join(tempDir, "my-project");
     const opensprintPath = path.join(repoPath, OPENSPRINT_DIR);
 
-    const listBefore = await request(app).get(`${API_PREFIX}/projects`);
+    const listBefore = await authedSupertest(app).get(`${API_PREFIX}/projects`);
     expect(listBefore.body.data).toHaveLength(1);
 
-    const archiveRes = await request(app).post(`${API_PREFIX}/projects/${projectId}/archive`);
+    const archiveRes = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/archive`);
     expect(archiveRes.status).toBe(204);
 
-    const listAfter = await request(app).get(`${API_PREFIX}/projects`);
+    const listAfter = await authedSupertest(app).get(`${API_PREFIX}/projects`);
     expect(listAfter.body.data).toHaveLength(0);
 
     const stat = await fs.stat(opensprintPath);
@@ -389,10 +389,10 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     const repoPath = path.join(tempDir, "my-project");
     const opensprintPath = path.join(repoPath, OPENSPRINT_DIR);
 
-    const deleteRes = await request(app).delete(`${API_PREFIX}/projects/${projectId}`);
+    const deleteRes = await authedSupertest(app).delete(`${API_PREFIX}/projects/${projectId}`);
     expect(deleteRes.status).toBe(204);
 
-    const listAfter = await request(app).get(`${API_PREFIX}/projects`);
+    const listAfter = await authedSupertest(app).get(`${API_PREFIX}/projects`);
     expect(listAfter.body.data).toHaveLength(0);
 
     await expect(fs.stat(opensprintPath)).rejects.toThrow();
@@ -447,7 +447,7 @@ describe("Projects REST API — create and settings", () => {
     await fs.mkdir(repoPath, { recursive: true });
 
     const body = { ...validCreateBody, repoPath };
-    const res = await request(app).post(`${API_PREFIX}/projects`).send(body);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects`).send(body);
 
     expect(res.status).toBe(201);
     expect(res.body.data).toBeDefined();
@@ -455,7 +455,7 @@ describe("Projects REST API — create and settings", () => {
     expect(res.body.data.name).toBe("New Project");
     expect(res.body.data.repoPath).toBe(repoPath);
 
-    const settingsRes = await request(app).get(
+    const settingsRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${res.body.data.id}/settings`
     );
     expect(settingsRes.status).toBe(200);
@@ -473,7 +473,7 @@ describe("Projects REST API — create and settings", () => {
       repoPathPolicy: "linux_fs_only",
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .post(`${API_PREFIX}/projects`)
       .send({ ...validCreateBody, repoPath: "/mnt/c/Users/Todd/my-project" });
 
@@ -483,7 +483,7 @@ describe("Projects REST API — create and settings", () => {
   });
 
   it("PUT /projects/:id/settings updates simpleComplexityAgent and complexComplexityAgent", async () => {
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/settings`)
       .send({
         simpleComplexityAgent: { type: "cursor", model: "composer-1.5", cliCommand: null },
@@ -517,12 +517,12 @@ describe("Projects REST API — create and settings", () => {
       hilConfig: DEFAULT_HIL_CONFIG,
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects`).send(body);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects`).send(body);
 
     expect(res.status).toBe(201);
     const newId = res.body.data.id;
 
-    const settingsRes = await request(app).get(`${API_PREFIX}/projects/${newId}/settings`);
+    const settingsRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${newId}/settings`);
     expect(settingsRes.status).toBe(200);
     expect(settingsRes.body.data.simpleComplexityAgentInherited).toBe(true);
     expect(settingsRes.body.data.complexComplexityAgentInherited).toBe(true);
@@ -537,12 +537,12 @@ describe("Projects REST API — create and settings", () => {
     await fs.mkdir(repoPath, { recursive: true });
 
     const body = { ...validCreateBody, repoPath };
-    const res = await request(app).post(`${API_PREFIX}/projects`).send(body);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects`).send(body);
 
     expect(res.status).toBe(201);
     const projectId = res.body.data.id;
 
-    const settingsRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
+    const settingsRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/settings`);
     expect(settingsRes.status).toBe(200);
     expect(settingsRes.body.data).not.toHaveProperty("apiKeys");
   });
@@ -555,7 +555,7 @@ describe("Projects REST API — create and settings", () => {
       repoPathPolicy: "linux_fs_only",
     });
 
-    const res = await request(app)
+    const res = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}`)
       .send({ repoPath: "/mnt/d/Users/Todd/updated-project" });
 

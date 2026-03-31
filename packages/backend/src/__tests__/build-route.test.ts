@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -12,7 +11,7 @@ import {
   pinOpenSprintPathsForTesting,
   resetOpenSprintPathsForTesting,
 } from "./opensprint-path-test-helper.js";
-import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -87,7 +86,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
 
   describe("GET /projects/:projectId/execute/status", () => {
     it("should return orchestrator status for existing project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -105,7 +104,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/nonexistent-id/execute/status`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/nonexistent-id/execute/status`);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -113,7 +112,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("returns selfImprovementRunInProgress true only while a self-improvement run is active", async () => {
-      const resInactive = await request(app).get(
+      const resInactive = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/execute/status`
       );
       expect(resInactive.status).toBe(200);
@@ -121,7 +120,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
 
       setSelfImprovementRunInProgressForTest(projectId, true);
       try {
-        const resActive = await request(app).get(
+        const resActive = await authedSupertest(app).get(
           `${API_PREFIX}/projects/${projectId}/execute/status`
         );
         expect(resActive.status).toBe(200);
@@ -130,7 +129,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
         setSelfImprovementRunInProgressForTest(projectId, false);
       }
 
-      const resAfter = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const resAfter = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
       expect(resAfter.status).toBe(200);
       expect(resAfter.body.data.selfImprovementRunInProgress).toBe(false);
     });
@@ -138,7 +137,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     it("returns selfImprovementRunMode 'audit' when audit-only run is active", async () => {
       setSelfImprovementRunInProgressForTest(projectId, { status: "running_audit" });
       try {
-        const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+        const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
         expect(res.status).toBe(200);
         expect(res.body.data.selfImprovementRunMode).toBe("audit");
       } finally {
@@ -152,7 +151,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
         stage: "scoring",
       });
       try {
-        const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+        const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
         expect(res.status).toBe(200);
         expect(res.body.data.selfImprovementRunMode).toBe("experiments");
       } finally {
@@ -161,7 +160,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("returns no selfImprovementRunMode when no run is active", async () => {
-      const res = await request(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/execute/status`);
       expect(res.status).toBe(200);
       expect(res.body.data.selfImprovementRunMode).toBeUndefined();
     });
@@ -169,7 +168,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
 
   describe("GET /projects/:projectId/execute/tasks/:taskId/output", () => {
     it("returns empty output when no task is running", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/execute/tasks/task-123/output`
       );
 
@@ -178,7 +177,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("returns 404 for non-existent project", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/nonexistent-id/execute/tasks/task-123/output`
       );
 
@@ -190,7 +189,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
 
   describe("GET /projects/:projectId/execute/failure-metrics", () => {
     it("returns rollup structure for the project", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/execute/failure-metrics`
       );
 
@@ -205,7 +204,7 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("accepts optional days query (capped)", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/execute/failure-metrics?days=7`
       );
       expect(res.status).toBe(200);
@@ -215,8 +214,8 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
 
   describe("POST /projects/:projectId/execute/nudge", () => {
     it("should accept nudge and return status", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/${projectId}/execute/nudge`)
+      const res = await authedSupertest(app).post(
+        `${API_PREFIX}/projects/${projectId}/execute/nudge`
       );
 
       expect(res.status).toBe(200);
@@ -226,8 +225,8 @@ describe.skipIf(!buildRoutePostgresOk)("Execute API", () => {
     });
 
     it("should return 404 for non-existent project", async () => {
-      const res = await withLocalSessionAuth(
-        request(app).post(`${API_PREFIX}/projects/nonexistent-id/execute/nudge`)
+      const res = await authedSupertest(app).post(
+        `${API_PREFIX}/projects/nonexistent-id/execute/nudge`
       );
 
       expect(res.status).toBe(404);

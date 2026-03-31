@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -187,7 +187,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
         ],
       };
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
 
@@ -240,7 +240,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       ],
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
 
     expect(res.status).toBe(201);
     const plan = res.body.data;
@@ -271,7 +271,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       ],
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
 
     expect(res.status).toBe(201);
     const plan = res.body.data;
@@ -301,7 +301,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       complexity: "low",
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
 
     expect(res.status).toBe(201);
     expect(res.body.data.taskCount).toBe(0);
@@ -315,7 +315,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       complexity: "low",
     };
 
-    const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
 
     expect(res.status).toBe(201);
     expect(res.body.data).toBeDefined();
@@ -340,7 +340,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       };
       // Intentionally omit complexity - backend should agent-evaluate
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
 
@@ -365,7 +365,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
         content: "# Simple\n\nOverview.",
       };
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
 
@@ -381,13 +381,13 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       complexity: "low",
     };
 
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
 
-    const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
+    const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.data.lastModified).toBeDefined();
     expect(typeof getRes.body.data.lastModified).toBe("string");
@@ -408,7 +408,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
         complexity: "low",
       };
 
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -416,14 +416,14 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
 
       const updatedContent =
         "# Updated Feature Title\n\n## Overview\n\nUpdated markdown body with new content.";
-      const putRes = await request(app)
+      const putRes = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: updatedContent });
 
       expect(putRes.status).toBe(200);
       expect(putRes.body.data.content).toBe(updatedContent);
 
-      const getRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans/${planId}`);
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.content).toBe(updatedContent);
     }
@@ -435,20 +435,20 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       content: "# Versioned Feature\n\n## Overview\n\nInitial content.",
       complexity: "low",
     };
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
     const planId = createRes.body.data.metadata.planId;
 
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
       .send({ content: "# Versioned Feature\n\n## Overview\n\nFirst save." });
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
       .send({ content: "# Versioned Feature\n\n## Overview\n\nSecond save." });
 
-    const versionsRes = await request(app).get(
+    const versionsRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
     );
     expect(versionsRes.status).toBe(200);
@@ -462,7 +462,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       content: "# Versioned Feature\n\n## Overview\n\nInitial content.",
       complexity: "low",
     };
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
@@ -473,14 +473,14 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       parentId: epicId,
     });
 
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
       .send({ content: "# Versioned Feature\n\n## Overview\n\nFirst save." });
-    await request(app)
+    await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
       .send({ content: "# Versioned Feature\n\n## Overview\n\nSecond save." });
 
-    const versionsRes = await request(app).get(
+    const versionsRes = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
     );
     expect(versionsRes.status).toBe(200);
@@ -491,7 +491,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
   });
 
   it("PUT /projects/:id/plans/:planId returns 404 when plan does not exist", async () => {
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/nonexistent-plan-xyz`)
       .send({ content: "# Nonexistent\n\nBody." });
     expect(putRes.status).toBe(404);
@@ -510,7 +510,7 @@ describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition"
       ],
     };
 
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
@@ -532,7 +532,7 @@ Updated description for task one.
 ### Renamed task two
 Updated description for task two.`;
 
-    const putRes = await request(app)
+    const putRes = await authedSupertest(app)
       .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
       .send({ content: updatedContent });
     expect(putRes.status).toBe(200);
@@ -563,9 +563,9 @@ Updated description for task two.`;
       complexity: "low",
     };
 
-    await request(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
+    await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans`).send(planBody);
 
-    const listRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+    const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
     expect(listRes.status).toBe(200);
     expect(listRes.body.data.plans).toBeDefined();
     expect(listRes.body.data.edges).toBeDefined();
@@ -592,7 +592,7 @@ Updated description for task two.`;
       complexity: "medium",
     };
 
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
@@ -613,7 +613,7 @@ Updated description for task two.`;
       }),
     });
 
-    const planTasksRes = await request(app).post(
+    const planTasksRes = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
     );
     expect(planTasksRes.status).toBe(200);
@@ -669,14 +669,14 @@ Updated description for task two.`;
       ],
     };
 
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
     const createdPlanId = createRes.body.data.metadata.planId;
     expect(createRes.body.data.taskCount).toBe(1);
 
-    const planTasksRes = await request(app).post(
+    const planTasksRes = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
     );
     expect(planTasksRes.status).toBe(400);
@@ -690,7 +690,7 @@ Updated description for task two.`;
       complexity: "low",
     };
 
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
@@ -703,7 +703,7 @@ Updated description for task two.`;
       epicId: "",
     });
 
-    const executeRes = await request(app).post(
+    const executeRes = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/execute`
     );
     expect(executeRes.status).toBe(400);
@@ -719,7 +719,7 @@ Updated description for task two.`;
         content: "# Generate Tasks\n\nOverview.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -734,7 +734,7 @@ Updated description for task two.`;
         })}\n\`\`\``,
       });
 
-      const genRes = await request(app).post(
+      const genRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
       );
       expect(genRes.status).toBe(200);
@@ -752,7 +752,7 @@ Updated description for task two.`;
         content: "# Generate Tasks Parse Failure\n\nOverview.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -766,7 +766,7 @@ Updated description for task two.`;
         }),
       });
 
-      const genRes = await request(app).post(
+      const genRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
       );
       expect(genRes.status).toBe(400);
@@ -785,7 +785,7 @@ Updated description for task two.`;
         content: "# Simplified Two Tier Agent Configuration\n\nOverview.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -806,7 +806,7 @@ Updated description for task two.`;
         })}\n\`\`\``,
       });
 
-      const genRes = await request(app).post(
+      const genRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
       );
       expect(genRes.status).toBe(200);
@@ -832,7 +832,7 @@ Updated description for task two.`;
         ],
       };
 
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -840,7 +840,7 @@ Updated description for task two.`;
       const epicId = createRes.body.data.metadata.epicId;
 
       // Execute! to unblock epic so tasks become ready
-      const shipRes = await request(app).post(
+      const shipRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/execute`
       );
       expect(shipRes.status).toBe(200);
@@ -871,7 +871,7 @@ Updated description for task two.`;
       });
 
       // Archive the plan
-      const archiveRes = await request(app).post(
+      const archiveRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/archive`
       );
       expect(archiveRes.status).toBe(200);
@@ -920,7 +920,7 @@ Updated description for task two.`;
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
@@ -928,7 +928,7 @@ Updated description for task two.`;
         const epicId = createRes.body.data.metadata.epicId;
 
         // Execute! (saves .shipped.md for plan_old)
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -946,14 +946,14 @@ Updated description for task two.`;
         }
 
         // Re-execute only allowed for complete plans; mark plan complete first
-        const markRes = await request(app).post(
+        const markRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
         );
         expect(markRes.status).toBe(200);
 
         // Re-execute: Auditor creates delta tasks (no gate); epic set back to blocked
         mockBroadcastToProject.mockClear();
-        const reshipRes = await request(app).post(
+        const reshipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(200);
@@ -977,7 +977,7 @@ Updated description for task two.`;
         expect(deltaTasks.length).toBe(1);
 
         // Second Execute! unblocks epic; delta tasks become ready
-        const secondShipRes = await request(app).post(
+        const secondShipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(secondShipRes.status).toBe(200);
@@ -1009,14 +1009,14 @@ Updated description for task two.`;
           tasks: [{ title: "Task A", description: "First", priority: 0, dependsOn: [] }],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
         const planId = createRes.body.data.metadata.planId;
         const epicId = createRes.body.data.metadata.epicId;
 
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -1032,7 +1032,7 @@ Updated description for task two.`;
         }
 
         // Re-execute only allowed for complete plans; mark plan complete first
-        const markRes = await request(app).post(
+        const markRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
         );
         expect(markRes.status).toBe(200);
@@ -1042,7 +1042,7 @@ Updated description for task two.`;
             i.id.startsWith(epicId + ".") && (i.issue_type ?? i.type) !== "epic"
         ).length;
 
-        const reshipRes = await request(app).post(
+        const reshipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(200);
@@ -1069,14 +1069,14 @@ Updated description for task two.`;
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
         const planId = createRes.body.data.metadata.planId;
         const epicId = createRes.body.data.metadata.epicId;
 
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -1092,7 +1092,7 @@ Updated description for task two.`;
         }
         // Plan is now in_review (all tasks closed, not marked complete). Do not call mark-complete.
 
-        const reshipRes = await request(app).post(
+        const reshipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(400);
@@ -1116,14 +1116,14 @@ Updated description for task two.`;
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
         const planId = createRes.body.data.metadata.planId;
         const epicId = createRes.body.data.metadata.epicId;
 
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -1144,7 +1144,7 @@ Updated description for task two.`;
           claim: true,
         });
 
-        const reshipRes = await request(app).post(
+        const reshipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(400);
@@ -1166,14 +1166,14 @@ Updated description for task two.`;
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
         const planId = createRes.body.data.metadata.planId;
         const epicId = createRes.body.data.metadata.epicId;
 
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -1189,7 +1189,7 @@ Updated description for task two.`;
         // Close only the first task
         await taskStore.close(projectId, (planTasks[0] as { id: string }).id, "Done");
 
-        const reshipRes = await request(app).post(
+        const reshipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(400);
@@ -1211,7 +1211,7 @@ Updated description for task two.`;
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
@@ -1219,7 +1219,7 @@ Updated description for task two.`;
         const epicId = createRes.body.data.metadata.epicId;
 
         // Execute! (tasks become ready but stay open); plan status is "building"
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -1233,7 +1233,7 @@ Updated description for task two.`;
         expect(tasksBefore.length).toBe(2);
 
         // Re-execute only allowed for complete plans; building plan must return 400
-        const reshipRes = await request(app).post(
+        const reshipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
         );
         expect(reshipRes.status).toBe(400);
@@ -1270,18 +1270,18 @@ Updated description for task two.`;
           { title: "Task B", description: "Second", priority: 1, dependsOn: [] },
         ],
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      const execRes = await request(app).post(
+      const execRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
       );
       expect(execRes.status).toBe(200);
-      const updateRes = await request(app)
+      const updateRes = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: "# Re-execute Version\n\n## Overview\n\nEdited to v2." });
       expect(updateRes.status).toBe(200);
@@ -1294,12 +1294,12 @@ Updated description for task two.`;
       for (const task of planTasks) {
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-      const markRes = await request(app).post(
+      const markRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
       );
       expect(markRes.status).toBe(200);
 
-      const reshipRes = await request(app)
+      const reshipRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`)
         .send({ version_number: 1 });
       expect(reshipRes.status).toBe(200);
@@ -1343,18 +1343,18 @@ Updated description for task two.`;
           { title: "Task B", description: "Second", priority: 1, dependsOn: [] },
         ],
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      const execRes = await request(app).post(
+      const execRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
       );
       expect(execRes.status).toBe(200);
-      const updateRes = await request(app)
+      const updateRes = await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: "# Re-execute No Version\n\n## Overview\n\nEdited to v2." });
       expect(updateRes.status).toBe(200);
@@ -1367,13 +1367,13 @@ Updated description for task two.`;
       for (const task of planTasks) {
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
-      const markRes = await request(app).post(
+      const markRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
       );
       expect(markRes.status).toBe(200);
 
       // No body: backend must use last_executed_version_number for plan_old
-      const reshipRes = await request(app).post(
+      const reshipRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/re-execute`
       );
       expect(reshipRes.status).toBe(200);
@@ -1455,7 +1455,7 @@ Updated description for task two.`;
           }),
         });
 
-        const res = await request(app)
+        const res = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
           .send({ description: "Add dark mode support with a toggle" });
 
@@ -1486,7 +1486,7 @@ Updated description for task two.`;
     );
 
     it("returns 400 when description is empty", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "" });
 
@@ -1496,7 +1496,7 @@ Updated description for task two.`;
     });
 
     it("returns 400 when description is missing", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({});
 
@@ -1507,7 +1507,7 @@ Updated description for task two.`;
     });
 
     it("returns 400 when description is whitespace only", async () => {
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "   \n\t  " });
 
@@ -1521,7 +1521,7 @@ Updated description for task two.`;
         content: "I cannot produce valid JSON for this request.",
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "Build a chat feature" });
 
@@ -1539,7 +1539,7 @@ Updated description for task two.`;
         }),
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "A simple feature with no tasks" });
 
@@ -1578,7 +1578,7 @@ Updated description for task two.`;
           }),
         });
 
-        const res = await request(app)
+        const res = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
           .send({ description: "Feature with snake_case fields" });
 
@@ -1606,7 +1606,7 @@ Updated description for task two.`;
         }),
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "Create a volunteer signup form" });
 
@@ -1639,7 +1639,7 @@ Updated description for task two.`;
         }),
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "Create a volunteer signup form" });
 
@@ -1667,7 +1667,7 @@ Updated description for task two.`;
           }),
         });
 
-        const res = await request(app)
+        const res = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
           .send({
             description: "Build a feature based on attached spec",
@@ -1705,7 +1705,7 @@ Updated description for task two.`;
           }),
         });
 
-        const res = await request(app)
+        const res = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
           .send({
             description: "Build this feature",
@@ -1739,7 +1739,7 @@ Updated description for task two.`;
         }),
       });
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/generate`)
         .send({ description: "Simple feature" });
 
@@ -1825,7 +1825,7 @@ Updated description for task two.`;
           }),
         });
 
-        const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
+        const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
 
         expect(res.status).toBe(200);
         expect(res.body.data).toBeDefined();
@@ -1851,7 +1851,7 @@ Updated description for task two.`;
         content: "I cannot produce JSON.",
       });
 
-      const res = await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
+      const res = await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/suggest`);
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("DECOMPOSE_PARSE_FAILED");
@@ -1872,7 +1872,7 @@ Updated description for task two.`;
             { title: "Auth task", description: "Implement auth", priority: 0, dependsOn: [] },
           ],
         };
-        const createARes = await request(app)
+        const createARes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planABody);
         expect(createARes.status).toBe(201);
@@ -1897,7 +1897,7 @@ Feature that depends on auth.
             { title: "Feature task", description: "Implement feature", priority: 0, dependsOn: [] },
           ],
         };
-        const createBRes = await request(app)
+        const createBRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBBody);
         expect(createBRes.status).toBe(201);
@@ -1905,7 +1905,7 @@ Feature that depends on auth.
         expect(planBId).toBe("feature-x");
 
         // Both plans in planning state (neither shipped)
-        const depsRes = await request(app).get(
+        const depsRes = await authedSupertest(app).get(
           `${API_PREFIX}/projects/${projectId}/plans/${planBId}/cross-epic-dependencies`
         );
         expect(depsRes.status).toBe(200);
@@ -1919,13 +1919,13 @@ Feature that depends on auth.
         content: "# Standalone\n\n## Dependencies\n\nNone.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const depsRes = await request(app).get(
+      const depsRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/cross-epic-dependencies`
       );
       expect(depsRes.status).toBe(200);
@@ -1940,13 +1940,13 @@ Feature that depends on auth.
         content: "# Auditor Runs Test\n\n## Dependencies\n\nNone.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const runsRes = await request(app).get(
+      const runsRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/auditor-runs`
       );
       expect(runsRes.status).toBe(200);
@@ -1959,7 +1959,7 @@ Feature that depends on auth.
         content: "# Plan With Auditor Runs\n\n## Dependencies\n\nNone.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -1976,7 +1976,7 @@ Feature that depends on auth.
         assessment: "Implementation meets plan scope.",
       });
 
-      const runsRes = await request(app).get(
+      const runsRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/auditor-runs`
       );
       expect(runsRes.status).toBe(200);
@@ -2003,24 +2003,24 @@ Feature that depends on auth.
           { title: "Task B", description: "Second", priority: 1, dependsOn: [] },
         ],
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const listAfterCreate = await request(app).get(
+      const listAfterCreate = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listAfterCreate.status).toBe(200);
       expect(listAfterCreate.body.data.versions).toHaveLength(1);
 
-      const executeRes = await request(app).post(
+      const executeRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
       );
       expect(executeRes.status).toBe(200);
 
-      const listAfterExecute = await request(app).get(
+      const listAfterExecute = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listAfterExecute.status).toBe(200);
@@ -2028,14 +2028,14 @@ Feature that depends on auth.
       expect(listAfterExecute.body.data.versions[0].version_number).toBe(1);
       expect(listAfterExecute.body.data.versions[0].is_executed_version).toBe(true);
 
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: "# List After Execute\n\n## Overview\n\nFirst update." });
-      await request(app)
+      await authedSupertest(app)
         .put(`${API_PREFIX}/projects/${projectId}/plans/${planId}`)
         .send({ content: "# List After Execute\n\n## Overview\n\nSecond update." });
 
-      const listAfterUpdates = await request(app).get(
+      const listAfterUpdates = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listAfterUpdates.status).toBe(200);
@@ -2054,13 +2054,13 @@ Feature that depends on auth.
         content: "# Versions List Test\n\n## Overview\n\nContent.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const listRes = await request(app).get(
+      const listRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listRes.status).toBe(200);
@@ -2075,7 +2075,7 @@ Feature that depends on auth.
         content: "# Versions Order Test\n\n## Overview\n\nContent.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -2100,7 +2100,7 @@ Feature that depends on auth.
         is_executed_version: true,
       });
 
-      const listRes = await request(app).get(
+      const listRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listRes.status).toBe(200);
@@ -2118,7 +2118,7 @@ Feature that depends on auth.
     });
 
     it("returns 404 when plan does not exist", async () => {
-      const listRes = await request(app).get(
+      const listRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/nonexistent-plan-xyz/versions`
       );
       expect(listRes.status).toBe(404);
@@ -2133,7 +2133,7 @@ Feature that depends on auth.
         content: "# Get Version Test\n\n## Overview\n\nContent.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -2149,7 +2149,7 @@ Feature that depends on auth.
         is_executed_version: true,
       });
 
-      const getRes = await request(app).get(
+      const getRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions/1`
       );
       expect(getRes.status).toBe(200);
@@ -2169,13 +2169,13 @@ Feature that depends on auth.
         content: "# Missing Version\n\nContent.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const getRes = await request(app).get(
+      const getRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions/999`
       );
       expect(getRes.status).toBe(404);
@@ -2183,7 +2183,7 @@ Feature that depends on auth.
     });
 
     it("returns 404 when plan does not exist", async () => {
-      const getRes = await request(app).get(
+      const getRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/nonexistent-plan-xyz/versions/1`
       );
       expect(getRes.status).toBe(404);
@@ -2196,19 +2196,19 @@ Feature that depends on auth.
         content: "# Invalid Version\n\nContent.",
         complexity: "low",
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const res0 = await request(app).get(
+      const res0 = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions/0`
       );
       expect(res0.status).toBe(404);
       expect(res0.body.error?.code).toBe("PLAN_VERSION_NOT_FOUND");
 
-      const resAbc = await request(app).get(
+      const resAbc = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions/abc`
       );
       expect(resAbc.status).toBe(404);
@@ -2225,7 +2225,7 @@ Feature that depends on auth.
         complexity: "low",
         tasks: [{ title: "Auth task", description: "Auth", priority: 0, dependsOn: [] }],
       };
-      const createARes = await request(app)
+      const createARes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planABody);
       expect(createARes.status).toBe(201);
@@ -2238,14 +2238,14 @@ Feature that depends on auth.
         complexity: "medium",
         tasks: [{ title: "Feature task", description: "Feature", priority: 0, dependsOn: [] }],
       };
-      const createBRes = await request(app)
+      const createBRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBBody);
       expect(createBRes.status).toBe(201);
       const planBId = createBRes.body.data.metadata.planId;
 
       // Execute B with A as prerequisite
-      const executeRes = await request(app)
+      const executeRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/${planBId}/execute`)
         .send({ prerequisitePlanIds: [planAId] });
       expect(executeRes.status).toBe(200);
@@ -2265,7 +2265,7 @@ Feature that depends on auth.
         complexity: "low",
         tasks: [{ title: "Task A", description: "First", priority: 0, dependsOn: [] }],
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
@@ -2275,7 +2275,7 @@ Feature that depends on auth.
       expect(versionsBefore).toHaveLength(0);
 
       mockBroadcastToProject.mockClear();
-      const executeRes = await request(app).post(
+      const executeRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
       );
       expect(executeRes.status).toBe(200);
@@ -2305,20 +2305,20 @@ Feature that depends on auth.
           { title: "Task B", description: "Second", priority: 1, dependsOn: [] },
         ],
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
       // Ensure v1 exists in plan_versions (list versions triggers ensurePlanHasAtLeastOneVersion).
-      const listRes = await request(app).get(
+      const listRes = await authedSupertest(app).get(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/versions`
       );
       expect(listRes.status).toBe(200);
       expect(listRes.body.data.versions).toHaveLength(1);
 
-      const executeRes = await request(app)
+      const executeRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`)
         .send({ version_number: 1 });
       expect(executeRes.status).toBe(200);
@@ -2336,13 +2336,13 @@ Feature that depends on auth.
         complexity: "low",
         tasks: [{ title: "Task A", description: "First", priority: 0, dependsOn: [] }],
       };
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
 
-      const executeRes = await request(app)
+      const executeRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`)
         .send({ version_number: 99 });
       expect(executeRes.status).toBe(404);
@@ -2365,14 +2365,14 @@ Feature that depends on auth.
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
         const planId = createRes.body.data.metadata.planId;
         const epicId = createRes.body.data.metadata.epicId;
 
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -2388,7 +2388,7 @@ Feature that depends on auth.
         }
 
         // Plan must be in_review (all tasks closed, not yet marked complete)
-        const getBeforeRes = await request(app).get(
+        const getBeforeRes = await authedSupertest(app).get(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}`
         );
         expect(getBeforeRes.status).toBe(200);
@@ -2397,7 +2397,7 @@ Feature that depends on auth.
         expect(getBeforeRes.body.data.metadata.reviewedAt).toBeFalsy();
 
         // List plans: plan appears with in_review (Evaluate Pending)
-        const listBeforeRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+        const listBeforeRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
         expect(listBeforeRes.status).toBe(200);
         const planInListBefore = listBeforeRes.body.data?.plans?.find(
           (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
@@ -2405,7 +2405,7 @@ Feature that depends on auth.
         expect(planInListBefore).toBeDefined();
         expect(planInListBefore.status).toBe("in_review");
 
-        const markRes = await request(app).post(
+        const markRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
         );
         expect(markRes.status).toBe(200);
@@ -2413,14 +2413,14 @@ Feature that depends on auth.
         expect(markRes.body.data.metadata.reviewedAt).toBeDefined();
 
         // Plan must be complete after mark-complete
-        const getAfterRes = await request(app).get(
+        const getAfterRes = await authedSupertest(app).get(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}`
         );
         expect(getAfterRes.status).toBe(200);
         expect(getAfterRes.body.data.status).toBe("complete");
 
         // List plans: plan appears complete (Evaluate Resolved/Done)
-        const listAfterRes = await request(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+        const listAfterRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
         expect(listAfterRes.status).toBe(200);
         const planInListAfter = listAfterRes.body.data?.plans?.find(
           (p: { metadata?: { planId?: string } }) => p.metadata?.planId === planId
@@ -2444,14 +2444,14 @@ Feature that depends on auth.
           ],
         };
 
-        const createRes = await request(app)
+        const createRes = await authedSupertest(app)
           .post(`${API_PREFIX}/projects/${projectId}/plans`)
           .send(planBody);
         expect(createRes.status).toBe(201);
         const planId = createRes.body.data.metadata.planId;
         const epicId = createRes.body.data.metadata.epicId;
 
-        const shipRes = await request(app).post(
+        const shipRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`
         );
         expect(shipRes.status).toBe(200);
@@ -2466,7 +2466,7 @@ Feature that depends on auth.
           await taskStore.close(projectId, (task as { id: string }).id, "Done");
         }
 
-        const markRes = await request(app).post(
+        const markRes = await authedSupertest(app).post(
           `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
         );
         expect(markRes.status).toBe(200);
@@ -2489,14 +2489,14 @@ Feature that depends on auth.
         tasks: [{ title: "Only task", description: "Only", priority: 0, dependsOn: [] }],
       };
 
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
       const allIssues = await taskStore.listAll(projectId);
       const planTasks = allIssues.filter(
         (i: { id: string; issue_type?: string; type?: string }) =>
@@ -2506,14 +2506,14 @@ Feature that depends on auth.
         await taskStore.close(projectId, (task as { id: string }).id, "Done");
       }
 
-      const first = await request(app).post(
+      const first = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
       );
       expect(first.status).toBe(200);
       const reviewedAt = first.body.data.metadata.reviewedAt;
       expect(reviewedAt).toBeDefined();
 
-      const second = await request(app).post(
+      const second = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
       );
       expect(second.status).toBe(200);
@@ -2532,14 +2532,14 @@ Feature that depends on auth.
         ],
       };
 
-      const createRes = await request(app)
+      const createRes = await authedSupertest(app)
         .post(`${API_PREFIX}/projects/${projectId}/plans`)
         .send(planBody);
       expect(createRes.status).toBe(201);
       const planId = createRes.body.data.metadata.planId;
       const epicId = createRes.body.data.metadata.epicId;
 
-      await request(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
+      await authedSupertest(app).post(`${API_PREFIX}/projects/${projectId}/plans/${planId}/execute`);
       const allIssues = await taskStore.listAll(projectId);
       const planTasks = allIssues.filter(
         (i: { id: string; issue_type?: string; type?: string }) =>
@@ -2548,7 +2548,7 @@ Feature that depends on auth.
       await taskStore.close(projectId, (planTasks[0] as { id: string }).id, "Done");
       // Leave planTasks[1] open
 
-      const markRes = await request(app).post(
+      const markRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${planId}/mark-complete`
       );
       expect(markRes.status).toBe(400);
@@ -2557,7 +2557,7 @@ Feature that depends on auth.
     });
 
     it("returns 404 when plan not found", async () => {
-      const markRes = await request(app).post(
+      const markRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/nonexistent-plan-id-xyz/mark-complete`
       );
       expect(markRes.status).toBe(404);
@@ -2571,7 +2571,7 @@ Feature that depends on auth.
       content: "# No Epic\n\nManually created without epic.",
       complexity: "low",
     };
-    const createRes = await request(app)
+    const createRes = await authedSupertest(app)
       .post(`${API_PREFIX}/projects/${projectId}/plans`)
       .send(planBody);
     expect(createRes.status).toBe(201);
@@ -2581,7 +2581,7 @@ Feature that depends on auth.
     expect(row).not.toBeNull();
     await taskStore.planUpdateMetadata(projectId, planId, { ...row!.metadata, epicId: "" });
 
-    const archiveRes = await request(app).post(
+    const archiveRes = await authedSupertest(app).post(
       `${API_PREFIX}/projects/${projectId}/plans/${planId}/archive`
     );
     expect(archiveRes.status).toBe(400);

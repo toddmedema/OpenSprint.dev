@@ -33,6 +33,7 @@ import { requestIdMiddleware } from "./middleware/request-id.js";
 import { wrapAsync } from "./middleware/wrap-async.js";
 import { requireDatabase } from "./middleware/require-database.js";
 import { orchestratorService } from "./services/orchestrator.service.js";
+import { requireLocalSessionAuth } from "./middleware/require-local-session-auth.js";
 import {
   getLocalSessionToken,
   ensureLocalSessionToken,
@@ -57,10 +58,13 @@ export function createApp(services?: AppServices) {
   app.use(express.json({ limit: "10mb" }));
   app.use(requestIdMiddleware);
 
-  // Health check
+  // Health check (no auth — must remain before the API auth gate)
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
+
+  // All API routes require Bearer token auth
+  app.use(API_PREFIX, requireLocalSessionAuth);
 
   // API routes (global agents count for desktop tray; must be before /projects so :projectId does not capture "agents")
   // Uses same logic as UI: list projects, then getActiveAgents(projectId) per project and sum (orchestrator + planning agents).
