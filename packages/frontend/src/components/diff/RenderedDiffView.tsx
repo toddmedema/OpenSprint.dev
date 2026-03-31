@@ -1,11 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { SAFE_REMARK_PLUGINS, SAFE_REHYPE_PLUGINS } from "../../lib/markdownSanitize";
-import {
-  computeMarkdownBlockDiff,
-  type DiffBlock,
-  type WordDiffPart,
-} from "../../lib/markdownBlockDiff";
+import type { DiffBlock, WordDiffPart } from "../../lib/markdownBlockDiff";
+import { useMarkdownBlockDiffWorker } from "../../lib/useMarkdownBlockDiffWorker";
 
 export interface RenderedDiffViewProps {
   fromContent: string;
@@ -162,12 +159,23 @@ function RenderBlock({ block, index }: { block: DiffBlock; index: number }) {
 
 export function RenderedDiffView({ fromContent, toContent, onParseError }: RenderedDiffViewProps) {
   const [expanded, setExpanded] = useState(false);
+  const { result, loading } = useMarkdownBlockDiffWorker(fromContent, toContent);
 
-  const result = useMemo(() => {
-    const r = computeMarkdownBlockDiff(fromContent, toContent);
-    if (r.parseError) onParseError?.();
-    return r;
-  }, [fromContent, toContent, onParseError]);
+  useEffect(() => {
+    if (result?.parseError) onParseError?.();
+  }, [result, onParseError]);
+
+  if (loading || !result) {
+    return (
+      <div className="p-4" data-testid="diff-view-loading">
+        <div className="animate-pulse space-y-3">
+          <div className="h-4 bg-theme-border-subtle rounded w-3/4" />
+          <div className="h-4 bg-theme-border-subtle rounded w-1/2" />
+          <div className="h-4 bg-theme-border-subtle rounded w-2/3" />
+        </div>
+      </div>
+    );
+  }
 
   if (result.parseError) {
     return (
