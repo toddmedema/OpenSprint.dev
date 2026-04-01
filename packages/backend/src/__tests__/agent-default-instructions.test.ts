@@ -5,18 +5,16 @@ describe("getOpenSprintDefaultInstructions", () => {
   it("coder defaults include Protected Path Policy", () => {
     const instructions = getOpenSprintDefaultInstructions("coder");
     expect(instructions).toContain("Protected Path Policy");
-    expect(instructions).toContain("routes/integrations-*");
-    expect(instructions).toContain("integration-store");
-    expect(instructions).toContain("token-encryption");
-    expect(instructions).toContain("todoist-sync");
+    expect(instructions).toContain("integration/OAuth");
+    expect(instructions).toContain("task prompt");
     expect(instructions).toContain("open_questions");
   });
 
   it("reviewer defaults include Protected Path Policy", () => {
     const instructions = getOpenSprintDefaultInstructions("reviewer");
     expect(instructions).toContain("Protected Path Policy");
-    expect(instructions).toContain("routes/integrations-*");
-    expect(instructions).toContain("Reject");
+    expect(instructions).toContain("integration/OAuth");
+    expect(instructions).toContain("reject");
   });
 
   it("non-coder/reviewer roles do not mention Protected Path Policy", () => {

@@ -58,7 +58,7 @@ describe("WatchdogService", () => {
     watchdog.stop();
   });
 
-  it("should call runFullRecovery for each target", async () => {
+  it("should call runFullRecovery with includeGupp for each target", async () => {
     watchdog.start(getTargets);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (watchdog as any).runChecks();
@@ -70,7 +70,8 @@ describe("WatchdogService", () => {
       expect.objectContaining({
         getSlottedTaskIds: expect.any(Function),
         getActiveAgentIds: expect.any(Function),
-      })
+      }),
+      { includeGupp: true }
     );
   });
 
@@ -114,12 +115,14 @@ describe("WatchdogService", () => {
     expect(recoveryService.runFullRecovery).toHaveBeenCalledWith(
       "proj-1",
       tmpDir,
-      expect.any(Object)
+      expect.any(Object),
+      { includeGupp: true }
     );
     expect(recoveryService.runFullRecovery).toHaveBeenCalledWith(
       "proj-2",
       tmpDir2,
-      expect.any(Object)
+      expect.any(Object),
+      { includeGupp: true }
     );
 
     await fs.rm(tmpDir2, { recursive: true, force: true }).catch(() => {});

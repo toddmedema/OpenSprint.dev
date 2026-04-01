@@ -365,7 +365,7 @@ describe("TaskDetailSidebar", () => {
     ).toBeTruthy();
   });
 
-  it("renders actions menu with Retry when task is blocked", async () => {
+  it("renders actions menu with Retry and Mark done when task is blocked", async () => {
     const user = userEvent.setup();
     const props = createMinimalProps({
       selectedTaskData: {
@@ -392,7 +392,7 @@ describe("TaskDetailSidebar", () => {
     expect(screen.getByTestId("sidebar-actions-menu-trigger")).toBeInTheDocument();
     await user.click(screen.getByTestId("sidebar-actions-menu-trigger"));
     expect(screen.getByTestId("sidebar-retry-btn")).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /mark done/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /mark done/i })).toBeInTheDocument();
   });
 
   it("shows block reason below status/priority row when task is blocked", () => {

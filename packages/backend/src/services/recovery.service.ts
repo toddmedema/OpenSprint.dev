@@ -268,8 +268,10 @@ export class RecoveryService {
     const requeued: string[] = [];
 
     for (const { taskId, assignment } of orphaned) {
+      const assignmentAgeMs = Date.now() - new Date(assignment.createdAt).getTime();
       const task = idToIssue.get(taskId);
       if (!task) {
+        this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "task_not_found", assignment);
         log.warn("Recovery: task not found, cleaning up assignment", { projectId, taskId });
         await this.removeWorktreeIfNeeded(repoPath, taskId, assignment.worktreePath);
         await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
@@ -277,6 +279,7 @@ export class RecoveryService {
       }
 
       if ((task.status as string) !== "in_progress") {
+        this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "status_mismatch", assignment);
         log.info("Recovery: task no longer in_progress, removing stale assignment", {
           projectId,
           taskId,
@@ -298,6 +301,7 @@ export class RecoveryService {
       if (!pidAlive && host.handleCompletedAssignment) {
         const terminalResult = await this.readTerminalAssignmentResult(assignment);
         if (terminalResult) {
+          this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "stale_success", assignment);
           const completed = await host.handleCompletedAssignment(
             projectId,
             repoPath,
@@ -329,6 +333,7 @@ export class RecoveryService {
         }
       }
 
+      this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "pid_dead_requeue", assignment);
       log.info("Recovery: PID dead or missing, requeuing task", { projectId, taskId });
       try {
         await this.taskStore.update(projectId, taskId, { status: "open", assignee: "" });
@@ -984,6 +989,43 @@ export class RecoveryService {
   }
 
   // ─── Shared helpers ───
+
+  private emitStaleAssignmentTelemetry(
+    repoPath: string,
+    projectId: string,
+    taskId: string,
+    assignmentAgeMs: number,
+    reason: "stale_success" | "task_not_found" | "status_mismatch" | "pid_dead_requeue",
+    assignment: GuppAssignment
+  ): void {
+    const ageSec = Math.round(assignmentAgeMs / 1000);
+    const failureType = assignment.retryContext?.failureType ?? null;
+    log.warn("Stale assignment detected", {
+      projectId,
+      taskId,
+      reason,
+      ageSec,
+      attempt: assignment.attempt,
+      phase: assignment.phase,
+      failureType,
+    });
+    eventLogService
+      .append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId,
+        event: "recovery.stale_assignment",
+        data: {
+          reason,
+          ageSec,
+          attempt: assignment.attempt,
+          phase: assignment.phase,
+          failureType,
+          worktreePath: assignment.worktreePath,
+        },
+      })
+      .catch((err) => log.debug("Best-effort event log append failed", { taskId, err }));
+  }
 
   private async recoverTask(projectId: string, repoPath: string, task: StoredTask): Promise<void> {
     const settings = await this.projectService.getSettings(projectId);

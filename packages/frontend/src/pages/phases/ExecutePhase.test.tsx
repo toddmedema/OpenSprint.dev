@@ -2380,7 +2380,7 @@ describe("ExecutePhase Redux integration", () => {
     });
   });
 
-  it("shows Retry in actions menu for blocked tasks and dispatches unblockTask when clicked", async () => {
+  it("shows Retry and Mark done in actions menu for blocked tasks and dispatches unblockTask when clicked", async () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Blocked Task", kanbanColumn: "blocked" });
     const tasks = [
@@ -2406,7 +2406,7 @@ describe("ExecutePhase Redux integration", () => {
     await user.click(menuTrigger);
     const unblockBtn = await screen.findByTestId("sidebar-retry-btn");
     expect(unblockBtn).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /mark done/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /mark done/i })).toBeInTheDocument();
 
     await user.click(unblockBtn);
 

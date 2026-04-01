@@ -850,4 +850,138 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       );
     });
   });
+
+  describe("stale assignment telemetry", () => {
+    it("emits recovery.stale_assignment event with stale_success reason when terminal result exists", async () => {
+      const completedHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(true),
+      };
+      const promptDir = path.join(tmpDir, ".opensprint", "active", "task-done");
+      await fs.mkdir(promptDir, { recursive: true });
+      await fs.writeFile(
+        path.join(promptDir, "result.json"),
+        JSON.stringify({ status: "success", summary: "done" }),
+        "utf-8"
+      );
+
+      const staleCreatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-done", status: "in_progress", assignee: "agent" } as never,
+      ]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-done",
+          assignment: {
+            taskId: "task-done",
+            projectId: "proj-1",
+            phase: "coding",
+            branchName: "opensprint/task-done",
+            worktreePath: tmpDir,
+            promptPath: path.join(promptDir, "prompt.md"),
+            agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+            attempt: 3,
+            createdAt: staleCreatedAt,
+            retryContext: { failureType: "agent_crash" },
+          },
+        },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, completedHost, { includeGupp: true });
+
+      expect(vi.mocked(eventLogService.append)).toHaveBeenCalledWith(
+        tmpDir,
+        expect.objectContaining({
+          taskId: "task-done",
+          event: "recovery.stale_assignment",
+          data: expect.objectContaining({
+            reason: "stale_success",
+            attempt: 3,
+            phase: "coding",
+            failureType: "agent_crash",
+          }),
+        })
+      );
+    });
+
+    it("emits recovery.stale_assignment with pid_dead_requeue reason when no terminal result exists", async () => {
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+      const staleCreatedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-dead", status: "in_progress", assignee: "agent" } as never,
+      ]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-dead",
+          assignment: {
+            taskId: "task-dead",
+            projectId: "proj-1",
+            phase: "coding",
+            branchName: "opensprint/task-dead",
+            worktreePath: tmpDir,
+            promptPath: path.join(tmpDir, ".opensprint", "active", "task-dead", "prompt.md"),
+            agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+            attempt: 2,
+            createdAt: staleCreatedAt,
+          },
+        },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(vi.mocked(eventLogService.append)).toHaveBeenCalledWith(
+        tmpDir,
+        expect.objectContaining({
+          taskId: "task-dead",
+          event: "recovery.stale_assignment",
+          data: expect.objectContaining({
+            reason: "pid_dead_requeue",
+            attempt: 2,
+            phase: "coding",
+            failureType: null,
+          }),
+        })
+      );
+    });
+
+    it("emits recovery.stale_assignment with task_not_found reason for orphaned assignment", async () => {
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-gone",
+          assignment: {
+            taskId: "task-gone",
+            projectId: "proj-1",
+            phase: "coding",
+            branchName: "opensprint/task-gone",
+            worktreePath: tmpDir,
+            promptPath: path.join(tmpDir, ".opensprint", "active", "task-gone", "prompt.md"),
+            agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+            attempt: 1,
+            createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+          },
+        },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(vi.mocked(eventLogService.append)).toHaveBeenCalledWith(
+        tmpDir,
+        expect.objectContaining({
+          taskId: "task-gone",
+          event: "recovery.stale_assignment",
+          data: expect.objectContaining({
+            reason: "task_not_found",
+          }),
+        })
+      );
+    });
+  });
 });

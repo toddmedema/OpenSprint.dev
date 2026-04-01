@@ -193,7 +193,7 @@ export function TaskDetailHeader({
                       disabled={unblockLoading}
                       aria-busy={unblockLoading}
                       aria-label={unblockLoading ? "Retrying" : "Retry"}
-                      className="dropdown-item w-full flex items-center justify-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[2rem]"
+                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[2rem]"
                       data-testid="sidebar-retry-btn"
                     >
                       {unblockLoading ? (
@@ -208,7 +208,7 @@ export function TaskDetailHeader({
                     </button>
                   </li>
                 )}
-                {!isDoneTask && !isBlockedTask && (
+                {!isDoneTask && (
                   <li role="none">
                     <button
                       type="button"

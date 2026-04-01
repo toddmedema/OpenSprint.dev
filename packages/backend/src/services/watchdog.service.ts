@@ -4,7 +4,8 @@
  * Thin timer wrapper around RecoveryService. Periodically runs recovery checks
  * for all registered projects. Started alongside the orchestrator from index.ts.
  *
- * The 5-min patrol includes: stale heartbeats, orphaned tasks (in_progress with
+ * The 5-min patrol includes: GUPP assignment scan (reconciles stale assignments
+ * with terminal results), stale heartbeats, orphaned tasks (in_progress with
  * agent assignee but no running process — those are reset so the orchestrator
  * can pick them up again), stale .git/index.lock removal, and slot reconciliation.
  * Human-assigned tasks are never reset.
@@ -61,7 +62,8 @@ export class WatchdogService {
         const result = await recoveryService.runFullRecovery(
           target.projectId,
           target.repoPath,
-          host
+          host,
+          { includeGupp: true }
         );
         const total = result.requeued.length + result.reattached.length + result.cleaned.length;
         if (total > 0) {
