@@ -1,4 +1,4 @@
-import { spawn, exec } from "child_process";
+import { spawn, execFile } from "child_process";
 import {
   readFileSync,
   readSync,
@@ -16,7 +16,6 @@ import {
 import { open as fsOpen, stat as fsStat, readFile, rm as fsRm } from "fs/promises";
 import os from "os";
 import path from "path";
-import { promisify } from "util";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
@@ -77,8 +76,10 @@ import {
   isReasoningOnlyCompletion,
   normalizeLocalOpenAIProviderBaseUrl,
 } from "../utils/local-openai-provider.js";
-
-const execAsync = promisify(exec);
+import {
+  CustomCliCommandParseError,
+  parseCustomCliCommandLine,
+} from "../utils/custom-cli-command.js";
 const log = createLogger("agent-client");
 
 const OUTPUT_POLL_MS = 150;
@@ -1051,6 +1052,17 @@ type LocalOpenAIProviderRuntime = {
   model: string;
   apiKey: string;
 };
+
+function parseAgentCliArgvOrThrow(cliCommand: string): string[] {
+  try {
+    return parseCustomCliCommandLine(cliCommand);
+  } catch (e) {
+    if (e instanceof CustomCliCommandParseError) {
+      throw new AppError(400, ErrorCodes.INVALID_AGENT_CONFIG, e.message);
+    }
+    throw e;
+  }
+}
 
 /**
  * Unified agent invocation interface.
@@ -2262,9 +2274,9 @@ export class AgentClient {
             "Custom agent requires a CLI command"
           );
         }
-        const parts = config.cliCommand.split(" ");
-        command = parts[0];
-        args = [...parts.slice(1), taskFilePath];
+        const argv = parseAgentCliArgvOrThrow(config.cliCommand);
+        command = argv[0]!;
+        args = [...argv.slice(1), taskFilePath];
         break;
       }
       default:
@@ -3537,12 +3549,28 @@ export class AgentClient {
       throw new AppError(400, ErrorCodes.AGENT_CLI_REQUIRED, "Custom agent requires a CLI command");
     }
 
+    const argv = parseAgentCliArgvOrThrow(config.cliCommand);
+    const command = argv[0]!;
+    const baseArgs = argv.slice(1);
+
     try {
       const timeoutMs = resolveInvokeTimeoutMs(options);
-      const { stdout } = await execAsync(`${config.cliCommand} "${prompt.replace(/"/g, '\\"')}"`, {
-        cwd: options.cwd || process.cwd(),
-        ...(timeoutMs !== null && { timeout: timeoutMs }),
-        maxBuffer: 10 * 1024 * 1024,
+      const { stdout } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        execFile(
+          command,
+          [...baseArgs, prompt],
+          {
+            cwd: options.cwd || process.cwd(),
+            encoding: "utf8",
+            maxBuffer: 10 * 1024 * 1024,
+            windowsHide: true,
+            ...(timeoutMs !== null && { timeout: timeoutMs }),
+          },
+          (error, out, errOut) => {
+            if (error) reject(error);
+            else resolve({ stdout: String(out ?? ""), stderr: String(errOut ?? "") });
+          }
+        );
       });
 
       const content = stdout.trim();

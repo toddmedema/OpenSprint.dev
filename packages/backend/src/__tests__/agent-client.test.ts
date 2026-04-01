@@ -3,14 +3,17 @@ import OpenAI from "openai";
 import { AgentClient } from "../services/agent-client.js";
 import { PendingMessageQueue } from "../services/agentic-loop.js";
 import type { AgentConfig } from "@opensprint/shared";
+import { ErrorCodes } from "../middleware/error-codes.js";
 import "../services/agent-process-registry.js";
 
 // Mock child_process
 const mockExec = vi.fn();
+const mockExecFile = vi.fn();
 const mockSpawn = vi.fn();
 
 vi.mock("child_process", () => ({
   exec: (...args: unknown[]) => mockExec(...args),
+  execFile: (...args: unknown[]) => mockExecFile(...args),
   spawn: (...args: unknown[]) => mockSpawn(...args),
 }));
 
@@ -732,9 +735,14 @@ describe("AgentClient", () => {
       expect(result.content).toBe("");
     });
 
-    it("should route custom config to Custom CLI", async () => {
-      mockExec.mockImplementation(
-        (_cmd: string, _opts: unknown, cb: (err: null, stdout: string) => void) => {
+    it("should route custom config to Custom CLI via execFile (no shell)", async () => {
+      mockExecFile.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          _opts: unknown,
+          cb: (err: null, stdout?: string) => void
+        ) => {
           cb(null, "Custom agent response");
         }
       );
@@ -745,8 +753,60 @@ describe("AgentClient", () => {
         cwd: "/tmp",
       });
 
-      expect(mockExec).toHaveBeenCalled();
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "my-agent",
+        ["Hello"],
+        expect.objectContaining({
+          cwd: "/tmp",
+          encoding: "utf8",
+          maxBuffer: 10 * 1024 * 1024,
+          windowsHide: true,
+        }),
+        expect.any(Function)
+      );
+      expect(mockExec).not.toHaveBeenCalled();
       expect(result.content).toBe("Custom agent response");
+    });
+
+    it("passes the prompt as one argv element so shell metacharacters cannot inject", async () => {
+      const malicious = '"; echo pwned; #"';
+      mockExecFile.mockImplementation(
+        (
+          _file: string,
+          args: string[],
+          _opts: unknown,
+          cb: (err: null, stdout?: string) => void
+        ) => {
+          cb(null, args[args.length - 1]);
+        }
+      );
+
+      const result = await client.invoke({
+        config: { type: "custom", model: null, cliCommand: "my-agent --quiet" },
+        prompt: malicious,
+        cwd: "/proj",
+      });
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "my-agent",
+        ["--quiet", malicious],
+        expect.objectContaining({ cwd: "/proj", encoding: "utf8" }),
+        expect.any(Function)
+      );
+      expect(result.content).toBe(malicious);
+    });
+
+    it("rejects custom cliCommand that fails argv parsing", async () => {
+      await expect(
+        client.invoke({
+          config: { type: "custom", model: null, cliCommand: 'my-agent "unclosed' },
+          prompt: "x",
+        })
+      ).rejects.toMatchObject({
+        code: ErrorCodes.INVALID_AGENT_CONFIG,
+        statusCode: 400,
+      });
+      expect(mockExecFile).not.toHaveBeenCalled();
     });
 
     it("should throw for custom agent when cliCommand is missing", async () => {
@@ -1412,6 +1472,33 @@ describe("AgentClient", () => {
 
       expect(mockSpawn).toHaveBeenCalledWith(
         "my-cli",
+        ["--verbose", taskFilePath],
+        expect.objectContaining({ cwd })
+      );
+    });
+
+    it("should spawn custom agent with quoted executable path in cliCommand", () => {
+      const mockChild = {
+        killed: false,
+        kill: vi.fn(),
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(() => ({ on: vi.fn() })),
+      };
+      mockSpawn.mockReturnValue(mockChild);
+
+      const taskFilePath = "/proj/.opensprint/active/bd-a3f8.1/prompt.md";
+      const cwd = "/proj";
+      const config: AgentConfig = {
+        type: "custom",
+        model: null,
+        cliCommand: '"/path/with spaces/my-cli" --verbose',
+      };
+
+      client.spawnWithTaskFile(config, taskFilePath, cwd, vi.fn(), vi.fn());
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "/path/with spaces/my-cli",
         ["--verbose", taskFilePath],
         expect.objectContaining({ cwd })
       );
