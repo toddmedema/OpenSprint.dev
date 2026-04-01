@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { TokenEncryptionService } from "../services/token-encryption.service.js";
+import {
+  TokenEncryptionService,
+  isIntegrationEncryptionKeyConfigured,
+} from "../services/token-encryption.service.js";
 
 describe("TokenEncryptionService", () => {
   let svc: TokenEncryptionService;
@@ -87,5 +90,49 @@ describe("TokenEncryptionService", () => {
         process.env.INTEGRATION_ENCRYPTION_KEY = original;
       }
     }
+  });
+
+  describe("isIntegrationEncryptionKeyConfigured", () => {
+    it("is false when env is unset", () => {
+      const original = process.env.INTEGRATION_ENCRYPTION_KEY;
+      try {
+        delete process.env.INTEGRATION_ENCRYPTION_KEY;
+        expect(isIntegrationEncryptionKeyConfigured()).toBe(false);
+      } finally {
+        if (original === undefined) {
+          delete process.env.INTEGRATION_ENCRYPTION_KEY;
+        } else {
+          process.env.INTEGRATION_ENCRYPTION_KEY = original;
+        }
+      }
+    });
+
+    it("is false when env is empty string", () => {
+      const original = process.env.INTEGRATION_ENCRYPTION_KEY;
+      try {
+        process.env.INTEGRATION_ENCRYPTION_KEY = "";
+        expect(isIntegrationEncryptionKeyConfigured()).toBe(false);
+      } finally {
+        if (original === undefined) {
+          delete process.env.INTEGRATION_ENCRYPTION_KEY;
+        } else {
+          process.env.INTEGRATION_ENCRYPTION_KEY = original;
+        }
+      }
+    });
+
+    it("is true when env is non-empty", () => {
+      const original = process.env.INTEGRATION_ENCRYPTION_KEY;
+      try {
+        process.env.INTEGRATION_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
+        expect(isIntegrationEncryptionKeyConfigured()).toBe(true);
+      } finally {
+        if (original === undefined) {
+          delete process.env.INTEGRATION_ENCRYPTION_KEY;
+        } else {
+          process.env.INTEGRATION_ENCRYPTION_KEY = original;
+        }
+      }
+    });
   });
 });

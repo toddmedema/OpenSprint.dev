@@ -5,6 +5,14 @@
  *   1. INTEGRATION_ENCRYPTION_KEY env var (base64-encoded 32-byte key)
  *   2. Deterministic key derived from hostname + a per-install salt stored
  *      in ~/.opensprint/encryption-salt
+ *
+ * **Shared or sensitive deployments:** For typical single-user local use, the
+ * fallback is convenient. On **shared hosts**, **multi-tenant servers**, or any
+ * machine where another OS user might read `~/.opensprint` (including
+ * `encryption-salt`), you **must** set `INTEGRATION_ENCRYPTION_KEY` to a
+ * cryptographically random 32-byte value (base64-encoded). Otherwise anyone
+ * who can read that directory can reconstruct the same key and decrypt stored
+ * integration tokens.
  */
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
@@ -39,6 +47,14 @@ function deriveKeyFromMachine(): Buffer {
   const salt = getOrCreateSalt();
   const seed = `${os.hostname()}:${salt}`;
   return createHash("sha256").update(seed).digest();
+}
+
+/**
+ * Returns true when `INTEGRATION_ENCRYPTION_KEY` is present (non-empty string).
+ * Does not validate base64 length; {@link TokenEncryptionService} constructor throws if invalid.
+ */
+export function isIntegrationEncryptionKeyConfigured(): boolean {
+  return Boolean(process.env.INTEGRATION_ENCRYPTION_KEY);
 }
 
 function resolveKey(): Buffer {

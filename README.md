@@ -64,6 +64,18 @@ Use this only if SQLite no longer meets your needs (for example, larger workload
 
 To install and prepare a local PostgreSQL during setup, run `USE_POSTGRES=1 npm run setup`.
 
+### Integration token encryption
+
+The backend encrypts stored integration OAuth tokens (for example Todoist) at rest. By default it uses a key derived from this machine’s hostname and a per-install salt in `~/.opensprint/encryption-salt`. That is fine for casual single-user local use.
+
+**On shared servers, multi-user hosts, or any environment where another OS user could read `~/.opensprint`, you must set `INTEGRATION_ENCRYPTION_KEY` in the environment** before starting the backend. Use a **base64-encoded 32-byte** cryptographically random key, for example:
+
+```bash
+openssl rand -base64 32
+```
+
+Put the value in `.env` at the repo root or in your process manager’s environment. If the variable is unset, the backend logs a startup warning reminding you to set it for sensitive deployments.
+
 ### PostgreSQL Setup FAQ
 
 Only needed if you are using PostgreSQL.

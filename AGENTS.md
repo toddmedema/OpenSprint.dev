@@ -10,6 +10,8 @@ Open Sprint is a web application that guides users through the full software dev
 
 Task tracking is handled internally by `TaskStoreService` backed by **SQLite (default)** or **PostgreSQL**. The connection is resolved in order: **`DATABASE_URL`**, then **`databaseUrl`** in `~/.opensprint/global-settings.json`, then the default SQLite path (`~/.opensprint/data/opensprint.sqlite`). There is no external task CLI.
 
+**Integration token encryption:** Integration OAuth tokens are encrypted at rest. Without **`INTEGRATION_ENCRYPTION_KEY`** (base64-encoded 32-byte key), the backend derives a key from the hostname and `~/.opensprint/encryption-salt`, which is acceptable for typical local single-user use but **not** for shared hosts where other users might read `~/.opensprint`. For those deployments, set `INTEGRATION_ENCRYPTION_KEY` in the environment; the backend emits a startup warning when it is unset.
+
 When Open Sprint spawns an Execute agent:
 
 1. The task branch and worktree are already prepared. Do not create or switch branches unless the task prompt explicitly tells you to recover git state.

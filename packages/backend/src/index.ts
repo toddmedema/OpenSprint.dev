@@ -34,6 +34,7 @@ import { openBrowser } from "./utils/open-browser.js";
 import { appendCrashLog } from "./utils/crash-log.js";
 import { appendRuntimeTrace } from "./utils/runtime-trace.js";
 import { startBackendDeathSentinel } from "./utils/backend-death-sentinel.js";
+import { isIntegrationEncryptionKeyConfigured } from "./services/token-encryption.service.js";
 
 // Electron launches backend with ELECTRON_RUN_AS_NODE=1 so process.execPath can run JS.
 // Clear it immediately so backend child processes (agent CLIs) are not forced into Node mode.
@@ -182,6 +183,12 @@ const FRONTEND_PORT = parseInt(process.env.FRONTEND_PORT || "5173", 10);
 server.listen(port, "127.0.0.1", () => {
   logStartup.info("Open Sprint backend listening", { url: `http://localhost:${port}` });
   logStartup.info("WebSocket server ready", { url: `ws://localhost:${port}/ws` });
+  if (process.env.NODE_ENV !== "test" && !isIntegrationEncryptionKeyConfigured()) {
+    logStartup.warn(
+      "INTEGRATION_ENCRYPTION_KEY is not set. Integration OAuth tokens are encrypted with a key derived from this hostname and ~/.opensprint/encryption-salt. For shared servers or any host where other users can read ~/.opensprint, set INTEGRATION_ENCRYPTION_KEY to a base64-encoded 32-byte random key (see README).",
+      { readmeSection: "integration-token-encryption" }
+    );
+  }
   appendRuntimeTrace("process.start", runtimeSessionId, {
     port,
     frontendPort: FRONTEND_PORT,
