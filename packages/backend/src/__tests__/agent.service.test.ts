@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import os from "os";
+import { buildMergerAgentPrompt } from "../services/agent/agent-merger-support.js";
 import { AgentService, createProcessGroupHandle } from "../services/agent.service.js";
 import type { AgentConfig } from "@opensprint/shared";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
@@ -405,20 +406,7 @@ describe("AgentService", () => {
     }
 
     it("includes destructive-command guardrails in merger prompts", async () => {
-      const prompt = await (
-        service as unknown as {
-          buildMergerPrompt: (options: {
-            projectId: string;
-            cwd: string;
-            config: AgentConfig;
-            phase: "merge_to_main" | "push_rebase" | "rebase_before_merge";
-            taskId: string;
-            branchName: string;
-            conflictedFiles: string[];
-            testCommand?: string;
-          }) => Promise<string>;
-        }
-      ).buildMergerPrompt({
+      const prompt = await buildMergerAgentPrompt({
         projectId: "proj-123",
         cwd: "/tmp/repo",
         config: { type: "cursor", model: null, cliCommand: null },

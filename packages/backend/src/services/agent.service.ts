@@ -12,14 +12,7 @@ import {
   getErrorMessage,
   isLimitError,
 } from "../utils/error-utils.js";
-import {
-  isOpenAIResponsesModel,
-  toOpenAIResponsesInputMessage,
-  type OpenAIResponsesInputContent,
-  type OpenAIResponsesInputMessage,
-} from "../utils/openai-models.js";
-import { isProcessAlive, signalProcessGroup } from "../utils/process-group.js";
-import { shellExec } from "../utils/shell-exec.js";
+import { isOpenAIResponsesModel } from "../utils/openai-models.js";
 import { acquireGlobalAgentSlot } from "./agent-global-concurrency.service.js";
 import { activeAgentsService } from "./active-agents.service.js";
 import {
@@ -28,7 +21,6 @@ import {
   clearLimitHit,
   ENV_FALLBACK_KEY_ID,
 } from "./api-key-resolver.service.js";
-import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { taskStore } from "./task-store.service.js";
 import { createLogger } from "../utils/logger.js";
 import { LOG_DIFF_TRUNCATE_AT_CHARS, truncateToThreshold } from "../utils/log-diff-truncation.js";
@@ -37,7 +29,30 @@ import {
   describeStructuredOutputProblem,
   parseMergerAgentResult,
 } from "./agent-result-validation.js";
-import { getMergeResultPath } from "./session-manager.js";
+import { buildAgentApiFailureMessages } from "./agent/agent-api-failure-messages.js";
+import {
+  buildMergerAgentPrompt,
+  clearMergerResultFile,
+  MERGER_RESULT_EXPECTED_SHAPE,
+  readMergerAgentResultWithRaw,
+  verifyMergerGitResolution,
+} from "./agent/agent-merger-support.js";
+import {
+  buildOpenAIPlanningResponsesInput,
+  collectOpenAIResponsesStream,
+  type OpenAIResponsesStreamEvent,
+} from "./agent/agent-openai-planning-stream.js";
+import type {
+  AgentTrackingInfo,
+  CodingAgentHandle,
+  InvokeCodingAgentOptions,
+  InvokePlanningAgentOptions,
+  MergerPhase,
+  PlanningAgentResponse,
+  RecordAgentRunOptions,
+  RunMergerAgentOptions,
+} from "./agent/agent-types.js";
+import { parseImageForClaude, writeImagesForCli } from "./agent/agent-image-attachments.js";
 import {
   buildOpenAIPromptCacheKey,
   extractAnthropicCacheUsage,
@@ -51,205 +66,19 @@ import { summarizeDebugArtifact } from "./agentic-repair.service.js";
 
 const log = createLogger("agent-service");
 
-/** Message for planning agent (user or assistant) */
-export interface PlanningMessage {
-  role: "user" | "assistant";
-  content: string;
-}
+export type {
+  AgentTrackingInfo,
+  CodingAgentHandle,
+  InvokeCodingAgentOptions,
+  InvokePlanningAgentOptions,
+  MergerPhase,
+  PlanningAgentResponse,
+  PlanningMessage,
+  RecordAgentRunOptions,
+  RunMergerAgentOptions,
+} from "./agent/agent-types.js";
 
-/**
- * Optional tracking descriptor — when provided, the agent is automatically
- * registered in activeAgentsService on invocation and unregistered on exit.
- */
-export interface AgentTrackingInfo {
-  id: string;
-  projectId: string;
-  phase: string;
-  role: AgentRole;
-  label: string;
-  branchName?: string;
-  /** Plan ID when agent is working in plan context (e.g. task generation for a plan) */
-  planId?: string;
-  /** Feedback ID when Analyst is categorizing a specific feedback item */
-  feedbackId?: string;
-  /** Owning task for Execute deep links when `id` is a per-run token (e.g. merger). */
-  taskId?: string;
-}
-
-/** Options for invokePlanningAgent */
-export interface InvokePlanningAgentOptions {
-  /** Project ID (required for Claude API key resolution and retry) */
-  projectId: string;
-  /** Agent role for agent log (required so every planning run is recorded) */
-  role: AgentRole;
-  /** Agent configuration (model from config) */
-  config: AgentConfig;
-  /** Conversation messages in order */
-  messages: PlanningMessage[];
-  /** Optional system prompt */
-  systemPrompt?: string;
-  /** Optional image attachments (base64 or data URLs). Claude: inline in message. Cursor/custom: written to temp files and paths appended to prompt. */
-  images?: string[];
-  /** Working directory for CLI agents (cursor/custom) */
-  cwd?: string;
-  /** Callback for streaming text chunks */
-  onChunk?: (chunk: string) => void;
-  /** When provided, auto-registers/unregisters with activeAgentsService */
-  tracking?: AgentTrackingInfo;
-  /** OpenAI Responses conversation chaining for repeated planning chats */
-  previousResponseId?: string;
-  /** Provider-specific prompt caching context */
-  promptCacheContext?: PromptCacheContext;
-}
-
-/** Response from planning agent */
-export interface PlanningAgentResponse {
-  content: string;
-  responseId?: string;
-  cacheMetrics?: AgentCacheUsageMetrics;
-}
-
-function buildOpenAIPlanningResponsesInput(
-  messages: PlanningMessage[],
-  images?: string[]
-): OpenAIResponsesInputMessage[] {
-  return messages.map((message, index) => {
-    const isLastUserMessage = message.role === "user" && index === messages.length - 1;
-    const hasImages = isLastUserMessage && images && images.length > 0;
-    if (!hasImages) {
-      return toOpenAIResponsesInputMessage(message.role, message.content);
-    }
-
-    const content: OpenAIResponsesInputContent[] = [{ type: "input_text", text: message.content }];
-    for (const image of images) {
-      content.push({
-        type: "input_image",
-        image_url: image.startsWith("data:") ? image : `data:image/png;base64,${image}`,
-        detail: "auto",
-      });
-    }
-    return { role: "user", content };
-  });
-}
-
-type OpenAIResponsesStreamEvent = {
-  type?: string;
-  delta?: string;
-  response?: {
-    id?: string | null;
-    usage?: {
-      input_tokens_details?: { cached_tokens?: number | null } | null;
-    } | null;
-  } | null;
-};
-
-async function collectOpenAIResponsesStream(
-  stream: AsyncIterable<OpenAIResponsesStreamEvent>,
-  onChunk: (chunk: string) => void
-): Promise<{
-  content: string;
-  responseId?: string;
-  usage?: {
-    input_tokens_details?: { cached_tokens?: number | null } | null;
-  } | null;
-}> {
-  let fullContent = "";
-  let responseId: string | undefined;
-  let usage:
-    | {
-        input_tokens_details?: { cached_tokens?: number | null } | null;
-      }
-    | null
-    | undefined;
-  for await (const event of stream) {
-    if (event.type === "response.output_text.delta" && event.delta) {
-      fullContent += event.delta;
-      onChunk(event.delta);
-    }
-    if (event.type === "response.completed" && event.response) {
-      responseId = event.response.id ?? undefined;
-      usage = event.response.usage;
-    }
-  }
-  return { content: fullContent, responseId, usage };
-}
-
-function buildAgentApiFailureMessages(
-  agentType: "claude" | "openai",
-  kind: "rate_limit" | "auth",
-  options?: { allKeysExhausted?: boolean }
-): { userMessage: string; notificationMessage: string } {
-  const label = agentType === "claude" ? "Claude" : "OpenAI";
-  if (kind === "rate_limit") {
-    if (options?.allKeysExhausted) {
-      return {
-        userMessage: `All ${label} API keys have hit rate limits. Add another key in Settings or retry after the limit resets.`,
-        notificationMessage: `${label} hit a rate limit. Add another API key in Settings or retry after the limit resets.`,
-      };
-    }
-    return {
-      userMessage: `${label} hit a rate limit. Add another key in Settings or retry after the limit resets.`,
-      notificationMessage: `${label} hit a rate limit. Add another API key in Settings or retry after the limit resets.`,
-    };
-  }
-
-  return {
-    userMessage: `${label} is not configured correctly. Add a valid API key in Settings and try again.`,
-    notificationMessage: `${label} needs a valid API key in Settings before work can continue.`,
-  };
-}
-
-/** Options for invokeCodingAgent (file-based prompt) */
-export interface InvokeCodingAgentOptions {
-  /** Working directory for the agent (typically repo path) */
-  cwd: string;
-  /** Callback for streaming output chunks */
-  onOutput: (chunk: string) => void;
-  /** Callback when agent process exits */
-  onExit: (code: number | null) => void;
-  /** Human-readable agent role for logging (e.g. 'coder', 'code reviewer') */
-  agentRole?: string;
-  /** When provided, auto-registers/unregisters with activeAgentsService */
-  tracking?: AgentTrackingInfo;
-  /** File path to redirect agent stdout/stderr for crash-resilient output */
-  outputLogPath?: string;
-  /** Project ID for Cursor: ApiKeyResolver for CURSOR_API_KEY, retry on limit error, clearLimitHit on success */
-  projectId?: string;
-}
-
-/** Return type for invokeCodingAgent — handle with kill() to terminate */
-export interface CodingAgentHandle {
-  kill: () => void;
-  pid: number | null;
-  /** Bounded queue for injecting live user messages into the agentic loop (API backends only). */
-  pendingMessages?: import("./agentic-loop.js").PendingMessageQueue | null;
-}
-
-export type MergerPhase = "rebase_before_merge" | "merge_to_main" | "push_rebase";
-
-export interface RunMergerAgentOptions {
-  projectId: string;
-  cwd: string;
-  config: AgentConfig;
-  phase: MergerPhase;
-  taskId: string;
-  branchName: string;
-  conflictedFiles: string[];
-  testCommand?: string;
-  mergeQualityGates?: string[];
-  /** Base branch for merger prompt context (default: "main") */
-  baseBranch?: string;
-}
-
-export interface RecordAgentRunOptions {
-  projectId: string;
-  role: AgentRole;
-  config: AgentConfig;
-  runId: string;
-  startedAt: string;
-  completedAt: string;
-  outcome: "success" | "failed";
-}
+export { createProcessGroupHandle } from "./agent/agent-process-handle.js";
 
 type AgentRunStatParams = {
   tracking?: AgentTrackingInfo;
@@ -282,34 +111,6 @@ type MergerSessionRecordParams = {
   debugArtifact?: import("@opensprint/shared").DebugArtifact | null;
 };
 
-const MERGER_RESULT_EXPECTED_SHAPE =
-  'a JSON object like {"status":"success","summary":"..."} or {"status":"failed","summary":"..."}';
-
-/** Create a handle for a detached agent process group after backend restart. */
-export function createProcessGroupHandle(processGroupLeaderPid: number): CodingAgentHandle {
-  return {
-    pid: processGroupLeaderPid,
-    kill() {
-      try {
-        signalProcessGroup(processGroupLeaderPid, "SIGTERM");
-      } catch {
-        // Process may already be dead
-        return;
-      }
-
-      const killTimer = setTimeout(() => {
-        if (!isProcessAlive(processGroupLeaderPid)) return;
-        try {
-          signalProcessGroup(processGroupLeaderPid, "SIGKILL");
-        } catch {
-          // Process may already be dead
-        }
-      }, 5000);
-      killTimer.unref?.();
-    },
-  };
-}
-
 /**
  * AgentService — unified interface for planning and coding agents.
  * invokePlanningAgent uses Claude API when config.type is 'claude';
@@ -318,7 +119,6 @@ export function createProcessGroupHandle(processGroupLeaderPid: number): CodingA
  */
 export class AgentService {
   private agentClient = new AgentClient();
-  private static readonly MERGER_MAIN_LOG_LIMIT = 5;
   private static readonly AGENT_STATS_RETENTION = 500;
 
   /**
@@ -395,7 +195,7 @@ export class AgentService {
     let prompt = lastUser?.content ?? "";
     let cleanup: (() => Promise<void>) | null = null;
     if (images && images.length > 0) {
-      const { promptSuffix, cleanup: doCleanup } = await this.writeImagesForCli(cwd, images);
+      const { promptSuffix, cleanup: doCleanup } = await writeImagesForCli(cwd, images);
       cleanup = doCleanup;
       prompt = prompt + promptSuffix;
     }
@@ -676,164 +476,6 @@ export class AgentService {
     }
   }
 
-  private async buildMergerPrompt(
-    options: RunMergerAgentOptions,
-    repairContext?: string
-  ): Promise<string> {
-    const baseBranch = options.baseBranch ?? "main";
-    const [agentInstructions, statusShort, diffFilterU, mainLog, branchDiffStat] =
-      await Promise.all([
-        getCombinedInstructions(options.cwd, "merger"),
-        this.captureGitOutput(options.cwd, "git status --short"),
-        this.captureGitOutput(options.cwd, "git diff --name-only --diff-filter=U"),
-        this.captureGitOutput(
-          options.cwd,
-          `git log --oneline -${AgentService.MERGER_MAIN_LOG_LIMIT} ${baseBranch}`
-        ),
-        this.captureGitOutput(options.cwd, `git diff --stat ${baseBranch}...${options.branchName}`),
-      ]);
-
-    const conflictedFiles =
-      options.conflictedFiles.length > 0 ? options.conflictedFiles.join("\n") : "(none reported)";
-    const testCommand = options.testCommand?.trim() ? options.testCommand.trim() : "(not provided)";
-    const mergeQualityGates =
-      options.mergeQualityGates && options.mergeQualityGates.length > 0
-        ? options.mergeQualityGates.map((cmd) => `- ${cmd}`).join("\n")
-        : "- (not provided)";
-    const resultPath = ".opensprint/merge-result.json";
-    const repairSection = repairContext?.trim()
-      ? `## Structured Output Repair\n\n` +
-        `Your previous attempt did not produce a valid \`${resultPath}\` file.\n\n` +
-        `${repairContext.trim()}\n\n` +
-        `Reuse the current conflict-resolution state. Do not start over unless the git state itself is still wrong. Fix the structured output file before you exit.\n\n`
-      : "";
-
-    const basePrompt = `# Merger Agent: Resolve Git Conflicts
-
-You are the Merger agent. Your job is to resolve ${options.phase} conflicts for task ${options.taskId} on branch ${options.branchName}.
-
-## Conflict Context
-
-- Stage: ${options.phase}
-- Task ID: ${options.taskId}
-- Branch: ${options.branchName}
-- Base branch: ${baseBranch}
-- Test command: ${testCommand}
-
-### Required quality gates before merge
-${mergeQualityGates}
-
-### Conflicted files
-${conflictedFiles}
-
-### git status --short
-${statusShort || "(no output)"}
-
-### git diff --name-only --diff-filter=U
-${diffFilterU || "(no output)"}
-
-### Recent ${baseBranch} commits
-${mainLog || "(no output)"}
-
-### Branch diff stat vs ${baseBranch}
-${branchDiffStat || "(no output)"}
-
-${repairSection}## Your Task
-
-1. Resolve every unmerged file and stage the resolved files.
-2. Prefer preserving both sides when they are compatible.
-3. Keep the branch compatible with the required quality gates above.
-4. Verify there are no remaining conflict markers or unmerged paths.
-5. Write your result to \`${resultPath}\` using this exact JSON format:
-   \`\`\`json
-   { "status": "success", "summary": "Brief description of how you resolved the conflicts" }
-   \`\`\`
-   If you cannot resolve the conflicts, write:
-   \`\`\`json
-   { "status": "failed", "summary": "Why the conflicts could not be resolved" }
-   \`\`\`
-   The \`status\` field MUST be exactly \`"success"\` or \`"failed"\`.
-   You may optionally include a \`"debugArtifact"\` field to report diagnosis of any issues you encountered:
-   \`\`\`json
-   {
-     "status": "success",
-     "summary": "...",
-     "debugArtifact": {
-       "rootCauseCategory": "code_defect | env_defect | dependency_defect | ...",
-       "evidence": "What you found",
-       "fixApplied": "What you changed",
-       "verificationCommand": "Command you ran to verify",
-       "verificationPassed": true,
-       "residualRisk": null,
-       "nextAction": "continue"
-     }
-   }
-   \`\`\`
-
-## Rules
-
-- Do NOT run \`git rebase --continue\`, \`git commit\`, or \`git merge --continue\`.
-- Resolve conflicts by editing files; do not delete files unless that is clearly correct.
-- Do NOT run destructive cleanup commands such as \`rm -rf\`, \`find ... -delete\`, or \`git clean -fdx\`.
-- Run \`git diff --check\` before exiting.
-- If post-resolution quality gates fail, diagnose the root cause from their output. Fix dependency drift, missing installs, or config issues directly. Re-run the failing gate to verify before reporting.
-- Exit with code 0 only when all conflicted files are resolved and staged.
-- Exit non-zero if you cannot produce a correct resolution.
-`;
-    if (agentInstructions.trim()) {
-      return `${agentInstructions}\n\n${basePrompt}`;
-    }
-    return basePrompt;
-  }
-
-  private async captureGitOutput(cwd: string, command: string): Promise<string> {
-    try {
-      const { stdout } = await shellExec(command, { cwd, timeout: 10_000 });
-      return stdout.trim();
-    } catch {
-      return "";
-    }
-  }
-
-  private async verifyMergerResult(cwd: string): Promise<boolean> {
-    const unmerged = await this.captureGitOutput(cwd, "git diff --name-only --diff-filter=U");
-    if (unmerged.trim().length > 0) {
-      return false;
-    }
-    try {
-      await shellExec("git diff --check", { cwd, timeout: 10_000 });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async readMergerResultWithRaw(
-    cwd: string
-  ): Promise<{ raw: string | null; parsed: ReturnType<typeof parseMergerAgentResult> }> {
-    const resultPath = getMergeResultPath(cwd);
-    try {
-      const raw = await fs.readFile(resultPath, "utf-8");
-      return {
-        raw,
-        parsed: parseMergerAgentResult(raw),
-      };
-    } catch {
-      return {
-        raw: null,
-        parsed: null,
-      };
-    }
-  }
-
-  private async clearMergerResult(cwd: string): Promise<void> {
-    try {
-      await fs.unlink(getMergeResultPath(cwd));
-    } catch {
-      // File may not exist
-    }
-  }
-
   /**
    * Run the merger agent and wait for it to complete.
    * Returns true if the agent exited with code 0 (success), false otherwise.
@@ -856,14 +498,14 @@ ${repairSection}## Your Task
         parsed: ReturnType<typeof parseMergerAgentResult>;
         verified: boolean;
       }> => {
-        await this.clearMergerResult(options.cwd);
+        await clearMergerResultFile(options.cwd);
         const promptPath = path.join(
           os.tmpdir(),
           `opensprint-merger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`
         );
         await fs.writeFile(
           promptPath,
-          await this.buildMergerPrompt(options, params?.repairContext)
+          await buildMergerAgentPrompt(options, params?.repairContext)
         );
         const releaseGlobalSlot = await acquireGlobalAgentSlot(options.projectId);
         let slotReleased = false;
@@ -893,10 +535,10 @@ ${repairSection}## Your Task
               },
             });
           });
-          const { raw, parsed } = await this.readMergerResultWithRaw(options.cwd);
+          const { raw, parsed } = await readMergerAgentResultWithRaw(options.cwd);
           const verified =
             exitedCleanly && parsed?.status === "success"
-              ? await this.verifyMergerResult(options.cwd)
+              ? await verifyMergerGitResolution(options.cwd)
               : false;
           return { exitedCleanly, raw, parsed, verified };
         } finally {
@@ -941,77 +583,8 @@ ${repairSection}## Your Task
       });
       return verified;
     } finally {
-      await this.clearMergerResult(options.cwd).catch(() => {});
+      await clearMergerResultFile(options.cwd).catch(() => {});
     }
-  }
-
-  /**
-   * Parse data URL or base64 string to { media_type, data } for Anthropic image blocks.
-   */
-  private parseImageForClaude(img: string): {
-    media_type: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
-    data: string;
-  } {
-    const VALID = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
-    if (img.startsWith("data:")) {
-      const match = img.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        const mt = match[1].toLowerCase();
-        const media_type = VALID.includes(mt as (typeof VALID)[number])
-          ? (mt as (typeof VALID)[number])
-          : "image/png";
-        return { media_type, data: match[2] };
-      }
-    }
-    return { media_type: "image/png", data: img };
-  }
-
-  /** Extension from MIME type for writing CLI image files */
-  private static readonly MIME_TO_EXT: Record<string, string> = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/gif": ".gif",
-    "image/webp": ".webp",
-  };
-
-  /**
-   * Decode image (data URL or base64) to buffer and file extension for CLI temp files.
-   */
-  private parseImageToBuffer(img: string): { buffer: Buffer; ext: string } {
-    const { media_type, data } = this.parseImageForClaude(img);
-    const buffer = Buffer.from(data, "base64");
-    const ext = AgentService.MIME_TO_EXT[media_type] ?? ".png";
-    return { buffer, ext };
-  }
-
-  /**
-   * Write image attachments to temp files and return prompt suffix + cleanup.
-   * Used for Cursor/custom CLI: agent reads images via file paths in the prompt.
-   * cwd: when set, files are under cwd/.opensprint/agent-images; otherwise under os.tmpdir().
-   */
-  private async writeImagesForCli(
-    cwd: string | undefined,
-    images: string[]
-  ): Promise<{ promptSuffix: string; cleanup: () => Promise<void> }> {
-    const baseDir = cwd ?? os.tmpdir();
-    const imageDirName = `.opensprint/agent-images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const imageDir = path.join(baseDir, imageDirName);
-    await fs.mkdir(imageDir, { recursive: true });
-    const pathsForPrompt: string[] = [];
-    for (let i = 0; i < images.length; i++) {
-      const { buffer, ext } = this.parseImageToBuffer(images[i]);
-      const name = `${i}${ext}`;
-      const filePath = path.join(imageDir, name);
-      await fs.writeFile(filePath, buffer);
-      // Use paths relative to cwd when available so CLI can read from project; otherwise absolute
-      pathsForPrompt.push(cwd ? path.join(imageDirName, name) : filePath);
-    }
-    const promptSuffix =
-      "\n\nAttached images (read these file paths for context):\n" + pathsForPrompt.join("\n");
-    const cleanup = async () => {
-      await fs.rm(imageDir, { recursive: true }).catch(() => {});
-    };
-    return { promptSuffix, cleanup };
   }
 
   /**
@@ -1037,7 +610,7 @@ ${repairSection}## Your Task
       const shouldCacheBlock = i < messages.length - 1;
       if (hasImages) {
         const imageBlocks = images!.map((img) => {
-          const { media_type, data } = this.parseImageForClaude(img);
+          const { media_type, data } = parseImageForClaude(img);
           return { type: "image" as const, source: { type: "base64" as const, media_type, data } };
         });
         return {

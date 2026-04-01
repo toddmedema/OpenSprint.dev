@@ -12,37 +12,31 @@ import type {
   ScaffoldProjectResponse,
   ScaffoldRecoveryInfo,
 } from "@opensprint/shared";
-import type { ProjectIndexEntry } from "@opensprint/shared";
 import {
   OPENSPRINT_DIR,
   SPEC_MD,
   prdToSpecMarkdown,
-  DEFAULT_HIL_CONFIG,
   DEFAULT_AI_AUTONOMY_LEVEL,
   DEFAULT_DEPLOYMENT_CONFIG,
   DEFAULT_REVIEW_MODE,
+  getTestCommandForFramework,
+  MAX_TOTAL_CONCURRENT_AGENTS_CAP,
   MIN_VALIDATION_TIMEOUT_MS,
   MAX_VALIDATION_TIMEOUT_MS,
-  getTestCommandForFramework,
-  hilConfigFromAiAutonomyLevel,
-  MAX_TOTAL_CONCURRENT_AGENTS_CAP,
   parseSettings,
   parseTeamMembers,
   getProvidersRequiringApiKeys,
   DEFAULT_AGENT_CONFIG,
-  applyGlobalAgentDefaultsToRawRecord,
   omitInheritedAgentTiersForStore,
-  projectStoredDefinesSimpleAgent,
-  projectStoredDefinesComplexAgent,
   VALID_MERGE_STRATEGIES,
   VALID_SELF_IMPROVEMENT_FREQUENCIES,
   mergeDeploymentConfigPatch,
   deploymentConfigForApiResponse,
+  hilConfigFromAiAutonomyLevel,
 } from "@opensprint/shared";
 import type { SelfImprovementFrequency } from "@opensprint/shared";
 import type { ApiKeyProvider } from "@opensprint/shared";
 import { getGlobalSettings } from "./global-settings.service.js";
-import type { AiAutonomyLevel, DeploymentConfig, HilConfig } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import {
   getSettingsFromStore,
@@ -65,339 +59,55 @@ import { parseAgentConfig, type AgentConfigInput } from "../schemas/agent-config
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { assertSupportedRepoPath } from "../utils/repo-path-policy.js";
-import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
-import { runGit, gitNoHooksConfigPrefix } from "../utils/git-command.js";
+import { runGit } from "../utils/git-command.js";
 import {
   ensureGitIdentityConfigured,
   ensureBaseBranchExists,
   ensureRepoHasInitialCommit,
   inspectGitRepoState,
-  hasWorkingTreeChanges,
 } from "../utils/git-repo-state.js";
-import { classifyInitError, attemptRecovery } from "./scaffold-recovery.service.js";
 import {
   ensureExpoReactTypeDevDependencies,
   ensureExpoLintMergeGateTooling,
 } from "../utils/scaffold-expo-deps.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import { getNextScheduledSelfImprovementRunAt } from "./project/project-scheduling.js";
+import { normalizeDeployment } from "./project/project-deployment-normalize.js";
+import {
+  ensureOpenSprintRuntimeContract,
+  ensureProjectGitignoreEntries,
+} from "./project/project-runtime-contract.js";
+import {
+  buildDefaultSettings,
+  clampValidationTimeoutMs,
+  DEFAULT_VALIDATION_TIMEOUT_MS,
+  extractNpmRunScriptName,
+  isPreferredRepoPathEntry,
+  normalizeRepoPath,
+  normalizeValidationSample,
+  percentile,
+  resolveAiAutonomyAndHil,
+  toCanonicalSettings,
+  VALID_AI_AUTONOMY_LEVELS,
+  VALIDATION_TIMING_SAMPLE_LIMIT,
+  VALIDATION_TIMEOUT_BUFFER_MS,
+  VALIDATION_TIMEOUT_MULTIPLIER,
+} from "./project/project-settings-helpers.js";
+import { projectSettingsFromRaw } from "./project/project-settings-from-raw.js";
+import { commitBootstrapRepoChanges } from "./project/project-bootstrap-git.js";
+import { resolvePreferredProjectEntry } from "./project/project-index-preference.js";
+import {
+  checkScaffoldPrerequisites,
+  runScaffoldCommandWithRecovery,
+} from "./project/project-scaffold-recovery.js";
+
+export { getNextScheduledSelfImprovementRunAt } from "./project/project-scheduling.js";
 
 const execAsync = promisify(exec);
 const log = createLogger("project");
 
-const DEFAULT_VALIDATION_TIMEOUT_MS = 300_000;
-const VALIDATION_TIMEOUT_BUFFER_MS = 30_000;
-const VALIDATION_TIMEOUT_MULTIPLIER = 1.8;
-const VALIDATION_TIMING_SAMPLE_LIMIT = 30;
-
-/** Next midnight UTC (daily) or next Sunday 00:00 UTC (weekly). Used for nextRunAt in settings response. */
-export function getNextScheduledSelfImprovementRunAt(
-  frequency: "daily" | "weekly",
-  now: Date = new Date()
-): string {
-  const n = now;
-  const y = n.getUTCFullYear();
-  const m = n.getUTCMonth();
-  const d = n.getUTCDate();
-  if (frequency === "daily") {
-    return new Date(Date.UTC(y, m, d + 1)).toISOString();
-  }
-  const day = n.getUTCDay();
-  const addDays = day === 0 ? 7 : 7 - day;
-  return new Date(Date.UTC(y, m, d + addDays)).toISOString();
-}
-
-const VALID_DEPLOYMENT_MODES = ["expo", "custom"] as const;
-
-/** Normalize deployment config: ensure valid mode, merge with defaults (PRD §6.4, §7.5.4) */
-function normalizeDeployment(input: CreateProjectRequest["deployment"]): DeploymentConfig {
-  const mode =
-    input?.mode && VALID_DEPLOYMENT_MODES.includes(input.mode as "expo" | "custom")
-      ? (input.mode as "expo" | "custom")
-      : "custom";
-  const hasTargets = input?.targets && input.targets.length > 0;
-  const targets = hasTargets
-    ? input!.targets
-    : input?.envVars && Object.keys(input.envVars).length > 0
-      ? [{ name: "production", isDefault: true, envVars: input.envVars }]
-      : input?.targets;
-  return {
-    ...DEFAULT_DEPLOYMENT_CONFIG,
-    ...input,
-    mode,
-    targets,
-    envVars: input?.envVars,
-    expoConfig: mode === "expo" ? { channel: input?.expoConfig?.channel ?? "preview" } : undefined,
-    customCommand: mode === "custom" ? input?.customCommand : undefined,
-    webhookUrl: mode === "custom" ? input?.webhookUrl : undefined,
-  };
-}
-
-const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
-const LEGACY_BD_TASK_TRACKING_INSTRUCTION = "Use 'bd' for task tracking";
-const OPENSPRINT_RUNTIME_CONTRACT_HEADING = "## Open Sprint Runtime Contract";
-const OPENSPRINT_RUNTIME_CONTRACT_SECTION = [
-  OPENSPRINT_RUNTIME_CONTRACT_HEADING,
-  "",
-  "Open Sprint manages task state internally. Do not use external task CLIs.",
-  "",
-  "- Execute agents start in a prepared worktree with the task branch already checked out.",
-  "- Run the smallest relevant non-watch verification for touched workspaces while iterating. Use scoped tests first, add scoped build/typecheck and lint commands when your changes could affect them, and leave the branch in a state where the project’s configured merge quality gates are expected to pass before reporting success.",
-  "- If you add, remove, or upgrade dependencies: run the repository’s documented install workflow from the repository root, update manifests/lockfiles required by that ecosystem, and commit dependency metadata changes together with the code that uses them.",
-  "- If the project’s build/typecheck includes tests, ensure test-runner globals and typing/runtime configuration are set up so build/typecheck still passes after your changes.",
-  "- Report completion or blocking questions by writing the exact `.opensprint/active/<task-id>/result.json` payload requested in the task prompt.",
-  "- Commit incremental logical units while working so crash recovery can preserve progress.",
-  '- If blocked by ambiguity, return `status: "failed"` with `open_questions` instead of guessing.',
-  "- Do not push, merge, or close tasks manually; the orchestrator handles validation, task state, merging, and remote publication.",
-].join("\n");
-
-// Runtime and worktree paths must stay local and never be committed.
-const PROJECT_GITIGNORE_ENTRIES = [
-  ".opensprint/*.json",
-  ".opensprint/orchestrator-state.json",
-  ".opensprint/worktrees/",
-  ".opensprint/pending-commits.json",
-  ".opensprint/sessions/",
-  ".opensprint/active/",
-  ".opensprint/runtime/",
-] as const;
-
-function removeLegacyBdTaskTrackingInstruction(content: string): string {
-  return content
-    .replace(new RegExp(`(^|\\n)${LEGACY_BD_TASK_TRACKING_INSTRUCTION}(?=\\n|$)`, "g"), "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trimEnd();
-}
-
-function ensureOpenSprintRuntimeContract(content: string): string {
-  const normalized = removeLegacyBdTaskTrackingInstruction(content);
-  if (normalized.includes(OPENSPRINT_RUNTIME_CONTRACT_HEADING)) {
-    return normalized
-      ? `${normalized}\n`
-      : `# Agent Instructions\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
-  }
-  if (!normalized.trim()) {
-    return `# Agent Instructions\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
-  }
-  return `${normalized}\n\n${OPENSPRINT_RUNTIME_CONTRACT_SECTION}\n`;
-}
-
-async function ensureProjectGitignoreEntries(repoPath: string): Promise<void> {
-  const gitignorePath = path.join(repoPath, ".gitignore");
-  try {
-    let content = await fs.readFile(gitignorePath, "utf-8");
-    for (const entry of PROJECT_GITIGNORE_ENTRIES) {
-      if (!content.includes(entry)) {
-        content += `\n${entry}`;
-      }
-    }
-    await fs.writeFile(gitignorePath, content.trimEnd() + "\n");
-  } catch {
-    await fs.writeFile(gitignorePath, PROJECT_GITIGNORE_ENTRIES.join("\n") + "\n");
-  }
-}
-
-/** Resolve aiAutonomyLevel and hilConfig from create/update input. aiAutonomyLevel takes precedence. */
-function resolveAiAutonomyAndHil(input: {
-  aiAutonomyLevel?: AiAutonomyLevel;
-  hilConfig?: CreateProjectRequest["hilConfig"];
-}): { aiAutonomyLevel: AiAutonomyLevel; hilConfig: HilConfig } {
-  const level = input.aiAutonomyLevel;
-  if (typeof level === "string" && VALID_AI_AUTONOMY_LEVELS.includes(level)) {
-    return { aiAutonomyLevel: level, hilConfig: hilConfigFromAiAutonomyLevel(level) };
-  }
-  const legacy = input.hilConfig;
-  if (legacy && typeof legacy === "object") {
-    const derived = parseSettings({ hilConfig: legacy });
-    return {
-      aiAutonomyLevel: derived.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL,
-      hilConfig: derived.hilConfig,
-    };
-  }
-  return {
-    aiAutonomyLevel: DEFAULT_AI_AUTONOMY_LEVEL,
-    hilConfig: DEFAULT_HIL_CONFIG,
-  };
-}
-
-/** Normalize path for comparison: trim and remove trailing slashes. */
-function normalizeRepoPath(p: string): string {
-  return p.trim().replace(/\/+$/, "") || "";
-}
-
-function extractNpmRunScriptName(command: string): string | null {
-  const match = command.trim().match(/^npm\s+run\s+([^\s]+)/i);
-  return match?.[1] ?? null;
-}
-
-function clampValidationTimeoutMs(raw: number): number {
-  if (!Number.isFinite(raw)) return DEFAULT_VALIDATION_TIMEOUT_MS;
-  const rounded = Math.round(raw);
-  return Math.min(MAX_VALIDATION_TIMEOUT_MS, Math.max(MIN_VALIDATION_TIMEOUT_MS, rounded));
-}
-
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return DEFAULT_VALIDATION_TIMEOUT_MS;
-  const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * p)));
-  return sorted[idx]!;
-}
-
-function normalizeValidationSample(raw: number): number | null {
-  if (!Number.isFinite(raw)) return null;
-  const rounded = Math.round(raw);
-  if (rounded <= 0) return null;
-  return Math.min(rounded, MAX_VALIDATION_TIMEOUT_MS);
-}
-
-function isPreferredRepoPathEntry(
-  candidate: { updatedAt: string | null; createdAt: string },
-  current: { updatedAt: string | null; createdAt: string }
-): boolean {
-  if (candidate.updatedAt !== null && current.updatedAt === null) {
-    return true;
-  }
-  if (candidate.updatedAt === null && current.updatedAt !== null) {
-    return false;
-  }
-
-  const candidateSortKey = candidate.updatedAt ?? candidate.createdAt;
-  const currentSortKey = current.updatedAt ?? current.createdAt;
-  if (candidateSortKey !== currentSortKey) {
-    return candidateSortKey > currentSortKey;
-  }
-
-  return candidate.createdAt > current.createdAt;
-}
-
-/** Build default ProjectSettings for a repo (no user input). Used when adopting or repairing. */
-function buildDefaultSettings(): ProjectSettings {
-  return {
-    simpleComplexityAgent: { ...DEFAULT_AGENT_CONFIG },
-    complexComplexityAgent: { ...DEFAULT_AGENT_CONFIG },
-    deployment: { ...DEFAULT_DEPLOYMENT_CONFIG },
-    aiAutonomyLevel: DEFAULT_AI_AUTONOMY_LEVEL,
-    hilConfig: { ...DEFAULT_HIL_CONFIG },
-    testFramework: null,
-    testCommand: null,
-    toolchainProfile: undefined,
-    validationTimeoutMsOverride: null,
-    reviewMode: DEFAULT_REVIEW_MODE,
-    maxConcurrentCoders: 1,
-    unknownScopeStrategy: "optimistic",
-    gitWorkingMode: "worktree",
-    mergeStrategy: "per_task",
-    worktreeBaseBranch: "main",
-    enableHumanTeammates: false,
-    selfImprovementFrequency: "never",
-    autoExecutePlans: false,
-    runAgentEnhancementExperiments: false,
-    selfImprovementPendingCandidateId: undefined,
-    selfImprovementActiveBehaviorVersionId: undefined,
-    selfImprovementBehaviorVersions: undefined,
-    selfImprovementBehaviorHistory: undefined,
-  };
-}
-
-/** Build canonical ProjectSettings for persistence. */
-function toCanonicalSettings(s: ProjectSettings): ProjectSettings {
-  const aiAutonomyLevel = s.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL;
-  return {
-    simpleComplexityAgent: s.simpleComplexityAgent,
-    complexComplexityAgent: s.complexComplexityAgent,
-    deployment: s.deployment,
-    aiAutonomyLevel,
-    hilConfig: hilConfigFromAiAutonomyLevel(aiAutonomyLevel),
-    testFramework: s.testFramework ?? null,
-    testCommand: s.testCommand ?? null,
-    ...(s.toolchainProfile && { toolchainProfile: s.toolchainProfile }),
-    validationTimeoutMsOverride:
-      typeof s.validationTimeoutMsOverride === "number"
-        ? clampValidationTimeoutMs(s.validationTimeoutMsOverride)
-        : null,
-    ...(s.validationTimingProfile && {
-      validationTimingProfile: {
-        ...(Array.isArray(s.validationTimingProfile.scoped) &&
-          s.validationTimingProfile.scoped.length > 0 && {
-            scoped: s.validationTimingProfile.scoped
-              .map((sample) => normalizeValidationSample(sample))
-              .filter((sample): sample is number => sample !== null)
-              .slice(-VALIDATION_TIMING_SAMPLE_LIMIT),
-          }),
-        ...(Array.isArray(s.validationTimingProfile.full) &&
-          s.validationTimingProfile.full.length > 0 && {
-            full: s.validationTimingProfile.full
-              .map((sample) => normalizeValidationSample(sample))
-              .filter((sample): sample is number => sample !== null)
-              .slice(-VALIDATION_TIMING_SAMPLE_LIMIT),
-          }),
-        ...(s.validationTimingProfile.updatedAt && {
-          updatedAt: s.validationTimingProfile.updatedAt,
-        }),
-      },
-    }),
-    reviewMode: s.reviewMode ?? DEFAULT_REVIEW_MODE,
-    ...(s.reviewAngles && s.reviewAngles.length > 0 && { reviewAngles: s.reviewAngles }),
-    ...(s.includeGeneralReview === true && { includeGeneralReview: true }),
-    maxConcurrentCoders: s.maxConcurrentCoders ?? 1,
-    ...(typeof s.maxTotalConcurrentAgents === "number" &&
-      Number.isFinite(s.maxTotalConcurrentAgents) &&
-      s.maxTotalConcurrentAgents >= 1 && {
-        maxTotalConcurrentAgents: Math.min(
-          MAX_TOTAL_CONCURRENT_AGENTS_CAP,
-          Math.max(1, Math.round(s.maxTotalConcurrentAgents))
-        ),
-      }),
-    unknownScopeStrategy: s.unknownScopeStrategy ?? "optimistic",
-    gitWorkingMode: s.gitWorkingMode ?? "worktree",
-    mergeStrategy: s.mergeStrategy ?? "per_task",
-    worktreeBaseBranch: s.worktreeBaseBranch ?? "main",
-    enableHumanTeammates: s.enableHumanTeammates === true,
-    ...(s.teamMembers && s.teamMembers.length > 0 && { teamMembers: s.teamMembers }),
-    selfImprovementFrequency: s.selfImprovementFrequency ?? "never",
-    ...(s.selfImprovementLastRunAt !== undefined && {
-      selfImprovementLastRunAt: s.selfImprovementLastRunAt,
-    }),
-    ...(s.selfImprovementLastCommitSha !== undefined && {
-      selfImprovementLastCommitSha: s.selfImprovementLastCommitSha,
-    }),
-    autoExecutePlans: s.autoExecutePlans === true,
-    runAgentEnhancementExperiments: s.runAgentEnhancementExperiments === true,
-    ...(s.selfImprovementReviewerAgents &&
-      s.selfImprovementReviewerAgents.length > 0 && {
-        selfImprovementReviewerAgents: s.selfImprovementReviewerAgents,
-      }),
-    ...(s.selfImprovementIncludeGeneralReview === true && {
-      selfImprovementIncludeGeneralReview: true,
-    }),
-    ...(s.selfImprovementPendingCandidateId && {
-      selfImprovementPendingCandidateId: s.selfImprovementPendingCandidateId,
-    }),
-    ...(s.selfImprovementActiveBehaviorVersionId && {
-      selfImprovementActiveBehaviorVersionId: s.selfImprovementActiveBehaviorVersionId,
-    }),
-    ...(Array.isArray(s.selfImprovementBehaviorVersions) &&
-      s.selfImprovementBehaviorVersions.length > 0 && {
-        selfImprovementBehaviorVersions: s.selfImprovementBehaviorVersions
-          .filter((v) => v?.id && v?.promotedAt)
-          .map((v) => ({ id: v.id, promotedAt: v.promotedAt })),
-      }),
-    ...(Array.isArray(s.selfImprovementBehaviorHistory) &&
-      s.selfImprovementBehaviorHistory.length > 0 && {
-        selfImprovementBehaviorHistory: s.selfImprovementBehaviorHistory
-          .filter((h) => h?.timestamp && h?.action)
-          .map((h) => ({
-            timestamp: h.timestamp,
-            action: h.action,
-            ...(h.behaviorVersionId && { behaviorVersionId: h.behaviorVersionId }),
-            ...(h.candidateId && { candidateId: h.candidateId }),
-          })),
-      }),
-  };
-}
-
 export class ProjectService {
   private taskStore = taskStoreSingleton;
-  private static readonly BOOTSTRAP_COMMIT_MESSAGE = "chore: initialize Open Sprint project";
   /** In-memory cache for listProjects() so GET /projects returns instantly when the event loop is busy (e.g. orchestrator). Invalidated on create/update/delete. */
   private listCache: Project[] | null = null;
 
@@ -422,73 +132,6 @@ export class ProjectService {
     this.listCache = null;
   }
 
-  /** Merge global agent defaults into raw JSON, parse, and annotate inheritance for API responses. */
-  private projectSettingsFromRaw(
-    raw: Record<string, unknown>,
-    gs: Awaited<ReturnType<typeof getGlobalSettings>>
-  ): ProjectSettings {
-    const normalized = applyGlobalAgentDefaultsToRawRecord(raw, gs);
-    const parsed = toCanonicalSettings(parseSettings(normalized));
-    return {
-      ...parsed,
-      simpleComplexityAgentInherited: !projectStoredDefinesSimpleAgent(raw),
-      complexComplexityAgentInherited: !projectStoredDefinesComplexAgent(raw),
-    };
-  }
-
-  private async stageAndCommitPaths(repoPath: string, pathsToStage: string[]): Promise<boolean> {
-    const existingPaths: string[] = [];
-    for (const relPath of pathsToStage) {
-      try {
-        await fs.access(path.join(repoPath, relPath));
-        existingPaths.push(relPath);
-      } catch {
-        // File may legitimately not exist in this project shape
-      }
-    }
-    if (existingPaths.length === 0) return false;
-
-    await runGit(["add", "-A", "--", ...existingPaths], { cwd: repoPath });
-    const staged = await runGit(["diff", "--cached", "--name-only"], { cwd: repoPath });
-    if (!staged.stdout.trim()) return false;
-    const noHooks = getGitNoHooksPath();
-    await runGit(
-      [...gitNoHooksConfigPrefix(noHooks), "commit", "-m", ProjectService.BOOTSTRAP_COMMIT_MESSAGE],
-      { cwd: repoPath, timeout: 30_000 }
-    );
-    return true;
-  }
-
-  private async commitBootstrapChanges(
-    repoPath: string,
-    options: { includeWholeRepo: boolean; extraPaths?: string[] }
-  ): Promise<boolean> {
-    if (options.includeWholeRepo) {
-      const hasChanges = await hasWorkingTreeChanges(repoPath);
-      if (!hasChanges) return false;
-      await runGit(["add", "-A"], { cwd: repoPath });
-      const noHooksBootstrap = getGitNoHooksPath();
-      await runGit(
-        [
-          ...gitNoHooksConfigPrefix(noHooksBootstrap),
-          "commit",
-          "-m",
-          ProjectService.BOOTSTRAP_COMMIT_MESSAGE,
-        ],
-        { cwd: repoPath, timeout: 30_000 }
-      );
-      return true;
-    }
-
-    return this.stageAndCommitPaths(repoPath, [
-      "AGENTS.md",
-      ".gitignore",
-      "SPEC.md",
-      ".opensprint",
-      ...(options.extraPaths ?? []),
-    ]);
-  }
-
   private async prepareRepoForProject(
     repoPath: string,
     preferredBaseBranch?: string
@@ -498,26 +141,6 @@ export class ProjectService {
     const baseBranch = repoState.baseBranch;
     await ensureBaseBranchExists(repoPath, baseBranch);
     return { hadHead: repoState.hasHead, baseBranch };
-  }
-
-  private async getPreferredProjectEntry(entries: ProjectIndexEntry[]): Promise<ProjectIndexEntry> {
-    let preferred = entries[0];
-    let preferredMeta = await getSettingsWithMetaFromStore(preferred.id, buildDefaultSettings());
-
-    for (const entry of entries.slice(1)) {
-      const entryMeta = await getSettingsWithMetaFromStore(entry.id, buildDefaultSettings());
-      if (
-        isPreferredRepoPathEntry(
-          { updatedAt: entryMeta.updatedAt, createdAt: entry.createdAt },
-          { updatedAt: preferredMeta.updatedAt, createdAt: preferred.createdAt }
-        )
-      ) {
-        preferred = entry;
-        preferredMeta = entryMeta;
-      }
-    }
-
-    return preferred;
   }
 
   /** List all projects (cached; invalidated on create/update/delete). Settings are in global DB. */
@@ -612,7 +235,7 @@ export class ProjectService {
       await fs.access(opensprintDir);
       if (existingEntries.length > 0) {
         await ensureProjectGitignoreEntries(repoPath);
-        const existing = await this.getPreferredProjectEntry(existingEntries);
+        const existing = await resolvePreferredProjectEntry(existingEntries);
         return this.getProject(existing.id);
       }
       // Repo has .opensprint but no index entry (e.g. index from another machine or cleared). Adopt it.
@@ -752,7 +375,7 @@ export class ProjectService {
       await ensureEasConfig(repoPath);
     }
 
-    await this.commitBootstrapChanges(repoPath, {
+    await commitBootstrapRepoChanges(repoPath, {
       includeWholeRepo: !hadHead,
       extraPaths: deployment.mode === "expo" ? ["eas.json"] : [],
     });
@@ -782,48 +405,6 @@ export class ProjectService {
       createdAt: now,
       updatedAt: now,
     };
-  }
-
-  /** Check that git and node are available before scaffolding. */
-  private async checkScaffoldPrerequisites(): Promise<{ missing: string[] }> {
-    const missing: string[] = [];
-    const timeout = 5000;
-
-    const isCommandNotFound = (err: unknown): boolean => {
-      const msg = err instanceof Error ? err.message : String(err);
-      const code =
-        err && typeof err === "object" && "code" in err
-          ? (err as { code?: string }).code
-          : undefined;
-      return (
-        code === "ENOENT" ||
-        /command not found/i.test(msg) ||
-        /not recognized/i.test(msg) ||
-        /not found/i.test(msg)
-      );
-    };
-
-    try {
-      await execAsync("git --version", { timeout });
-    } catch (err) {
-      if (isCommandNotFound(err)) {
-        missing.push("Git");
-      } else {
-        throw err;
-      }
-    }
-
-    try {
-      await execAsync("node --version", { timeout });
-    } catch (err) {
-      if (isCommandNotFound(err)) {
-        missing.push("Node.js");
-      } else {
-        throw err;
-      }
-    }
-
-    return { missing };
   }
 
   /** Scaffold a new project from template (Create New wizard). */
@@ -872,7 +453,7 @@ export class ProjectService {
       return { project };
     }
 
-    const prereq = await this.checkScaffoldPrerequisites();
+    const prereq = await checkScaffoldPrerequisites();
     if (prereq.missing.length > 0) {
       const list = prereq.missing.join(", ");
       const msg =
@@ -906,7 +487,7 @@ export class ProjectService {
       await fs.mkdir(repoPath, { recursive: true });
 
       // Step 1: scaffold Expo app
-      const scaffoldResult = await this.runWithRecovery(
+      const scaffoldResult = await runScaffoldCommandWithRecovery(
         "npx create-expo-app@latest . --template blank --yes",
         repoPath,
         agentConfig,
@@ -923,7 +504,7 @@ export class ProjectService {
       }
 
       // Step 2: npm install (explicitly include dev deps so test runners like Jest are available)
-      const installResult = await this.runWithRecovery(
+      const installResult = await runScaffoldCommandWithRecovery(
         "npm install --include=dev",
         repoPath,
         agentConfig,
@@ -956,7 +537,7 @@ export class ProjectService {
       }
 
       // Step 4: TypeScript + React typings (Expo pins compatible versions; blank template often omits these)
-      const tsResult = await this.runWithRecovery(
+      const tsResult = await runScaffoldCommandWithRecovery(
         "npx expo install typescript @types/react @types/react-dom",
         repoPath,
         agentConfig,
@@ -998,7 +579,7 @@ export class ProjectService {
         });
       }
 
-      const lintAfterScaffold = await this.runWithRecovery(
+      const lintAfterScaffold = await runScaffoldCommandWithRecovery(
         "npm run lint",
         repoPath,
         agentConfig,
@@ -1017,7 +598,7 @@ export class ProjectService {
       const tsconfigPath = path.join(repoPath, "tsconfig.json");
       try {
         await fs.access(tsconfigPath);
-        const typecheckResult = await this.runWithRecovery(
+        const typecheckResult = await runScaffoldCommandWithRecovery(
           "npx tsc --noEmit",
           repoPath,
           agentConfig,
@@ -1061,7 +642,7 @@ export class ProjectService {
           });
           continue;
         }
-        const gateResult = await this.runWithRecovery(
+        const gateResult = await runScaffoldCommandWithRecovery(
           gateCommand,
           repoPath,
           agentConfig,
@@ -1096,93 +677,6 @@ export class ProjectService {
     const project = await this.createProject(createRequest);
 
     return { project, ...(recovery && { recovery }) };
-  }
-
-  /**
-   * Run a shell command with agent-driven error recovery.
-   * On failure: classifies the error, invokes an agent to fix it, retries once.
-   */
-  private async runWithRecovery(
-    command: string,
-    cwd: string,
-    agentConfig: AgentConfigInput & { type: string },
-    fallbackMessage: string
-  ): Promise<{ success: boolean; errorMessage?: string; recovery?: ScaffoldRecoveryInfo }> {
-    try {
-      await execAsync(command, { cwd });
-      return { success: true };
-    } catch (firstErr) {
-      const rawError = getErrorMessage(firstErr, fallbackMessage);
-      const classification = classifyInitError(rawError);
-
-      log.info("Scaffold command failed, attempting recovery", {
-        command,
-        category: classification.category,
-        recoverable: classification.recoverable,
-      });
-
-      if (!classification.recoverable) {
-        return {
-          success: false,
-          errorMessage: `${classification.summary}: ${rawError}`,
-          recovery: {
-            attempted: false,
-            success: false,
-            errorCategory: classification.category,
-            errorSummary: classification.summary,
-          },
-        };
-      }
-
-      const recoveryResult = await attemptRecovery(
-        classification,
-        cwd,
-        agentConfig as AgentConfigInput
-      );
-
-      if (!recoveryResult.success) {
-        return {
-          success: false,
-          errorMessage: recoveryResult.errorMessage ?? `${classification.summary}: ${rawError}`,
-          recovery: {
-            attempted: true,
-            success: false,
-            errorCategory: classification.category,
-            errorSummary: classification.summary,
-            agentOutput: recoveryResult.agentOutput,
-          },
-        };
-      }
-
-      // Agent claims success — retry the original command
-      log.info("Recovery agent succeeded, retrying command", { command });
-      try {
-        await execAsync(command, { cwd });
-        return {
-          success: true,
-          recovery: {
-            attempted: true,
-            success: true,
-            errorCategory: classification.category,
-            errorSummary: classification.summary,
-            agentOutput: recoveryResult.agentOutput,
-          },
-        };
-      } catch (retryErr) {
-        const retryMsg = getErrorMessage(retryErr, fallbackMessage);
-        return {
-          success: false,
-          errorMessage: `Recovery agent ran but the command still failed: ${retryMsg}`,
-          recovery: {
-            attempted: true,
-            success: false,
-            errorCategory: classification.category,
-            errorSummary: classification.summary,
-            agentOutput: recoveryResult.agentOutput,
-          },
-        };
-      }
-    }
   }
 
   /** Get a single project by ID */
@@ -1283,10 +777,10 @@ export class ProjectService {
       canonicalDefaults.testCommand =
         detected?.testCommand ?? (getTestCommandForFramework(null) || null);
       await setSettingsInStore(projectId, canonicalDefaults as unknown as ProjectSettings);
-      return this.projectSettingsFromRaw(canonicalDefaults, gs);
+      return projectSettingsFromRaw(canonicalDefaults, gs);
     }
     const raw = await getRawSettingsRecord(projectId);
-    return this.projectSettingsFromRaw(raw, gs);
+    return projectSettingsFromRaw(raw, gs);
   }
 
   async getSettingsWithRuntimeState(projectId: string): Promise<ProjectSettings> {
@@ -1454,7 +948,7 @@ export class ProjectService {
       }
     }
 
-    const current = this.projectSettingsFromRaw(workingRaw, gs);
+    const current = projectSettingsFromRaw(workingRaw, gs);
     const simpleComplexityAgent = current.simpleComplexityAgent;
     const complexComplexityAgent = current.complexComplexityAgent;
 
