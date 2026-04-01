@@ -293,6 +293,27 @@ describe("TaskService", () => {
     expect(paginated.items[1].id).toBe("task-2");
   });
 
+  it("listTasks with pagination passes current page task IDs to loadSessionsTestResultsOnlyGroupedByTaskId", async () => {
+    mockTaskStoreState.listAll = Array.from({ length: 5 }, (_, i) => ({
+      id: `task-${i}`,
+      title: `Task ${i}`,
+      status: "open" as const,
+      issue_type: "task" as const,
+      priority: 2,
+      created_at: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+      updated_at: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+      dependencies: [],
+    })) as StoredTask[];
+
+    const loadMock = vi.mocked(SessionManager.prototype.loadSessionsTestResultsOnlyGroupedByTaskId);
+    loadMock.mockClear();
+
+    await taskService.listTasks("proj-1", { limit: 2, offset: 1 });
+
+    expect(loadMock).toHaveBeenCalledTimes(1);
+    expect(loadMock).toHaveBeenCalledWith("/tmp/test-repo", ["task-1", "task-2"]);
+  });
+
   it("listTasks returns task with source when stored issue has source (e.g. from extra.source)", async () => {
     mockTaskStoreState.listAll = [
       {

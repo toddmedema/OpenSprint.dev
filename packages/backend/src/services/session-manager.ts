@@ -13,6 +13,7 @@ import type {
 } from "@opensprint/shared";
 import { ensureRuntimeDir, getRuntimePath } from "../utils/runtime-dir.js";
 import { getSafeTaskActiveDir } from "../utils/path-safety.js";
+import type { DbRow } from "../db/client.js";
 import { taskStore } from "./task-store.service.js";
 import type { ProjectService } from "./project.service.js";
 import { LOG_DIFF_TRUNCATE_AT_CHARS, truncateToThreshold } from "../utils/log-diff-truncation.js";
@@ -362,24 +363,53 @@ export class SessionManager {
   /**
    * Load only latest attempt's test_results per task for list enrichment.
    * One row per task (no output_log/git_diff). Keeps Map shape for enrichTasksWithTestResultsFromMap.
+   * When `taskIds` is omitted, loads for all tasks in the project. When provided (e.g. paginated
+   * list page), restricts the query to those IDs so large backlogs avoid scanning all sessions.
    */
   async loadSessionsTestResultsOnlyGroupedByTaskId(
-    repoPath: string
+    repoPath: string,
+    taskIds?: readonly string[]
   ): Promise<Map<string, Array<{ testResults: TestResults | null }>>> {
     const projectId = await this.repoPathToProjectId(repoPath);
     const client = await taskStore.getDb();
-    const rows = await client.query(
-      `SELECT a.task_id, a.attempt, a.test_results
-       FROM agent_sessions a
-       INNER JOIN (
-         SELECT project_id, task_id, MAX(attempt) AS max_attempt
-         FROM agent_sessions
-         WHERE project_id = $1
-         GROUP BY project_id, task_id
-       ) b ON a.project_id = b.project_id AND a.task_id = b.task_id AND a.attempt = b.max_attempt
-       WHERE a.project_id = $2`,
-      [projectId, projectId]
-    );
+
+    let rows: DbRow[];
+    if (taskIds != null) {
+      const unique = [
+        ...new Set(taskIds.filter((id): id is string => typeof id === "string" && id.length > 0)),
+      ];
+      if (unique.length === 0) {
+        return new Map();
+      }
+      const inPlaceholders = unique.map((_, i) => `$${i + 2}`).join(", ");
+      const outerProjectParam = unique.length + 2;
+      rows = await client.query(
+        `SELECT a.task_id, a.attempt, a.test_results
+         FROM agent_sessions a
+         INNER JOIN (
+           SELECT project_id, task_id, MAX(attempt) AS max_attempt
+           FROM agent_sessions
+           WHERE project_id = $1 AND task_id IN (${inPlaceholders})
+           GROUP BY project_id, task_id
+         ) b ON a.project_id = b.project_id AND a.task_id = b.task_id AND a.attempt = b.max_attempt
+         WHERE a.project_id = $${outerProjectParam}`,
+        [projectId, ...unique, projectId]
+      );
+    } else {
+      rows = await client.query(
+        `SELECT a.task_id, a.attempt, a.test_results
+         FROM agent_sessions a
+         INNER JOIN (
+           SELECT project_id, task_id, MAX(attempt) AS max_attempt
+           FROM agent_sessions
+           WHERE project_id = $1
+           GROUP BY project_id, task_id
+         ) b ON a.project_id = b.project_id AND a.task_id = b.task_id AND a.attempt = b.max_attempt
+         WHERE a.project_id = $2`,
+        [projectId, projectId]
+      );
+    }
+
     const result = new Map<string, Array<{ testResults: TestResults | null }>>();
     for (const row of rows) {
       const taskId = row.task_id as string;

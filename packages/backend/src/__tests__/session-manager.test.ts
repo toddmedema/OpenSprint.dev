@@ -288,6 +288,121 @@ describe.skipIf(!sessionPostgresOk)("SessionManager", () => {
     });
   });
 
+  describe("loadSessionsTestResultsOnlyGroupedByTaskId", () => {
+    it("returns latest attempt test_results per task for the project", async () => {
+      const projectId = repoPathToProjectId(repoPath);
+      const { taskStore } = await import("../services/task-store.service.js");
+      const client = await taskStore.getDb();
+
+      await insertSession(client, projectId, {
+        taskId: "task-a",
+        attempt: 1,
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-01T00:00:00Z",
+        completedAt: "2024-01-01T00:05:00Z",
+        status: "success",
+        outputLog: "",
+        gitBranch: "main",
+        gitDiff: null,
+        testResults: { passed: 5, failed: 0, skipped: 0, total: 5, details: [] },
+        failureReason: null,
+      });
+      await insertSession(client, projectId, {
+        taskId: "task-a",
+        attempt: 2,
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-02T00:00:00Z",
+        completedAt: "2024-01-02T00:05:00Z",
+        status: "success",
+        outputLog: "",
+        gitBranch: "main",
+        gitDiff: null,
+        testResults: { passed: 6, failed: 0, skipped: 0, total: 6, details: [] },
+        failureReason: null,
+      });
+      await insertSession(client, projectId, {
+        taskId: "task-b",
+        attempt: 1,
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-03T00:00:00Z",
+        completedAt: "2024-01-03T00:05:00Z",
+        status: "success",
+        outputLog: "",
+        gitBranch: "main",
+        gitDiff: null,
+        testResults: { passed: 1, failed: 0, skipped: 0, total: 1, details: [] },
+        failureReason: null,
+      });
+
+      const result = await manager.loadSessionsTestResultsOnlyGroupedByTaskId(repoPath);
+      expect(result.size).toBe(2);
+      expect(result.get("task-a")?.[0].testResults?.passed).toBe(6);
+      expect(result.get("task-b")?.[0].testResults?.passed).toBe(1);
+    });
+
+    it("when taskIds is provided, only loads those tasks", async () => {
+      const projectId = repoPathToProjectId(repoPath);
+      const { taskStore } = await import("../services/task-store.service.js");
+      const client = await taskStore.getDb();
+
+      const base = {
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-01T00:00:00Z",
+        completedAt: "2024-01-01T00:05:00Z",
+        status: "success",
+        outputLog: "",
+        gitBranch: "main",
+        gitDiff: null,
+        failureReason: null,
+      } as const;
+
+      await insertSession(client, projectId, {
+        ...base,
+        taskId: "scoped-a",
+        attempt: 1,
+        testResults: { passed: 2, failed: 0, skipped: 0, total: 2, details: [] },
+      });
+      await insertSession(client, projectId, {
+        ...base,
+        taskId: "scoped-b",
+        attempt: 1,
+        testResults: { passed: 3, failed: 0, skipped: 0, total: 3, details: [] },
+      });
+
+      const result = await manager.loadSessionsTestResultsOnlyGroupedByTaskId(repoPath, ["scoped-a"]);
+      expect(result.size).toBe(1);
+      expect(result.get("scoped-a")?.[0].testResults?.passed).toBe(2);
+      expect(result.has("scoped-b")).toBe(false);
+    });
+
+    it("returns empty map when taskIds is an empty array", async () => {
+      const projectId = repoPathToProjectId(repoPath);
+      const { taskStore } = await import("../services/task-store.service.js");
+      const client = await taskStore.getDb();
+      await insertSession(client, projectId, {
+        taskId: "only-task",
+        attempt: 1,
+        agentType: "cursor",
+        agentModel: "gpt-4",
+        startedAt: "2024-01-01T00:00:00Z",
+        completedAt: "2024-01-01T00:05:00Z",
+        status: "success",
+        outputLog: "",
+        gitBranch: "main",
+        gitDiff: null,
+        testResults: { passed: 1, failed: 0, skipped: 0, total: 1, details: [] },
+        failureReason: null,
+      });
+
+      const result = await manager.loadSessionsTestResultsOnlyGroupedByTaskId(repoPath, []);
+      expect(result.size).toBe(0);
+    });
+  });
+
   describe("readSession", () => {
     it("returns session when row exists in DB", async () => {
       const projectId = repoPathToProjectId(repoPath);

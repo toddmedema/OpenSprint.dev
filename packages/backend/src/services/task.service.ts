@@ -115,12 +115,6 @@ export class TaskService {
     const startTotal = performance.now();
     const project = await this.projectService.getProject(projectId);
 
-    const t1 = performance.now();
-    const sessionsByTask = await this.sessionManager.loadSessionsTestResultsOnlyGroupedByTaskId(
-      project.repoPath
-    );
-    const sessionsMs = Math.round(performance.now() - t1);
-
     if (options?.limit != null && options?.offset != null) {
       const offset = Math.max(0, options.offset);
       const limit = Math.max(1, Math.min(500, options.limit));
@@ -132,6 +126,14 @@ export class TaskService {
         offset
       );
       const listStoreMs = Math.round(performance.now() - t0);
+
+      const pageTaskIds = [...new Set(page.map((i) => i.id).filter((id) => id.length > 0))];
+      const t1 = performance.now();
+      const sessionsByTask = await this.sessionManager.loadSessionsTestResultsOnlyGroupedByTaskId(
+        project.repoPath,
+        pageTaskIds
+      );
+      const sessionsMs = Math.round(performance.now() - t1);
 
       const idToIssue = new Map(allForGraph.map((i) => [i.id, i]));
       for (const full of page) {
@@ -155,6 +157,12 @@ export class TaskService {
 
       return { items: tasks, total };
     }
+
+    const t1 = performance.now();
+    const sessionsByTask = await this.sessionManager.loadSessionsTestResultsOnlyGroupedByTaskId(
+      project.repoPath
+    );
+    const sessionsMs = Math.round(performance.now() - t1);
 
     const t0 = performance.now();
     const allIssues = await this.taskStore.listAll(projectId);
