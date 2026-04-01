@@ -44,6 +44,19 @@ import type { RetryContext, RetryQualityGateDetail } from "./orchestrator-phase-
 import { validationWorkspaceService } from "./validation-workspace.service.js";
 import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.js";
 import { isTaskWorktreeMergeGateArtifactCurrent } from "./merge-verification.service.js";
+import {
+  buildBaselineFailureFingerprint,
+  buildBaselineQualityGateNotificationDetail,
+  buildEnvironmentSetupRemediationMessage,
+  buildMergeQualityGateJobError,
+  buildQualityGateStructuredDetails,
+  buildQualityGateSummaryDetailFromMergeError,
+  getQualityGateFailureDetailsFromMergeError,
+  getQualityGateFirstErrorLine,
+  isEnvironmentSetupQualityGateMergeError,
+  QUALITY_GATE_OUTPUT_SNIPPET_LIMIT,
+  toQualityGateOutputSnippet,
+} from "./merge-quality-gate-failure-utils.js";
 
 const log = createLogger("merge-coordinator");
 const _MAX_PUSH_REBASE_RESOLUTION_ROUNDS = 12;
@@ -51,7 +64,6 @@ const NEXT_RETRY_CONTEXT_KEY = "next_retry_context";
 const MERGE_RETRY_MODE_KEY = "merge_retry_mode";
 const BASELINE_MERGE_RETRY_MODE = "baseline_wait";
 const MERGE_RETRY_CONTEXT_FAILURE_LIMIT = 1200;
-const QUALITY_GATE_OUTPUT_SNIPPET_LIMIT = 1800;
 const BASELINE_QUALITY_GATE_SUCCESS_CACHE_MS = 60_000;
 const BASELINE_QUALITY_GATE_PAUSE_MS = 5 * 60_000;
 const BASELINE_QUALITY_GATE_PAUSE_MAX_MS = 60 * 60_000;
@@ -558,246 +570,6 @@ export class MergeCoordinatorService {
     return retryContext;
   }
 
-  private getFirstNonEmptyLine(text: string): string | null {
-    for (const line of text.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (trimmed.length > 0) return trimmed;
-    }
-    return null;
-  }
-
-  private getQualityGateFirstErrorLine(failure: MergeQualityGateFailure): string {
-    const explicit = failure.firstErrorLine?.trim();
-    if (explicit) return explicit;
-    return (
-      this.getFirstNonEmptyLine(failure.output) ??
-      this.getFirstNonEmptyLine(failure.reason) ??
-      "Unknown quality gate failure"
-    );
-  }
-
-  private getQualityGateFailureDetails(
-    mergeErr: Error
-  ): MergeJobError["qualityGateFailure"] | null {
-    if (!(mergeErr instanceof MergeJobError) || mergeErr.stage !== "quality_gate") return null;
-    return mergeErr.qualityGateFailure ?? null;
-  }
-
-  private toOutputSnippet(text: string | null | undefined): string | null {
-    const trimmed = text?.trim();
-    if (!trimmed) return null;
-    return compactExecutionText(trimmed, QUALITY_GATE_OUTPUT_SNIPPET_LIMIT);
-  }
-
-  private buildQualityGateStructuredDetails(
-    qualityGateFailure: MergeJobError["qualityGateFailure"] | null,
-    fallbackWorktreePath?: string | null
-  ): {
-    failedGateCommand: string | null;
-    failedGateReason: string | null;
-    failedGateOutputSnippet: string | null;
-    worktreePath: string | null;
-    qualityGateCategory: "quality_gate" | "environment_setup" | null;
-    qualityGateValidationWorkspace:
-      | "baseline"
-      | "merged_candidate"
-      | "task_worktree"
-      | "repo_root"
-      | null;
-    qualityGateRepairAttempted: boolean;
-    qualityGateRepairSucceeded: boolean;
-    qualityGateExecutable: string | null;
-    qualityGateCwd: string | null;
-    qualityGateExitCode: number | null;
-    qualityGateSignal: string | null;
-    qualityGateClassificationConfidence: "high" | "low" | null;
-    qualityGateClassificationReason: string | null;
-    qualityGateDetail: {
-      command: string | null;
-      reason: string | null;
-      outputSnippet: string | null;
-      worktreePath: string | null;
-      firstErrorLine: string | null;
-      category: "quality_gate" | "environment_setup" | null;
-      validationWorkspace: "baseline" | "merged_candidate" | "task_worktree" | "repo_root" | null;
-      repairAttempted: boolean;
-      repairSucceeded: boolean;
-      executable: string | null;
-      cwd: string | null;
-      exitCode: number | null;
-      signal: string | null;
-      classificationConfidence: "high" | "low" | null;
-      classificationReason: string | null;
-    } | null;
-  } {
-    const failedGateCommand = qualityGateFailure?.command?.trim() || null;
-    const failedGateReason = qualityGateFailure?.reason?.trim() || null;
-    const failedGateOutputSnippet = this.toOutputSnippet(
-      qualityGateFailure?.outputSnippet ?? qualityGateFailure?.firstErrorLine ?? null
-    );
-    const worktreePath =
-      qualityGateFailure?.worktreePath?.trim() || fallbackWorktreePath?.trim() || null;
-    const firstErrorLine = qualityGateFailure?.firstErrorLine?.trim() || null;
-    const qualityGateCategory = qualityGateFailure?.category ?? null;
-    const qualityGateValidationWorkspace = qualityGateFailure?.validationWorkspace ?? null;
-    const qualityGateRepairAttempted = qualityGateFailure?.autoRepairAttempted ?? false;
-    const qualityGateRepairSucceeded = qualityGateFailure?.autoRepairSucceeded ?? false;
-    const qualityGateExecutable = qualityGateFailure?.executable?.trim() || null;
-    const qualityGateCwd = qualityGateFailure?.cwd?.trim() || null;
-    const qualityGateExitCode = qualityGateFailure?.exitCode ?? null;
-    const qualityGateSignal = qualityGateFailure?.signal?.trim() || null;
-    const qualityGateClassificationConfidence =
-      qualityGateFailure?.classificationConfidence ?? null;
-    const qualityGateClassificationReason =
-      qualityGateFailure?.classificationReason?.trim() || null;
-    const hasDetail =
-      failedGateCommand != null ||
-      failedGateReason != null ||
-      failedGateOutputSnippet != null ||
-      worktreePath != null ||
-      firstErrorLine != null ||
-      qualityGateCategory != null ||
-      qualityGateValidationWorkspace != null ||
-      qualityGateRepairAttempted ||
-      qualityGateRepairSucceeded ||
-      qualityGateExecutable != null ||
-      qualityGateCwd != null ||
-      qualityGateExitCode != null ||
-      qualityGateSignal != null ||
-      qualityGateClassificationConfidence != null ||
-      qualityGateClassificationReason != null;
-    return {
-      failedGateCommand,
-      failedGateReason,
-      failedGateOutputSnippet,
-      worktreePath,
-      qualityGateCategory,
-      qualityGateValidationWorkspace,
-      qualityGateRepairAttempted,
-      qualityGateRepairSucceeded,
-      qualityGateExecutable,
-      qualityGateCwd,
-      qualityGateExitCode,
-      qualityGateSignal,
-      qualityGateClassificationConfidence,
-      qualityGateClassificationReason,
-      qualityGateDetail: hasDetail
-        ? {
-            command: failedGateCommand,
-            reason: failedGateReason,
-            outputSnippet: failedGateOutputSnippet,
-            worktreePath,
-            firstErrorLine,
-            category: qualityGateCategory,
-            validationWorkspace: qualityGateValidationWorkspace,
-            repairAttempted: qualityGateRepairAttempted,
-            repairSucceeded: qualityGateRepairSucceeded,
-            executable: qualityGateExecutable,
-            cwd: qualityGateCwd,
-            exitCode: qualityGateExitCode,
-            signal: qualityGateSignal,
-            classificationConfidence: qualityGateClassificationConfidence,
-            classificationReason: qualityGateClassificationReason,
-          }
-        : null,
-    };
-  }
-
-  private isEnvironmentSetupQualityGateFailure(mergeErr: Error): boolean {
-    return this.getQualityGateFailureDetails(mergeErr)?.category === "environment_setup";
-  }
-
-  private buildEnvironmentSetupRemediation(params: {
-    command?: string | null;
-    worktreePath?: string | null;
-    validationWorkspace?: string | null;
-  }): string {
-    const command = params.command?.trim();
-    const worktreePath = params.worktreePath?.trim();
-    const validationWorkspace = params.validationWorkspace?.trim();
-    const commandStep = command
-      ? `then rerun ${command} before retrying merge.`
-      : "then rerun the failing quality gate before retrying merge.";
-    const isValidationWorkspace =
-      validationWorkspace === "baseline" || validationWorkspace === "merged_candidate";
-    const relinkStep = isValidationWorkspace
-      ? ""
-      : ", refresh worktree dependency workspace if required by this project";
-    return compactExecutionText(
-      `Run the project dependency install command${worktreePath ? ` in ${worktreePath}` : " in the repository root"}${relinkStep}, ${commandStep}`,
-      500
-    );
-  }
-
-  private buildQualityGateSummaryDetail(mergeErr: Error): string | null {
-    const qualityGateFailure = this.getQualityGateFailureDetails(mergeErr);
-    if (!qualityGateFailure) return null;
-
-    const command = qualityGateFailure.command?.trim();
-    const firstErrorLine = qualityGateFailure.firstErrorLine?.trim();
-
-    const details: string[] = [];
-    if (command) details.push(`cmd: ${command}`);
-    if (firstErrorLine) details.push(`error: ${compactExecutionText(firstErrorLine, 220)}`);
-    if (qualityGateFailure.autoRepairAttempted) {
-      const commands =
-        qualityGateFailure.autoRepairCommands && qualityGateFailure.autoRepairCommands.length > 0
-          ? qualityGateFailure.autoRepairCommands.join(" -> ")
-          : "auto-repair";
-      const result = qualityGateFailure.autoRepairSucceeded
-        ? "succeeded; retry still failed"
-        : "failed";
-      details.push(`repair: ${commands} (${result})`);
-    }
-    if (qualityGateFailure.category === "environment_setup") {
-      details.push("category: environment_setup");
-    }
-    if (qualityGateFailure.validationWorkspace) {
-      details.push(`workspace: ${qualityGateFailure.validationWorkspace}`);
-    }
-    if (qualityGateFailure.classificationConfidence) {
-      details.push(`classification: ${qualityGateFailure.classificationConfidence}`);
-    }
-    if (details.length === 0) return null;
-    return details.join(" | ");
-  }
-
-  private buildMergeQualityGateError(
-    failure: MergeQualityGateFailure,
-    fallbackWorktreePath: string
-  ): MergeJobError {
-    const reason = failure.reason.trim().slice(0, 500) || "Unknown quality gate failure";
-    const outputSnippet =
-      this.toOutputSnippet(failure.outputSnippet ?? failure.output) ?? "No output captured";
-    const detail = outputSnippet.length > 0 ? ` | ${outputSnippet}` : "";
-    const firstErrorLine = this.getQualityGateFirstErrorLine(failure).slice(0, 300);
-    return new MergeJobError(
-      `Quality gate failed (${failure.command}): ${reason}${detail}`,
-      "quality_gate",
-      [],
-      "requeued",
-      {
-        command: failure.command,
-        reason,
-        outputSnippet,
-        worktreePath: failure.worktreePath ?? fallbackWorktreePath,
-        firstErrorLine,
-        validationWorkspace: failure.validationWorkspace,
-        category: failure.category ?? "quality_gate",
-        autoRepairAttempted: failure.autoRepairAttempted ?? false,
-        autoRepairSucceeded: failure.autoRepairSucceeded ?? false,
-        autoRepairCommands: failure.autoRepairCommands,
-        autoRepairOutput: failure.autoRepairOutput,
-        executable: failure.executable,
-        cwd: failure.cwd,
-        exitCode: failure.exitCode ?? null,
-        signal: failure.signal ?? null,
-        classificationConfidence: failure.classificationConfidence,
-        classificationReason: failure.classificationReason,
-      }
-    );
-  }
-
   private async ensureMergeQualityGates(options: MergeQualityGateRunOptions): Promise<void> {
     if (!this.host.runMergeQualityGates) return;
     const profile = options.qualityGateProfile ?? DETERMINISTIC_MERGE_GATE_PROFILE;
@@ -826,7 +598,7 @@ export class MergeCoordinatorService {
     });
     if (!failure) return;
 
-    throw this.buildMergeQualityGateError(failure, options.worktreePath);
+    throw buildMergeQualityGateJobError(failure, options.worktreePath);
   }
 
   private baselineCacheKey(projectId: string, baseBranch: string): string {
@@ -927,14 +699,6 @@ export class MergeCoordinatorService {
     );
   }
 
-  private buildBaselineFailureFingerprint(failure: MergeQualityGateFailure): string {
-    const command = failure.command.trim().toLowerCase();
-    const firstError = this.getQualityGateFirstErrorLine(failure).trim().toLowerCase();
-    const workspace = (failure.validationWorkspace ?? "unknown").trim().toLowerCase();
-    const category = (failure.category ?? "quality_gate").trim().toLowerCase();
-    return `${command}|${firstError}|${workspace}|${category}`.slice(0, 700);
-  }
-
   private computeBaselinePauseWithBackoff(
     projectId: string,
     baseBranch: string,
@@ -942,7 +706,7 @@ export class MergeCoordinatorService {
   ): { pausedUntilIso: string; pauseMs: number; consecutiveFailures: number; fingerprint: string } {
     const now = Date.now();
     const cacheKey = this.baselineCacheKey(projectId, baseBranch);
-    const fingerprint = this.buildBaselineFailureFingerprint(failure);
+    const fingerprint = buildBaselineFailureFingerprint(failure);
     const current = this.baselineFailureBackoff.get(cacheKey);
     const sameFingerprintWithinWindow =
       current &&
@@ -1229,18 +993,6 @@ export class MergeCoordinatorService {
         err,
       });
     }
-  }
-
-  private buildBaselineQualityGateDetail(failure: MergeQualityGateFailure): string {
-    const firstErrorLine = this.getQualityGateFirstErrorLine(failure);
-    const classificationDetail =
-      failure.classificationConfidence === "low"
-        ? " | classification: low-confidence environment signal"
-        : "";
-    return compactExecutionText(
-      `cmd: ${failure.command} | error: ${compactExecutionText(firstErrorLine, 220)}${classificationDetail}`,
-      380
-    );
   }
 
   private async resolveBaselineQualityGateNotifications(
@@ -1534,13 +1286,13 @@ export class MergeCoordinatorService {
     failure: MergeQualityGateFailure,
     taskWorktreePath: string
   ): Promise<void> {
-    const detail = this.buildBaselineQualityGateDetail(failure);
-    const firstErrorLine = this.getQualityGateFirstErrorLine(failure);
+    const detail = buildBaselineQualityGateNotificationDetail(failure);
+    const firstErrorLine = getQualityGateFirstErrorLine(failure);
     const failedGateReason = failure.reason.trim().slice(0, 500) || "Unknown quality gate failure";
     const failedGateOutputSnippet =
-      this.toOutputSnippet(failure.outputSnippet ?? failure.output) ??
+      toQualityGateOutputSnippet(failure.outputSnippet ?? failure.output) ??
       compactExecutionText(
-        this.getQualityGateFirstErrorLine(failure),
+        getQualityGateFirstErrorLine(failure),
         QUALITY_GATE_OUTPUT_SNIPPET_LIMIT
       );
     const failureWorktreePath = failure.worktreePath ?? repoPath;
@@ -1570,7 +1322,7 @@ export class MergeCoordinatorService {
     } = this.computeBaselinePauseWithBackoff(projectId, baseBranch, failure);
     const isEnvironmentSetupFailure = failure.category === "environment_setup";
     const remediationAction = isEnvironmentSetupFailure
-      ? this.buildEnvironmentSetupRemediation({
+      ? buildEnvironmentSetupRemediationMessage({
           command: failure.command,
           worktreePath: failureWorktreePath,
           validationWorkspace: failure.validationWorkspace ?? null,
@@ -1822,7 +1574,7 @@ export class MergeCoordinatorService {
     createdTask: boolean;
     fingerprint: string;
   }> {
-    const fingerprint = this.buildBaselineFailureFingerprint(failure);
+    const fingerprint = buildBaselineFailureFingerprint(failure);
     if (failure.category === "environment_setup" && failure.classificationConfidence === "low") {
       log.info(
         "Skipping baseline remediation task creation for low-confidence environment failure",
@@ -1875,7 +1627,7 @@ export class MergeCoordinatorService {
     }
     const failedGateReason = failure.reason.trim().slice(0, 1200) || "Unknown quality gate failure";
     const failedGateOutputSnippet =
-      this.toOutputSnippet(failure.outputSnippet ?? failure.output) ?? null;
+      toQualityGateOutputSnippet(failure.outputSnippet ?? failure.output) ?? null;
     const result = await selfImprovementService.ensureBaselineQualityGateTask(projectId, {
       baseBranch,
       command: failure.command,
@@ -2497,15 +2249,15 @@ export class MergeCoordinatorService {
         "optimistic";
       const mergeFailureReason = mergeErr.message?.slice(0, 500) ?? "Merge failed";
       const stageLabel = isQualityGateFailure ? "quality-gate" : "merge";
-      const qualityGateFailureDetails = this.getQualityGateFailureDetails(mergeErr);
-      const qualityGateStructuredDetails = this.buildQualityGateStructuredDetails(
+      const qualityGateFailureDetails = getQualityGateFailureDetailsFromMergeError(mergeErr);
+      const qualityGateStructuredDetails = buildQualityGateStructuredDetails(
         qualityGateFailureDetails,
         slot?.worktreePath ?? repoPath
       );
       const isEnvironmentSetupQualityGateFailure =
-        isQualityGateFailure && this.isEnvironmentSetupQualityGateFailure(mergeErr);
+        isQualityGateFailure && isEnvironmentSetupQualityGateMergeError(mergeErr);
       const environmentSetupRemediation = isEnvironmentSetupQualityGateFailure
-        ? this.buildEnvironmentSetupRemediation({
+        ? buildEnvironmentSetupRemediationMessage({
             command:
               qualityGateStructuredDetails.failedGateCommand ??
               qualityGateFailureDetails?.command ??
@@ -2518,7 +2270,7 @@ export class MergeCoordinatorService {
           })
         : null;
       const qualityGateSummaryDetail = isQualityGateFailure
-        ? this.buildQualityGateSummaryDetail(mergeErr)
+        ? buildQualityGateSummaryDetailFromMergeError(mergeErr)
         : null;
       const qualityGateSummarySuffix = qualityGateSummaryDetail
         ? ` (${qualityGateSummaryDetail})`
@@ -3072,9 +2824,9 @@ export class MergeCoordinatorService {
     await this.createBaselineQualityGateNotification(
       projectId,
       baseBranch,
-      this.buildBaselineQualityGateDetail(failure)
+      buildBaselineQualityGateNotificationDetail(failure)
     );
-    throw this.buildMergeQualityGateError(failure, repoPath);
+    throw buildMergeQualityGateJobError(failure, repoPath);
   }
 
   private async resolvePushRebaseConflicts(options: {
