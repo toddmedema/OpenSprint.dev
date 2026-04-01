@@ -554,7 +554,7 @@ describe("Navbar", () => {
     const nonSelectedOption = screen.getByRole("option", { name: "Project B" });
     expect(nonSelectedOption).toHaveClass("text-theme-text");
     expect(nonSelectedOption).toHaveClass("font-medium");
-    expect(nonSelectedOption).toHaveClass("hover:bg-theme-info-bg");
+    expect(nonSelectedOption).toHaveClass("hover:bg-theme-border");
   });
 
   it("project selector trigger grows with the project name while keeping truncation and tap target", () => {

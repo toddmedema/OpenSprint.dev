@@ -2180,6 +2180,17 @@ describe("TaskDetailSidebar", () => {
       expect(screen.queryByTestId("assignee-dropdown-trigger")).not.toBeInTheDocument();
     });
 
+    it("omits assignee placeholder when enableHumanTeammates is false and task is unassigned", () => {
+      const props = createMinimalProps({
+        teamMembers: [{ id: "alice", name: "Alice" }],
+        enableHumanTeammates: false,
+      });
+      renderSidebar(props, { preloadedState: defaultPreloadedState });
+      const row = screen.getByTestId("task-detail-priority-state-row");
+      expect(within(row).queryByText("—")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("assignee-dropdown-trigger")).not.toBeInTheDocument();
+    });
+
     it("shows assignee dropdown in metadata row when task is not done", () => {
       const props = createMinimalProps({
         selectedTaskData: { ...defaultSelectedTaskData, assignee: "Alice" },

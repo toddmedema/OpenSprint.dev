@@ -763,6 +763,29 @@ describe("TimelineList", () => {
     expect(screen.queryByTestId("assignee-dropdown-trigger")).not.toBeInTheDocument();
   });
 
+  it("when enableHumanTeammates is false omits assignee em dash for unassigned task", () => {
+    const tasks = [
+      createMockTask({
+        id: "task-1",
+        title: "Ready task",
+        kanbanColumn: "ready",
+        assignee: null,
+      }),
+    ];
+    renderWithProviders(
+      <TimelineList
+        tasks={tasks}
+        plans={[]}
+        onTaskSelect={vi.fn()}
+        {...defaultListProps}
+        enableHumanTeammates={false}
+      />
+    );
+    expect(screen.getByTestId("task-row-assignee")).toBeInTheDocument();
+    expect(screen.getByTestId("task-row-assignee")).toHaveTextContent("");
+    expect(screen.queryByTestId("assignee-dropdown-trigger")).not.toBeInTheDocument();
+  });
+
   it("task row shows assignee; click opens dropdown; selection updates task", async () => {
     const user = userEvent.setup();
     const tasks = [

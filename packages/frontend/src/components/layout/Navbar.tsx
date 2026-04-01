@@ -316,10 +316,10 @@ export function Navbar({
                           setDropdownOpen(false);
                           navigate(getProjectPhasePath(p.id, currentPhase ?? "sketch"));
                         }}
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                        className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors hover:bg-theme-border focus-visible:bg-theme-border ${
                           p.id === project?.id
-                            ? "bg-theme-info-bg text-theme-info-text font-medium"
-                            : "text-theme-text font-medium hover:bg-theme-info-bg"
+                            ? "bg-theme-info-bg text-theme-info-text hover:text-theme-text focus-visible:text-theme-text"
+                            : "text-theme-text"
                         }`}
                       >
                         {p.name}
@@ -332,14 +332,14 @@ export function Navbar({
                       <button
                         type="button"
                         onClick={() => handleCreateOrAddClick("/projects/add-existing")}
-                        className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-border hover:text-theme-text focus-visible:bg-theme-border focus-visible:text-theme-text transition-colors"
                       >
                         Add Existing Project
                       </button>
                       <button
                         type="button"
                         onClick={() => handleCreateOrAddClick("/projects/create-new")}
-                        className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-info-bg hover:text-theme-text transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-theme-muted hover:bg-theme-border hover:text-theme-text focus-visible:bg-theme-border focus-visible:text-theme-text transition-colors"
                       >
                         Create New Project
                       </button>

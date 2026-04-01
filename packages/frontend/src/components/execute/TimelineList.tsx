@@ -210,7 +210,7 @@ function TimelineRow({
           />
         ) : (
           <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME}>
-            {task.assignee?.trim() ? task.assignee : "—"}
+            {task.assignee?.trim() ? task.assignee : null}
           </span>
         )}
       </span>

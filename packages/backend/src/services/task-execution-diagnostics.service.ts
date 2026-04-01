@@ -870,13 +870,17 @@ export class TaskExecutionDiagnosticsService {
       .map((event) => summarizeEvent(event))
       .filter((event): event is TaskExecutionEventItem => event != null)
       .sort((a, b) => a.at.localeCompare(b.at));
-    const cumulativeAttempts = this.taskStore.getCumulativeAttemptsFromIssue(task);
+    const attemptNumbers = getAttemptNumbers(task, sessions, timeline);
+    const cumulativeFromLabels = this.taskStore.getCumulativeAttemptsFromIssue(task);
+    const maxAttemptFromEvidence =
+      attemptNumbers.length > 0 ? Math.max(...attemptNumbers) : 0;
+    const cumulativeAttempts = Math.max(cumulativeFromLabels, maxAttemptFromEvidence);
     const lastExecution = parseTaskLastExecutionSummary(
       (task as StoredTask & { last_execution_summary?: unknown }).last_execution_summary
     );
     const fallbackMergeStage = extractMergeStageFromTask(task);
     const fallbackConflictedFiles = extractConflictFilesFromTask(task);
-    const attempts = getAttemptNumbers(task, sessions, timeline).map((attempt) =>
+    const attempts = attemptNumbers.map((attempt) =>
       buildAttemptItem(
         attempt,
         sessions.filter((session) => session.attempt === attempt),

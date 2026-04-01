@@ -113,6 +113,7 @@ import {
   synthesizeCodingResultFromOutput,
   classifyNoResultReasonCode,
 } from "./no-result-reason.service.js";
+import { isWorktreeCheckoutUsable } from "../utils/worktree-health.js";
 import {
   describeStructuredOutputProblem,
   parseCodingAgentResult,
@@ -1046,9 +1047,15 @@ export class OrchestratorService {
     task: StoredTask,
     assignment: GuppAssignment
   ): Promise<boolean> {
-    try {
-      await fs.access(assignment.worktreePath);
-    } catch {
+    if (
+      assignment.worktreePath !== repoPath &&
+      !(await isWorktreeCheckoutUsable(repoPath, assignment.worktreePath))
+    ) {
+      log.warn("Recovery: assignment worktree is missing checkout files; skipping terminal result", {
+        taskId: task.id,
+        branchName: assignment.branchName,
+        worktreePath: assignment.worktreePath,
+      });
       return false;
     }
 
@@ -1103,9 +1110,15 @@ export class OrchestratorService {
     const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
     if (reviewMode === "never") return false;
 
-    try {
-      await fs.access(assignment.worktreePath);
-    } catch {
+    if (
+      assignment.worktreePath !== repoPath &&
+      !(await isWorktreeCheckoutUsable(repoPath, assignment.worktreePath))
+    ) {
+      log.warn("Recovery: review assignment worktree is missing checkout files; skipping", {
+        taskId: task.id,
+        branchName: assignment.branchName,
+        worktreePath: assignment.worktreePath,
+      });
       return false;
     }
 
@@ -1324,9 +1337,15 @@ export class OrchestratorService {
     const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
     if (reviewMode === "never") return false;
 
-    try {
-      await fs.access(assignment.worktreePath);
-    } catch {
+    if (
+      assignment.worktreePath !== repoPath &&
+      !(await isWorktreeCheckoutUsable(repoPath, assignment.worktreePath))
+    ) {
+      log.warn("Recovery: review worktree missing checkout files; cannot resume", {
+        taskId: task.id,
+        branchName: assignment.branchName,
+        worktreePath: assignment.worktreePath,
+      });
       return false;
     }
 

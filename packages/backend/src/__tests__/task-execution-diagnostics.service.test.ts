@@ -604,6 +604,74 @@ describe("TaskExecutionDiagnosticsService", () => {
     );
   });
 
+  it("aligns cumulativeAttempts with attempt history when task labels omit attempts:N", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "failed",
+      labels: [],
+      block_reason: null,
+      last_execution_summary: null,
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(0);
+    sessionManager.listSessions.mockResolvedValue([
+      {
+        taskId,
+        attempt: 1,
+        agentType: "openai",
+        agentModel: "gpt-5",
+        startedAt: "2026-03-29T20:28:00.000Z",
+        completedAt: "2026-03-29T20:28:10.000Z",
+        status: "failed",
+        outputLog: "",
+        gitBranch: "opensprint/os-eeac.39",
+        gitDiff: null,
+        testResults: null,
+        failureReason: "Pre-merge quality gates failed",
+      },
+      {
+        taskId,
+        attempt: 2,
+        agentType: "openai",
+        agentModel: "gpt-5",
+        startedAt: "2026-03-31T14:18:00.000Z",
+        completedAt: "2026-03-31T14:18:30.000Z",
+        status: "failed",
+        outputLog: "",
+        gitBranch: "opensprint/os-eeac.39",
+        gitDiff: null,
+        testResults: null,
+        failureReason: "Sparse worktree",
+      },
+      {
+        taskId,
+        attempt: 3,
+        agentType: "openai",
+        agentModel: "gpt-5",
+        startedAt: "2026-03-29T20:47:00.000Z",
+        completedAt: "2026-03-29T20:47:20.000Z",
+        status: "failed",
+        outputLog: "",
+        gitBranch: "opensprint/os-eeac.39",
+        gitDiff: null,
+        testResults: null,
+        failureReason: "Quality gate failed",
+      },
+    ] satisfies AgentSession[]);
+    mockReadForTask.mockResolvedValue([]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+
+    expect(diagnostics.cumulativeAttempts).toBe(3);
+    expect(diagnostics.attempts).toHaveLength(3);
+    expect(diagnostics.attempts[0]?.attempt).toBe(3);
+  });
+
   it("surfaces running tool-wait diagnostics for active attempts", async () => {
     taskStore.show.mockResolvedValue({
       id: taskId,

@@ -116,6 +116,14 @@ export function usePlanPhaseMain({
   const selectedPlanIdFromStore = useAppSelector((s) => s.plan.selectedPlanId);
   const selectedPlanId = propSelectedPlanId ?? selectedPlanIdFromStore ?? null;
   const [selectedDraftPlanId, setSelectedDraftPlanId] = useState<string | null>(null);
+  /** After the user closes the plan sidebar, do not auto-reopen from draft notifications until they select a plan or draft again. */
+  const [planSidebarDismissed, setPlanSidebarDismissed] = useState(false);
+
+  useEffect(() => {
+    if (selectedPlanId != null || selectedDraftPlanId != null) {
+      setPlanSidebarDismissed(false);
+    }
+  }, [selectedPlanId, selectedDraftPlanId]);
 
   useEffect(() => {
     dispatch(clearPhaseUnread({ projectId, phase: "plan" }));
@@ -298,6 +306,14 @@ export function usePlanPhaseMain({
       )) ??
     null;
   const activeQuestionId = parseDetailParams(location.search).question;
+  const prevPlanQuestionIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const q = activeQuestionId ?? undefined;
+    if (q != null && q !== prevPlanQuestionIdRef.current) {
+      setPlanSidebarDismissed(false);
+    }
+    prevPlanQuestionIdRef.current = q;
+  }, [activeQuestionId]);
   const draftPlanNotifications = useMemo(
     () =>
       openQuestionNotifications.filter(
@@ -329,10 +345,11 @@ export function usePlanPhaseMain({
   const prevChatMessageCountRef = useRef(0);
 
   useEffect(() => {
+    if (planSidebarDismissed) return;
     if (!selectedDraftPlanId && fallbackDraftPlanId) {
       setSelectedDraftPlanId(fallbackDraftPlanId);
     }
-  }, [fallbackDraftPlanId, selectedDraftPlanId]);
+  }, [fallbackDraftPlanId, selectedDraftPlanId, planSidebarDismissed]);
 
   const planQueueRef = useRef<string[]>([]);
   const processingQueueRef = useRef(false);
@@ -576,7 +593,9 @@ export function usePlanPhaseMain({
     !selectedPlanId && sidebarOpenQuestionNotification?.sourceId?.startsWith("draft:")
       ? sidebarOpenQuestionNotification.sourceId.replace(/^draft:/, "")
       : null;
-  const effectiveDraftPlanId = activeDraftPlanId ?? notificationDraftPlanId;
+  const effectiveDraftPlanId = planSidebarDismissed
+    ? selectedDraftPlanId
+    : activeDraftPlanId ?? notificationDraftPlanId;
   const draftPlanContext = effectiveDraftPlanId ? `plan-draft:${effectiveDraftPlanId}` : null;
   const activePlanContext = planContext ?? draftPlanContext;
   const planChatDraftKey = useMemo(
@@ -1002,6 +1021,7 @@ export function usePlanPhaseMain({
   );
 
   const handleClosePlan = useCallback(() => {
+    setPlanSidebarDismissed(true);
     setSelectedDraftPlanId(null);
     dispatch(setSelectedPlanId(null));
     onSelectPlanId?.(null);

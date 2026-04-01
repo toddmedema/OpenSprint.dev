@@ -43,6 +43,7 @@ import { createLogger } from "../utils/logger.js";
 import { RepoPreflightError, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { resolveExecuteReplayMetadata } from "./execute-replay-metadata.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
+import { isWorktreeCheckoutUsable } from "../utils/worktree-health.js";
 
 const log = createLogger("phase-executor");
 
@@ -152,20 +153,7 @@ export class PhaseExecutorService {
    * no source checkout. Guard against that by requiring a valid git checkout marker.
    */
   private async hasUsableExistingWorktree(repoPath: string, wtPath: string): Promise<boolean> {
-    try {
-      await fs.access(wtPath);
-      await fs.access(path.join(wtPath, ".git"));
-      const repoHasPackageJson = await fs
-        .access(path.join(repoPath, "package.json"))
-        .then(() => true)
-        .catch(() => false);
-      if (repoHasPackageJson) {
-        await fs.access(path.join(wtPath, "package.json"));
-      }
-      return true;
-    } catch {
-      return false;
-    }
+    return isWorktreeCheckoutUsable(repoPath, wtPath);
   }
 
   /**

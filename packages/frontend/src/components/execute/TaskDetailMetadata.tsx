@@ -134,11 +134,11 @@ export function TaskDetailMetadata({
                 isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
                 matchTaskNameTypography
               />
-            ) : (
+            ) : task.assignee?.trim() ? (
               <span className="inline-flex items-center gap-1.5 text-xs text-theme-muted">
-                {task.assignee?.trim() ? task.assignee : "—"}
+                {task.assignee}
               </span>
-            )}
+            ) : null}
             {isDoneTask &&
               (() => {
                 const duration = formatTaskDuration(task.startedAt, task.completedAt);

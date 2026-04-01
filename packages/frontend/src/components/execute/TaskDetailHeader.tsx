@@ -193,7 +193,7 @@ export function TaskDetailHeader({
                       disabled={unblockLoading}
                       aria-busy={unblockLoading}
                       aria-label={unblockLoading ? "Retrying" : "Retry"}
-                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[2rem]"
+                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-border focus-visible:bg-theme-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[2rem]"
                       data-testid="sidebar-retry-btn"
                     >
                       {unblockLoading ? (
@@ -218,7 +218,7 @@ export function TaskDetailHeader({
                         setActionsMenuOpen(false);
                       }}
                       disabled={markDoneLoading}
-                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs font-medium text-brand-600 hover:bg-theme-border-subtle/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs font-medium text-brand-600 hover:bg-theme-border focus-visible:bg-theme-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       data-testid="sidebar-mark-done-btn"
                     >
                       {markDoneLoading ? "Marking…" : "Mark done"}
@@ -235,7 +235,7 @@ export function TaskDetailHeader({
                         setActionsMenuOpen(false);
                       }}
                       disabled={forceRetryLoading}
-                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-warning-text hover:bg-theme-warning-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-warning-text hover:bg-theme-border focus-visible:bg-theme-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       data-testid="sidebar-force-retry-btn"
                     >
                       {forceRetryLoading ? "Retrying..." : "Force Retry"}
@@ -251,7 +251,7 @@ export function TaskDetailHeader({
                       setActionsMenuOpen(false);
                     }}
                     disabled={deleteLoading}
-                    className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="dropdown-item w-full flex items-center gap-2 text-left text-xs text-theme-error-text hover:bg-theme-border focus-visible:bg-theme-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="sidebar-delete-task-btn"
                   >
                     {deleteLoading ? "Deleting..." : "Delete"}
@@ -368,7 +368,7 @@ export function TaskDetailHeader({
                 onClick={() => {
                   void handleConfirmForceRetry();
                 }}
-                className="btn-primary bg-theme-warning-text hover:bg-theme-warning-text/90 disabled:opacity-50"
+                className="btn-primary disabled:opacity-50"
                 data-testid="sidebar-force-retry-confirm-btn"
                 disabled={forceRetryLoading}
               >
