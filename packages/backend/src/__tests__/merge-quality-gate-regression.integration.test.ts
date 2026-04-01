@@ -193,9 +193,13 @@ describe("Cross-service quality-gate regression integration", () => {
     vi.clearAllMocks();
     previousNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "development";
-    repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-qg-repo-"));
-    worktreePath = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-qg-worktree-"));
-    baselineWorktreePath = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-qg-baseline-"));
+    repoPath = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-qg-repo-")));
+    worktreePath = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-qg-worktree-"))
+    );
+    baselineWorktreePath = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-qg-baseline-"))
+    );
     await Promise.all([
       prepareWorkspace(repoPath),
       prepareWorkspace(worktreePath),

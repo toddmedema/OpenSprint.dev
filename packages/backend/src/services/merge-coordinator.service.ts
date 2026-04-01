@@ -2252,7 +2252,14 @@ export class MergeCoordinatorService {
       const qualityGateFailureDetails = getQualityGateFailureDetailsFromMergeError(mergeErr);
       const qualityGateStructuredDetails = buildQualityGateStructuredDetails(
         qualityGateFailureDetails,
-        slot?.worktreePath ?? repoPath
+        slot?.worktreePath ?? repoPath,
+        isQualityGateFailure
+          ? {
+              reason: mergeFailureReason,
+              firstErrorLine: mergeFailureReason,
+              category: "quality_gate",
+            }
+          : undefined
       );
       const isEnvironmentSetupQualityGateFailure =
         isQualityGateFailure && isEnvironmentSetupQualityGateMergeError(mergeErr);

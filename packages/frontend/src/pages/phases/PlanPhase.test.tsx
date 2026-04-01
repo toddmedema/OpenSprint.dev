@@ -1000,6 +1000,33 @@ describe("PlanPhase archive", () => {
     expect(onSelectPlanId).toHaveBeenCalledWith(null);
   });
 
+  it("closes the sidebar immediately even when selectedPlanId is controlled by props", async () => {
+    const store = createStore();
+    const user = userEvent.setup();
+    const onSelectPlanId = vi.fn();
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase
+            projectId="proj-1"
+            selectedPlanId="archive-test-feature"
+            onSelectPlanId={onSelectPlanId}
+          />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapper }
+    );
+
+    expect(screen.getByRole("textbox", { name: /title/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close plan panel" }));
+
+    expect(onSelectPlanId).toHaveBeenCalledWith(null);
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox", { name: /title/i })).not.toBeInTheDocument();
+    });
+  });
+
   it("closes plan sidebar and re-opening shows expected content", async () => {
     const store = createStore();
     const user = userEvent.setup();

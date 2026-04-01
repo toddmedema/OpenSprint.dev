@@ -861,6 +861,48 @@ describe("MergeCoordinatorService", () => {
     );
   });
 
+  it("propagates generic quality-gate failures to retry context when gate details are missing", async () => {
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+    const { MergeJobError } = await import("../services/git-commit-queue.service.js");
+    mockGitQueueEnqueueAndWait.mockRejectedValue(
+      new MergeJobError(
+        "Quality gate failed before command execution: toolchain unavailable",
+        "quality_gate",
+        []
+      )
+    );
+
+    await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
+
+    expect(mockHost.taskStore.update).toHaveBeenCalledWith(
+      projectId,
+      taskId,
+      expect.objectContaining({
+        status: "open",
+        extra: expect.objectContaining({
+          failedGateReason: expect.stringContaining(
+            "Quality gate failed before command execution: toolchain unavailable"
+          ),
+          qualityGateDetail: expect.objectContaining({
+            reason: expect.stringContaining(
+              "Quality gate failed before command execution: toolchain unavailable"
+            ),
+            firstErrorLine: expect.stringContaining(
+              "Quality gate failed before command execution: toolchain unavailable"
+            ),
+            category: "quality_gate",
+          }),
+          next_retry_context: expect.objectContaining({
+            previousFailure: expect.stringContaining(
+              "Quality gate failed before command execution: toolchain unavailable"
+            ),
+            failureType: "merge_quality_gate",
+          }),
+        }),
+      })
+    );
+  });
+
   it("persists retry context when quality-gate failures reach blocked threshold", async () => {
     (
       mockHost.taskStore.getCumulativeAttemptsFromIssue as unknown as ReturnType<typeof vi.fn>
