@@ -1380,6 +1380,7 @@ export function PlanPhase({
               ) : (
                 <PlanListView
                   plans={plansForListView}
+                  planDependencyEdges={dependencyGraph?.edges}
                   selectedPlanId={selectedPlanId ?? null}
                   executingPlanId={executingPlanId}
                   reExecutingPlanId={reExecutingPlanId}

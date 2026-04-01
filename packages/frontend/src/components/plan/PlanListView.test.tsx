@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { PlanListView } from "./PlanListView";
-import type { Plan } from "@opensprint/shared";
+import type { Plan, PlanDependencyEdge } from "@opensprint/shared";
+import { MAX_PLAN_DEPTH } from "@opensprint/shared";
 
 function makePlan(
   planId: string,
   status: Plan["status"],
   taskCount = 0,
-  hasGeneratedPlanTasksForCurrentVersion = taskCount > 0
+  hasGeneratedPlanTasksForCurrentVersion = taskCount > 0,
+  opts?: { parentPlanId?: string; depth?: number; childPlanIds?: string[] }
 ): Plan {
   return {
     metadata: {
@@ -17,6 +20,7 @@ function makePlan(
       epicId: `epic-${planId}`,
       shippedAt: null,
       complexity: "medium",
+      ...(opts?.parentPlanId != null ? { parentPlanId: opts.parentPlanId } : {}),
     },
     content: "",
     status,
@@ -24,6 +28,8 @@ function makePlan(
     doneTaskCount: 0,
     dependencyCount: 0,
     hasGeneratedPlanTasksForCurrentVersion,
+    ...(opts?.depth != null ? { depth: opts.depth } : {}),
+    ...(opts?.childPlanIds != null ? { childPlanIds: opts.childPlanIds } : {}),
   };
 }
 
@@ -369,5 +375,174 @@ describe("PlanListView", () => {
     );
     const row = screen.getByTestId("plan-list-row-active-plan");
     expect(within(row).getByText(/Planning…/)).toBeInTheDocument();
+  });
+
+  it("renders parent/child hierarchy in the same status section with tree roles", () => {
+    const plans: Plan[] = [
+      makePlan("root-plan", "planning", 0, false, { childPlanIds: ["child-plan"] }),
+      makePlan("child-plan", "planning", 0, false, { parentPlanId: "root-plan" }),
+    ];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    const section = screen.getByTestId("plan-list-section-planning");
+    const tree = within(section).getByRole("tree", { name: /Planning plans/i });
+    expect(tree).toBeInTheDocument();
+
+    expect(screen.getByTestId("plan-tree-toggle-root-plan")).toBeInTheDocument();
+    const rootRow = screen.getByTestId("plan-list-row-root-plan");
+    const childRow = screen.getByTestId("plan-list-row-child-plan");
+    expect(within(rootRow).getByText("Root Plan")).toBeInTheDocument();
+    const subGroup = within(rootRow).getByRole("group", { name: /Sub-plans under Root Plan/i });
+    expect(subGroup).toBeInTheDocument();
+    expect(within(subGroup).getByTestId("plan-list-row-child-plan")).toBeInTheDocument();
+    expect(within(childRow).getByText("Child Plan")).toBeInTheDocument();
+  });
+
+  it("collapses nested sub-plans when the toggle is activated", async () => {
+    const user = userEvent.setup();
+    const plans: Plan[] = [
+      makePlan("root-plan", "planning", 0, false, { childPlanIds: ["child-plan"] }),
+      makePlan("child-plan", "planning", 0, false, { parentPlanId: "root-plan" }),
+    ];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("plan-list-row-child-plan")).toBeVisible();
+    await user.click(screen.getByTestId("plan-tree-toggle-root-plan"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("plan-list-row-child-plan")).not.toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("plan-tree-toggle-root-plan"));
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-list-row-child-plan")).toBeVisible();
+    });
+  });
+
+  it("shows waiting-on hint when blocks edges reference incomplete plans", () => {
+    const plans: Plan[] = [
+      makePlan("blocker", "planning", 0, false),
+      makePlan("blocked", "planning", 0, false),
+    ];
+    const edges: PlanDependencyEdge[] = [{ from: "blocker", to: "blocked", type: "blocks" }];
+    render(
+      <PlanListView
+        plans={plans}
+        planDependencyEdges={edges}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    const hint = screen.getByTestId("plan-list-blocked-hint-blocked");
+    expect(hint).toHaveAttribute("role", "status");
+    expect(hint).toHaveTextContent(/Waiting on Blocker/);
+    expect(hint).toHaveTextContent(/before this plan can run/);
+  });
+
+  it("does not show waiting-on hint when the blocking plan is complete", () => {
+    const plans: Plan[] = [
+      makePlan("blocker", "complete", 1, true),
+      makePlan("blocked", "planning", 0, false),
+    ];
+    const edges: PlanDependencyEdge[] = [{ from: "blocker", to: "blocked", type: "blocks" }];
+    render(
+      <PlanListView
+        plans={plans}
+        planDependencyEdges={edges}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId("plan-list-blocked-hint-blocked")).not.toBeInTheDocument();
+  });
+
+  it("shows max depth hint when plan depth reaches the hierarchy cap", () => {
+    const plans: Plan[] = [makePlan("deep-plan", "planning", 0, false, { depth: MAX_PLAN_DEPTH })];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("plan-list-max-depth-hint")).toHaveTextContent("Max depth");
+  });
+
+  it("treats a plan as a section root when its parent is absent from the list", () => {
+    const plans: Plan[] = [
+      makePlan("orphan-child", "building", 1, true, { parentPlanId: "missing-parent" }),
+    ];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId={null}
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    const row = screen.getByTestId("plan-list-row-orphan-child");
+    expect(within(row).getByText("Orphan Child")).toBeInTheDocument();
+    expect(within(row).queryByTestId("plan-tree-toggle-orphan-child")).not.toBeInTheDocument();
   });
 });
