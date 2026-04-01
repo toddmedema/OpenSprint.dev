@@ -7,7 +7,7 @@ import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
-import { PlanPhase, getPlanChatMessageDisplay } from "./PlanPhase";
+import { PlanPhase } from "./PlanPhase";
 import { useDecomposePlans } from "../../api/hooks";
 import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
 import { api } from "../../api/client";
@@ -62,19 +62,6 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver;
-});
-
-describe("getPlanChatMessageDisplay", () => {
-  it("returns 'Plan updated' when content contains [PLAN_UPDATE]", () => {
-    expect(getPlanChatMessageDisplay("[PLAN_UPDATE]\n# Plan\n\nContent.\n[/PLAN_UPDATE]")).toBe(
-      "Plan updated"
-    );
-  });
-
-  it("returns content unchanged when it does not contain [PLAN_UPDATE]", () => {
-    const content = "I can help refine this plan. What would you like to change?";
-    expect(getPlanChatMessageDisplay(content)).toBe(content);
-  });
 });
 
 const mockArchive = vi.fn().mockResolvedValue(undefined);
