@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { Notification, ScopeChangeMetadata } from "@opensprint/shared";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
 import { PrdDiffView } from "./prd/PrdDiffView";
@@ -45,16 +45,35 @@ export function HilApprovalBlock({
   });
 
   const {
-    data: proposedDiffData,
+    data: proposedDiffPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     isSuccess: proposedDiffSuccess,
     isError: proposedDiffError,
     error: proposedDiffErr,
-  } = useQuery({
+  } = useInfiniteQuery({
     queryKey: queryKeys.prd.proposedDiff(projectId, notification.id),
-    queryFn: () => api.prd.getProposedDiff(projectId, notification.id),
+    queryFn: ({ pageParam }) =>
+      api.prd.getProposedDiff(projectId, notification.id, { lineOffset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (last) =>
+      last.diff.pagination?.hasMore
+        ? last.diff.pagination.offset + last.diff.pagination.limit
+        : undefined,
     enabled: !hideDiffInBlock && hasPrdApprovalScope,
     retry: false,
   });
+
+  const proposedDiffData = useMemo(() => {
+    if (!proposedDiffPages?.pages.length) return undefined;
+    const lines = proposedDiffPages.pages.flatMap((p) => p.diff.lines);
+    const summary = proposedDiffPages.pages[0]?.diff.summary;
+    return {
+      requestId: proposedDiffPages.pages[0]!.requestId,
+      diff: { lines, summary },
+    };
+  }, [proposedDiffPages]);
 
   const handleApprove = useCallback(async () => {
     setLoading(true);
@@ -109,6 +128,9 @@ export function HilApprovalBlock({
                 diff={proposedDiffData.diff}
                 fromVersion="current"
                 toVersion="proposed"
+                fetchMoreAvailable={hasNextPage}
+                onFetchMoreDiff={hasNextPage ? () => fetchNextPage() : undefined}
+                isFetchingMoreDiff={isFetchingNextPage}
               />
             ) : showDiffError ? (
               <div

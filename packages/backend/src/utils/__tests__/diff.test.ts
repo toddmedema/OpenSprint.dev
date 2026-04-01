@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeLineDiff } from "../diff.js";
+import { applyDiffPagination, computeLineDiff, isDiffContentPayloadTooLarge } from "../diff.js";
+import { PRD_DIFF_MAX_COMBINED_CONTENT_BYTES } from "@opensprint/shared";
 
 describe("computeLineDiff", () => {
   it("additions only: old empty, new has lines", () => {
@@ -119,5 +120,49 @@ describe("computeLineDiff", () => {
       newLineNumber: 1,
     });
     expect(result.summary).toEqual({ additions: 0, deletions: 0 });
+  });
+});
+
+describe("applyDiffPagination", () => {
+  it("returns first window and hasMore when more lines exist", () => {
+    const full = computeLineDiff("a\nb\nc\nd\n", "a\nx\nc\nd\n");
+    const page = applyDiffPagination(full, 0, 2);
+    expect(page.lines).toHaveLength(2);
+    expect(page.summary).toEqual(full.summary);
+    expect(page.pagination).toEqual({
+      totalLines: full.lines.length,
+      offset: 0,
+      limit: 2,
+      hasMore: true,
+    });
+  });
+
+  it("offsets into the diff and clears hasMore on last page", () => {
+    const full = computeLineDiff("a\nb\nc\n", "x\nb\nc\n");
+    const start = applyDiffPagination(full, 0, 2);
+    const rest = applyDiffPagination(full, start.pagination!.offset + start.pagination!.limit, 50);
+    expect(rest.pagination!.hasMore).toBe(false);
+    expect(rest.pagination!.offset + rest.pagination!.limit).toBe(full.lines.length);
+  });
+
+  it("clamps offset past end to empty slice", () => {
+    const full = computeLineDiff("one\n", "two\n");
+    const page = applyDiffPagination(full, 999, 10);
+    expect(page.lines).toHaveLength(0);
+    expect(page.pagination?.hasMore).toBe(false);
+    expect(page.pagination?.totalLines).toBe(full.lines.length);
+  });
+});
+
+describe("isDiffContentPayloadTooLarge", () => {
+  it("returns false for small strings", () => {
+    expect(isDiffContentPayloadTooLarge("hello", "world")).toBe(false);
+  });
+
+  it("returns true when combined UTF-8 bytes exceed cap", () => {
+    const half = Math.ceil(PRD_DIFF_MAX_COMBINED_CONTENT_BYTES / 2) + 1;
+    const a = "x".repeat(half);
+    const b = "y".repeat(half);
+    expect(isDiffContentPayloadTooLarge(a, b)).toBe(true);
   });
 });

@@ -6,6 +6,16 @@ export const OPENSPRINT_DIR = ".opensprint";
 
 /** Sketch phase output: flat markdown at repo root. Metadata (version, changeLog) in .opensprint. */
 export const SPEC_MD = "SPEC.md";
+
+/** Default maximum diff lines per PRD proposed-diff / version-diff GET response. */
+export const PRD_DIFF_DEFAULT_LINE_LIMIT = 2500;
+/** Hard cap on the `lineLimit` query parameter for those endpoints. */
+export const PRD_DIFF_MAX_LINE_LIMIT = 5000;
+/**
+ * When `includeContent` is true, omit `fromContent`/`toContent` if combined UTF-8 byte length exceeds this
+ * (keeps JSON payloads bounded for huge SPEC.md).
+ */
+export const PRD_DIFF_MAX_COMBINED_CONTENT_BYTES = 512 * 1024;
 export const SPEC_METADATA_PATH = `${OPENSPRINT_DIR}/spec-metadata.json`;
 
 /** Paths within the .opensprint directory (repo and runtime). Settings live in global store (~/.opensprint/settings.json). Feedback, inbox, agent stats, event log, orchestrator counters, and deployments are now DB-only; no file paths. */

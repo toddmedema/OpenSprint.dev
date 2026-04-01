@@ -145,6 +145,7 @@ describe("HilApprovalBlock", () => {
           { type: "add" as const, text: "## New section", newLineNumber: 2 },
         ],
         summary: { additions: 1, deletions: 0 },
+        pagination: { totalLines: 2, offset: 0, limit: 2, hasMore: false },
       },
     } as never);
     const notificationWithDiff = {
@@ -183,6 +184,7 @@ describe("HilApprovalBlock", () => {
       diff: {
         lines: [],
         summary: { additions: 0, deletions: 0 },
+        pagination: { totalLines: 0, offset: 0, limit: 0, hasMore: false },
       },
     } as never);
     const notificationWithDiff = {

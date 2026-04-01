@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ServerDiffView, INITIAL_DIFF_LINE_CAP } from "./ServerDiffView";
@@ -153,5 +153,19 @@ describe("ServerDiffView", () => {
     await user.click(showMore);
     expect(screen.queryByTestId("server-diff-show-more")).not.toBeInTheDocument();
     expect(screen.getByText(`Row ${INITIAL_DIFF_LINE_CAP + 5}`)).toBeInTheDocument();
+  });
+
+  it("shows Load more diff when server pagination has more pages", async () => {
+    const user = userEvent.setup();
+    const onFetch = vi.fn();
+    render(
+      <ServerDiffView
+        diff={mockDiff}
+        fetchMoreAvailable={true}
+        onFetchMoreDiff={onFetch}
+      />
+    );
+    await user.click(screen.getByTestId("server-diff-load-more-pages"));
+    expect(onFetch).toHaveBeenCalledTimes(1);
   });
 });

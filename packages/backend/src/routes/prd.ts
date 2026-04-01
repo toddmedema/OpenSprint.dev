@@ -12,7 +12,7 @@ import {
 import { prdFromCodebaseService } from "../services/prd-from-codebase.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { notificationService } from "../services/notification.service.js";
-import { computeLineDiff } from "../utils/diff.js";
+import { applyDiffPagination, computeLineDiff, isDiffContentPayloadTooLarge } from "../utils/diff.js";
 import { prdToSpecMarkdown } from "@opensprint/shared";
 import type { PrdService } from "../services/prd.service.js";
 import type { ChatService } from "../services/chat.service.js";
@@ -103,10 +103,14 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
         fromVersion: number;
         toVersion?: string;
         includeContent: boolean;
+        lineOffset: number;
+        lineLimit: number;
       };
       const fromVersion = query.fromVersion;
       const toVersionParam = query.toVersion;
       const includeContent = query.includeContent;
+      const lineOffset = query.lineOffset;
+      const lineLimit = query.lineLimit;
 
       const fromContent = await prdService.getSnapshot(projectId, fromVersion);
       if (fromContent === null) {
@@ -147,15 +151,20 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
         resolvedToVersion = String(toVersion);
       }
 
-      const diff = computeLineDiff(fromContent, toContent);
+      const fullDiff = computeLineDiff(fromContent, toContent);
+      const diff = applyDiffPagination(fullDiff, lineOffset, lineLimit);
       const data: Record<string, unknown> = {
         fromVersion: String(fromVersion),
         toVersion: resolvedToVersion,
-        diff: { lines: diff.lines, summary: diff.summary },
+        diff,
       };
       if (includeContent) {
-        data.fromContent = fromContent;
-        data.toContent = toContent;
+        if (isDiffContentPayloadTooLarge(fromContent, toContent)) {
+          data.contentOmittedDueToSize = true;
+        } else {
+          data.fromContent = fromContent;
+          data.toContent = toContent;
+        }
       }
       res.json({ data });
     })
@@ -169,9 +178,16 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
     validateQuery(prdProposedDiffQuerySchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const { projectId } = req.params;
-      const query = req.query as unknown as { requestId: string; includeContent: boolean };
+      const query = req.query as unknown as {
+        requestId: string;
+        includeContent: boolean;
+        lineOffset: number;
+        lineLimit: number;
+      };
       const requestId = query.requestId;
       const includeContent = query.includeContent;
+      const lineOffset = query.lineOffset;
+      const lineLimit = query.lineLimit;
 
       const notification = await notificationService.getById(projectId, requestId);
       if (
@@ -207,15 +223,20 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
 
       const currentSpec = prdToSpecMarkdown(currentPrd);
       const proposedSpec = prdToSpecMarkdown(proposedPrd);
-      const diff = computeLineDiff(currentSpec, proposedSpec);
+      const fullDiff = computeLineDiff(currentSpec, proposedSpec);
+      const diff = applyDiffPagination(fullDiff, lineOffset, lineLimit);
 
       const data: Record<string, unknown> = {
         requestId,
-        diff: { lines: diff.lines, summary: diff.summary },
+        diff,
       };
       if (includeContent) {
-        data.fromContent = currentSpec;
-        data.toContent = proposedSpec;
+        if (isDiffContentPayloadTooLarge(currentSpec, proposedSpec)) {
+          data.contentOmittedDueToSize = true;
+        } else {
+          data.fromContent = currentSpec;
+          data.toContent = proposedSpec;
+        }
       }
       res.json({ data });
     })

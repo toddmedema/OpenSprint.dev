@@ -190,6 +190,12 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.body.data.diff.summary).toBeDefined();
       expect(typeof res.body.data.diff.summary.additions).toBe("number");
       expect(typeof res.body.data.diff.summary.deletions).toBe("number");
+      expect(res.body.data.diff.pagination).toMatchObject({
+        offset: 0,
+        hasMore: false,
+        totalLines: res.body.data.diff.lines.length,
+        limit: res.body.data.diff.lines.length,
+      });
     });
 
     it("returns 404 when fromVersion has no snapshot", async () => {
@@ -237,6 +243,46 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.body.data.diff.lines.every((l: { type: string }) => l.type === "context")).toBe(
         true
       );
+      expect(res.body.data.diff.pagination?.hasMore).toBe(false);
+    });
+
+    it("paginates diff lines with lineLimit and lineOffset", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "First version" });
+
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Second version" });
+
+      const first = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&lineLimit=3&lineOffset=0&includeContent=false`
+      );
+      expect(first.status).toBe(200);
+      expect(first.body.data.diff.lines).toHaveLength(3);
+      expect(first.body.data.diff.pagination?.totalLines).toBeGreaterThan(3);
+      expect(first.body.data.diff.pagination?.hasMore).toBe(true);
+
+      const off = first.body.data.diff.pagination!.offset + first.body.data.diff.pagination!.limit;
+      const second = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&lineLimit=3&lineOffset=${off}&includeContent=false`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.data.diff.pagination?.offset).toBe(off);
+      expect(second.body.data.diff.lines.length).toBeGreaterThan(0);
+    });
+
+    it("returns 400 when lineLimit exceeds max", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "x" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/diff?fromVersion=1&lineLimit=999999`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("VALIDATION_ERROR");
     });
 
     it("returns 404 when toVersion snapshot is missing", async () => {
@@ -422,6 +468,7 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.body.data.diff.summary).toBeDefined();
       expect(typeof res.body.data.diff.summary.additions).toBe("number");
       expect(typeof res.body.data.diff.summary.deletions).toBe("number");
+      expect(res.body.data.diff.pagination?.offset).toBe(0);
     });
 
     it("returns 404 for invalid requestId", async () => {
@@ -497,6 +544,40 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.body.data.diff.lines).toBeDefined();
       expect(Array.isArray(res.body.data.diff.lines)).toBe(true);
       expect(res.body.data.diff.summary).toBeDefined();
+    });
+
+    it("paginates proposed-diff lines with lineLimit", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Current content" });
+
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-paginate",
+        description: "Approve scope change?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "Update executive summary",
+          scopeChangeProposedUpdates: [
+            {
+              section: "executive_summary",
+              changeLogEntry: "Proposed update",
+              content: "Proposed paginate",
+            },
+          ],
+        },
+      });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}&lineLimit=2&lineOffset=0&includeContent=false`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.diff.lines).toHaveLength(2);
+      expect(res.body.data.diff.pagination?.totalLines).toBeGreaterThan(2);
+      expect(res.body.data.diff.pagination?.hasMore).toBe(true);
     });
 
     it("includes content by default in proposed-diff", async () => {

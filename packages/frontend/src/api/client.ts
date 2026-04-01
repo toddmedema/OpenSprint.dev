@@ -424,10 +424,12 @@ export const api = {
     getProposedDiff: (
       projectId: string,
       requestId: string,
-      opts?: { includeContent?: boolean }
+      opts?: { includeContent?: boolean; lineOffset?: number; lineLimit?: number }
     ) => {
       const params = new URLSearchParams({ requestId });
       if (opts?.includeContent === false) params.set("includeContent", "false");
+      if (opts?.lineOffset != null) params.set("lineOffset", String(opts.lineOffset));
+      if (opts?.lineLimit != null) params.set("lineLimit", String(opts.lineLimit));
       return request<PrdProposedDiffResponse>(
         `/projects/${projectId}/prd/proposed-diff?${params.toString()}`
       );
@@ -436,11 +438,13 @@ export const api = {
       projectId: string,
       fromVersion: string,
       toVersion?: string,
-      opts?: { includeContent?: boolean }
+      opts?: { includeContent?: boolean; lineOffset?: number; lineLimit?: number }
     ) => {
       const params = new URLSearchParams({ fromVersion });
       if (toVersion != null && toVersion !== "") params.set("toVersion", toVersion);
       if (opts?.includeContent === false) params.set("includeContent", "false");
+      if (opts?.lineOffset != null) params.set("lineOffset", String(opts.lineOffset));
+      if (opts?.lineLimit != null) params.set("lineLimit", String(opts.lineLimit));
       return request<PrdVersionDiffResponse>(
         `/projects/${projectId}/prd/diff?${params.toString()}`
       );

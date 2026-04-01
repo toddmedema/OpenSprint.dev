@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { formatSectionKey, formatTimestamp } from "../../lib/formatting";
 import { getPrdSourceColor, PRD_SOURCE_LABELS } from "../../lib/constants";
 import { api, isApiError } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
 import { ServerDiffView } from "./ServerDiffView";
 import type { ServerDiffResult } from "./ServerDiffView";
 import { useModalA11y } from "../../hooks/useModalA11y";
@@ -25,18 +27,9 @@ export interface PrdChangeLogProps {
 
 export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChangeLogProps) {
   const [diffModalFromVersion, setDiffModalFromVersion] = useState<number | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffError, setDiffError] = useState<string | null>(null);
-  const [diffResult, setDiffResult] = useState<{
-    diff: ServerDiffResult;
-    fromVersion: string;
-    toVersion: string;
-  } | null>(null);
 
   const closeDiffModal = useCallback(() => {
     setDiffModalFromVersion(null);
-    setDiffError(null);
-    setDiffResult(null);
   }, []);
 
   const diffModalContainerRef = useRef<HTMLDivElement>(null);
@@ -46,33 +39,50 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
     isOpen: diffModalFromVersion != null,
   });
 
-  useEffect(() => {
-    if (diffModalFromVersion == null) return;
-    setDiffLoading(true);
-    setDiffError(null);
-    setDiffResult(null);
-    api.prd
-      .getVersionDiff(projectId, String(diffModalFromVersion))
-      .then((res) => {
-        setDiffResult({
-          diff: res.diff,
-          fromVersion: res.fromVersion,
-          toVersion: res.toVersion,
-        });
-      })
-      .catch((err) => {
-        const message =
-          isApiError(err) && err.code === "NOT_FOUND"
-            ? "Version not found."
-            : err instanceof Error
-              ? err.message
-              : "Failed to load diff";
-        setDiffError(message);
-      })
-      .finally(() => {
-        setDiffLoading(false);
-      });
-  }, [projectId, diffModalFromVersion]);
+  const fromKey = diffModalFromVersion != null ? String(diffModalFromVersion) : "";
+  const {
+    data: versionDiffPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: diffLoading,
+    isError: diffQueryError,
+    error: diffQueryErr,
+  } = useInfiniteQuery({
+    queryKey: [...queryKeys.prd.versionDiff(projectId, fromKey), "paged"] as const,
+    queryFn: ({ pageParam }) =>
+      api.prd.getVersionDiff(projectId, fromKey, undefined, { lineOffset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (last) =>
+      last.diff.pagination?.hasMore
+        ? last.diff.pagination.offset + last.diff.pagination.limit
+        : undefined,
+    enabled: diffModalFromVersion != null,
+  });
+
+  const diffError = diffQueryError
+    ? isApiError(diffQueryErr) && diffQueryErr.code === "NOT_FOUND"
+      ? "Version not found."
+      : diffQueryErr instanceof Error
+        ? diffQueryErr.message
+        : "Failed to load diff"
+    : null;
+
+  const diffResult = useMemo((): {
+    diff: ServerDiffResult;
+    fromVersion: string;
+    toVersion: string;
+  } | null => {
+    if (!versionDiffPages?.pages.length) return null;
+    const lines = versionDiffPages.pages.flatMap((p) => p.diff.lines);
+    const summary = versionDiffPages.pages[0]?.diff.summary;
+    const first = versionDiffPages.pages[0]!;
+    return {
+      diff: { lines, summary },
+      fromVersion: first.fromVersion,
+      toVersion: first.toVersion,
+    };
+  }, [versionDiffPages]);
 
   return (
     <div className="mt-10 pt-6 border-t border-theme-border">
@@ -117,7 +127,6 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                     <button
                       type="button"
                       onClick={() => {
-                        setDiffLoading(true);
                         setDiffModalFromVersion(entry.documentVersion!);
                       }}
                       className="text-theme-accent hover:underline shrink-0"
@@ -194,6 +203,9 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                   diff={diffResult.diff}
                   fromVersion={diffResult.fromVersion}
                   toVersion={diffResult.toVersion}
+                  fetchMoreAvailable={hasNextPage}
+                  onFetchMoreDiff={hasNextPage ? () => fetchNextPage() : undefined}
+                  isFetchingMoreDiff={isFetchingNextPage}
                 />
               )}
             </div>

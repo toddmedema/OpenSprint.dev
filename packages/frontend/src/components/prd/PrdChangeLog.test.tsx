@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
+import type React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrdChangeLog, type PrdHistoryEntry } from "./PrdChangeLog";
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const mockGetVersionDiff = vi.fn();
 
@@ -42,7 +49,7 @@ describe("PrdChangeLog", () => {
   });
 
   it("renders change history toggle and entries when expanded", () => {
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -56,7 +63,7 @@ describe("PrdChangeLog", () => {
   });
 
   it("shows Compare to current only for entries with documentVersion", () => {
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion, entryWithoutDocVersion]}
@@ -76,10 +83,11 @@ describe("PrdChangeLog", () => {
       diff: {
         lines: [{ type: "context", text: "line", oldLineNumber: 1, newLineNumber: 1 }],
         summary: { additions: 0, deletions: 0 },
+        pagination: { totalLines: 1, offset: 0, limit: 1, hasMore: false },
       },
     });
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -90,7 +98,7 @@ describe("PrdChangeLog", () => {
 
     await user.click(screen.getByTestId("compare-to-current"));
 
-    expect(mockGetVersionDiff).toHaveBeenCalledWith("proj-1", "3");
+    expect(mockGetVersionDiff).toHaveBeenCalledWith("proj-1", "3", undefined, { lineOffset: 0 });
     expect(screen.getByTestId("version-diff-modal-content")).toBeInTheDocument();
     expect(screen.getByText("Diff: v3 → current")).toBeInTheDocument();
     expect(screen.getByTestId("version-diff-modal-close")).toBeInTheDocument();
@@ -106,7 +114,7 @@ describe("PrdChangeLog", () => {
         })
     );
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -130,6 +138,7 @@ describe("PrdChangeLog", () => {
           },
         ],
         summary: { additions: 1, deletions: 0 },
+        pagination: { totalLines: 1, offset: 0, limit: 1, hasMore: false },
       },
     });
 
@@ -143,10 +152,14 @@ describe("PrdChangeLog", () => {
     mockGetVersionDiff.mockResolvedValue({
       fromVersion: "3",
       toVersion: "current",
-      diff: { lines: [], summary: { additions: 0, deletions: 0 } },
+      diff: {
+        lines: [],
+        summary: { additions: 0, deletions: 0 },
+        pagination: { totalLines: 0, offset: 0, limit: 0, hasMore: false },
+      },
     });
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -167,10 +180,13 @@ describe("PrdChangeLog", () => {
     mockGetVersionDiff.mockResolvedValue({
       fromVersion: "3",
       toVersion: "current",
-      diff: { lines: [] },
+      diff: {
+        lines: [],
+        pagination: { totalLines: 0, offset: 0, limit: 0, hasMore: false },
+      },
     });
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -189,10 +205,13 @@ describe("PrdChangeLog", () => {
     mockGetVersionDiff.mockResolvedValue({
       fromVersion: "3",
       toVersion: "current",
-      diff: { lines: [] },
+      diff: {
+        lines: [],
+        pagination: { totalLines: 0, offset: 0, limit: 0, hasMore: false },
+      },
     });
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -212,7 +231,7 @@ describe("PrdChangeLog", () => {
     const user = userEvent.setup();
     mockGetVersionDiff.mockRejectedValue(new Error("Network error"));
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -232,7 +251,7 @@ describe("PrdChangeLog", () => {
     });
     mockGetVersionDiff.mockRejectedValue(notFoundError);
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}
@@ -255,10 +274,14 @@ describe("PrdChangeLog", () => {
     mockGetVersionDiff.mockResolvedValue({
       fromVersion: "3",
       toVersion: "current",
-      diff: { lines: [], summary: { additions: 0, deletions: 0 } },
+      diff: {
+        lines: [],
+        summary: { additions: 0, deletions: 0 },
+        pagination: { totalLines: 0, offset: 0, limit: 0, hasMore: false },
+      },
     });
 
-    render(
+    renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
         entries={[entryWithDocVersion]}

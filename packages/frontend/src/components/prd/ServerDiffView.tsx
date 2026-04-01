@@ -34,6 +34,12 @@ export interface ServerDiffViewProps {
   fromVersion?: string;
   /** Optional title: "to" version (e.g. "current" or version id) */
   toVersion?: string;
+  /** When more diff lines exist on the server, fetch the next window */
+  onFetchMoreDiff?: () => void;
+  /** True while the next paginated chunk is loading */
+  isFetchingMoreDiff?: boolean;
+  /** Server reports additional pages available */
+  fetchMoreAvailable?: boolean;
 }
 
 const LINE_TYPE_ARIA: Record<ServerDiffLine["type"], string> = {
@@ -42,7 +48,14 @@ const LINE_TYPE_ARIA: Record<ServerDiffLine["type"], string> = {
   context: "Context line",
 };
 
-export function ServerDiffView({ diff, fromVersion, toVersion }: ServerDiffViewProps) {
+export function ServerDiffView({
+  diff,
+  fromVersion,
+  toVersion,
+  onFetchMoreDiff,
+  isFetchingMoreDiff,
+  fetchMoreAvailable,
+}: ServerDiffViewProps) {
   const { lines, summary } = diff;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -176,6 +189,19 @@ export function ServerDiffView({ diff, fromVersion, toVersion }: ServerDiffViewP
                   data-testid="server-diff-show-more"
                 >
                   Show more ({hiddenCount} more line{hiddenCount !== 1 ? "s" : ""})
+                </button>
+              </div>
+            )}
+            {fetchMoreAvailable && onFetchMoreDiff && (
+              <div className="px-3 py-2 border-t border-theme-border bg-theme-surface-muted">
+                <button
+                  type="button"
+                  onClick={onFetchMoreDiff}
+                  disabled={isFetchingMoreDiff}
+                  className="text-sm text-theme-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring rounded disabled:opacity-50"
+                  data-testid="server-diff-load-more-pages"
+                >
+                  {isFetchingMoreDiff ? "Loading…" : "Load more diff"}
                 </button>
               </div>
             )}
