@@ -42,7 +42,10 @@ describe("runMergeQualityGates", () => {
   const getExecutedCommands = (runCommand: ReturnType<typeof vi.fn>): string[] =>
     runCommand.mock.calls
       .map((call) => commandLabel(call[0] as { command: string; args?: string[] }))
-      .filter((label) => label !== "git rev-parse --verify HEAD");
+      .filter(
+        (label) =>
+          label !== "git rev-parse --verify HEAD" && label !== "git rev-parse --show-toplevel"
+      );
 
   const makeTempWorktree = async (
     scripts?: Record<string, string>,
@@ -342,7 +345,10 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
 
     expect(failure).toBeNull();
-    expect(symlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
+    expect(symlinkNodeModules).toHaveBeenCalledWith(
+      await fs.realpath(repoPath),
+      await fs.realpath(worktreePath)
+    );
     const executed = getExecutedCommands(runCommand);
     expect(executed).toContain("npm run build");
     expect(executed.filter((c) => c === "npm run build")).toHaveLength(2);
@@ -396,7 +402,10 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
 
     expect(failure).toBeNull();
-    expect(symlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
+    expect(symlinkNodeModules).toHaveBeenCalledWith(
+      await fs.realpath(repoPath),
+      await fs.realpath(worktreePath)
+    );
     const executed = getExecutedCommands(runCommand);
     expect(executed).toContain("npm run build");
   });
@@ -538,6 +547,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
   it("merged_candidate repair runs npm ci when repo deps are unhealthy even if node_modules exists", async () => {
     const repoPath = await makeTempWorktree({ build: "tsc -b" }, true);
     const worktreePath = await makeTempWorktree({ build: "tsc -b" }, true);
+    const resolvedRepoPath = await fs.realpath(repoPath);
     let buildAttempts = 0;
     const runCommand = vi.fn(
       async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
@@ -546,7 +556,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
           return makeCommandResult(spec, options.cwd);
         }
         if (label === "npm ls --depth=0 --include=dev") {
-          if (options.cwd === repoPath) {
+          if (options.cwd === resolvedRepoPath) {
             throw makeCommandFailure(spec, options.cwd, {
               message: "Dependency setup check failed",
               stderr: "Error: Cannot find module 'better-sqlite3'",
@@ -590,11 +600,14 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
     );
 
     expect(failure).toBeNull();
-    expect(symlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
+    expect(symlinkNodeModules).toHaveBeenCalledWith(
+      resolvedRepoPath,
+      await fs.realpath(worktreePath)
+    );
     const npmCiCalls = runCommand.mock.calls.filter(
       (call) =>
         commandLabel(call[0] as { command: string; args?: string[] }) === "npm ci" &&
-        (call[1] as { cwd: string }).cwd === repoPath
+        (call[1] as { cwd: string }).cwd === resolvedRepoPath
     );
     expect(npmCiCalls).toHaveLength(1);
   });
