@@ -441,6 +441,74 @@ export class TaskStoreService {
   }
 
   /**
+   * Paginated tasks for the task list API: COUNT + LIMIT/OFFSET in SQL (excludes chore rows).
+   * Also returns a minimal hydrated set of all project tasks (including chores) for ready/graph
+   * computation in TaskService without loading full rows for every task.
+   */
+  async listTasksPaginated(
+    projectId: string,
+    limit: number,
+    offset: number
+  ): Promise<{ page: StoredTask[]; total: number; allForGraph: StoredTask[] }> {
+    await this.ensureInitialized();
+    const client = this.ensureClient();
+    const { depsByTaskId, dependentCountByTaskId } = await this.loadDepsMapsForProject(projectId);
+
+    const nonChoreSql =
+      "SELECT * FROM tasks WHERE project_id = ? AND issue_type <> 'chore' ORDER BY priority ASC, created_at ASC LIMIT ? OFFSET ?";
+
+    const [countRow, graphRows, pageRows] = await Promise.all([
+      client.queryOne(
+        toPgParams(
+          "SELECT COUNT(*)::int AS cnt FROM tasks WHERE project_id = ? AND issue_type <> 'chore'"
+        ),
+        [projectId]
+      ),
+      client.query(toPgParams("SELECT id, status, issue_type, description FROM tasks WHERE project_id = ?"), [
+        projectId,
+      ]),
+      client.query(toPgParams(nonChoreSql), [projectId, limit, offset]),
+    ]);
+
+    const total = (countRow?.cnt as number) ?? 0;
+    const allForGraph = graphRows.map((row) =>
+      this.hydrateTaskMinimalForListGraph(
+        row as Record<string, unknown>,
+        depsByTaskId,
+        dependentCountByTaskId
+      )
+    );
+    const page = pageRows.map((row) =>
+      hydrateTask(row as Record<string, unknown>, depsByTaskId, dependentCountByTaskId)
+    );
+    return { page, total, allForGraph };
+  }
+
+  /** Narrow row + shared dep maps for listTasks ready / dependency graph (not full SELECT *). */
+  private hydrateTaskMinimalForListGraph(
+    row: Record<string, unknown>,
+    depsByTaskId: Map<string, Array<{ depends_on_id: string; type: string }>>,
+    dependentCountByTaskId: Map<string, number>
+  ): StoredTask {
+    const id = row.id as string;
+    const deps = depsByTaskId.get(id) ?? [];
+    return {
+      id,
+      title: "",
+      description: (row.description as string) ?? undefined,
+      issue_type: (row.issue_type as string) || "task",
+      status: (row.status as string) || "open",
+      priority: 0,
+      labels: [],
+      created_at: "",
+      updated_at: "",
+      assignee: null,
+      dependencies: deps,
+      dependent_count: dependentCountByTaskId.get(id) ?? 0,
+    };
+  }
+
+  /**
    * List the N most recently completed tasks for analytics.
    * When projectId is provided, scope to that project; when null, global scope.
    * Only returns tasks with completed_at set (required for completion time).

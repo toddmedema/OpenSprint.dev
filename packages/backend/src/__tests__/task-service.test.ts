@@ -64,6 +64,21 @@ vi.mock("../services/task-store.service.js", async (importOriginal) => {
       planUpdateMetadata: vi.fn(),
       syncForPush: vi.fn(),
       listRecentlyCompletedTasks: vi.fn().mockResolvedValue([]),
+      listTasksPaginated: vi.fn().mockImplementation(async (_pid: string, limit: number, offset: number) => {
+        const all = mockTaskStoreState.listAll;
+        const nonChore = all.filter((i) => (i.issue_type ?? "task") !== "chore");
+        nonChore.sort((a, b) => {
+          const pa = a.priority ?? 0;
+          const pb = b.priority ?? 0;
+          if (pa !== pb) return pa - pb;
+          return String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+        });
+        return {
+          page: nonChore.slice(offset, offset + limit) as StoredTask[],
+          total: nonChore.length,
+          allForGraph: [...all],
+        };
+      }),
     },
     TaskStoreService: vi.fn(),
     SCHEMA_SQL: "",
@@ -244,6 +259,38 @@ describe("TaskService", () => {
     expect(tasks).toBeDefined();
     expect(tasks.length).toBe(1);
     expect(mockTaskStoreState.readyCalls).toBe(0);
+  });
+
+  it("listTasks with limit and offset uses listTasksPaginated and does not call listAll", async () => {
+    const { taskStore } = await import("../services/task-store.service.js");
+    mockTaskStoreState.listAll = Array.from({ length: 5 }, (_, i) => ({
+      id: `task-${i}`,
+      title: `Task ${i}`,
+      status: "open" as const,
+      issue_type: "task" as const,
+      priority: 2,
+      created_at: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+      updated_at: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+      dependencies: [],
+    })) as StoredTask[];
+
+    vi.mocked(taskStore.listAll).mockClear();
+    vi.mocked(taskStore.listTasksPaginated).mockClear();
+
+    const result = await taskService.listTasks("proj-1", { limit: 2, offset: 1 });
+
+    expect(taskStore.listTasksPaginated).toHaveBeenCalledWith("proj-1", 2, 1);
+    expect(taskStore.listAll).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({
+        total: 5,
+        items: expect.any(Array),
+      })
+    );
+    const paginated = result as { items: { id: string }[]; total: number };
+    expect(paginated.items).toHaveLength(2);
+    expect(paginated.items[0].id).toBe("task-1");
+    expect(paginated.items[1].id).toBe("task-2");
   });
 
   it("listTasks returns task with source when stored issue has source (e.g. from extra.source)", async () => {

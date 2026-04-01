@@ -681,6 +681,32 @@ suite("TaskStoreService", () => {
     });
   });
 
+  describe("listTasksPaginated", () => {
+    it("excludes chores from total and page but includes them in allForGraph", async () => {
+      await store.create(TEST_PROJECT_ID, "Chore", { type: "chore" });
+      const a = await store.create(TEST_PROJECT_ID, "A", { type: "task" });
+      const b = await store.create(TEST_PROJECT_ID, "B", { type: "task" });
+
+      const r = await store.listTasksPaginated(TEST_PROJECT_ID, 10, 0);
+      expect(r.total).toBe(2);
+      expect(r.page.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
+      expect(r.allForGraph).toHaveLength(3);
+    });
+
+    it("orders by priority ASC then created_at ASC and respects limit and offset", async () => {
+      const low = await store.create(TEST_PROJECT_ID, "Later priority", { type: "task", priority: 2 });
+      const high = await store.create(TEST_PROJECT_ID, "Earlier priority", { type: "task", priority: 0 });
+      const mid = await store.create(TEST_PROJECT_ID, "Mid", { type: "task", priority: 1 });
+
+      const r0 = await store.listTasksPaginated(TEST_PROJECT_ID, 10, 0);
+      expect(r0.page.map((t) => t.id)).toEqual([high.id, mid.id, low.id]);
+
+      const r1 = await store.listTasksPaginated(TEST_PROJECT_ID, 2, 1);
+      expect(r1.total).toBe(3);
+      expect(r1.page.map((t) => t.id)).toEqual([mid.id, low.id]);
+    });
+  });
+
   describe("listRecentlyCompletedTasks", () => {
     it("returns closed tasks with completed_at, ordered by completed_at DESC", async () => {
       const t1 = await store.create(TEST_PROJECT_ID, "Task 1", { type: "task", complexity: 3 });

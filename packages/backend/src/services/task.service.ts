@@ -115,15 +115,50 @@ export class TaskService {
     const startTotal = performance.now();
     const project = await this.projectService.getProject(projectId);
 
-    const t0 = performance.now();
-    const allIssues = await this.taskStore.listAll(projectId);
-    const listAllMs = Math.round(performance.now() - t0);
-
     const t1 = performance.now();
     const sessionsByTask = await this.sessionManager.loadSessionsTestResultsOnlyGroupedByTaskId(
       project.repoPath
     );
     const sessionsMs = Math.round(performance.now() - t1);
+
+    if (options?.limit != null && options?.offset != null) {
+      const offset = Math.max(0, options.offset);
+      const limit = Math.max(1, Math.min(500, options.limit));
+
+      const t0 = performance.now();
+      const { page, total, allForGraph } = await this.taskStore.listTasksPaginated(
+        projectId,
+        limit,
+        offset
+      );
+      const listStoreMs = Math.round(performance.now() - t0);
+
+      const idToIssue = new Map(allForGraph.map((i) => [i.id, i]));
+      for (const full of page) {
+        idToIssue.set(full.id, full);
+      }
+
+      const readyIds = this.computeReadyIdsFromListAll(allForGraph);
+      const tasks = page.map((issue) => this.storedTaskToTask(issue, readyIds, idToIssue));
+      this.enrichTasksWithTestResultsFromMap(tasks, sessionsByTask);
+
+      const totalMs = Math.round(performance.now() - startTotal);
+      if (totalMs > 1000) {
+        log.warn("listTasks slow", {
+          listStoreMs,
+          sessionsMs,
+          totalMs,
+          taskCount: tasks.length,
+          paginated: true,
+        });
+      }
+
+      return { items: tasks, total };
+    }
+
+    const t0 = performance.now();
+    const allIssues = await this.taskStore.listAll(projectId);
+    const listAllMs = Math.round(performance.now() - t0);
 
     const readyIds = this.computeReadyIdsFromListAll(allIssues);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
@@ -143,13 +178,6 @@ export class TaskService {
         totalMs,
         taskCount: tasks.length,
       });
-    }
-
-    if (options?.limit != null && options?.offset != null) {
-      const offset = Math.max(0, options.offset);
-      const limit = Math.max(1, Math.min(500, options.limit));
-      const items = tasks.slice(offset, offset + limit);
-      return { items, total: tasks.length };
     }
 
     return tasks;
