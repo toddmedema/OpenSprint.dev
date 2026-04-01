@@ -16,6 +16,7 @@
     "boot-screen.ts",
     "window-options.ts",
     "runtime-branding.ts",
-    "open-in-editor.ts"
+    "open-in-editor.ts",
+    "desktop-crash-log.ts"
   ]
 }

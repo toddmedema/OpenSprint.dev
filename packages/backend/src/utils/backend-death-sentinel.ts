@@ -3,7 +3,13 @@ import { appendRuntimeTrace } from "./runtime-trace.js";
 
 /**
  * Launch a detached watcher process that survives backend termination and writes
- * a forensic breadcrumb when the backend PID disappears unexpectedly.
+ * forensic breadcrumbs when the backend or its parent PID disappears unexpectedly.
+ *
+ * Improvements over earlier versions:
+ * - Emits a dedicated `parent.disappeared` event when the Electron parent dies
+ * - Periodic `sentinel.heartbeat` every 60 checks so we can confirm the sentinel is alive
+ * - Logs `startedAtIso` in every event for easy time-range correlation
+ * - Handles SIGTERM/SIGINT with a clean `sentinel.terminated` breadcrumb
  */
 export function startBackendDeathSentinel(params: {
   sessionId: string;
@@ -20,7 +26,9 @@ const backendPid = Number(process.argv[1]);
 const parentPid = Number(process.argv[2]);
 const sessionId = String(process.argv[3] || "unknown-session");
 const startedAt = Date.now();
+const startedAtIso = new Date(startedAt).toISOString();
 const logPath = process.env.OPENSPRINT_SENTINEL_LOG_PATH || path.join(os.homedir(), ".opensprint", "backend-sentinel.log");
+const HEARTBEAT_EVERY = 60;
 
 function alive(pid) {
   if (!Number.isFinite(pid) || pid <= 1) return false;
@@ -44,6 +52,7 @@ function write(event, payload) {
         watcherPid: process.pid,
         backendPid,
         parentPid,
+        startedAtIso,
         payload: payload || {},
       }) + "\\n",
       "utf-8"
@@ -60,6 +69,15 @@ const interval = setInterval(() => {
   checks += 1;
   const backendAlive = alive(backendPid);
   const parentAlive = alive(parentPid);
+
+  if (!parentAlive && lastParentAlive) {
+    write("parent.disappeared", {
+      checks,
+      backendAliveAtParentDeath: backendAlive,
+      monitorUptimeMs: Date.now() - startedAt,
+    });
+  }
+
   if (!backendAlive) {
     write("backend.disappeared", {
       checks,
@@ -69,6 +87,17 @@ const interval = setInterval(() => {
     });
     process.exit(0);
   }
+
+  if (checks % HEARTBEAT_EVERY === 0) {
+    write("sentinel.heartbeat", {
+      checks,
+      backendAlive,
+      parentAlive,
+      monitorUptimeMs: Date.now() - startedAt,
+      memRssBytes: process.memoryUsage().rss,
+    });
+  }
+
   lastParentAlive = parentAlive;
 }, 1000);
 interval.unref();
@@ -82,6 +111,16 @@ setTimeout(() => {
   });
   process.exit(0);
 }, 24 * 60 * 60 * 1000).unref();
+
+process.on("SIGTERM", () => {
+  write("sentinel.terminated", { signal: "SIGTERM", checks, monitorUptimeMs: Date.now() - startedAt });
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  write("sentinel.terminated", { signal: "SIGINT", checks, monitorUptimeMs: Date.now() - startedAt });
+  process.exit(0);
+});
 
 process.on("uncaughtException", (err) => {
   write("sentinel.uncaughtException", {

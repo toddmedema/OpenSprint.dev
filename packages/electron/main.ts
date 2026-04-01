@@ -21,6 +21,8 @@ import { shouldApplyRuntimeDockIcon } from "./runtime-branding";
 import { renderBootHtml } from "./boot-screen";
 import { openInEditor, type EditorMode } from "./open-in-editor";
 import { execFile } from "child_process";
+import crypto from "crypto";
+import { appendDesktopCrashLog, setDesktopSessionId } from "./desktop-crash-log";
 
 import { autoUpdater } from "electron-updater";
 
@@ -57,10 +59,15 @@ let isQuitting = false;
 let quitAfterBackendStop = false;
 let backendStartupInProgress = false;
 let backendPort = DEFAULT_BACKEND_PORT;
+let backendRestartAttempted = false;
+
+const desktopSessionId = crypto.randomUUID();
+setDesktopSessionId(desktopSessionId);
 
 process.on("unhandledRejection", (reason) => {
   const msg = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
   console.error("[Electron] Unhandled promise rejection (caught by safety net):", msg);
+  appendDesktopCrashLog("process.unhandledRejection", { reason: msg });
   try {
     const logDir = path.join(os.homedir(), ".opensprint", "logs");
     fs.mkdirSync(logDir, { recursive: true });
@@ -78,6 +85,9 @@ process.on("uncaughtException", (error) => {
     "[Electron] Uncaught exception (caught by safety net):",
     error.stack ?? error.message
   );
+  appendDesktopCrashLog("process.uncaughtException", {
+    error: error.stack ?? error.message,
+  });
   try {
     const logDir = path.join(os.homedir(), ".opensprint", "logs");
     fs.mkdirSync(logDir, { recursive: true });
@@ -826,6 +836,11 @@ function startBackend(pathOverride?: string): ChildProcess {
   child.on("error", (err: Error) => {
     backendLaunchError = new Error(`Backend process error: ${err.message}`);
     console.error("Backend process error:", err);
+    appendDesktopCrashLog("backend.child_error", {
+      message: err.message,
+      stack: err.stack,
+      pid: child.pid ?? null,
+    });
   });
   child.on("exit", (code, signal) => {
     const exitedActiveBackend = backendProcess === child;
@@ -835,6 +850,14 @@ function startBackend(pathOverride?: string): ChildProcess {
       closeBackendLogStream();
       clearDesktopLocalSessionTokenCache();
     }
+    appendDesktopCrashLog("backend.child_exit", {
+      code,
+      signal,
+      exitedActiveBackend,
+      isQuitting,
+      backendStartupInProgress,
+      pid: child.pid ?? null,
+    });
     if (!isQuitting && code !== 0) {
       backendLaunchError = new Error(`Backend exited with code ${code}`);
     } else if (!isQuitting && signal) {
@@ -842,20 +865,16 @@ function startBackend(pathOverride?: string): ChildProcess {
     }
     if (isQuitting) return;
     if (!exitedActiveBackend) return;
-    if (code != null && code !== 0) {
-      console.error("Backend exited with code", code);
-      if (backendStartupInProgress) {
-        return;
-      }
-      dialog.showErrorBox(
-        "Backend Error",
-        "The backend process crashed. The app will now quit." +
-          (backendLogPath ? `\n\nBackend log: ${backendLogPath}` : "")
+    if (backendStartupInProgress) return;
+
+    const unexpectedExit =
+      (code != null && code !== 0) || (code === null && signal != null);
+    if (unexpectedExit) {
+      console.error(
+        "Backend exited unexpectedly:",
+        code != null ? `code ${code}` : `signal ${signal}`
       );
-      app.exit(1);
-    }
-    if (signal) {
-      console.error("Backend killed with signal", signal);
+      void attemptBackendRestart(code, signal);
     }
   });
   return child;
@@ -920,6 +939,26 @@ function createWindow(): void {
       event.preventDefault();
     }
   });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    appendDesktopCrashLog("webContents.render_process_gone", {
+      reason: details.reason,
+      exitCode: details.exitCode,
+    });
+  });
+  mainWindow.webContents.on("unresponsive", () => {
+    appendDesktopCrashLog("webContents.unresponsive", {});
+  });
+  mainWindow.webContents.on("responsive", () => {
+    appendDesktopCrashLog("webContents.responsive", {});
+  });
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    appendDesktopCrashLog("webContents.did_fail_load", {
+      errorCode,
+      errorDescription,
+      validatedURL,
+    });
+  });
+
   loadBootScreen("Starting backend...");
   mainWindow.on("close", (e) => {
     if (isQuitting) {
@@ -1240,6 +1279,62 @@ function killBackend(): Promise<void> {
   return backendShutdownPromise;
 }
 
+async function attemptBackendRestart(
+  exitCode: number | null,
+  exitSignal: string | null
+): Promise<void> {
+  if (backendRestartAttempted || isQuitting) {
+    appendDesktopCrashLog("backend.restart_exhausted", {
+      exitCode,
+      exitSignal,
+      backendRestartAttempted,
+      isQuitting,
+    });
+    dialog.showErrorBox(
+      "Backend Error",
+      "The backend process crashed and could not be restarted. The app will now quit." +
+        (backendLogPath ? `\n\nBackend log: ${backendLogPath}` : "")
+    );
+    app.exit(1);
+    return;
+  }
+
+  backendRestartAttempted = true;
+  appendDesktopCrashLog("backend.restart_attempt", { exitCode, exitSignal });
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    loadBootScreen("Backend stopped unexpectedly. Restarting...");
+  }
+
+  try {
+    backendStartupInProgress = true;
+    backendProcess = startBackend();
+    await waitForBackend(backendProcess);
+    backendStartupInProgress = false;
+    backendLaunchError = null;
+
+    appendDesktopCrashLog("backend.restart_succeeded", {
+      newPid: backendProcess?.pid ?? null,
+    });
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      await mainWindow.loadURL(getBackendOrigin());
+    }
+  } catch (err) {
+    backendStartupInProgress = false;
+    appendDesktopCrashLog("backend.restart_failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    await killBackend();
+    dialog.showErrorBox(
+      "Backend Error",
+      "The backend process crashed and could not be restarted. The app will now quit." +
+        (backendLogPath ? `\n\nBackend log: ${backendLogPath}` : "")
+    );
+    app.exit(1);
+  }
+}
+
 app.on("second-instance", () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -1274,6 +1369,26 @@ app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) {
     return;
   }
+
+  appendDesktopCrashLog("app.ready", {
+    sessionId: desktopSessionId,
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    electronVersion: process.versions.electron,
+    nodeVersion: process.versions.node,
+    isPackaged: app.isPackaged,
+  });
+
+  app.on("child-process-gone", (_event, details) => {
+    appendDesktopCrashLog("app.child_process_gone", {
+      type: details.type,
+      reason: details.reason,
+      exitCode: details.exitCode,
+      serviceName: details.serviceName,
+      name: details.name,
+    });
+  });
 
   setupSessionSecurity();
   applyRuntimeBranding();
@@ -1555,6 +1670,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
+  appendDesktopCrashLog("app.before_quit", {
+    hadBackend: backendProcess != null,
+    backendPid: backendProcess?.pid ?? null,
+    quitAfterBackendStop,
+  });
   isQuitting = true;
   if (dailyUpdateTimer) {
     clearInterval(dailyUpdateTimer);
