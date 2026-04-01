@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -1211,6 +1212,44 @@ describe("Todoist OAuth Routes", () => {
 
       first.destroy();
       second.destroy();
+    });
+
+    it("creates parent directory with 0o700 and state file with 0o600 on POSIX", () => {
+      if (process.platform === "win32") {
+        return;
+      }
+      const base = fs.mkdtempSync(path.join(os.tmpdir(), "oauth-perms-"));
+      const nestedDir = path.join(base, ".opensprint");
+      const filePath = path.join(nestedDir, "todoist-oauth-states.json");
+      const store = new OAuthStateStore(filePath);
+      store.store("perm-state", "proj-perm");
+
+      const dirStat = fs.statSync(nestedDir);
+      const fileStat = fs.statSync(filePath);
+      expect(dirStat.mode & 0o777).toBe(0o700);
+      expect(fileStat.mode & 0o777).toBe(0o600);
+
+      store.destroy();
+      fs.rmSync(base, { recursive: true, force: true });
+    });
+
+    it("tightens permissions when persisting over an existing loose file on POSIX", () => {
+      if (process.platform === "win32") {
+        return;
+      }
+      const base = fs.mkdtempSync(path.join(os.tmpdir(), "oauth-perms-loose-"));
+      const filePath = path.join(base, "todoist-oauth-states.json");
+      fs.mkdirSync(base, { recursive: true });
+      fs.writeFileSync(filePath, "{}", "utf8");
+      fs.chmodSync(filePath, 0o644);
+      expect(fs.statSync(filePath).mode & 0o777).toBe(0o644);
+
+      const store = new OAuthStateStore(filePath);
+      store.store("after-loose", "proj-x");
+      expect(fs.statSync(filePath).mode & 0o777).toBe(0o600);
+
+      store.destroy();
+      fs.rmSync(base, { recursive: true, force: true });
     });
   });
 });

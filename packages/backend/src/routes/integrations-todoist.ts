@@ -42,6 +42,10 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("todoist-oauth");
 
 const OAUTH_SCOPES: readonly Permission[] = ["data:read_write", "data:delete"];
+/** Match token-encryption.service (encryption-salt): owner read/write only. */
+const OAUTH_STATE_FILE_MODE = 0o600;
+/** Restrict ~/.opensprint subtree created for OAuth state to owner only. */
+const OAUTH_STATE_DIR_MODE = 0o700;
 const STATE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const STATE_CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
 const SYNC_RATE_LIMIT_MS = 10 * 1000; // 10 seconds
@@ -92,9 +96,17 @@ export class OAuthStateStore {
 
   private persistToDisk(): void {
     const dir = path.dirname(this.filePath);
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: OAUTH_STATE_DIR_MODE });
     const payload = JSON.stringify(Object.fromEntries(this.states), null, 2);
-    fs.writeFileSync(this.filePath, payload, "utf8");
+    fs.writeFileSync(this.filePath, payload, {
+      encoding: "utf8",
+      mode: OAUTH_STATE_FILE_MODE,
+    });
+    try {
+      fs.chmodSync(this.filePath, OAUTH_STATE_FILE_MODE);
+    } catch {
+      // Mode applies on create; chmod tightens existing files on POSIX. Ignore otherwise.
+    }
   }
 
   private pruneExpired(): void {
