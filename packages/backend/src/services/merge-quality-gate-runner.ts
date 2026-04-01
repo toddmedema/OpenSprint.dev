@@ -100,6 +100,8 @@ interface PreparedGateCommand {
   label: string;
   spec: CommandSpec;
   executable: string;
+  /** Directory where the gate command must run (may differ from options.worktreePath after resolution). */
+  executionCwd: string;
 }
 
 type PreparedGateCommandResult =
@@ -522,13 +524,23 @@ async function ensurePathExists(
   }
 }
 
+/** Resolve symlinked / aliased paths (e.g. macOS /var → /private/var) for stable gate cwd. */
+async function resolveMergeGateFilesystemRoot(p: string): Promise<string> {
+  const resolved = path.resolve(p);
+  try {
+    return await fs.realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 async function prepareGateCommand(
   options: MergeQualityGateRunOptions,
   command: string,
   validationWorkspace: MergeQualityGateFailure["validationWorkspace"],
   runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
 ): Promise<PreparedGateCommandResult> {
-  const cwd = options.worktreePath;
+  let cwd = await resolveMergeGateFilesystemRoot(options.worktreePath);
   const resolvedProfile = resolveToolchainProfile(options.toolchainProfile);
   const workspaceFailure = await ensurePathExists(cwd, `Validation workspace is missing: ${cwd}`, {
     command,
@@ -543,17 +555,42 @@ async function prepareGateCommand(
     npmGate && isNodeDependencyStrategy(resolvedProfile.dependencyStrategy);
   let packageScripts = new Set<string>();
   if (shouldRunNodePrechecks) {
-    const packageJsonPath = path.join(cwd, "package.json");
-    const packageJsonFailure = await ensurePathExists(
-      packageJsonPath,
-      `Validation workspace package.json is missing: ${packageJsonPath}`,
-      {
-        command,
-        validationWorkspace,
-        worktreePath: cwd,
+    let packageJsonPath = path.join(cwd, "package.json");
+    try {
+      await fs.access(packageJsonPath);
+    } catch {
+      const missingAtInput = packageJsonPath;
+      try {
+        const topLevelResult = await runCommand(
+          {
+            command: "git",
+            args: ["rev-parse", "--show-toplevel"],
+          },
+          {
+            cwd,
+            timeout: QUALITY_GATE_PRECHECK_TIMEOUT_MS,
+          }
+        );
+        const topLevel = topLevelResult.stdout.trim();
+        if (!topLevel) throw new Error("git show-toplevel empty");
+        const topAbs = await resolveMergeGateFilesystemRoot(topLevel);
+        const candidate = path.join(topAbs, "package.json");
+        await fs.access(candidate);
+        cwd = topAbs;
+        packageJsonPath = candidate;
+      } catch {
+        return {
+          failure: buildFailure({
+            command,
+            reason: `Validation workspace package.json is missing: ${missingAtInput}`,
+            worktreePath: cwd,
+            validationWorkspace,
+            category: "environment_setup",
+            cwd,
+          }),
+        };
       }
-    );
-    if (packageJsonFailure) return { failure: packageJsonFailure };
+    }
 
     try {
       const raw = await fs.readFile(packageJsonPath, "utf-8");
@@ -690,6 +727,7 @@ async function prepareGateCommand(
       label: command,
       spec,
       executable,
+      executionCwd: cwd,
     },
     packageScripts,
   };
@@ -1026,16 +1064,17 @@ async function executePreparedGate(
   runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>,
   commandEnv?: NodeJS.ProcessEnv
 ): Promise<MergeQualityGateFailure | null> {
+  const cwd = prepared.executionCwd;
   try {
     await runCommand(prepared.spec, {
-      cwd: options.worktreePath,
+      cwd,
       timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
       ...(commandEnv ? { env: commandEnv } : {}),
     });
     return null;
   } catch (err) {
     return extractCommandFailure(prepared.label, err, {
-      worktreePath: options.worktreePath,
+      worktreePath: cwd,
       validationWorkspace,
     });
   }
@@ -1063,20 +1102,28 @@ export async function runMergeQualityGates(
 ): Promise<MergeQualityGateFailure | null> {
   if (process.env.NODE_ENV === "test") return null;
 
+  const normWt = await resolveMergeGateFilesystemRoot(options.worktreePath);
+  const normRepo = await resolveMergeGateFilesystemRoot(options.repoPath);
+  const gateOptions: MergeQualityGateRunOptions = {
+    ...options,
+    worktreePath: normWt,
+    repoPath: normRepo,
+  };
+
   const runCommand = deps.runCommand ?? runCommandDefault;
-  const qualityGateProfile = options.qualityGateProfile ?? "deterministic";
+  const qualityGateProfile = gateOptions.qualityGateProfile ?? "deterministic";
   const executionPlan: MergeQualityGateExecutionPlanEntry[] = deps.commands
     ? deps.commands.map((command) => ({ command }))
     : getMergeQualityGateExecutionPlan({
         profile: qualityGateProfile,
-        testRunId: buildMergeGateRunId(options),
+        testRunId: buildMergeGateRunId(gateOptions),
         integrationWorkerCap: resolveMergeGateIntegrationWorkerCap(),
-        toolchainProfile: options.toolchainProfile,
+        toolchainProfile: gateOptions.toolchainProfile,
       });
   const validationWorkspace =
-    options.validationWorkspace ??
-    (options.worktreePath === options.repoPath ? "repo_root" : "task_worktree");
-  const resolvedProfile = resolveToolchainProfile(options.toolchainProfile);
+    gateOptions.validationWorkspace ??
+    (normWt === normRepo ? "repo_root" : "task_worktree");
+  const resolvedProfile = resolveToolchainProfile(gateOptions.toolchainProfile);
   const symlinkNodeModules =
     deps.symlinkNodeModules ??
     (async (repoPath: string, wtPath: string) => {
@@ -1088,17 +1135,17 @@ export async function runMergeQualityGates(
     const command = gate.command;
     const commandEnv = gate.env;
     const preparedOrFailure = await prepareGateCommand(
-      options,
+      gateOptions,
       command,
       validationWorkspace,
       runCommand
     );
     if ("skipped" in preparedOrFailure) {
       log.info("Skipping merge quality gate because npm script is not defined", {
-        projectId: options.projectId,
-        taskId: options.taskId,
+        projectId: gateOptions.projectId,
+        taskId: gateOptions.taskId,
         command,
-        cwd: options.worktreePath,
+        cwd: gateOptions.worktreePath,
       });
       continue;
     }
@@ -1114,12 +1161,17 @@ export async function runMergeQualityGates(
         return initialFailure;
       }
 
-      const autoRepair = await repairQualityGateEnvironment(options, validationWorkspace, command, {
-        runCommand,
-        symlinkNodeModules,
-      });
+      const autoRepair = await repairQualityGateEnvironment(
+        gateOptions,
+        validationWorkspace,
+        command,
+        {
+          runCommand,
+          symlinkNodeModules,
+        }
+      );
       const retryPreparedOrFailure = await prepareGateCommand(
-        { ...options, worktreePath: autoRepair.worktreePath },
+        { ...gateOptions, worktreePath: autoRepair.worktreePath },
         command,
         validationWorkspace,
         runCommand
@@ -1138,7 +1190,7 @@ export async function runMergeQualityGates(
       }
       const retryFailure = await executePreparedGate(
         retryPreparedOrFailure.prepared,
-        { ...options, worktreePath: autoRepair.worktreePath },
+        { ...gateOptions, worktreePath: autoRepair.worktreePath },
         validationWorkspace,
         runCommand,
         commandEnv
@@ -1156,15 +1208,15 @@ export async function runMergeQualityGates(
     }
 
     log.info("Running merge quality gate", {
-      projectId: options.projectId,
-      taskId: options.taskId,
+      projectId: gateOptions.projectId,
+      taskId: gateOptions.taskId,
       command,
-      cwd: options.worktreePath,
+      cwd: preparedOrFailure.prepared.executionCwd,
       executable: preparedOrFailure.prepared.executable,
     });
     const initialFailure = await executePreparedGate(
       preparedOrFailure.prepared,
-      options,
+      gateOptions,
       validationWorkspace,
       runCommand,
       commandEnv
@@ -1172,8 +1224,8 @@ export async function runMergeQualityGates(
     if (!initialFailure) continue;
     if (initialFailure.category !== "environment_setup") {
       log.warn("Merge quality gate failed", {
-        projectId: options.projectId,
-        taskId: options.taskId,
+        projectId: gateOptions.projectId,
+        taskId: gateOptions.taskId,
         command,
         reason: initialFailure.reason,
       });
@@ -1186,12 +1238,17 @@ export async function runMergeQualityGates(
       return initialFailure;
     }
 
-    const autoRepair = await repairQualityGateEnvironment(options, validationWorkspace, command, {
-      runCommand,
-      symlinkNodeModules,
-    });
+    const autoRepair = await repairQualityGateEnvironment(
+      gateOptions,
+      validationWorkspace,
+      command,
+      {
+        runCommand,
+        symlinkNodeModules,
+      }
+    );
     const retryPreparedOrFailure = await prepareGateCommand(
-      { ...options, worktreePath: autoRepair.worktreePath },
+      { ...gateOptions, worktreePath: autoRepair.worktreePath },
       command,
       validationWorkspace,
       runCommand
@@ -1210,15 +1267,15 @@ export async function runMergeQualityGates(
     }
 
     log.info("Retrying merge quality gate after environment auto-repair", {
-      projectId: options.projectId,
-      taskId: options.taskId,
+      projectId: gateOptions.projectId,
+      taskId: gateOptions.taskId,
       command,
       repairCommands: autoRepair.commands,
       cwd: autoRepair.worktreePath,
     });
     const retryFailure = await executePreparedGate(
       retryPreparedOrFailure.prepared,
-      { ...options, worktreePath: autoRepair.worktreePath },
+      { ...gateOptions, worktreePath: autoRepair.worktreePath },
       validationWorkspace,
       runCommand,
       commandEnv
@@ -1226,8 +1283,8 @@ export async function runMergeQualityGates(
     if (!retryFailure) continue;
 
     log.warn("Merge quality gate failed after environment auto-repair retry", {
-      projectId: options.projectId,
-      taskId: options.taskId,
+      projectId: gateOptions.projectId,
+      taskId: gateOptions.taskId,
       command,
       reason: retryFailure.reason,
       category: retryFailure.category,

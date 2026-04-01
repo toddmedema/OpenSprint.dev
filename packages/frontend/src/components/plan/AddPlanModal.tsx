@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, useEffect, useCallback } from "react";
+import { useState, useRef, useLayoutEffect, useEffect, useCallback, useId } from "react";
 import type { PlanAttachment } from "@opensprint/shared";
 import {
   PLAN_ATTACHMENT_ACCEPT,
@@ -16,6 +16,10 @@ export interface AddPlanModalProps {
   onGenerate: (description: string, attachments?: PlanAttachment[]) => Promise<boolean>;
   onClose: () => void;
 }
+
+const ATTACH_CONTROL_LABEL = "Attach images or documents for more context";
+
+const HOVER_TOOLTIP_DELAY_MS = 300;
 
 const ACCEPTED_MIME_TYPES = Object.keys(PLAN_ATTACHMENT_ACCEPT);
 const ACCEPT_STRING = Object.entries(PLAN_ATTACHMENT_ACCEPT)
@@ -77,12 +81,46 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
   const containerRef = useRef<HTMLDivElement>(null);
   const featureInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
+  const attachTooltipHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const attachTooltipId = useId();
+  const [attachTooltipVisible, setAttachTooltipVisible] = useState(false);
   useModalA11y({ containerRef, onClose, isOpen: true, initialFocusRef: featureInputRef });
 
   const [attachments, setAttachments] = useState<PlanAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  const clearAttachTooltipHoverTimer = useCallback(() => {
+    if (attachTooltipHoverTimerRef.current) {
+      clearTimeout(attachTooltipHoverTimerRef.current);
+      attachTooltipHoverTimerRef.current = null;
+    }
+  }, []);
+
+  const hideAttachTooltip = useCallback(() => {
+    clearAttachTooltipHoverTimer();
+    setAttachTooltipVisible(false);
+  }, [clearAttachTooltipHoverTimer]);
+
+  useEffect(() => {
+    return () => clearAttachTooltipHoverTimer();
+  }, [clearAttachTooltipHoverTimer]);
+
+  const handleAttachTooltipMouseEnter = useCallback(() => {
+    attachTooltipHoverTimerRef.current = setTimeout(
+      () => setAttachTooltipVisible(true),
+      HOVER_TOOLTIP_DELAY_MS
+    );
+  }, []);
+
+  const handleAttachTooltipMouseLeave = useCallback(() => {
+    clearAttachTooltipHoverTimer();
+    if (attachButtonRef.current !== document.activeElement) {
+      setAttachTooltipVisible(false);
+    }
+  }, [clearAttachTooltipHoverTimer]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -300,27 +338,53 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             data-testid="file-input"
             tabIndex={-1}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="btn-secondary text-sm inline-flex items-center gap-1"
-            aria-label="Attach files"
-            data-testid="attach-files-button"
+          <span
+            className="relative inline-flex"
+            role="presentation"
+            onMouseEnter={handleAttachTooltipMouseEnter}
+            onMouseLeave={handleAttachTooltipMouseLeave}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              className="w-4 h-4"
+            <button
+              ref={attachButtonRef}
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="btn-secondary h-10 w-10 shrink-0 p-0 flex items-center justify-center disabled:opacity-50"
+              aria-label={ATTACH_CONTROL_LABEL}
+              aria-describedby={attachTooltipVisible ? attachTooltipId : undefined}
+              data-testid="attach-files-button"
+              onFocus={() => {
+                clearAttachTooltipHoverTimer();
+                setAttachTooltipVisible(true);
+              }}
+              onBlur={hideAttachTooltip}
             >
-              <path
-                fillRule="evenodd"
-                d="M11.986 3A2.743 2.743 0 0 0 10.05 3.8L4.05 9.8a1.243 1.243 0 0 0 1.757 1.757l4.5-4.5a.75.75 0 0 1 1.061 1.06l-4.5 4.5a2.743 2.743 0 1 1-3.879-3.878l6-6A4.243 4.243 0 0 1 15 8.744l-6 6a5.743 5.743 0 0 1-8.121-8.122l4.5-4.5a.75.75 0 0 1 1.06 1.061l-4.5 4.5a4.243 4.243 0 0 0 6 6l6-6A2.743 2.743 0 0 0 11.986 3Z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Attach
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className="w-4 h-4"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M11.986 3A2.743 2.743 0 0 0 10.05 3.8L4.05 9.8a1.243 1.243 0 0 0 1.757 1.757l4.5-4.5a.75.75 0 0 1 1.061 1.06l-4.5 4.5a2.743 2.743 0 1 1-3.879-3.878l6-6A4.243 4.243 0 0 1 15 8.744l-6 6a5.743 5.743 0 0 1-8.121-8.122l4.5-4.5a.75.75 0 0 1 1.06 1.061l-4.5 4.5a4.243 4.243 0 0 0 6 6l6-6A2.743 2.743 0 0 0 11.986 3Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+            {attachTooltipVisible && (
+              <div
+                id={attachTooltipId}
+                role="tooltip"
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1.5 text-xs font-normal
+                  bg-theme-bg-elevated text-theme-text rounded-lg shadow-lg ring-1 ring-theme-border
+                  max-w-[min(280px,calc(100vw-2rem))] text-center z-50 pointer-events-none
+                  animate-fade-in"
+              >
+                {ATTACH_CONTROL_LABEL}
+              </div>
+            )}
+          </span>
           <button
             type="button"
             onClick={() => {

@@ -104,18 +104,31 @@ export function getQualityGateFailureDetailsFromMergeError(
 
 export function buildQualityGateStructuredDetails(
   qualityGateFailure: MergeJobQualityGateAttachment | null | undefined,
-  fallbackWorktreePath?: string | null
+  fallbackWorktreePath?: string | null,
+  fallback?: {
+    command?: string | null;
+    reason?: string | null;
+    firstErrorLine?: string | null;
+    category?: "quality_gate" | "environment_setup" | null;
+    validationWorkspace?: "baseline" | "merged_candidate" | "task_worktree" | "repo_root" | null;
+  }
 ): QualityGateStructuredDetails {
-  const failedGateCommand = qualityGateFailure?.command?.trim() || null;
-  const failedGateReason = qualityGateFailure?.reason?.trim() || null;
+  const failedGateCommand = qualityGateFailure?.command?.trim() || fallback?.command?.trim() || null;
+  const failedGateReason = qualityGateFailure?.reason?.trim() || fallback?.reason?.trim() || null;
+  const firstErrorLine =
+    qualityGateFailure?.firstErrorLine?.trim() || fallback?.firstErrorLine?.trim() || null;
   const failedGateOutputSnippet = toQualityGateOutputSnippet(
-    qualityGateFailure?.outputSnippet ?? qualityGateFailure?.firstErrorLine ?? null
+    qualityGateFailure?.outputSnippet ??
+      qualityGateFailure?.firstErrorLine ??
+      fallback?.firstErrorLine ??
+      fallback?.reason ??
+      null
   );
   const worktreePath =
     qualityGateFailure?.worktreePath?.trim() || fallbackWorktreePath?.trim() || null;
-  const firstErrorLine = qualityGateFailure?.firstErrorLine?.trim() || null;
-  const qualityGateCategory = qualityGateFailure?.category ?? null;
-  const qualityGateValidationWorkspace = qualityGateFailure?.validationWorkspace ?? null;
+  const qualityGateCategory = qualityGateFailure?.category ?? fallback?.category ?? null;
+  const qualityGateValidationWorkspace =
+    qualityGateFailure?.validationWorkspace ?? fallback?.validationWorkspace ?? null;
   const qualityGateRepairAttempted = qualityGateFailure?.autoRepairAttempted ?? false;
   const qualityGateRepairSucceeded = qualityGateFailure?.autoRepairSucceeded ?? false;
   const qualityGateExecutable = qualityGateFailure?.executable?.trim() || null;

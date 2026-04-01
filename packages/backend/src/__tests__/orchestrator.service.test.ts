@@ -1672,7 +1672,10 @@ describe("OrchestratorService (slot-based model)", () => {
           "npm run test",
         ]);
         expect(mockSymlinkNodeModules).toHaveBeenCalledTimes(1);
-        expect(mockSymlinkNodeModules).toHaveBeenCalledWith(repoPath, worktreePath);
+        expect(mockSymlinkNodeModules).toHaveBeenCalledWith(
+          await fs.realpath(repoPath),
+          await fs.realpath(worktreePath)
+        );
       } finally {
         process.env.NODE_ENV = previousNodeEnv;
       }

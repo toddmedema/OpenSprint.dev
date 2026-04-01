@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AddPlanModal } from "./AddPlanModal";
 import { planIdeaDraftStorageKey } from "../../lib/agentInputDraftStorage";
 import { PLAN_ATTACHMENT_MAX_SIZE, PLAN_ATTACHMENT_MAX_COUNT } from "@opensprint/shared";
@@ -120,9 +121,10 @@ describe("AddPlanModal", () => {
 
       const attachBtn = screen.getByTestId("attach-files-button");
       expect(attachBtn).toBeInTheDocument();
-      expect(attachBtn).toHaveAccessibleName("Attach files");
+      expect(attachBtn).toHaveAccessibleName("Attach images or documents for more context");
+      expect(attachBtn.textContent?.replace(/\s/g, "")).toBe("");
 
-      const footer = attachBtn.parentElement!;
+      const footer = attachBtn.parentElement!.parentElement!;
       const buttons = Array.from(footer.querySelectorAll("button"));
       const cancelIndex = buttons.findIndex((b) => b.textContent?.includes("Cancel"));
       const attachIndex = buttons.findIndex((b) => b.dataset.testid === "attach-files-button");
@@ -339,6 +341,90 @@ describe("AddPlanModal", () => {
       fireEvent.dragOver(dialog, { dataTransfer: { files: [] } });
 
       expect(screen.getByTestId("drop-zone")).toBeInTheDocument();
+    });
+
+    describe("attach control tooltip", () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it("shows tooltip after hover delay", async () => {
+        const onClose = vi.fn();
+        const onGenerate = vi.fn().mockResolvedValue(false);
+        render(
+          <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+        );
+
+        const attachBtn = screen.getByTestId("attach-files-button");
+        await userEvent.hover(attachBtn);
+        act(() => {
+          vi.advanceTimersByTime(300);
+        });
+
+        await waitFor(() => {
+          const tooltip = screen.getByRole("tooltip");
+          expect(tooltip).toHaveTextContent("Attach images or documents for more context");
+        });
+      });
+
+      it("shows tooltip on focus without waiting for hover delay", () => {
+        const onClose = vi.fn();
+        const onGenerate = vi.fn().mockResolvedValue(false);
+        render(
+          <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+        );
+
+        const attachBtn = screen.getByTestId("attach-files-button");
+        act(() => {
+          attachBtn.focus();
+        });
+
+        const tooltip = screen.getByRole("tooltip");
+        expect(tooltip).toHaveTextContent("Attach images or documents for more context");
+      });
+
+      it("dismisses tooltip when pointer leaves and control is not focused", async () => {
+        const onClose = vi.fn();
+        const onGenerate = vi.fn().mockResolvedValue(false);
+        render(
+          <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+        );
+
+        const attachBtn = screen.getByTestId("attach-files-button");
+        await userEvent.hover(attachBtn);
+        act(() => {
+          vi.advanceTimersByTime(300);
+        });
+
+        await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
+
+        await userEvent.unhover(attachBtn);
+
+        await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+      });
+
+      it("keeps tooltip when pointer leaves but control stays focused", async () => {
+        const onClose = vi.fn();
+        const onGenerate = vi.fn().mockResolvedValue(false);
+        render(
+          <AddPlanModal projectId={defaultProjectId} onGenerate={onGenerate} onClose={onClose} />
+        );
+
+        const attachBtn = screen.getByTestId("attach-files-button");
+        act(() => {
+          attachBtn.focus();
+        });
+        expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+        await userEvent.hover(attachBtn);
+        await userEvent.unhover(attachBtn);
+
+        expect(screen.getByRole("tooltip")).toBeInTheDocument();
+      });
     });
   });
 });

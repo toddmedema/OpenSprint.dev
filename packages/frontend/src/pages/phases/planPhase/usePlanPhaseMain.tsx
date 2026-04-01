@@ -114,10 +114,28 @@ export function usePlanPhaseMain({
   const location = useLocation();
   const navigate = useNavigate();
   const selectedPlanIdFromStore = useAppSelector((s) => s.plan.selectedPlanId);
-  const selectedPlanId = propSelectedPlanId ?? selectedPlanIdFromStore ?? null;
+  /**
+   * When close is triggered while selection is URL-controlled, keep the sidebar closed
+   * until the parent clears or changes the prop. This avoids a visible re-open flicker
+   * while route state catches up.
+   */
+  const [dismissedControlledPlanId, setDismissedControlledPlanId] = useState<string | null>(null);
+  const selectedPlanId =
+    (propSelectedPlanId != null && propSelectedPlanId === dismissedControlledPlanId
+      ? undefined
+      : propSelectedPlanId) ??
+    selectedPlanIdFromStore ??
+    null;
   const [selectedDraftPlanId, setSelectedDraftPlanId] = useState<string | null>(null);
   /** After the user closes the plan sidebar, do not auto-reopen from draft notifications until they select a plan or draft again. */
   const [planSidebarDismissed, setPlanSidebarDismissed] = useState(false);
+
+  useEffect(() => {
+    if (dismissedControlledPlanId == null) return;
+    if (propSelectedPlanId == null || propSelectedPlanId !== dismissedControlledPlanId) {
+      setDismissedControlledPlanId(null);
+    }
+  }, [dismissedControlledPlanId, propSelectedPlanId]);
 
   useEffect(() => {
     if (selectedPlanId != null || selectedDraftPlanId != null) {
@@ -130,12 +148,19 @@ export function usePlanPhaseMain({
   }, [dispatch, projectId, queryClient]);
 
   useEffect(() => {
+    if (
+      dismissedControlledPlanId != null &&
+      propSelectedPlanId != null &&
+      propSelectedPlanId === dismissedControlledPlanId
+    ) {
+      return;
+    }
     if (propSelectedPlanId === undefined || selectedPlanIdFromStore === propSelectedPlanId) return;
     if (propSelectedPlanId) {
       setSelectedDraftPlanId(null);
     }
     dispatch(setSelectedPlanId(propSelectedPlanId ?? null));
-  }, [dispatch, propSelectedPlanId, selectedPlanIdFromStore]);
+  }, [dispatch, dismissedControlledPlanId, propSelectedPlanId, selectedPlanIdFromStore]);
 
   /* ── TanStack Query for loading state (data synced to Redux by ProjectShell) ── */
   const plansQuery = usePlans(projectId);
@@ -1021,11 +1046,12 @@ export function usePlanPhaseMain({
   );
 
   const handleClosePlan = useCallback(() => {
+    setDismissedControlledPlanId(propSelectedPlanId ?? null);
     setPlanSidebarDismissed(true);
     setSelectedDraftPlanId(null);
     dispatch(setSelectedPlanId(null));
     onSelectPlanId?.(null);
-  }, [dispatch, onSelectPlanId]);
+  }, [dispatch, onSelectPlanId, propSelectedPlanId]);
 
   const handlePlanContentSave = useCallback(
     async (content: string) => {
