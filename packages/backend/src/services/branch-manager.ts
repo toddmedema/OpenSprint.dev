@@ -14,6 +14,7 @@ import {
 } from "../utils/git-repo-state.js";
 import { formatClosedCommitMessage, parseClosedCommitMessage } from "../utils/commit-message.js";
 import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
+import { validateWorktreeCheckout } from "../utils/worktree-health.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
@@ -1273,13 +1274,13 @@ export class BranchManager {
       }
     }
 
-    // Epic: reuse existing worktree at wtPath if it is on the right branch.
     if (isEpic) {
       const existing = await this.getWorktreePathForBranch(repoPath, branchName);
       if (existing !== null) {
         const resolvedExisting = await fs.realpath(existing).catch(() => path.resolve(existing));
         const resolvedWt = await fs.realpath(wtPath).catch(() => path.resolve(wtPath));
         if (resolvedExisting === resolvedWt) {
+          await validateWorktreeCheckout(repoPath, wtPath);
           await this.symlinkNodeModules(repoPath, wtPath);
           return wtPath;
         }
@@ -1305,8 +1306,8 @@ export class BranchManager {
       { timeout: 30_000 }
     );
 
-    // Symlink node_modules from main repo so dependencies are available in the worktree.
-    // Git worktrees only contain tracked files; node_modules is gitignored.
+    await validateWorktreeCheckout(repoPath, wtPath);
+
     await this.symlinkNodeModules(repoPath, wtPath);
 
     return wtPath;

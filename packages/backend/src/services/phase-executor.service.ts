@@ -43,7 +43,7 @@ import { createLogger } from "../utils/logger.js";
 import { RepoPreflightError, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { resolveExecuteReplayMetadata } from "./execute-replay-metadata.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
-import { isWorktreeCheckoutUsable } from "../utils/worktree-health.js";
+import { isWorktreeCheckoutUsable, IncompleteWorktreeError } from "../utils/worktree-health.js";
 
 const log = createLogger("phase-executor");
 
@@ -648,6 +648,8 @@ export class PhaseExecutorService {
         return;
       }
       log.error(`Coding phase failed for task ${task.id}`, { projectId, taskId: task.id, branchName, error });
+      const isPreflightLike =
+        error instanceof RepoPreflightError || error instanceof IncompleteWorktreeError;
       const failureReason =
         error instanceof RepoPreflightError
           ? this.formatRepoPreflightFailure(error)
@@ -659,7 +661,7 @@ export class PhaseExecutorService {
         branchName,
         failureReason,
         null,
-        error instanceof RepoPreflightError ? "repo_preflight" : "agent_crash"
+        isPreflightLike ? "repo_preflight" : "agent_crash"
       );
     }
   }

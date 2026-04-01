@@ -333,6 +333,30 @@ export class RecoveryService {
         }
       }
 
+      // Final check: re-read result.json in case the agent wrote it between our
+      // first read and now (closes the TOCTOU race with agent file writes).
+      if (!pidAlive && host.handleCompletedAssignment) {
+        const lateResult = await this.readTerminalAssignmentResult(assignment);
+        if (lateResult) {
+          this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "stale_success", assignment);
+          log.info("Recovery: late terminal result found before requeue, completing instead", {
+            projectId,
+            taskId,
+            status: lateResult,
+          });
+          const completed = await host.handleCompletedAssignment(
+            projectId,
+            repoPath,
+            task,
+            assignment
+          );
+          if (completed) {
+            reattached.push(taskId);
+            continue;
+          }
+        }
+      }
+
       this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "pid_dead_requeue", assignment);
       log.info("Recovery: PID dead or missing, requeuing task", { projectId, taskId });
       try {
@@ -444,6 +468,30 @@ export class RecoveryService {
             });
             await terminateProcessGroup(heartbeat.processGroupLeaderPid, 2000);
           }
+
+          // Final re-read: the agent may have flushed result.json between the
+          // first check and process termination.
+          if (!pidAlive && assignment && host.handleCompletedAssignment) {
+            const lateResult = await this.readTerminalAssignmentResult(assignment);
+            if (lateResult) {
+              log.info("Recovery: late terminal result found before heartbeat requeue", {
+                projectId,
+                taskId,
+                status: lateResult,
+              });
+              const completed = await host.handleCompletedAssignment(
+                projectId,
+                repoPath,
+                task,
+                assignment
+              );
+              if (completed) {
+                reattached.push(taskId);
+                continue;
+              }
+            }
+          }
+
           await this.recoverTask(projectId, repoPath, task);
           requeued.push(taskId);
         }
@@ -747,6 +795,29 @@ export class RecoveryService {
       }
 
       if (!pidAlive) {
+        // Final re-read before committing to recovery: close the TOCTOU window
+        // where the agent writes result.json between the first check and now.
+        if (host.handleCompletedAssignment) {
+          const lateResult = await this.readTerminalAssignmentResult(assignment);
+          if (lateResult) {
+            log.info("Recovery: late terminal result found before slot requeue", {
+              projectId,
+              taskId,
+              status: lateResult,
+            });
+            const completed = await host.handleCompletedAssignment(
+              projectId,
+              repoPath,
+              task,
+              assignment
+            );
+            if (completed) {
+              stale.push(taskId);
+              continue;
+            }
+          }
+        }
+
         log.warn("Recovering dead slotted task", {
           projectId,
           taskId,

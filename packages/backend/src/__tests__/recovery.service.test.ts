@@ -947,6 +947,117 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       );
     });
 
+    it("completes task via late result.json re-read instead of requeueing (TOCTOU fix)", async () => {
+      let callCount = 0;
+      const promptDir = path.join(tmpDir, ".opensprint", "active", "task-late");
+      await fs.mkdir(promptDir, { recursive: true });
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(true),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-late", status: "in_progress", assignee: "Gandalf" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-late",
+          assignment: {
+            taskId: "task-late",
+            projectId: "proj-1",
+            phase: "coding",
+            branchName: "opensprint/task-late",
+            worktreePath: tmpDir,
+            promptPath: path.join(promptDir, "prompt.md"),
+            agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+            attempt: 1,
+            createdAt: new Date().toISOString(),
+          },
+        },
+      ]);
+
+      // Simulate the race: first read returns null, second read finds success
+      const originalReadFile = fs.readFile;
+      const resultPath = path.join(promptDir, "result.json");
+      const spy = vi.spyOn(fs, "readFile").mockImplementation(async (...args: unknown[]) => {
+        const filePath = args[0] as string;
+        if (filePath === resultPath) {
+          callCount++;
+          if (callCount === 1) {
+            throw new Error("ENOENT");
+          }
+          return JSON.stringify({ status: "success" });
+        }
+        return originalReadFile.call(fs, ...args as Parameters<typeof originalReadFile>) as Promise<string>;
+      });
+
+      const result = await service.runFullRecovery("proj-1", tmpDir, guppHost, {
+        includeGupp: true,
+      });
+
+      spy.mockRestore();
+
+      expect(guppHost.handleCompletedAssignment).toHaveBeenCalledWith(
+        "proj-1",
+        tmpDir,
+        expect.objectContaining({ id: "task-late" }),
+        expect.objectContaining({ phase: "coding" })
+      );
+      expect(result.reattached).toEqual(["task-late"]);
+      expect(result.requeued).toEqual([]);
+      // Should NOT have been requeued
+      expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+        "proj-1",
+        "task-late",
+        expect.objectContaining({ status: "open" })
+      );
+    });
+
+    it("requeues when both initial and late result.json reads return null", async () => {
+      const promptDir = path.join(tmpDir, ".opensprint", "active", "task-noresult");
+      await fs.mkdir(promptDir, { recursive: true });
+      // No result.json written at all
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-noresult", status: "in_progress", assignee: "Aragorn" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-noresult",
+          assignment: {
+            taskId: "task-noresult",
+            projectId: "proj-1",
+            phase: "coding",
+            branchName: "opensprint/task-noresult",
+            worktreePath: tmpDir,
+            promptPath: path.join(promptDir, "prompt.md"),
+            agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+            attempt: 1,
+            createdAt: new Date().toISOString(),
+          },
+        },
+      ]);
+
+      const result = await service.runFullRecovery("proj-1", tmpDir, guppHost, {
+        includeGupp: true,
+      });
+
+      expect(result.requeued).toEqual(["task-noresult"]);
+      expect(vi.mocked(taskStore.update)).toHaveBeenCalledWith(
+        "proj-1",
+        "task-noresult",
+        expect.objectContaining({ status: "open" })
+      );
+    });
+
     it("emits recovery.stale_assignment with task_not_found reason for orphaned assignment", async () => {
       const guppHost = {
         ...host,

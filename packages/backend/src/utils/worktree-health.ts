@@ -11,6 +11,78 @@ const EXCLUDED_ROOT_DIRS = new Set([
   "tmp",
 ]);
 
+export class IncompleteWorktreeError extends Error {
+  constructor(
+    public readonly worktreePath: string,
+    public readonly detail: string
+  ) {
+    super(`Worktree checkout at ${worktreePath} is incomplete: ${detail}`);
+    this.name = "IncompleteWorktreeError";
+  }
+}
+
+/**
+ * Validate a freshly created worktree has the minimum expected checkout files.
+ * Throws IncompleteWorktreeError if the checkout is missing critical markers.
+ *
+ * Call this immediately after `git worktree add` and before any agent dispatch.
+ */
+export async function validateWorktreeCheckout(
+  repoPath: string,
+  worktreePath: string
+): Promise<void> {
+  try {
+    await fs.access(worktreePath);
+  } catch {
+    throw new IncompleteWorktreeError(worktreePath, "directory does not exist");
+  }
+
+  try {
+    await fs.access(path.join(worktreePath, ".git"));
+  } catch {
+    throw new IncompleteWorktreeError(worktreePath, ".git entry is missing");
+  }
+
+  const repoHasPackageJson = await fs
+    .access(path.join(repoPath, "package.json"))
+    .then(() => true)
+    .catch(() => false);
+  if (repoHasPackageJson) {
+    try {
+      await fs.access(path.join(worktreePath, "package.json"));
+    } catch {
+      throw new IncompleteWorktreeError(
+        worktreePath,
+        "package.json is present in the main repo but missing in the worktree"
+      );
+    }
+  }
+
+  const repoRootEntries = await fs.readdir(repoPath, { withFileTypes: true }).catch(() => null);
+  if (!repoRootEntries) return;
+
+  const repoCheckoutMarkers = repoRootEntries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((name) => !name.startsWith(".") && !EXCLUDED_ROOT_DIRS.has(name));
+
+  if (repoCheckoutMarkers.length === 0) return;
+
+  for (const marker of repoCheckoutMarkers) {
+    try {
+      await fs.access(path.join(worktreePath, marker));
+      return; // at least one source directory present
+    } catch {
+      // keep probing
+    }
+  }
+
+  throw new IncompleteWorktreeError(
+    worktreePath,
+    `none of the expected source directories are present (checked: ${repoCheckoutMarkers.join(", ")})`
+  );
+}
+
 /**
  * Best-effort check that a worktree contains a real source checkout, not just runtime metadata.
  *
