@@ -255,12 +255,6 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
           <CloseButton onClick={onClose} ariaLabel="Close Add Plan modal" />
         </div>
         <div className="px-5 py-4">
-          <label
-            htmlFor="add-plan-feature-description"
-            className="block text-sm font-medium text-theme-text mb-2"
-          >
-            Feature plan idea
-          </label>
           <textarea
             ref={featureInputRef}
             id="add-plan-feature-description"
@@ -269,6 +263,7 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             onChange={(e) => setFeatureDescription(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Describe your feature idea…"
+            aria-label="Describe your feature idea"
             data-testid="feature-description-input"
           />
           {/* Attachment list */}
