@@ -163,6 +163,7 @@ describe("Cross-service quality-gate regression integration", () => {
 
   async function prepareWorkspace(dirPath: string): Promise<void> {
     await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(path.join(dirPath, ".git"), "gitdir: /tmp/fake");
     await fs.writeFile(
       path.join(dirPath, "package.json"),
       JSON.stringify({ name: "test-workspace", private: true, scripts: { lint: "eslint ." } })

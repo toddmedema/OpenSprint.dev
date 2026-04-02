@@ -1066,7 +1066,7 @@ describe("BranchManager", () => {
       const listedPath = list.find((w) => w.taskId === taskId)?.worktreePath;
       expect(listedPath).toBeDefined();
       expect(listedPath).toContain(taskId);
-      expect(listedPath).toContain("opensprint-worktrees");
+      expect(listedPath).toContain(".opensprint/runtime/worktrees");
 
       await branchManager.removeTaskWorktree(repoPath, taskId);
       const listAfter = await branchManager.listTaskWorktrees(repoPath);
@@ -1312,7 +1312,7 @@ describe("BranchManager", () => {
       const epicId = `epic-${Date.now()}`;
       const epicKey = `epic_${epicId}`;
       const branchName = `opensprint/${epicKey}`;
-      const expectedPath = branchManager.getWorktreePath(epicKey);
+      const expectedPath = branchManager.getWorktreePath(epicKey, repoPath);
 
       const wtPath = await branchManager.createTaskWorktree(repoPath, "os-task-1", "main", {
         worktreeKey: epicKey,

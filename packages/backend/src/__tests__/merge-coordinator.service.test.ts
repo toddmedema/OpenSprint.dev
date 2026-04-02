@@ -185,6 +185,21 @@ vi.mock("../services/final-review.service.js", () => ({
   },
 }));
 
+vi.mock("../utils/worktree-health.js", () => ({
+  assertWorktreeIntegrity: vi.fn().mockResolvedValue({ valid: true, phase: "merge", worktreePath: "", taskId: "" }),
+}));
+
+vi.mock("../utils/failure-fingerprint.js", () => ({
+  buildFailureFingerprint: vi.fn().mockReturnValue({
+    hash: "mock-hash-0000",
+    failureClass: "unknown",
+    normalizedMessage: "",
+    phase: "",
+    branch: "",
+    raw: "",
+  }),
+}));
+
 vi.mock("../services/self-improvement.service.js", () => ({
   selfImprovementService: {
     runIfDue: vi.fn().mockResolvedValue(undefined),

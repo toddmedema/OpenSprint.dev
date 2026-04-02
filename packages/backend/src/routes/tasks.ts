@@ -1,6 +1,6 @@
 import { Router, Request } from "express";
 import type { TaskService } from "../services/task.service.js";
-import type { ApiResponse, Task, AgentSession, TaskAnalytics } from "@opensprint/shared";
+import type { ApiResponse, Task, AgentSession } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 import {
   projectIdParamSchema,
@@ -58,17 +58,6 @@ export function createTasksRouter(taskService: TaskService): Router {
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const tasks = await taskService.getReadyTasks(req.params.projectId);
       const body: ApiResponse<Task[]> = { data: tasks };
-      res.json(body);
-    })
-  );
-
-  // GET /projects/:projectId/tasks/analytics — Task analytics (project-scoped)
-  router.get(
-    "/analytics",
-    validateParams(projectIdParamSchema),
-    wrapAsync(async (req: Request<ProjectParams>, res) => {
-      const analytics = await taskService.getTaskAnalytics(req.params.projectId);
-      const body: ApiResponse<TaskAnalytics> = { data: analytics };
       res.json(body);
     })
   );

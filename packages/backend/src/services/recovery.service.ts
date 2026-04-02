@@ -250,14 +250,19 @@ export class RecoveryService {
     repoPath: string,
     host: RecoveryHost
   ): Promise<{ reattached: string[]; requeued: string[] }> {
-    const worktreeBase = this.branchManager.getWorktreeBasePath();
-    const fromWorktrees =
-      await this.crashRecovery.findOrphanedAssignmentsFromWorktrees(worktreeBase);
+    const durableBase = this.branchManager.getWorktreeBasePath(repoPath);
+    const legacyBase = this.branchManager.getLegacyWorktreeBasePath();
+    const fromDurable =
+      await this.crashRecovery.findOrphanedAssignmentsFromWorktrees(durableBase);
+    const fromLegacy =
+      await this.crashRecovery.findOrphanedAssignmentsFromWorktrees(legacyBase);
     const fromMainRepo = await this.crashRecovery.findOrphanedAssignments(repoPath);
     const byTaskId = new Map<string, { taskId: string; assignment: GuppAssignment }>();
     for (const o of fromMainRepo)
       byTaskId.set(o.taskId, o as { taskId: string; assignment: GuppAssignment });
-    for (const o of fromWorktrees)
+    for (const o of fromLegacy)
+      byTaskId.set(o.taskId, o as { taskId: string; assignment: GuppAssignment });
+    for (const o of fromDurable)
       byTaskId.set(o.taskId, o as { taskId: string; assignment: GuppAssignment });
     const orphaned = [...byTaskId.values()];
 
@@ -386,8 +391,13 @@ export class RecoveryService {
     excludeIds: Set<string>,
     host: RecoveryHost
   ): Promise<{ reattached: string[]; requeued: string[] }> {
-    const worktreeBase = this.branchManager.getWorktreeBasePath();
-    const stale = await heartbeatService.findStaleHeartbeats(worktreeBase);
+    const durableBase = this.branchManager.getWorktreeBasePath(repoPath);
+    const legacyBase = this.branchManager.getLegacyWorktreeBasePath();
+    const staleDurable = await heartbeatService.findStaleHeartbeats(durableBase);
+    const staleLegacy = await heartbeatService.findStaleHeartbeats(legacyBase);
+    const staleMap = new Map(staleLegacy.map((s) => [s.taskId, s]));
+    for (const s of staleDurable) staleMap.set(s.taskId, s);
+    const stale = [...staleMap.values()];
     const reattached: string[] = [];
     const requeued: string[] = [];
 
@@ -1006,7 +1016,7 @@ export class RecoveryService {
     const now = Date.now();
     const candidatePaths = new Set<string>();
     if (assignmentWorktreePath) candidatePaths.add(assignmentWorktreePath);
-    candidatePaths.add(this.branchManager.getWorktreePath(taskId));
+    candidatePaths.add(this.branchManager.getWorktreePath(taskId, repoPath));
 
     for (const worktreePath of candidatePaths) {
       const heartbeat = await heartbeatService.readHeartbeat(worktreePath, taskId);
@@ -1173,7 +1183,7 @@ export class RecoveryService {
 
     // In Branches mode, agent runs in repoPath; no worktree. In Worktree mode, use worktree path.
     const workPath =
-      gitWorkingMode === "branches" ? repoPath : this.branchManager.getWorktreePath(task.id);
+      gitWorkingMode === "branches" ? repoPath : this.branchManager.getWorktreePath(task.id, repoPath);
     try {
       await fs.access(workPath);
       await this.branchManager.commitWip(workPath, task.id);
@@ -1209,9 +1219,12 @@ export class RecoveryService {
         }
       ).readAssignmentAt;
       if (typeof readAssignmentAt !== "function") return null;
-      const worktreePath = this.branchManager.getWorktreePath(taskId);
+      const worktreePath = this.branchManager.getWorktreePath(taskId, repoPath);
+      const legacyPath = this.branchManager.getWorktreePath(taskId);
       return (
-        (await readAssignmentAt(worktreePath, taskId)) ?? (await readAssignmentAt(repoPath, taskId))
+        (await readAssignmentAt(worktreePath, taskId)) ??
+        (await readAssignmentAt(legacyPath, taskId)) ??
+        (await readAssignmentAt(repoPath, taskId))
       );
     } catch {
       return null;

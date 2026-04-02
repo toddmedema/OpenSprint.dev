@@ -33,25 +33,6 @@ export const paginationQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().optional(),
 });
 
-export const executePrepareBodySchema = z
-  .object({
-    phase: z.enum(["coding", "review"]).optional(),
-    createBranch: z.boolean().optional(),
-    attempt: z.number().int().positive().optional(),
-  })
-  .optional()
-  .default({});
-
-export const executeEventsQuerySchema = z.object({
-  since: z.string().optional(),
-  taskId: z.string().optional(),
-  count: z.coerce.number().int().positive().optional(),
-});
-
-export const executeFailureMetricsQuerySchema = z.object({
-  days: z.coerce.number().int().positive().max(90).optional(),
-});
-
 export const notificationParamsSchema = z.object({
   projectId: z.string().min(1),
   notificationId: z.string().min(1),

@@ -10,6 +10,7 @@ import {
   type CommandSpec,
 } from "../utils/command-runner.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
+import { assertWorktreeIntegrity, rebuildWorktreeIfInvalid } from "../utils/worktree-health.js";
 import { BranchManager } from "./branch-manager.js";
 import {
   type MergeQualityGateExecutionPlanEntry,
@@ -1104,6 +1105,52 @@ export async function runMergeQualityGates(
 
   const normWt = await resolveMergeGateFilesystemRoot(options.worktreePath);
   const normRepo = await resolveMergeGateFilesystemRoot(options.repoPath);
+
+  const effectiveValidationWorkspace =
+    options.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree");
+  if (normWt !== normRepo && effectiveValidationWorkspace === "task_worktree") {
+    const integrity = await assertWorktreeIntegrity(normRepo, normWt, options.taskId, "merge");
+    if (!integrity.valid) {
+      log.warn("Worktree integrity pre-check failed, attempting auto-rebuild", {
+        taskId: options.taskId,
+        failureReason: integrity.failureReason,
+        detail: integrity.detail,
+        worktreePath: normWt,
+      });
+
+      const branchManager = new BranchManager();
+      const rebuildResult = await rebuildWorktreeIfInvalid(
+        normRepo,
+        normWt,
+        options.taskId,
+        options.branchName,
+        options.baseBranch,
+        {
+          removeWorktree: (rp, key, ap) => branchManager.removeTaskWorktree(rp, key, ap),
+          createWorktree: (rp, tid, bb, opts) =>
+            branchManager.createTaskWorktree(rp, tid, bb, opts),
+        }
+      );
+
+      if (!rebuildResult.rebuilt) {
+        return {
+          command: "(pre-gate integrity check)",
+          reason: `Worktree integrity check failed and auto-rebuild unsuccessful: ${integrity.detail}${rebuildResult.error ? ` | rebuild error: ${rebuildResult.error}` : ""}`,
+          output: "",
+          worktreePath: normWt,
+          validationWorkspace: options.validationWorkspace,
+          category: "environment_setup",
+          autoRepairAttempted: true,
+          autoRepairSucceeded: false,
+        };
+      }
+
+      log.info("Worktree auto-rebuilt before quality gates", {
+        taskId: options.taskId,
+        newPath: rebuildResult.newPath,
+      });
+    }
+  }
   const gateOptions: MergeQualityGateRunOptions = {
     ...options,
     worktreePath: normWt,

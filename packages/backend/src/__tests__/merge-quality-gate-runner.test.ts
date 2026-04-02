@@ -53,6 +53,7 @@ describe("runMergeQualityGates", () => {
   ): Promise<string> => {
     const worktreePath = await fs.mkdtemp(path.join(os.tmpdir(), "merge-quality-gate-runner-"));
     tempDirs.push(worktreePath);
+    await fs.writeFile(path.join(worktreePath, ".git"), "gitdir: /tmp/fake-git-dir");
     if (scripts) {
       await fs.writeFile(
         path.join(worktreePath, "package.json"),

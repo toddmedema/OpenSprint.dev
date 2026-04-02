@@ -338,18 +338,6 @@ describe("api client", () => {
   });
 
   describe("plans", () => {
-    it("agent-backed planning requests do not apply the default client timeout", async () => {
-      vi.mocked(fetch).mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue({ data: { plans: [] } }),
-      } as Response);
-
-      await api.plans.suggest("proj-1");
-      const call = vi.mocked(fetch).mock.calls[0];
-      expect(call?.[1]).not.toHaveProperty("signal");
-    });
-
     it("list calls GET /projects/:projectId/plans and returns plans with edges", async () => {
       const mockGraph = {
         plans: [

@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "node:os";
 import path from "path";
-import { OPENSPRINT_PATHS } from "@opensprint/shared";
+import { OPENSPRINT_PATHS, OPENSPRINT_DIR } from "@opensprint/shared";
 
 function isPathInsideResolved(
   parentResolved: string,
@@ -52,10 +52,13 @@ export function getSafeTaskActiveDir(repoPath: string, taskId: string): string {
 export function isTaskWorktreePath(taskId: string, candidatePath: string): boolean {
   const resolved = path.resolve(candidatePath);
   const parentBase = path.basename(path.dirname(resolved));
-  if (parentBase !== "opensprint-worktrees") return false;
+  const isLegacyRoot = parentBase === "opensprint-worktrees";
+  const isDurableRoot = resolved.includes(
+    path.sep + OPENSPRINT_DIR + path.sep + "runtime" + path.sep + "worktrees" + path.sep
+  );
+  if (!isLegacyRoot && !isDurableRoot) return false;
   const basename = path.basename(resolved);
   if (basename === taskId) return true;
-  // per_epic: worktree key is epic_<epicId>, taskId is e.g. os-abc.1 (child of epic os-abc)
   if (basename.startsWith("epic_")) {
     const epicId = basename.slice(5);
     return taskId === epicId || taskId.startsWith(epicId + ".");

@@ -69,6 +69,9 @@ vi.mock("../services/worktree-cleanup-intent.service.js", () => ({
 vi.mock("../services/branch-manager.js", () => ({
   BranchManager: vi.fn().mockImplementation(() => ({
     getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
+    getLegacyWorktreeBasePath: vi
+      .fn()
+      .mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees-legacy")),
     getWorktreePath: vi
       .fn()
       .mockImplementation((taskId: string) =>

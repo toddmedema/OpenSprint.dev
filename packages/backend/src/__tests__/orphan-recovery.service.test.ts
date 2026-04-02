@@ -211,7 +211,7 @@ describe("OrphanRecoveryService", () => {
 
   it("should commit uncommitted changes as WIP before removing worktree", async () => {
     const taskId = `task-wip-${Date.now()}`;
-    const wtPath = path.join(os.tmpdir(), "opensprint-worktrees", taskId);
+    const wtPath = path.join(repoPath, ".opensprint", "runtime", "worktrees", taskId);
 
     // Remove any stale worktree from previous runs
     try {

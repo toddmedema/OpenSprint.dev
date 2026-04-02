@@ -9,7 +9,6 @@ import type {
   ProjectSettings,
   ProjectSettingsApiUpdate,
   Prd,
-  PrdSection,
   PrdChangeLogEntry,
   PrdSectionUpdateResult,
   PrdUploadResult,
@@ -18,7 +17,6 @@ import type {
   PlanStatusResponse,
   CreatePlanRequest,
   UpdatePlanRequest,
-  SuggestPlansResponse,
   GeneratePlanRequest,
   GeneratePlanResult,
   CrossEpicDependenciesResponse,
@@ -412,8 +410,6 @@ export const api = {
   // ─── PRD ───
   prd: {
     get: (projectId: string) => request<Prd>(`/projects/${projectId}/prd`),
-    getSection: (projectId: string, section: string) =>
-      request<PrdSection>(`/projects/${projectId}/prd/${section}`),
     updateSection: (projectId: string, section: string, content: string) =>
       request<PrdSectionUpdateResult>(`/projects/${projectId}/prd/${section}`, {
         method: "PUT",
@@ -479,11 +475,6 @@ export const api = {
   // ─── Plans ───
   plans: {
     list: (projectId: string) => request<PlanDependencyGraph>(`/projects/${projectId}/plans`),
-    suggest: (projectId: string) =>
-      request<SuggestPlansResponse>(`/projects/${projectId}/plans/suggest`, {
-        method: "POST",
-        ...NO_REQUEST_TIMEOUT,
-      }),
     decompose: (projectId: string) =>
       request<{ created: number; plans: Plan[] }>(`/projects/${projectId}/plans/decompose`, {
         method: "POST",
@@ -569,8 +560,6 @@ export const api = {
       }),
     delete: (projectId: string, planId: string) =>
       request<void>(`/projects/${projectId}/plans/${planId}`, { method: "DELETE" }),
-    dependencies: (projectId: string) =>
-      request<PlanDependencyGraph>(`/projects/${projectId}/plans/dependencies`),
   },
 
   // ─── Tasks ───
@@ -595,8 +584,6 @@ export const api = {
       }),
     sessions: (projectId: string, taskId: string) =>
       request<AgentSession[]>(`/projects/${projectId}/tasks/${taskId}/sessions`),
-    session: (projectId: string, taskId: string, attempt: number) =>
-      request<AgentSession>(`/projects/${projectId}/tasks/${taskId}/sessions/${attempt}`),
     markDone: (projectId: string, taskId: string) =>
       request<{ taskClosed: boolean; epicClosed?: boolean }>(
         `/projects/${projectId}/tasks/${taskId}/done`,

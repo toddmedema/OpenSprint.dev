@@ -1,5 +1,4 @@
 import fs from "fs/promises";
-import path from "path";
 import type {
   QualityGateDiagnosticDetail,
   Task,
@@ -10,7 +9,6 @@ import type {
   TaskAnalyticsBucket,
 } from "@opensprint/shared";
 import {
-  resolveTestCommand,
   clampTaskComplexity,
   TASK_COMPLEXITY_MIN,
   TASK_COMPLEXITY_MAX,
@@ -22,7 +20,6 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { SessionManager } from "./session-manager.js";
 import { triggerDeployForEvent } from "./deploy-trigger.service.js";
-import { ContextAssembler } from "./context-assembler.js";
 import { BranchManager } from "./branch-manager.js";
 import { FeedbackService } from "./feedback.service.js";
 import type { StoredTask } from "./task-store.service.js";
@@ -60,7 +57,6 @@ export class TaskService {
     private taskStore: TaskStoreService,
     private feedbackService: FeedbackService,
     private sessionManager: SessionManager,
-    private contextAssembler: ContextAssembler,
     private branchManager: BranchManager,
     private orchestrator: TaskOrchestratorControl
   ) {}
@@ -938,69 +934,4 @@ export class TaskService {
     return { taskClosed: true, epicClosed };
   }
 
-  /**
-   * Prepare the task directory at .opensprint/active/<task-id>/ with prompt.md, config.json,
-   * and context/ (spec.md, plan.md, deps/). Creates the task branch if createBranch is true.
-   * Returns the absolute path to the task directory.
-   */
-  async prepareTaskDirectory(
-    projectId: string,
-    taskId: string,
-    options: { phase?: "coding" | "review"; createBranch?: boolean; attempt?: number } = {}
-  ): Promise<string> {
-    const { phase = "coding", createBranch = true, attempt = 1 } = options;
-    const project = await this.projectService.getProject(projectId);
-    const repoPath = project.repoPath;
-    const settings = await this.projectService.getSettings(projectId);
-
-    const issue = await this.taskStore.show(projectId, taskId);
-    const mergeStrategy = settings.mergeStrategy ?? "per_task";
-    const allIssues = await this.taskStore.listAll(projectId);
-    const epicId = resolveEpicId(taskId, allIssues);
-    const useEpicBranch = mergeStrategy === "per_epic" && epicId != null;
-    const branchName = useEpicBranch ? `opensprint/epic_${epicId}` : `opensprint/${taskId}`;
-
-    if (createBranch) {
-      const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
-      await this.branchManager.createOrCheckoutBranch(repoPath, branchName, baseBranch);
-    }
-
-    const prdExcerpt = await this.contextAssembler.extractPrdExcerpt(repoPath);
-    const planContent =
-      (await this.contextAssembler.getPlanContentForTask(
-        projectId,
-        repoPath,
-        issue,
-        this.taskStore
-      )) || "# Plan\n\nNo plan content available.";
-    const blockerIds = this.taskStore.getBlockersFromIssue(issue);
-    const dependencyOutputs = await this.contextAssembler.collectDependencyOutputs(
-      repoPath,
-      blockerIds
-    );
-
-    const config = {
-      invocation_id: taskId,
-      agent_role: (phase === "review" ? "reviewer" : "coder") as "reviewer" | "coder",
-      taskId,
-      repoPath,
-      branch: branchName,
-      testCommand: resolveTestCommand(settings) || 'echo "No test command configured"',
-      attempt,
-      phase,
-      previousFailure: null as string | null,
-      reviewFeedback: null as string | null,
-    };
-
-    const taskDir = await this.contextAssembler.assembleTaskDirectory(repoPath, taskId, config, {
-      taskId,
-      title: issue.title ?? "",
-      description: (issue.description as string) ?? "",
-      planContent,
-      prdExcerpt,
-      dependencyOutputs,
-    });
-
-    return path.resolve(taskDir);
-  }
 }

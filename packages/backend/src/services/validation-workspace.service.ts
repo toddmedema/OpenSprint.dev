@@ -5,6 +5,7 @@ import { ensureRepoHasInitialCommit } from "../utils/git-repo-state.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
 import { createLogger } from "../utils/logger.js";
 import { runCommand as runCommandDefault, type CommandRunResult } from "../utils/command-runner.js";
+import { assertWorktreeIntegrity, type WorktreeIntegrityResult } from "../utils/worktree-health.js";
 import { BranchManager } from "./branch-manager.js";
 
 const log = createLogger("validation-workspace");
@@ -106,6 +107,14 @@ export class ValidationWorkspaceService {
         }
       ).catch(() => {});
     }
+  }
+
+  async checkWorktreeReadiness(
+    repoPath: string,
+    worktreePath: string,
+    taskId: string
+  ): Promise<WorktreeIntegrityResult> {
+    return assertWorktreeIntegrity(repoPath, worktreePath, taskId, "merge");
   }
 
   private async verifyWorkspaceReady(

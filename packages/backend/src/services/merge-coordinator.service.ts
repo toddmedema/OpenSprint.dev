@@ -38,6 +38,8 @@ import { appendCrashLog } from "../utils/crash-log.js";
 import { appendRuntimeTrace } from "../utils/runtime-trace.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
+import { assertWorktreeIntegrity } from "../utils/worktree-health.js";
+import { buildFailureFingerprint } from "../utils/failure-fingerprint.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import type { MergeQualityGateProfile } from "./merge-quality-gates.js";
 import type { RetryContext, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
@@ -1513,6 +1515,9 @@ export class MergeCoordinatorService {
       failedGateReason?: string | null;
       failedGateOutputSnippet?: string | null;
       worktreePath?: string | null;
+      failureClass?: string | null;
+      failureFingerprint?: string | null;
+      circuitBreakerTripped?: boolean;
     }
   ): void {
     const qg = args.qualityGateDetail ?? null;
@@ -1528,6 +1533,9 @@ export class MergeCoordinatorService {
       failedGateReason: args.failedGateReason ?? qg?.reason ?? null,
       failedGateOutputSnippet: args.failedGateOutputSnippet ?? qg?.outputSnippet ?? null,
       worktreePath: args.worktreePath ?? qg?.worktreePath ?? null,
+      failureClass: args.failureClass ?? null,
+      failureFingerprint: args.failureFingerprint ?? null,
+      circuitBreakerTripped: args.circuitBreakerTripped ?? false,
     } as unknown as ServerEvent);
   }
 
@@ -1545,6 +1553,8 @@ export class MergeCoordinatorService {
       failedGateReason?: string | null;
       failedGateOutputSnippet?: string | null;
       worktreePath?: string | null;
+      failureClass?: string | null;
+      failureFingerprint?: string | null;
     }
   ): void {
     const qg = args.qualityGateDetail ?? null;
@@ -1561,6 +1571,8 @@ export class MergeCoordinatorService {
       failedGateReason: args.failedGateReason ?? qg?.reason ?? null,
       failedGateOutputSnippet: args.failedGateOutputSnippet ?? qg?.outputSnippet ?? null,
       worktreePath: args.worktreePath ?? qg?.worktreePath ?? null,
+      failureClass: args.failureClass ?? null,
+      failureFingerprint: args.failureFingerprint ?? null,
     } as unknown as ServerEvent);
   }
 
@@ -1855,6 +1867,24 @@ export class MergeCoordinatorService {
         return;
       }
       const wtPath = slot.worktreePath ?? repoPath;
+
+      if (wtPath !== repoPath) {
+        const integrity = await assertWorktreeIntegrity(repoPath, wtPath, task.id, "merge");
+        if (!integrity.valid) {
+          log.error("Worktree integrity check failed before merge", {
+            taskId: task.id,
+            phase: integrity.phase,
+            failureReason: integrity.failureReason,
+            detail: integrity.detail,
+            worktreePath: wtPath,
+          });
+          appendRuntimeTrace("merge.worktree_integrity_failed", task.id, {
+            detail: integrity.detail ?? "unknown",
+            failureReason: integrity.failureReason,
+            worktreePath: wtPath,
+          });
+        }
+      }
 
       // 1. Prepare: commit any WIP, then wait for any in-flight push to finish
       await this.host.branchManager.waitForGitReady(wtPath);
@@ -2291,6 +2321,28 @@ export class MergeCoordinatorService {
         isEnvironmentSetupQualityGateFailure ? "environment_setup" : undefined,
         qualityGateStructuredDetails.qualityGateDetail
       );
+
+      const failureFingerprint = buildFailureFingerprint(
+        mergeFailureReason,
+        normalizedStage,
+        failedBranchName,
+        qualityGateFailureDetails?.category
+      );
+      log.info("Merge failure fingerprint", {
+        taskId: task.id,
+        fingerprintHash: failureFingerprint.hash,
+        failureClass: failureFingerprint.failureClass,
+        normalizedMessage: failureFingerprint.normalizedMessage,
+        phase: failureFingerprint.phase,
+      });
+      appendRuntimeTrace("merge.failure_fingerprint", task.id, {
+        hash: failureFingerprint.hash,
+        failureClass: failureFingerprint.failureClass,
+        normalizedMessage: failureFingerprint.normalizedMessage,
+        phase: failureFingerprint.phase,
+        branch: failureFingerprint.branch,
+      });
+
       const mergeBlockReason = this.getMergeFailureBlockReason(normalizedStage);
       const mergeFailureType = this.getMergeFailureType(
         normalizedStage,
@@ -2322,6 +2374,29 @@ export class MergeCoordinatorService {
         }
       }
 
+      const previousFingerprint =
+        (freshIssue?.extra as Record<string, unknown> | undefined)?.lastFailureFingerprint as
+          | string
+          | undefined;
+      const infraFingerprintRepeated =
+        failureFingerprint.failureClass === "environment_setup" &&
+        previousFingerprint === failureFingerprint.hash;
+
+      if (infraFingerprintRepeated) {
+        log.warn("Retry circuit breaker tripped: identical infra fingerprint repeated", {
+          taskId: task.id,
+          fingerprintHash: failureFingerprint.hash,
+          normalizedMessage: failureFingerprint.normalizedMessage,
+          attempt: cumulativeAttempts,
+        });
+        appendRuntimeTrace("merge.circuit_breaker_tripped", task.id, {
+          hash: failureFingerprint.hash,
+          failureClass: failureFingerprint.failureClass,
+          normalizedMessage: failureFingerprint.normalizedMessage,
+          attempt: cumulativeAttempts,
+        });
+      }
+
       const maxMergeFailures = BACKOFF_FAILURE_THRESHOLD * 2;
       const shouldBypassMergeFailureAutoBlock =
         unknownScopeStrategy === "optimistic" &&
@@ -2330,6 +2405,7 @@ export class MergeCoordinatorService {
         isEnvironmentSetupQualityGateFailure &&
         cumulativeAttempts >= MAX_ENVIRONMENT_SETUP_QUALITY_GATE_ATTEMPTS;
       if (
+        infraFingerprintRepeated ||
         reachedEnvironmentSetupFailureLimit ||
         (!shouldBypassMergeFailureAutoBlock && cumulativeAttempts >= maxMergeFailures)
       ) {
@@ -2371,6 +2447,8 @@ export class MergeCoordinatorService {
             qualityGateClassificationReason:
               qualityGateStructuredDetails.qualityGateClassificationReason,
             qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
+            lastFailureFingerprint: failureFingerprint.hash,
+            lastFailureClass: failureFingerprint.failureClass,
           },
         });
         await this.host.taskStore.comment(
@@ -2385,17 +2463,22 @@ export class MergeCoordinatorService {
         broadcastToProject(projectId, {
           type: "task.blocked",
           taskId: task.id,
-          reason: isQualityGateFailure
-            ? isEnvironmentSetupQualityGateFailure
-              ? `Blocked after ${cumulativeAttempts} environment-setup quality-gate failures`
-              : `Blocked after ${cumulativeAttempts} quality-gate failures`
-            : `Blocked after ${cumulativeAttempts} merge failures`,
+          reason: infraFingerprintRepeated
+            ? `Circuit breaker: repeated identical infrastructure failure (${failureFingerprint.failureClass})`
+            : isQualityGateFailure
+              ? isEnvironmentSetupQualityGateFailure
+                ? `Blocked after ${cumulativeAttempts} environment-setup quality-gate failures`
+                : `Blocked after ${cumulativeAttempts} quality-gate failures`
+              : `Blocked after ${cumulativeAttempts} merge failures`,
           cumulativeAttempts,
           qualityGateDetail: qualityGateStructuredDetails?.qualityGateDetail ?? null,
           failedGateCommand: qualityGateStructuredDetails?.failedGateCommand ?? null,
           failedGateReason: qualityGateStructuredDetails?.failedGateReason ?? null,
           failedGateOutputSnippet: qualityGateStructuredDetails?.failedGateOutputSnippet ?? null,
           worktreePath: qualityGateStructuredDetails?.worktreePath ?? null,
+          failureClass: failureFingerprint.failureClass,
+          failureFingerprint: failureFingerprint.hash,
+          circuitBreakerTripped: infraFingerprintRepeated,
         } as ServerEvent);
         eventLogService
           .append(repoPath, {
@@ -2439,6 +2522,9 @@ export class MergeCoordinatorService {
               worktreePath: qualityGateStructuredDetails.worktreePath,
               qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
               nextAction: blockedNextAction,
+              failureClass: failureFingerprint.failureClass,
+              failureFingerprint: failureFingerprint.hash,
+              circuitBreakerTripped: infraFingerprintRepeated,
             },
           })
           .catch(() => {});
@@ -2452,6 +2538,9 @@ export class MergeCoordinatorService {
           failedGateReason: qualityGateStructuredDetails.failedGateReason,
           failedGateOutputSnippet: qualityGateStructuredDetails.failedGateOutputSnippet,
           worktreePath: qualityGateStructuredDetails.worktreePath,
+          failureClass: failureFingerprint.failureClass,
+          failureFingerprint: failureFingerprint.hash,
+          circuitBreakerTripped: infraFingerprintRepeated,
         });
         eventLogService
           .append(repoPath, {
@@ -2530,6 +2619,8 @@ export class MergeCoordinatorService {
           qualityGateClassificationReason:
             qualityGateStructuredDetails.qualityGateClassificationReason,
           qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
+          lastFailureFingerprint: failureFingerprint.hash,
+          lastFailureClass: failureFingerprint.failureClass,
         },
       });
       await this.host.taskStore.comment(
@@ -2624,6 +2715,8 @@ export class MergeCoordinatorService {
             qualityGateClassificationReason:
               qualityGateStructuredDetails.qualityGateClassificationReason,
             qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
+            failureClass: failureFingerprint.failureClass,
+            failureFingerprint: failureFingerprint.hash,
           },
         })
         .catch(() => {});
@@ -2638,6 +2731,8 @@ export class MergeCoordinatorService {
         failedGateReason: qualityGateStructuredDetails.failedGateReason,
         failedGateOutputSnippet: qualityGateStructuredDetails.failedGateOutputSnippet,
         worktreePath: qualityGateStructuredDetails.worktreePath,
+        failureClass: failureFingerprint.failureClass,
+        failureFingerprint: failureFingerprint.hash,
       });
 
       shouldNudge = true;

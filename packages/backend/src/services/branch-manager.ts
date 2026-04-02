@@ -20,6 +20,7 @@ import { ProjectService } from "./project.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
+import { worktreeRegistry } from "./worktree-registry.js";
 
 /** Paths we must not commit from worktrees (runtime-only; would block merge in main). Agent stats, event log, and orchestrator counters are now DB-only. */
 const RUNTIME_EXCLUDE_FOR_WIP = [
@@ -1151,17 +1152,29 @@ export class BranchManager {
 
   // ─── Git Worktree Operations ───
 
-  /** Base directory for task worktrees (used by heartbeat stale detection) */
-  getWorktreeBasePath(): string {
+  /** Legacy temp-based base directory (pre-durable). Used for backward-compatible discovery. */
+  getLegacyWorktreeBasePath(): string {
     return path.join(os.tmpdir(), "opensprint-worktrees");
+  }
+
+  /**
+   * Durable base directory for task worktrees, scoped to the project repo.
+   * Falls back to the legacy temp path when no repoPath is available.
+   */
+  getWorktreeBasePath(repoPath?: string): string {
+    if (repoPath) {
+      return path.join(repoPath, OPENSPRINT_PATHS.worktrees);
+    }
+    return this.getLegacyWorktreeBasePath();
   }
 
   /**
    * Get the filesystem path for a worktree by key.
    * @param key - Task ID (per-task worktree) or epic key (e.g. epic_<epicId> for shared epic worktree).
+   * @param repoPath - When provided, uses the durable project-scoped root; otherwise legacy temp root.
    */
-  getWorktreePath(key: string): string {
-    return path.join(this.getWorktreeBasePath(), key);
+  getWorktreePath(key: string, repoPath?: string): string {
+    return path.join(this.getWorktreeBasePath(repoPath), key);
   }
 
   /**
@@ -1248,7 +1261,7 @@ export class BranchManager {
   ): Promise<string> {
     const worktreeKey = options?.worktreeKey ?? taskId;
     const branchName = options?.branchName ?? `opensprint/${taskId}`;
-    const wtPath = this.getWorktreePath(worktreeKey);
+    const wtPath = this.getWorktreePath(worktreeKey, repoPath);
     const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
 
     if (currentBranch === branchName) {
@@ -1309,6 +1322,9 @@ export class BranchManager {
     await validateWorktreeCheckout(repoPath, wtPath);
 
     await this.symlinkNodeModules(repoPath, wtPath);
+
+    worktreeRegistry.register(worktreeKey, wtPath, branchName);
+    worktreeRegistry.transition(worktreeKey, "ready");
 
     return wtPath;
   }
@@ -1824,7 +1840,16 @@ export class BranchManager {
     worktreeKey: string,
     actualPath?: string
   ): Promise<void> {
-    const wtPath = actualPath ?? this.getWorktreePath(worktreeKey);
+    const wtPath = actualPath ?? this.getWorktreePath(worktreeKey, repoPath);
+
+    if (!worktreeRegistry.canCleanup(worktreeKey)) {
+      log.warn("Skipping worktree removal: active lease prevents cleanup", {
+        worktreeKey,
+        entry: worktreeRegistry.get(worktreeKey),
+      });
+      return;
+    }
+
     const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
     if (!registeredPath) {
       // Drop stale git metadata entries that can survive abrupt process exits.
@@ -1898,6 +1923,9 @@ export class BranchManager {
       }
       await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
     }
+
+    worktreeRegistry.retire(worktreeKey);
+    worktreeRegistry.remove(worktreeKey);
   }
 
   private async removeWorktreePathWithEscalation(
@@ -2023,22 +2051,27 @@ export class BranchManager {
   /**
    * List all task worktrees for this repo.
    * Parses `git worktree list --porcelain` and returns { taskId, worktreePath } for each worktree
-   * under any opensprint-worktrees directory (not just current tmpdir). This ensures we find
-   * orphaned worktrees created when os.tmpdir() differed (e.g. before restart or TMPDIR change).
+   * under any opensprint-worktrees directory (legacy temp) or the durable worktree root
+   * (.opensprint/runtime/worktrees). This ensures we find worktrees from both layouts.
    */
   async listTaskWorktrees(
     repoPath: string
   ): Promise<Array<{ taskId: string; worktreePath: string }>> {
     const result: Array<{ taskId: string; worktreePath: string }> = [];
+    const durableBaseRaw = path.resolve(this.getWorktreeBasePath(repoPath));
+    const durableBase = await fs.realpath(durableBaseRaw).catch(() => durableBaseRaw);
     try {
       const { stdout } = await this.gitExec(repoPath, ["worktree", "list", "--porcelain"]);
       for (const line of stdout.split("\n")) {
         if (!line.startsWith("worktree ")) continue;
         const worktreePath = line.slice(9).trim();
-        const resolved = path.resolve(worktreePath);
-        // Match any path under *opensprint-worktrees* (parent dir name), not just current tmpdir
+        const rawResolved = path.resolve(worktreePath);
+        const resolved = await fs.realpath(rawResolved).catch(() => rawResolved);
         const parentDir = path.basename(path.dirname(resolved));
-        if (parentDir === "opensprint-worktrees") {
+        const isLegacyWorktree = parentDir === "opensprint-worktrees";
+        const isDurableWorktree =
+          resolved.startsWith(durableBase + path.sep) || resolved === durableBase;
+        if (isLegacyWorktree || isDurableWorktree) {
           const taskId = path.basename(resolved);
           if (taskId) result.push({ taskId, worktreePath });
         }

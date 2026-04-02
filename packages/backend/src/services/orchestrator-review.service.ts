@@ -64,6 +64,7 @@ import {
   persistTaskLastExecutionSummary,
 } from "./task-execution-summary.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
+import { assertWorktreeIntegrity } from "../utils/worktree-health.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
@@ -195,6 +196,19 @@ export class OrchestratorReviewService {
     const slot = this.host.getState(projectId).slots.get(task.id);
     if (!slot) return;
     const wtPath = slot.worktreePath ?? repoPath;
+
+    if (wtPath !== repoPath) {
+      const integrity = await assertWorktreeIntegrity(repoPath, wtPath, task.id, "review");
+      if (!integrity.valid) {
+        log.warn("Worktree integrity check failed before review", {
+          taskId: task.id,
+          failureReason: integrity.failureReason,
+          detail: integrity.detail,
+          worktreePath: wtPath,
+        });
+      }
+    }
+
     const testCommand = resolveTestCommand(settings) || undefined;
     const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
     const mergeQualityGates = getMergeQualityGateCommands(settings.toolchainProfile);

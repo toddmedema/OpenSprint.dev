@@ -87,6 +87,11 @@ describe("OrchestratorDispatchService", () => {
       getBranchManager: vi.fn().mockReturnValue({
         ensureOnMain: vi.fn().mockResolvedValue(undefined),
         getWorktreePath: vi.fn().mockImplementation((key: string) => `/tmp/repo/.worktrees/${key}`),
+        removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
+        createTaskWorktree: vi.fn().mockImplementation(
+          (_repoPath: string, taskId: string, _baseBranch: string, opts?: { worktreeKey?: string }) =>
+            Promise.resolve(`/tmp/repo/.worktrees/${opts?.worktreeKey ?? taskId}`)
+        ),
       }),
       getFileScopeAnalyzer: vi
         .fn()
@@ -255,7 +260,7 @@ describe("OrchestratorDispatchService", () => {
 
     const slot = executeCodingPhase.mock.calls[0]?.[3] as DispatchSlotLike;
     expect(slot.worktreePath).toBe("/tmp/repo/.worktrees/os-wt01");
-    expect(host.getBranchManager().getWorktreePath).toHaveBeenCalledWith("os-wt01");
+    expect(host.getBranchManager().getWorktreePath).toHaveBeenCalledWith("os-wt01", repoPath);
   });
 
   it("sets slot.worktreePath to repoPath in branches mode", async () => {

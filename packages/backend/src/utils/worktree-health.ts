@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { createLogger } from "./logger.js";
 
 const EXCLUDED_ROOT_DIRS = new Set([
   ".git",
@@ -10,6 +11,8 @@ const EXCLUDED_ROOT_DIRS = new Set([
   "coverage",
   "tmp",
 ]);
+
+export type WorktreePhase = "dispatch" | "review" | "merge" | "retry";
 
 export type WorktreePreflightFailureReason =
   | "directory_missing"
@@ -158,6 +161,46 @@ export async function preflightWorktreeForDiff(
   };
 }
 
+export interface WorktreeIntegrityResult {
+  valid: boolean;
+  phase: WorktreePhase;
+  failureReason?: WorktreePreflightFailureReason;
+  failureClass?: "environment_validation_failed";
+  detail?: string;
+  worktreePath: string;
+  taskId: string;
+}
+
+/**
+ * Phase-bound worktree integrity preflight.
+ *
+ * Validates that a worktree is structurally sound before a phase boundary.
+ * Called by dispatch, review, merge-gate, and retry flows to fail fast
+ * rather than discovering an invalid worktree deep in execution.
+ */
+export async function assertWorktreeIntegrity(
+  repoPath: string,
+  worktreePath: string,
+  taskId: string,
+  phase: WorktreePhase
+): Promise<WorktreeIntegrityResult> {
+  const ok: WorktreeIntegrityResult = { valid: true, phase, worktreePath, taskId };
+  if (worktreePath === repoPath) return ok;
+
+  const preflight = await preflightWorktreeForDiff(repoPath, worktreePath);
+  if (preflight.usable) return ok;
+
+  return {
+    valid: false,
+    phase,
+    failureReason: preflight.failureReason,
+    failureClass: "environment_validation_failed",
+    detail: preflight.detail,
+    worktreePath,
+    taskId,
+  };
+}
+
 /**
  * Best-effort check that a worktree contains a real source checkout, not just runtime metadata.
  *
@@ -220,4 +263,97 @@ export async function isWorktreeCheckoutUsable(
   }
 
   return false;
+}
+
+const rebuildLog = createLogger("worktree-rebuild");
+
+export interface WorktreeRebuildResult {
+  rebuilt: boolean;
+  previousPath: string;
+  newPath: string;
+  error?: string;
+}
+
+export interface WorktreeRebuildDeps {
+  removeWorktree(repoPath: string, worktreeKey: string, actualPath?: string): Promise<void>;
+  createWorktree(
+    repoPath: string,
+    taskId: string,
+    baseBranch: string,
+    options?: { worktreeKey?: string; branchName?: string }
+  ): Promise<string>;
+}
+
+/**
+ * Rebuild a worktree that has failed integrity validation.
+ *
+ * Flow: retire bad worktree -> remove -> recreate from branch -> verify.
+ * Returns the new worktree path on success.
+ */
+export async function rebuildWorktreeIfInvalid(
+  repoPath: string,
+  worktreePath: string,
+  taskId: string,
+  branchName: string,
+  baseBranch: string,
+  deps: WorktreeRebuildDeps
+): Promise<WorktreeRebuildResult> {
+  const integrity = await assertWorktreeIntegrity(repoPath, worktreePath, taskId, "retry");
+  if (integrity.valid) {
+    return { rebuilt: false, previousPath: worktreePath, newPath: worktreePath };
+  }
+
+  rebuildLog.warn("Rebuilding invalid worktree", {
+    taskId,
+    worktreePath,
+    failureReason: integrity.failureReason,
+    detail: integrity.detail,
+  });
+
+  try {
+    await deps.removeWorktree(repoPath, taskId, worktreePath);
+  } catch (err) {
+    rebuildLog.warn("Failed to remove invalid worktree during rebuild", {
+      taskId,
+      worktreePath,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  try {
+    const newPath = await deps.createWorktree(repoPath, taskId, baseBranch, {
+      branchName,
+    });
+
+    const verification = await assertWorktreeIntegrity(repoPath, newPath, taskId, "retry");
+    if (!verification.valid) {
+      return {
+        rebuilt: false,
+        previousPath: worktreePath,
+        newPath: newPath,
+        error: `Rebuilt worktree still invalid: ${verification.detail}`,
+      };
+    }
+
+    rebuildLog.info("Worktree rebuilt successfully", {
+      taskId,
+      previousPath: worktreePath,
+      newPath,
+    });
+
+    return { rebuilt: true, previousPath: worktreePath, newPath };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    rebuildLog.error("Failed to rebuild worktree", {
+      taskId,
+      worktreePath,
+      err: errorMsg,
+    });
+    return {
+      rebuilt: false,
+      previousPath: worktreePath,
+      newPath: worktreePath,
+      error: errorMsg,
+    };
+  }
 }

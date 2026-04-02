@@ -13,6 +13,7 @@ import type {
   RetryQualityGateDetail,
 } from "./orchestrator-phase-context.js";
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
+import { assertWorktreeIntegrity, rebuildWorktreeIfInvalid } from "../utils/worktree-health.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("orchestrator-dispatch");
@@ -340,7 +341,7 @@ export interface OrchestratorDispatchHost {
   };
   getBranchManager(): {
     ensureOnMain(repoPath: string, baseBranch: string): Promise<void>;
-    getWorktreePath(key: string): string;
+    getWorktreePath(key: string, repoPath?: string): string;
   };
   getFileScopeAnalyzer(): {
     predict(
@@ -451,7 +452,7 @@ export class OrchestratorDispatchService {
     } else if (settings.gitWorkingMode === "branches") {
       slot.worktreePath = repoPath;
     } else {
-      slot.worktreePath = this.host.getBranchManager().getWorktreePath(worktreeKey);
+      slot.worktreePath = this.host.getBranchManager().getWorktreePath(worktreeKey, repoPath);
     }
     slot.fileScope = await this.host
       .getFileScopeAnalyzer()
@@ -470,6 +471,49 @@ export class OrchestratorDispatchService {
     await this.host.persistCounters(projectId, repoPath);
     const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
     await this.host.getBranchManager().ensureOnMain(repoPath, baseBranch);
+
+    if (slot.worktreePath && slot.worktreePath !== repoPath) {
+      const integrity = await assertWorktreeIntegrity(repoPath, slot.worktreePath, task.id, "dispatch");
+      if (!integrity.valid) {
+        log.warn("Worktree integrity check failed at dispatch, attempting rebuild", {
+          taskId: task.id,
+          phase: integrity.phase,
+          failureReason: integrity.failureReason,
+          detail: integrity.detail,
+          worktreePath: slot.worktreePath,
+        });
+        const bm = this.host.getBranchManager() as {
+          ensureOnMain(repoPath: string, baseBranch: string): Promise<void>;
+          getWorktreePath(key: string, repoPath?: string): string;
+          removeTaskWorktree(repoPath: string, worktreeKey: string, actualPath?: string): Promise<void>;
+          createTaskWorktree(repoPath: string, taskId: string, baseBranch: string, options?: { worktreeKey?: string; branchName?: string }): Promise<string>;
+        };
+        const rebuildResult = await rebuildWorktreeIfInvalid(
+          repoPath,
+          slot.worktreePath,
+          task.id,
+          branchName,
+          baseBranch,
+          {
+            removeWorktree: (rp, key, ap) => bm.removeTaskWorktree(rp, key, ap),
+            createWorktree: (rp, tid, bb, opts) => bm.createTaskWorktree(rp, tid, bb, opts),
+          }
+        );
+        if (rebuildResult.rebuilt) {
+          slot.worktreePath = rebuildResult.newPath;
+          log.info("Worktree rebuilt successfully at dispatch", {
+            taskId: task.id,
+            newPath: rebuildResult.newPath,
+          });
+        } else if (rebuildResult.error) {
+          log.error("Worktree rebuild failed at dispatch", {
+            taskId: task.id,
+            error: rebuildResult.error,
+          });
+        }
+      }
+    }
+
     if (mergeResumeState) {
       await this.host.performMergeRetry(projectId, repoPath, task, slot);
       return;

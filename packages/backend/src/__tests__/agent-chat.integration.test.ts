@@ -491,6 +491,6 @@ describe("open-editor integration (HTTP)", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.worktreePath).toBe(tmpDir);
-    expect(branchInstance.getWorktreePath).toHaveBeenCalledWith("os-fallback");
+    expect(branchInstance.getWorktreePath).toHaveBeenCalledWith("os-fallback", tmpDir);
   });
 });

@@ -187,7 +187,7 @@ describe("open-editor.service", () => {
 
       const result = await resolveOpenEditor("proj-1", "os-1234");
 
-      expect(branchInstance.getWorktreePath).toHaveBeenCalledWith("os-1234");
+      expect(branchInstance.getWorktreePath).toHaveBeenCalledWith("os-1234", tmpDir);
       expect(result.worktreePath).toBe(tmpDir);
       expect(result.opened).toBe(true);
     });

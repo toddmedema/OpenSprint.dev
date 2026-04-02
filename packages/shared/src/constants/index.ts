@@ -30,6 +30,8 @@ export const OPENSPRINT_PATHS = {
   active: `${OPENSPRINT_DIR}/active`,
   agents: `${OPENSPRINT_DIR}/agents`,
   pendingCommits: `${OPENSPRINT_DIR}/pending-commits.json`,
+  /** Durable worktree root inside the repo runtime dir (replaces OS temp). */
+  worktrees: `${OPENSPRINT_DIR}/runtime/worktrees`,
   heartbeat: "heartbeat.json",
   agentOutputLog: "agent-output.log",
   assignment: "assignment.json",

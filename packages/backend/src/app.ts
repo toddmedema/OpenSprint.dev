@@ -12,7 +12,6 @@ import { createExecuteRouter } from "./routes/execute.js";
 import { createDeliverRouter } from "./routes/deliver.js";
 import { createAgentsRouter } from "./routes/agents.js";
 import { createTasksRouter } from "./routes/tasks.js";
-import { createTasksAnalyticsRouter } from "./routes/tasks-analytics.js";
 import { createAppServices, type AppServices } from "./composition.js";
 import { createFeedbackRouter } from "./routes/feedback.js";
 import {
@@ -88,7 +87,6 @@ export function createApp(services?: AppServices) {
   app.use(`${API_PREFIX}/db-status`, dbStatusRouter);
   app.use(`${API_PREFIX}/models`, modelsRouter);
   app.use(`${API_PREFIX}/env`, envRouter);
-  app.use(`${API_PREFIX}/tasks`, createTasksAnalyticsRouter(taskService));
   app.use(`${API_PREFIX}/global-settings`, globalSettingsRouter);
   app.use(`${API_PREFIX}/help`, requireDatabase, helpRouter);
   app.use(`${API_PREFIX}/projects/:projectId/plan-status`, requireDatabase);
@@ -111,7 +109,7 @@ export function createApp(services?: AppServices) {
   app.use(
     `${API_PREFIX}/projects/:projectId/execute`,
     requireDatabase,
-    createExecuteRouter(taskService, projectService, sessionManager)
+    createExecuteRouter(projectService, sessionManager)
   );
   app.use(
     `${API_PREFIX}/projects/:projectId/deliver`,

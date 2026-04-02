@@ -68,17 +68,6 @@ export function createProjectsRouter(
     })
   );
 
-  // GET /projects/:id/sketch — Sketch phase resource (returns project; chat/prd under /chat, /prd)
-  router.get(
-    "/:id/sketch",
-    validateParams(projectIdParamSchema),
-    wrapAsync(async (req: Request<ProjectParams>, res) => {
-      const project = await projectService.getProject(req.params.id);
-      const body: ApiResponse<Project> = { data: project };
-      res.json(body);
-    })
-  );
-
   // GET /projects/:id/plan-status — Plan it / Replan it CTA visibility (PRD §7.1.5)
   router.get(
     "/:id/plan-status",

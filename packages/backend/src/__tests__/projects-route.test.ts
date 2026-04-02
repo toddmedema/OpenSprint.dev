@@ -110,16 +110,6 @@ describe.skipIf(!projectsPostgresOk)("Projects REST API — spec/sketch phase ro
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("GET /projects/:id/sketch should return project (Sketch phase canonical endpoint)", async () => {
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/sketch`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data).toBeDefined();
-    expect(res.body.data.id).toBe(projectId);
-    expect(res.body.data.name).toBe("Sketch Test Project");
-    expect(res.body.data.currentPhase).toBe("sketch");
-  });
-
   it("GET /projects/:id/sketch-context returns hasExistingCode false when repo has no source files", async () => {
     const res = await authedSupertest(app).get(
       `${API_PREFIX}/projects/${projectId}/sketch-context`

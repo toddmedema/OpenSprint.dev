@@ -92,8 +92,7 @@ export async function resolveOpenEditor(
   } else if (activeEntry.worktreePath) {
     worktreePath = activeEntry.worktreePath;
   } else {
-    // Fallback: derive worktree path from BranchManager
-    worktreePath = branchManager.getWorktreePath(taskId);
+    worktreePath = branchManager.getWorktreePath(taskId, repoPath);
   }
 
   // Validate path exists

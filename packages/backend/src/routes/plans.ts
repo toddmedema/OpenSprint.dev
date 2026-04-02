@@ -103,17 +103,6 @@ export function createPlansRouter(planService: PlanService): Router {
     })
   );
 
-  // GET /projects/:projectId/plans/dependencies — Get dependency graph
-  router.get(
-    "/dependencies",
-    validateParams(projectIdParamSchema),
-    wrapAsync(async (req: Request<ProjectParams>, res) => {
-      const graph = await planService.getDependencyGraph(req.params.projectId);
-      const body: ApiResponse<PlanDependencyGraph> = { data: graph };
-      res.json(body);
-    })
-  );
-
   // POST /projects/:projectId/plans/execute-batch — Queue Execute-all (persists; survives UI refresh)
   router.post(
     "/execute-batch",

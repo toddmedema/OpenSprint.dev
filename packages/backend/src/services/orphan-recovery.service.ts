@@ -43,8 +43,13 @@ export class OrphanRecoveryService {
     if (!project) return { recovered: [] };
     const projectId = project.id;
     const excludeSet = toExcludeSet(excludeTaskIds);
-    const worktreeBase = this.branchManager.getWorktreeBasePath();
-    const stale = await heartbeatService.findStaleHeartbeats(worktreeBase);
+    const durableBase = this.branchManager.getWorktreeBasePath(repoPath);
+    const legacyBase = this.branchManager.getLegacyWorktreeBasePath();
+    const staleDurable = await heartbeatService.findStaleHeartbeats(durableBase);
+    const staleLegacy = await heartbeatService.findStaleHeartbeats(legacyBase);
+    const staleMap = new Map(staleLegacy.map((s) => [s.taskId, s]));
+    for (const s of staleDurable) staleMap.set(s.taskId, s);
+    const stale = [...staleMap.values()];
     const recovered: string[] = [];
 
     for (const { taskId } of stale) {
@@ -114,7 +119,7 @@ export class OrphanRecoveryService {
 
     // In Branches mode, agent runs in repoPath; no worktree. In Worktree mode, use worktree path.
     const workPath =
-      gitWorkingMode === "branches" ? repoPath : this.branchManager.getWorktreePath(task.id);
+      gitWorkingMode === "branches" ? repoPath : this.branchManager.getWorktreePath(task.id, repoPath);
     try {
       await fs.access(workPath);
       await this.branchManager.commitWip(workPath, task.id);

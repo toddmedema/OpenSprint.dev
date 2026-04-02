@@ -436,6 +436,17 @@ vi.mock("../utils/file-utils.js", () => ({
 vi.mock("../utils/worktree-health.js", () => ({
   isWorktreeCheckoutUsable: vi.fn().mockResolvedValue(true),
   preflightWorktreeForDiff: (...args: unknown[]) => mockPreflightWorktreeForDiff(...args),
+  assertWorktreeIntegrity: vi.fn().mockResolvedValue({
+    valid: true,
+    phase: "dispatch",
+    worktreePath: "",
+    taskId: "",
+  }),
+  rebuildWorktreeIfInvalid: vi.fn().mockResolvedValue({
+    rebuilt: false,
+    previousPath: "",
+    newPath: "",
+  }),
   IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
     worktreePath: string;
     detail: string;
