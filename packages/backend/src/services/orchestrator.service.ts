@@ -794,11 +794,12 @@ export class OrchestratorService {
     const state = this.getState(projectId);
     if (state.slots.size === 0) return;
 
+    const allIssues = await this.taskStore.listAll(projectId);
     const validIds =
-      validTaskIds ??
-      new Set(
-        (await this.taskStore.listAll(projectId)).map((i) => i.id).filter(Boolean) as string[]
-      );
+      validTaskIds ?? new Set(allIssues.map((i) => i.id).filter(Boolean) as string[]);
+    const statusById = new Map(
+      allIssues.map((i) => [i.id, (i.status as string | undefined) ?? "open"])
+    );
 
     // Do not treat slots as stale when the task list is empty. Empty list can mean real deletion
     // (e.g. another process) or a transient/wrong-DB result; killing agents on empty list causes
@@ -816,7 +817,18 @@ export class OrchestratorService {
     let removed = false;
 
     for (const [taskId, slot] of [...state.slots]) {
-      if (validIds.has(taskId)) continue;
+      if (validIds.has(taskId)) {
+        const taskStatus = statusById.get(taskId);
+        if (taskStatus != null && taskStatus !== "in_progress") {
+          log.warn("Task-agent status drift detected: slot active while task status is not in_progress", {
+            projectId,
+            taskId,
+            taskStatus,
+            slotPhase: slot.phase,
+          });
+        }
+        continue;
+      }
       log.warn("Removing stale slot: task no longer in task store", { projectId, taskId });
       if (slot.agent.activeProcess) {
         try {

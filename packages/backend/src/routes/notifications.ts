@@ -28,7 +28,7 @@ type ResolveBody = {
 };
 interface ProjectNotificationsRouterDeps {
   projectService: Pick<ProjectService, "getSettings">;
-  orchestratorService: Pick<OrchestratorService, "nudge">;
+  orchestratorService: Pick<OrchestratorService, "nudge" | "hasActiveTask">;
 }
 
 export function createProjectNotificationsRouter({
@@ -148,14 +148,24 @@ export function createProjectNotificationsRouter({
         sourceId: notification.sourceId,
       });
 
-      // When source=execute, unblock the task and nudge orchestrator so agent picks up the response promptly
+      // When source=execute, unblock with guarded transitions to keep task and slot states aligned.
       if (notification.source === "execute" && notification.sourceId) {
         const taskId = notification.sourceId;
         try {
-          await taskStore.update(projectId, taskId, {
-            status: "open",
-            block_reason: null,
-          });
+          const task = await taskStore.show(projectId, taskId);
+          const status = (task.status as string) ?? "open";
+          const hasActiveSlot = orchestratorService.hasActiveTask(projectId, taskId);
+
+          if (status === "blocked") {
+            await taskStore.update(projectId, taskId, {
+              status: hasActiveSlot ? "in_progress" : "open",
+              block_reason: null,
+            });
+          } else if (status === "in_progress") {
+            await taskStore.update(projectId, taskId, {
+              block_reason: null,
+            });
+          }
         } catch {
           // Task may not exist or already unblocked
         }

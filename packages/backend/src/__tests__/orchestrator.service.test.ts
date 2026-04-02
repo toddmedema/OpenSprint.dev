@@ -3293,6 +3293,24 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(agents[0].id).toBe("task-no-empty-wipe");
     });
 
+    it("status drift observability does not mutate task status from read paths", async () => {
+      const { task } = setupSingleTaskFlow("task-status-drift");
+      mockTaskStoreReady.mockResolvedValueOnce([task]);
+      mockTaskStoreListAll.mockResolvedValue([{ ...task, status: "open" }]);
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      mockTaskStoreUpdate.mockClear();
+
+      const agents = await orchestrator.getActiveAgents(projectId);
+      expect(agents).toHaveLength(1);
+      expect(agents[0].id).toBe("task-status-drift");
+      expect(mockTaskStoreUpdate).not.toHaveBeenCalled();
+    });
+
     it("returns one reviewer entry per active review angle", async () => {
       const { task } = setupSingleTaskFlow("task-review-angles");
       mockTaskStoreReady.mockResolvedValueOnce([task]);

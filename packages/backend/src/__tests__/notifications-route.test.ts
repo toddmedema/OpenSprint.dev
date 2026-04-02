@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import { createApp } from "../app.js";
 import { ProjectService } from "../services/project.service.js";
+import { orchestratorService } from "../services/orchestrator.service.js";
 import { notificationService } from "../services/notification.service.js";
 import { taskStore } from "../services/task-store.service.js";
 import { setGlobalSettings } from "../services/global-settings.service.js";
@@ -212,10 +213,89 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     expect(listRes.body.data).toHaveLength(0);
   });
 
-  it("PATCH resolve execute notification unblocks the task", async () => {
+  it("PATCH resolve execute notification sets blocked task open when no active slot", async () => {
     const task = await taskStore.create(projectId, "Test task", { type: "task" });
     await taskStore.update(projectId, task.id, {
       status: "blocked",
+      block_reason: "Open Question",
+    });
+
+    const created = await notificationService.create({
+      projectId,
+      source: "execute",
+      sourceId: task.id,
+      questions: [{ id: "q1", text: "Clarify scope?" }],
+    });
+
+    const hasActiveTaskSpy = vi.spyOn(orchestratorService, "hasActiveTask").mockReturnValue(false);
+    const nudgeSpy = vi.spyOn(orchestratorService, "nudge").mockImplementation(() => {});
+    const res = await authedSupertest(app).patch(
+      `${API_PREFIX}/projects/${projectId}/notifications/${created.id}`
+    );
+    nudgeSpy.mockRestore();
+    hasActiveTaskSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("resolved");
+
+    const updated = await taskStore.show(projectId, task.id);
+    expect(updated.status).toBe("open");
+    expect((updated as { block_reason?: string | null }).block_reason ?? null).toBeFalsy();
+  });
+
+  it("PATCH resolve execute notification keeps blocked task in_progress when slot is active", async () => {
+    const task = await taskStore.create(projectId, "Test task", { type: "task" });
+    await taskStore.update(projectId, task.id, {
+      status: "blocked",
+      block_reason: "Open Question",
+    });
+
+    const created = await notificationService.create({
+      projectId,
+      source: "execute",
+      sourceId: task.id,
+      questions: [{ id: "q1", text: "Clarify scope?" }],
+    });
+
+    const hasActiveTaskSpy = vi.spyOn(orchestratorService, "hasActiveTask").mockReturnValue(true);
+    const res = await authedSupertest(app).patch(
+      `${API_PREFIX}/projects/${projectId}/notifications/${created.id}`
+    );
+    hasActiveTaskSpy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("resolved");
+
+    const updated = await taskStore.show(projectId, task.id);
+    expect(updated.status).toBe("in_progress");
+    expect((updated as { block_reason?: string | null }).block_reason ?? null).toBeFalsy();
+  });
+
+  it("PATCH resolve execute notification never reopens closed tasks", async () => {
+    const task = await taskStore.create(projectId, "Test task", { type: "task" });
+    await taskStore.close(projectId, task.id, "Completed", true);
+
+    const created = await notificationService.create({
+      projectId,
+      source: "execute",
+      sourceId: task.id,
+      questions: [{ id: "q1", text: "Clarify scope?" }],
+    });
+
+    const res = await authedSupertest(app).patch(
+      `${API_PREFIX}/projects/${projectId}/notifications/${created.id}`
+    );
+
+    expect(res.status).toBe(200);
+    const updated = await taskStore.show(projectId, task.id);
+    expect(updated.status).toBe("closed");
+  });
+
+  it("PATCH resolve execute notification keeps in_progress status and clears block_reason", async () => {
+    const task = await taskStore.create(projectId, "Test task", { type: "task" });
+    await taskStore.update(projectId, task.id, {
+      status: "in_progress",
+      assignee: "Claude",
       block_reason: "Open Question",
     });
 
@@ -231,10 +311,8 @@ describe.skipIf(!notificationsPostgresOk)("Notifications REST API", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe("resolved");
-
     const updated = await taskStore.show(projectId, task.id);
-    expect(["open", "in_progress"]).toContain(updated.status);
+    expect(updated.status).toBe("in_progress");
     expect((updated as { block_reason?: string | null }).block_reason ?? null).toBeFalsy();
   });
 
