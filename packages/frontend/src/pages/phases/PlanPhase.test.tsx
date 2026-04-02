@@ -3460,7 +3460,7 @@ describe("PlanPhase Generate Plan", () => {
     });
   });
 
-  it("Add Plan modal has Feature plan idea label", async () => {
+  it("Add Plan modal has no Feature plan idea subheader; textarea stays labeled for a11y", async () => {
     const store = createStore();
     const user = userEvent.setup();
     render(
@@ -3473,8 +3473,8 @@ describe("PlanPhase Generate Plan", () => {
     );
 
     await user.click(screen.getByTestId("add-plan-button"));
-    expect(screen.getByText("Feature plan idea")).toBeInTheDocument();
-    expect(screen.getByLabelText("Feature plan idea")).toBeInTheDocument();
+    expect(screen.queryByText("Feature plan idea")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Describe your feature idea" })).toBeInTheDocument();
   });
 
   it("Add Plan modal textarea accepts multi-line text (Shift+Enter for newline)", async () => {
