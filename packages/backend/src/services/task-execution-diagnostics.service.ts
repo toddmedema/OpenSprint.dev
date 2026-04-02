@@ -575,6 +575,39 @@ function summarizeEvent(event: OrchestratorEvent): TaskExecutionEventItem | null
     };
   }
 
+  if (event.event === "preflight_worktree_invalid") {
+    const failureReason = asString(data.failureReason);
+    const detail = asString(data.detail);
+    return {
+      at: event.timestamp,
+      attempt,
+      phase: "coding",
+      outcome: "failed",
+      title: "Workspace invalid",
+      summary: compactExecutionText(
+        `Task worktree failed preflight check${failureReason ? ` (${failureReason})` : ""}${detail ? `: ${detail}` : ""}`,
+        360
+      ),
+      failureType: "workspace_invalid",
+      nextAction: "Blocked pending investigation",
+    };
+  }
+
+  if (event.event === "recovery.stale_success_consumed") {
+    const source = asString(data.source);
+    return {
+      at: event.timestamp,
+      attempt,
+      phase: "orchestrator",
+      outcome: "completed",
+      title: "Recovered stale success",
+      summary: compactExecutionText(
+        `Terminal result.json consumed during recovery${source ? ` (${source})` : ""}`,
+        360
+      ),
+    };
+  }
+
   if (event.event === "task.failed") {
     const phase = phaseFromUnknown(data.phase, "coding");
     const reason = asString(data.reason);

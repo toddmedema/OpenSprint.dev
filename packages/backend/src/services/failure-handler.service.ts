@@ -48,7 +48,7 @@ import { suggestPolicyFromArtifact, summarizeDebugArtifact } from "./agentic-rep
 
 const log = createLogger("failure-handler");
 
-const INFRA_FAILURE_TYPES: FailureType[] = ["agent_crash", "timeout", "merge_conflict"];
+const INFRA_FAILURE_TYPES: FailureType[] = ["agent_crash", "timeout", "merge_conflict", "workspace_invalid"];
 const MAX_INFRA_RETRIES = 2;
 const NO_RESULT_TAIL_LINES = 8;
 const NO_RESULT_REASON_LIMIT = 1200;
@@ -1138,7 +1138,7 @@ export class FailureHandlerService {
       return;
     }
 
-    if (failureType === "repo_preflight" || failureType === "environment_setup") {
+    if (failureType === "repo_preflight" || failureType === "environment_setup" || failureType === "workspace_invalid") {
       log.warn("Deterministic environment/setup failure; blocking task until remediated", {
         taskId: task.id,
         failureType,

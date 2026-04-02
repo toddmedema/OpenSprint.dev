@@ -5,6 +5,7 @@ import os from "os";
 import {
   validateWorktreeCheckout,
   isWorktreeCheckoutUsable,
+  preflightWorktreeForDiff,
   IncompleteWorktreeError,
 } from "../utils/worktree-health.js";
 
@@ -121,6 +122,47 @@ describe("worktree-health", () => {
       await fs.mkdir(path.join(worktreeDir, ".git"), { recursive: true });
 
       expect(await isWorktreeCheckoutUsable(repoDir, worktreeDir)).toBe(false);
+    });
+  });
+
+  describe("preflightWorktreeForDiff", () => {
+    it("returns usable:true for a valid worktree", async () => {
+      await fs.mkdir(path.join(worktreeDir, ".git"), { recursive: true });
+      await fs.writeFile(path.join(worktreeDir, "package.json"), "{}");
+      await fs.mkdir(path.join(worktreeDir, "packages"), { recursive: true });
+
+      const result = await preflightWorktreeForDiff(repoDir, worktreeDir);
+      expect(result).toEqual({ usable: true });
+    });
+
+    it("returns directory_missing when worktree does not exist", async () => {
+      const ghost = path.join(os.tmpdir(), `ghost-wt-${Date.now()}`);
+      const result = await preflightWorktreeForDiff(repoDir, ghost);
+      expect(result.usable).toBe(false);
+      expect(result.failureReason).toBe("directory_missing");
+    });
+
+    it("returns git_entry_missing when .git is absent", async () => {
+      const result = await preflightWorktreeForDiff(repoDir, worktreeDir);
+      expect(result.usable).toBe(false);
+      expect(result.failureReason).toBe("git_entry_missing");
+    });
+
+    it("returns package_json_missing when repo has it but worktree does not", async () => {
+      await fs.mkdir(path.join(worktreeDir, ".git"), { recursive: true });
+
+      const result = await preflightWorktreeForDiff(repoDir, worktreeDir);
+      expect(result.usable).toBe(false);
+      expect(result.failureReason).toBe("package_json_missing");
+    });
+
+    it("returns source_directories_missing when none of the repo dirs exist in worktree", async () => {
+      await fs.mkdir(path.join(worktreeDir, ".git"), { recursive: true });
+      await fs.writeFile(path.join(worktreeDir, "package.json"), "{}");
+
+      const result = await preflightWorktreeForDiff(repoDir, worktreeDir);
+      expect(result.usable).toBe(false);
+      expect(result.failureReason).toBe("source_directories_missing");
     });
   });
 });

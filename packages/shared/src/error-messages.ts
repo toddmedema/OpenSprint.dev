@@ -98,6 +98,7 @@ export type FailureType =
   | "agent_crash"
   | "repo_preflight"
   | "environment_setup"
+  | "workspace_invalid"
   | "timeout"
   | "no_result"
   | "merge_conflict"
@@ -111,6 +112,7 @@ export const FAILURE_TYPE_LABELS: Record<FailureType, string> = {
   agent_crash: "Agent crashed",
   repo_preflight: "Repo preflight failed",
   environment_setup: "Environment setup failed",
+  workspace_invalid: "Workspace invalid",
   timeout: "Timeout",
   no_result: "No result",
   merge_conflict: "Merge conflict",

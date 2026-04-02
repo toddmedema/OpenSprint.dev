@@ -11,6 +11,18 @@ const EXCLUDED_ROOT_DIRS = new Set([
   "tmp",
 ]);
 
+export type WorktreePreflightFailureReason =
+  | "directory_missing"
+  | "git_entry_missing"
+  | "package_json_missing"
+  | "source_directories_missing";
+
+export interface WorktreePreflightResult {
+  usable: boolean;
+  failureReason?: WorktreePreflightFailureReason;
+  detail?: string;
+}
+
 export class IncompleteWorktreeError extends Error {
   constructor(
     public readonly worktreePath: string,
@@ -81,6 +93,69 @@ export async function validateWorktreeCheckout(
     worktreePath,
     `none of the expected source directories are present (checked: ${repoCheckoutMarkers.join(", ")})`
   );
+}
+
+/**
+ * Structured preflight check returning a typed result instead of throwing.
+ * Use before diff capture or merge-gate runs to distinguish workspace failures
+ * from agent-produced empty diffs.
+ */
+export async function preflightWorktreeForDiff(
+  repoPath: string,
+  worktreePath: string
+): Promise<WorktreePreflightResult> {
+  try {
+    await fs.access(worktreePath);
+  } catch {
+    return { usable: false, failureReason: "directory_missing", detail: "worktree directory does not exist" };
+  }
+
+  try {
+    await fs.access(path.join(worktreePath, ".git"));
+  } catch {
+    return { usable: false, failureReason: "git_entry_missing", detail: ".git entry is missing from worktree" };
+  }
+
+  const repoHasPackageJson = await fs
+    .access(path.join(repoPath, "package.json"))
+    .then(() => true)
+    .catch(() => false);
+  if (repoHasPackageJson) {
+    try {
+      await fs.access(path.join(worktreePath, "package.json"));
+    } catch {
+      return {
+        usable: false,
+        failureReason: "package_json_missing",
+        detail: "package.json is present in the main repo but missing in the worktree",
+      };
+    }
+  }
+
+  const repoRootEntries = await fs.readdir(repoPath, { withFileTypes: true }).catch(() => null);
+  if (!repoRootEntries) return { usable: true };
+
+  const repoCheckoutMarkers = repoRootEntries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((name) => !name.startsWith(".") && !EXCLUDED_ROOT_DIRS.has(name));
+
+  if (repoCheckoutMarkers.length === 0) return { usable: true };
+
+  for (const marker of repoCheckoutMarkers) {
+    try {
+      await fs.access(path.join(worktreePath, marker));
+      return { usable: true };
+    } catch {
+      // keep probing
+    }
+  }
+
+  return {
+    usable: false,
+    failureReason: "source_directories_missing",
+    detail: `none of the expected source directories are present (checked: ${repoCheckoutMarkers.join(", ")})`,
+  };
 }
 
 /**

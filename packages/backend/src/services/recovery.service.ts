@@ -178,7 +178,7 @@ export class RecoveryService {
     staleResult.requeued.forEach((taskId) => excludeWorktreeKeys.add(taskId));
 
     // 3. Orphaned in_progress tasks
-    const orphanResult = await this.recoverOrphanedTasks(projectId, repoPath, excludeIds);
+    const orphanResult = await this.recoverOrphanedTasks(projectId, repoPath, excludeIds, host);
     result.requeued.push(...orphanResult);
     orphanResult.forEach((taskId) => excludeIds.add(taskId));
     orphanResult.forEach((taskId) => excludeWorktreeKeys.add(taskId));
@@ -187,7 +187,8 @@ export class RecoveryService {
     const assigneeLessResult = await this.recoverAssigneeLessInProgressTasks(
       projectId,
       repoPath,
-      excludeIds
+      excludeIds,
+      host
     );
     result.requeued.push(...assigneeLessResult);
     assigneeLessResult.forEach((taskId) => excludeIds.add(taskId));
@@ -522,7 +523,8 @@ export class RecoveryService {
   private async recoverOrphanedTasks(
     projectId: string,
     repoPath: string,
-    excludeIds: Set<string>
+    excludeIds: Set<string>,
+    host?: RecoveryHost
   ): Promise<string[]> {
     const orphans = await this.taskStore.listInProgressWithAgentAssignee(projectId);
     const toRecover = orphans.filter((t) => !excludeIds.has(t.id));
@@ -539,6 +541,39 @@ export class RecoveryService {
           )
         ) {
           continue;
+        }
+        // Check for a terminal result.json before blindly requeueing
+        if (host?.handleCompletedAssignment) {
+          const assignment = await this.readAssignment(repoPath, task.id);
+          if (assignment) {
+            const terminalResult = await this.readTerminalAssignmentResult(assignment);
+            if (terminalResult) {
+              log.info("Recovery: orphaned task has terminal result; completing instead of requeue", {
+                projectId,
+                taskId: task.id,
+                status: terminalResult,
+              });
+              const completed = await host.handleCompletedAssignment(
+                projectId,
+                repoPath,
+                task,
+                assignment
+              );
+              if (completed) {
+                void eventLogService
+                  .append(repoPath, {
+                    timestamp: new Date().toISOString(),
+                    projectId,
+                    taskId: task.id,
+                    event: "recovery.stale_success_consumed",
+                    data: { source: "orphaned_task", status: terminalResult },
+                  })
+                  .catch(() => {});
+                recovered.push(task.id);
+                continue;
+              }
+            }
+          }
         }
         await this.recoverTask(projectId, repoPath, task);
         recovered.push(task.id);
@@ -576,7 +611,8 @@ export class RecoveryService {
   private async recoverAssigneeLessInProgressTasks(
     projectId: string,
     repoPath: string,
-    excludeIds: Set<string>
+    excludeIds: Set<string>,
+    host?: RecoveryHost
   ): Promise<string[]> {
     const stranded = await this.taskStore.listInProgressWithoutAssignee(projectId);
     const cutoffMs = Date.now() - HEARTBEAT_STALE_MS;
@@ -598,6 +634,39 @@ export class RecoveryService {
           )
         ) {
           continue;
+        }
+        // Check for a terminal result.json before blindly requeueing
+        if (host?.handleCompletedAssignment) {
+          const assignment = await this.readAssignment(repoPath, task.id);
+          if (assignment) {
+            const terminalResult = await this.readTerminalAssignmentResult(assignment);
+            if (terminalResult) {
+              log.info("Recovery: assignee-less task has terminal result; completing instead of requeue", {
+                projectId,
+                taskId: task.id,
+                status: terminalResult,
+              });
+              const completed = await host.handleCompletedAssignment(
+                projectId,
+                repoPath,
+                task,
+                assignment
+              );
+              if (completed) {
+                void eventLogService
+                  .append(repoPath, {
+                    timestamp: new Date().toISOString(),
+                    projectId,
+                    taskId: task.id,
+                    event: "recovery.stale_success_consumed",
+                    data: { source: "assignee_less_task", status: terminalResult },
+                  })
+                  .catch(() => {});
+                recovered.push(task.id);
+                continue;
+              }
+            }
+          }
         }
         await this.recoverTask(projectId, repoPath, task);
         recovered.push(task.id);

@@ -790,4 +790,92 @@ describe("TaskExecutionDiagnosticsService", () => {
     expect(diagnostics.latestOutcome).toBe("running");
     expect(diagnostics.latestSummary).toContain("resumed after reconnect");
   });
+
+  it("renders preflight_worktree_invalid event as workspace_invalid failure", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "blocked",
+      labels: ["attempts:2"],
+      block_reason: "Coding Failure",
+      last_execution_summary: null,
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(2);
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-03-02T10:00:00.000Z",
+        projectId,
+        taskId,
+        event: "preflight_worktree_invalid",
+        data: {
+          attempt: 2,
+          failureReason: "package_json_missing",
+          detail: "package.json is present in the main repo but missing in the worktree",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+
+    expect(diagnostics.latestOutcome).toBe("failed");
+    expect(diagnostics.latestFailureType).toBe("workspace_invalid");
+    expect(diagnostics.latestSummary).toContain("package_json_missing");
+    expect(diagnostics.timeline[0]).toEqual(
+      expect.objectContaining({
+        phase: "coding",
+        outcome: "failed",
+        title: "Workspace invalid",
+        failureType: "workspace_invalid",
+      })
+    );
+  });
+
+  it("renders recovery.stale_success_consumed event as completed outcome", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "closed",
+      labels: ["attempts:1"],
+      block_reason: null,
+      last_execution_summary: null,
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(1);
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-03-02T10:00:00.000Z",
+        projectId,
+        taskId,
+        event: "recovery.stale_success_consumed",
+        data: {
+          attempt: 1,
+          source: "orphaned_task",
+          status: "success",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+
+    expect(diagnostics.latestOutcome).toBe("completed");
+    expect(diagnostics.latestSummary).toContain("Terminal result.json consumed during recovery");
+    expect(diagnostics.timeline[0]).toEqual(
+      expect.objectContaining({
+        phase: "orchestrator",
+        outcome: "completed",
+        title: "Recovered stale success",
+      })
+    );
+  });
 });

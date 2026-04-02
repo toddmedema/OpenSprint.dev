@@ -105,6 +105,7 @@ const {
   mockMaybeAutoRespond,
   mockRecordAttempt,
   mockCreateBaselineWorkspace,
+  mockPreflightWorktreeForDiff,
 } = vi.hoisted(() => ({
   mockBroadcastToProject: vi.fn(),
   mockSendAgentOutputToProject: vi.fn(),
@@ -194,6 +195,7 @@ const {
   mockMaybeAutoRespond: vi.fn().mockResolvedValue(undefined),
   mockRecordAttempt: vi.fn().mockResolvedValue(undefined),
   mockCreateBaselineWorkspace: vi.fn(),
+  mockPreflightWorktreeForDiff: vi.fn().mockResolvedValue({ usable: true }),
 }));
 
 vi.mock("../websocket/index.js", () => ({
@@ -429,6 +431,21 @@ vi.mock("../services/git-commit-queue.service.js", async (importOriginal) => {
 
 vi.mock("../utils/file-utils.js", () => ({
   writeJsonAtomic: (...args: unknown[]) => mockWriteJsonAtomic(...args),
+}));
+
+vi.mock("../utils/worktree-health.js", () => ({
+  isWorktreeCheckoutUsable: vi.fn().mockResolvedValue(true),
+  preflightWorktreeForDiff: (...args: unknown[]) => mockPreflightWorktreeForDiff(...args),
+  IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
+    worktreePath: string;
+    detail: string;
+    constructor(worktreePath: string, detail: string) {
+      super(`Worktree checkout at ${worktreePath} is incomplete: ${detail}`);
+      this.name = "IncompleteWorktreeError";
+      this.worktreePath = worktreePath;
+      this.detail = detail;
+    }
+  },
 }));
 
 vi.mock("../services/plan-complexity.js", () => ({
@@ -2611,6 +2628,69 @@ describe("OrchestratorService (slot-based model)", () => {
               ?.consecutiveEmptyDiffs === 0
         );
         expect(resetCall).toBeDefined();
+      });
+
+      it("reports workspace_invalid instead of empty-diff when worktree preflight fails", async () => {
+        const { task } = setupSingleTaskFlow("task-empty-diff-ws-invalid");
+        mockTaskStoreReady.mockResolvedValueOnce([task]);
+        mockReadResult.mockResolvedValue({
+          status: "success",
+          summary: "Done",
+        });
+        mockPreflightWorktreeForDiff.mockResolvedValueOnce({
+          usable: false,
+          failureReason: "package_json_missing",
+          detail: "package.json is present in the main repo but missing in the worktree",
+        });
+
+        await orchestrator.ensureRunning(projectId);
+        await vi.waitFor(() => {
+          expect(mockWriteJsonAtomic).toHaveBeenCalled();
+        });
+
+        const appendSpy = vi.spyOn(eventLogService, "append").mockResolvedValue(undefined);
+        const failureSpy = vi
+          .spyOn(
+            (
+              orchestrator as unknown as {
+                failureHandler: {
+                  handleTaskFailure: (...args: unknown[]) => Promise<void>;
+                };
+              }
+            ).failureHandler,
+            "handleTaskFailure"
+          )
+          .mockResolvedValue(undefined);
+
+        await (orchestrator as unknown as HandleCodingDone).handleCodingDone(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          0
+        );
+
+        expect(appendSpy).toHaveBeenCalledWith(
+          repoPath,
+          expect.objectContaining({
+            taskId: task.id,
+            event: "preflight_worktree_invalid",
+            data: expect.objectContaining({
+              failureReason: "package_json_missing",
+            }),
+          })
+        );
+        expect(failureSpy).toHaveBeenCalledWith(
+          projectId,
+          repoPath,
+          task,
+          `opensprint/${task.id}`,
+          expect.stringContaining("worktree is invalid"),
+          null,
+          "workspace_invalid"
+        );
+
+        appendSpy.mockRestore();
       });
     });
 

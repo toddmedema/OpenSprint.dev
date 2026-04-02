@@ -113,7 +113,7 @@ import {
   synthesizeCodingResultFromOutput,
   classifyNoResultReasonCode,
 } from "./no-result-reason.service.js";
-import { isWorktreeCheckoutUsable } from "../utils/worktree-health.js";
+import { isWorktreeCheckoutUsable, preflightWorktreeForDiff } from "../utils/worktree-health.js";
 import {
   describeStructuredOutputProblem,
   parseCodingAgentResult,
@@ -2210,6 +2210,46 @@ export class OrchestratorService {
         settings.simpleComplexityAgent;
       slot.activeAgentConfig = agentConfig;
       const baseBranch = await resolveBaseBranch(repoPath, settings.worktreeBaseBranch);
+      // Guard: verify the worktree still has a usable checkout before measuring diffs.
+      // A missing/corrupt worktree would produce an empty diff and incorrectly trigger the
+      // empty-diff circuit breaker. Classify this as workspace_invalid instead.
+      const worktreePreflight = await preflightWorktreeForDiff(repoPath, wtPath);
+      if (!worktreePreflight.usable) {
+        log.warn("Worktree invalid at diff-capture time; failing as workspace_invalid", {
+          taskId: task.id,
+          worktreePath: wtPath,
+          failureReason: worktreePreflight.failureReason,
+          detail: worktreePreflight.detail,
+        });
+        void eventLogService
+          .append(repoPath, {
+            timestamp: new Date().toISOString(),
+            projectId,
+            taskId: task.id,
+            event: "preflight_worktree_invalid",
+            data: {
+              projectId,
+              attempt: slot.attempt,
+              branchName,
+              worktreePath: wtPath,
+              failureReason: worktreePreflight.failureReason,
+              detail: worktreePreflight.detail,
+            },
+          })
+          .catch(() => {});
+        await this.failureHandler.handleTaskFailure(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          `Agent reported success but the task worktree is invalid (${worktreePreflight.failureReason}: ${worktreePreflight.detail}). ` +
+            "The workspace was likely cleaned up or corrupted during the run. Blocking for investigation.",
+          null,
+          "workspace_invalid"
+        );
+        return;
+      }
+
       // Commit any uncommitted work before measuring the branch diff. `captureBranchDiff` only
       // sees commits (base...branch); without this, success + uncommitted edits looks like an
       // empty diff and trips the consecutive-empty-diff circuit breaker incorrectly.

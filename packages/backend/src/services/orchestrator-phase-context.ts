@@ -13,6 +13,7 @@ export type FailureType =
   | "agent_crash"
   | "repo_preflight"
   | "environment_setup"
+  | "workspace_invalid"
   | "timeout"
   | "no_result"
   | "merge_conflict"
