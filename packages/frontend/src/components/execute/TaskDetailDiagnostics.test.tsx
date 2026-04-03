@@ -135,9 +135,11 @@ describe("TaskDetailDiagnostics", () => {
       />
     );
     const section = screen.getByTestId("execution-diagnostics-section");
+    // Section root has no panel styling (border/bg removed in de75.39)
     expect(section.className).not.toMatch(/\bbg-theme-surface\b/);
-    expect(section.className).not.toMatch(/\bborder-theme-border\b/);
-    expect(screen.getByTestId("execution-attempt-1").className).toContain("card");
+    // Attempt rows live directly inside the section
+    const attemptRow = screen.getByTestId("execution-attempt-1");
+    expect(section).toContainElement(attemptRow);
   });
 
   it("prioritizes failed command + first error and reveals structured details on demand", async () => {

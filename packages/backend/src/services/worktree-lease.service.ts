@@ -134,18 +134,11 @@ export class WorktreeLeaseService {
     const newExpiresAt = new Date(Date.now() + ttl).toISOString();
     let renewed = false;
     await taskStore.runWrite(async (client) => {
-      const rows = await client.query(
-        "SELECT released_at FROM worktree_leases WHERE worktree_key = $1",
-        [worktreeKey]
-      );
-      if (rows.length === 0) return;
-      const row = rows[0] as { released_at: string | null };
-      if (row.released_at) return;
-      await client.execute(
+      const affected = await client.execute(
         "UPDATE worktree_leases SET expires_at = $1 WHERE worktree_key = $2 AND released_at IS NULL",
         [newExpiresAt, worktreeKey]
       );
-      renewed = true;
+      renewed = affected > 0;
     });
     return renewed;
   }

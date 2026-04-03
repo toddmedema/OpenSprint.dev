@@ -19,6 +19,7 @@ vi.mock("../services/active-agents.service.js", () => ({
 
 vi.mock("../services/orchestrator.service.js", () => ({
   orchestratorService: {
+    canRunRecoveryForProject: vi.fn().mockResolvedValue(true),
     getRecoveryHost: vi.fn().mockReturnValue({
       getSlottedTaskIds: vi.fn().mockReturnValue([]),
       getActiveAgentIds: vi.fn().mockReturnValue([]),
@@ -64,6 +65,7 @@ describe("WatchdogService", () => {
     await (watchdog as any).runChecks();
 
     expect(recoveryService.runFullRecovery).toHaveBeenCalledTimes(1);
+    expect(orchestratorService.canRunRecoveryForProject).toHaveBeenCalledWith("proj-1");
     expect(recoveryService.runFullRecovery).toHaveBeenCalledWith(
       "proj-1",
       tmpDir,
@@ -73,6 +75,16 @@ describe("WatchdogService", () => {
       }),
       { includeGupp: true }
     );
+  });
+
+  it("skips recovery when this instance is not project leader", async () => {
+    vi.mocked(orchestratorService.canRunRecoveryForProject).mockResolvedValueOnce(false);
+
+    watchdog.start(getTargets);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (watchdog as any).runChecks();
+
+    expect(recoveryService.runFullRecovery).not.toHaveBeenCalled();
   });
 
   it("should pass host that delegates to orchestrator and activeAgents services", async () => {

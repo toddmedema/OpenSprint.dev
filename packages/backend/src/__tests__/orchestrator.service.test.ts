@@ -2291,25 +2291,28 @@ describe("OrchestratorService (slot-based model)", () => {
     });
 
     it("blocks task assignment when open PRD/SPEC HIL approval exists", async () => {
-      mockHasOpenPrdSpecHilApproval.mockResolvedValueOnce(true);
+      mockHasOpenPrdSpecHilApproval.mockResolvedValue(true);
       const { task } = setupSingleTaskFlow();
       mockTaskStoreReady.mockResolvedValueOnce([task]);
+      try {
+        await orchestrator.ensureRunning(projectId);
 
-      await orchestrator.ensureRunning(projectId);
+        await vi.waitFor(() => {
+          expect(mockBroadcastToProject).toHaveBeenCalledWith(
+            projectId,
+            expect.objectContaining({ type: "execute.status" })
+          );
+        });
 
-      await vi.waitFor(() => {
-        expect(mockBroadcastToProject).toHaveBeenCalledWith(
-          projectId,
-          expect.objectContaining({ type: "execute.status" })
+        expect(mockHasOpenPrdSpecHilApproval).toHaveBeenCalledWith(projectId);
+        expect(mockInvokeCodingAgent).not.toHaveBeenCalled();
+        expect(mockWriteJsonAtomic).not.toHaveBeenCalledWith(
+          expect.stringContaining("assignment.json"),
+          expect.anything()
         );
-      });
-
-      expect(mockHasOpenPrdSpecHilApproval).toHaveBeenCalledWith(projectId);
-      expect(mockInvokeCodingAgent).not.toHaveBeenCalled();
-      expect(mockWriteJsonAtomic).not.toHaveBeenCalledWith(
-        expect.stringContaining("assignment.json"),
-        expect.anything()
-      );
+      } finally {
+        mockHasOpenPrdSpecHilApproval.mockResolvedValue(false);
+      }
     });
 
     it("branches mode: uses createOrCheckoutBranch, skips symlinkNodeModules when wtPath=repoPath", async () => {
@@ -3309,7 +3312,7 @@ describe("OrchestratorService (slot-based model)", () => {
       expect(agents[0].id).toBe("task-no-empty-wipe");
     });
 
-    it("status drift observability does not mutate task status from read paths", async () => {
+    it("repairs status drift when slot is active but task status is open", async () => {
       const { task } = setupSingleTaskFlow("task-status-drift");
       mockTaskStoreReady.mockResolvedValueOnce([task]);
       mockTaskStoreListAll.mockResolvedValue([{ ...task, status: "open" }]);
@@ -3324,7 +3327,13 @@ describe("OrchestratorService (slot-based model)", () => {
       const agents = await orchestrator.getActiveAgents(projectId);
       expect(agents).toHaveLength(1);
       expect(agents[0].id).toBe("task-status-drift");
-      expect(mockTaskStoreUpdate).not.toHaveBeenCalled();
+      expect(mockTaskStoreUpdate).toHaveBeenCalledWith(
+        projectId,
+        "task-status-drift",
+        expect.objectContaining({
+          status: "in_progress",
+        })
+      );
     });
 
     it("returns one reviewer entry per active review angle", async () => {

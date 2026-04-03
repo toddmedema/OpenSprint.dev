@@ -58,6 +58,13 @@ export class WatchdogService {
     const targets = await getTargets();
     for (const target of targets) {
       try {
+        const canRunRecovery = await orchestratorService.canRunRecoveryForProject(target.projectId);
+        if (!canRunRecovery) {
+          log.info("Skipping watchdog recovery on non-leader instance", {
+            projectId: target.projectId,
+          });
+          continue;
+        }
         const host: RecoveryHost = orchestratorService.getRecoveryHost();
         const result = await recoveryService.runFullRecovery(
           target.projectId,

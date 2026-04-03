@@ -351,6 +351,14 @@ describe("WorktreeLeaseService", () => {
       await service.renew("task-1", 60_000);
       expect(await service.canCleanup("task-1")).toBe(false);
     });
+
+    it("returns false when concurrent release wins the race", async () => {
+      await service.acquire(BASE_PARAMS);
+      // Simulate a concurrent release between the (now removed) SELECT and the UPDATE
+      memStore.rows.get("task-1")!.released_at = new Date().toISOString();
+      const renewed = await service.renew("task-1", 120_000);
+      expect(renewed).toBe(false);
+    });
   });
 
   describe("generation tracking", () => {

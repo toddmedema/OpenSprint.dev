@@ -749,6 +749,28 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       );
     });
 
+    it("does not reset recently updated agent-assigned in-progress tasks within grace window", async () => {
+      vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([
+        {
+          id: "task-just-started-assigned",
+          project_id: "proj-1",
+          title: "Recently started assigned task",
+          status: "in_progress",
+          assignee: "Frodo",
+          updated_at: new Date().toISOString(),
+        } as never,
+      ]);
+
+      const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+      expect(result.requeued).toEqual([]);
+      expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+        "proj-1",
+        "task-just-started-assigned",
+        expect.objectContaining({ status: "open", assignee: "" })
+      );
+    });
+
     it("does not reset tasks that are slotted or have active agent", async () => {
       vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([
         { id: "task-slotted", status: "in_progress", assignee: "Samwise" } as never,
@@ -1390,6 +1412,59 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       await service.runFullRecovery("proj-1", tmpDir, agentHost, { includeGupp: true });
 
       expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    });
+
+    it("propagates reattached shared epic worktree key/path to prune exclusion sets", async () => {
+      const epicWtPath = path.join(tmpDir, "epic_shared");
+      await fs.mkdir(epicWtPath, { recursive: true });
+
+      const reattachHost = {
+        getSlottedTaskIds: () => [] as string[],
+        getActiveAgentIds: () => [] as string[],
+        reattachSlot: vi.fn().mockResolvedValue(true),
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-epic-child", status: "in_progress", assignee: "Agent" } as never,
+      ]);
+
+      mockReadHeartbeat.mockResolvedValue({
+        processGroupLeaderPid: TEST_PID,
+        heartbeatTimestamp: Date.now(),
+        lastOutputTimestamp: Date.now(),
+      });
+      process.kill = ((pid: number, sig?: number | string) => {
+        if (pid === TEST_PID && (sig === 0 || sig === undefined)) return true;
+        return originalKill.call(process, pid, sig);
+      }) as typeof process.kill;
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-epic-child",
+          assignment: makeAssignment("task-epic-child", epicWtPath, {
+            worktreeKey: "epic_shared",
+          }),
+        },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, reattachHost, { includeGupp: true });
+
+      expect(reattachHost.reattachSlot).toHaveBeenCalled();
+      expect(mockPruneOrphanWorktrees).toHaveBeenCalledWith(
+        tmpDir,
+        "proj-1",
+        expect.any(Set),
+        expect.objectContaining({ has: expect.any(Function) }),
+        expect.objectContaining({ has: expect.any(Function) }),
+        expect.anything()
+      );
+
+      const pruneCall = mockPruneOrphanWorktrees.mock.calls[0];
+      const pruneExcludeKeys: Set<string> = pruneCall[3];
+      const pruneExcludePaths: Set<string> = pruneCall[4];
+      expect(pruneExcludeKeys.has("epic_shared")).toBe(true);
+      expect(pruneExcludePaths.has(path.resolve(epicWtPath))).toBe(true);
     });
   });
 });

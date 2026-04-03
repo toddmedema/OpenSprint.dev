@@ -168,6 +168,8 @@ export class RecoveryService {
       guppResult.requeued.forEach((id) => excludeIds.add(id));
       guppResult.reattached.forEach((id) => excludeWorktreeKeys.add(id));
       guppResult.requeued.forEach((id) => excludeWorktreeKeys.add(id));
+      guppResult.worktreeKeys.forEach((k) => excludeWorktreeKeys.add(k));
+      guppResult.worktreePaths.forEach((p) => excludeWorktreePaths.add(p));
     }
 
     // 2. Stale heartbeat recovery
@@ -286,7 +288,14 @@ export class RecoveryService {
     excludeIds: Set<string>,
     excludeWorktreeKeys: Set<string>,
     excludeWorktreePaths: Set<string>
-  ): Promise<{ reattached: string[]; requeued: string[] }> {
+  ): Promise<{
+    reattached: string[];
+    requeued: string[];
+    /** Worktree keys (taskId or epic_*) touched by reattached/requeued assignments. */
+    worktreeKeys: string[];
+    /** Resolved absolute worktree paths touched by reattached/requeued assignments. */
+    worktreePaths: string[];
+  }> {
     const durableBase = this.branchManager.getWorktreeBasePath(repoPath);
     const legacyBase = this.branchManager.getLegacyWorktreeBasePath();
     const fromDurable =
@@ -303,12 +312,14 @@ export class RecoveryService {
       byTaskId.set(o.taskId, o as { taskId: string; assignment: GuppAssignment });
     const orphaned = [...byTaskId.values()];
 
-    if (orphaned.length === 0) return { reattached: [], requeued: [] };
+    if (orphaned.length === 0) return { reattached: [], requeued: [], worktreeKeys: [], worktreePaths: [] };
 
     const allIssues = await this.taskStore.listAll(projectId);
     const idToIssue = new Map(allIssues.map((i) => [i.id, i]));
     const reattached: string[] = [];
     const requeued: string[] = [];
+    const recoveredWorktreeKeys: string[] = [];
+    const recoveredWorktreePaths: string[] = [];
 
     for (const { taskId, assignment } of orphaned) {
       const assignmentAgeMs = Date.now() - new Date(assignment.createdAt).getTime();
@@ -363,6 +374,12 @@ export class RecoveryService {
         heartbeat.processGroupLeaderPid > 0 &&
         isProcessAlive(heartbeat.processGroupLeaderPid);
 
+      const trackReattach = () => {
+        reattached.push(taskId);
+        recoveredWorktreeKeys.push(worktreeKey);
+        if (resolvedWtPath) recoveredWorktreePaths.push(resolvedWtPath);
+      };
+
       if (!pidAlive && host.handleCompletedAssignment) {
         const terminalResult = await this.readTerminalAssignmentResult(assignment);
         if (terminalResult) {
@@ -374,7 +391,7 @@ export class RecoveryService {
             assignment
           );
           if (completed) {
-            reattached.push(taskId);
+            trackReattach();
             continue;
           }
         }
@@ -383,7 +400,7 @@ export class RecoveryService {
       if (pidAlive && assignment.phase === "coding" && host.reattachSlot) {
         const attached = await host.reattachSlot(projectId, repoPath, task, assignment);
         if (attached) {
-          reattached.push(taskId);
+          trackReattach();
           continue;
         }
       }
@@ -393,7 +410,7 @@ export class RecoveryService {
           pidAlive,
         });
         if (resumed) {
-          reattached.push(taskId);
+          trackReattach();
           continue;
         }
       }
@@ -416,7 +433,7 @@ export class RecoveryService {
             assignment
           );
           if (completed) {
-            reattached.push(taskId);
+            trackReattach();
             continue;
           }
         }
@@ -444,7 +461,7 @@ export class RecoveryService {
       requeued.push(taskId);
     }
 
-    return { reattached, requeued };
+    return { reattached, requeued, worktreeKeys: recoveredWorktreeKeys, worktreePaths: recoveredWorktreePaths };
   }
 
   // ─── Stale heartbeat recovery ───
@@ -601,7 +618,13 @@ export class RecoveryService {
     host?: RecoveryHost
   ): Promise<string[]> {
     const orphans = await this.taskStore.listInProgressWithAgentAssignee(projectId);
-    const toRecover = orphans.filter((t) => !excludeIds.has(t.id));
+    const cutoffMs = Date.now() - SLOT_RECOVERY_GRACE_MS;
+    const toRecover = orphans.filter((task) => {
+      if (excludeIds.has(task.id)) return false;
+      const updatedAtMs = Date.parse(task.updated_at ?? "");
+      if (!Number.isFinite(updatedAtMs)) return true;
+      return updatedAtMs <= cutoffMs;
+    });
     const recovered: string[] = [];
 
     for (const task of toRecover) {

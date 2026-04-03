@@ -827,6 +827,30 @@ export class OrchestratorService {
             taskStatus,
             slotPhase: slot.phase,
           });
+          try {
+            await this.taskStore.update(projectId, taskId, {
+              status: "in_progress",
+              ...(typeof slot.assignee === "string" && slot.assignee.length > 0
+                ? { assignee: slot.assignee }
+                : {}),
+            });
+            statusById.set(taskId, "in_progress");
+            log.info("Task-agent status drift repaired: task status reset to in_progress", {
+              projectId,
+              taskId,
+              slotPhase: slot.phase,
+              repairedAssignee:
+                typeof slot.assignee === "string" && slot.assignee.length > 0 ? slot.assignee : null,
+            });
+            void broadcastAuthoritativeTaskUpdated(broadcastToProject, projectId, taskId);
+          } catch (err) {
+            log.warn("Failed to repair task-agent status drift", {
+              projectId,
+              taskId,
+              slotPhase: slot.phase,
+              err,
+            });
+          }
         }
         continue;
       }
@@ -1711,6 +1735,16 @@ export class OrchestratorService {
 
     log.info("Nudge received, starting loop for project", { projectId });
     this.startRunLoop(projectId, "nudge");
+  }
+
+  async canRunRecoveryForProject(projectId: string): Promise<boolean> {
+    if (ORCHESTRATOR_LEASE_DISABLED) return true;
+    try {
+      return await this.tryAcquireOrRenewLease(projectId);
+    } catch (err) {
+      log.warn("Failed to evaluate recovery lease ownership", { projectId, err });
+      return false;
+    }
   }
 
   async getStatus(
