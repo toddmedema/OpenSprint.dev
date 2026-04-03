@@ -140,21 +140,11 @@ export class RecoveryService {
   ): Promise<RecoveryResult> {
     const result: RecoveryResult = { reattached: [], requeued: [], cleaned: [] };
 
-    // 1. GUPP crash recovery (startup only)
-    if (
-      opts.includeGupp &&
-      (host.reattachSlot || host.resumeReviewPhase || host.handleCompletedAssignment)
-    ) {
-      const guppResult = await this.recoverFromAssignments(projectId, repoPath, host);
-      result.reattached.push(...guppResult.reattached);
-      result.requeued.push(...guppResult.requeued);
-    }
-
-    // Build exclude set: active agents + slotted tasks + just-reattached
+    // Build exclude sets FIRST so every recovery phase (including GUPP) respects active slots.
+    // This prevents assignment cleanup from removing worktrees belonging to in-flight agents.
     const excludeIds = new Set([
       ...host.getSlottedTaskIds(projectId),
       ...host.getActiveAgentIds(projectId),
-      ...result.reattached,
     ]);
     const excludeWorktreeKeys = new Set([
       ...excludeIds,
@@ -163,6 +153,22 @@ export class RecoveryService {
     const excludeWorktreePaths = new Set(
       (host.getSlottedWorktreePaths?.(projectId) ?? []).map((p) => path.resolve(p))
     );
+
+    // 1. GUPP crash recovery (startup only) — now receives exclude sets
+    if (
+      opts.includeGupp &&
+      (host.reattachSlot || host.resumeReviewPhase || host.handleCompletedAssignment)
+    ) {
+      const guppResult = await this.recoverFromAssignments(
+        projectId, repoPath, host, excludeIds, excludeWorktreeKeys, excludeWorktreePaths
+      );
+      result.reattached.push(...guppResult.reattached);
+      result.requeued.push(...guppResult.requeued);
+      guppResult.reattached.forEach((id) => excludeIds.add(id));
+      guppResult.requeued.forEach((id) => excludeIds.add(id));
+      guppResult.reattached.forEach((id) => excludeWorktreeKeys.add(id));
+      guppResult.requeued.forEach((id) => excludeWorktreeKeys.add(id));
+    }
 
     // 2. Stale heartbeat recovery
     const staleResult = await this.recoverFromStaleHeartbeats(
@@ -276,7 +282,10 @@ export class RecoveryService {
   private async recoverFromAssignments(
     projectId: string,
     repoPath: string,
-    host: RecoveryHost
+    host: RecoveryHost,
+    excludeIds: Set<string>,
+    excludeWorktreeKeys: Set<string>,
+    excludeWorktreePaths: Set<string>
   ): Promise<{ reattached: string[]; requeued: string[] }> {
     const durableBase = this.branchManager.getWorktreeBasePath(repoPath);
     const legacyBase = this.branchManager.getLegacyWorktreeBasePath();
@@ -303,6 +312,18 @@ export class RecoveryService {
 
     for (const { taskId, assignment } of orphaned) {
       const assignmentAgeMs = Date.now() - new Date(assignment.createdAt).getTime();
+      const worktreeKey = this.resolveCleanupWorktreeKey(taskId, assignment.worktreeKey, assignment.worktreePath);
+      const resolvedWtPath = assignment.worktreePath ? path.resolve(assignment.worktreePath) : null;
+
+      // Skip destructive cleanup for tasks/worktrees that belong to active slots
+      if (excludeIds.has(taskId) || excludeWorktreeKeys.has(worktreeKey) ||
+          (resolvedWtPath && excludeWorktreePaths.has(resolvedWtPath))) {
+        log.info("Recovery: skipping assignment cleanup for active slot", {
+          projectId, taskId, worktreeKey, worktreePath: assignment.worktreePath,
+        });
+        continue;
+      }
+
       const task = idToIssue.get(taskId);
       if (!task) {
         this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "task_not_found", assignment);
@@ -1324,6 +1345,17 @@ export class RecoveryService {
       log.info("Skipping worktree removal: active lease exists", { taskId, worktreeKey, worktreePath });
       return;
     }
+    const lease = await worktreeLeaseService.get(worktreeKey).catch(() => null);
+    log.info("Proceeding with worktree removal (lease allows cleanup)", {
+      taskId,
+      worktreeKey,
+      worktreePath,
+      leaseState: lease
+        ? (lease.releasedAt ? "released" : "expired")
+        : "no_lease",
+      leaseExpiresAt: lease?.expiresAt ?? null,
+      leaseReleasedAt: lease?.releasedAt ?? null,
+    });
     try {
       await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
       await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});

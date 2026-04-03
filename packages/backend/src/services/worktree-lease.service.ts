@@ -14,7 +14,7 @@ import { taskStore } from "./task-store.service.js";
 
 const log = createLogger("worktree-lease");
 
-const DEFAULT_LEASE_TTL_MS = 30 * 60_000; // 30 minutes
+const DEFAULT_LEASE_TTL_MS = 2 * 60 * 60_000; // 2 hours — must exceed the longest agent timeout
 
 export interface WorktreeLease {
   worktreeKey: string;
@@ -127,6 +127,27 @@ export class WorktreeLeaseService {
       log.info("Worktree lease released", { worktreeKey, owner });
     }
     return released;
+  }
+
+  async renew(worktreeKey: string, ttlMs?: number): Promise<boolean> {
+    const ttl = ttlMs ?? DEFAULT_LEASE_TTL_MS;
+    const newExpiresAt = new Date(Date.now() + ttl).toISOString();
+    let renewed = false;
+    await taskStore.runWrite(async (client) => {
+      const rows = await client.query(
+        "SELECT released_at FROM worktree_leases WHERE worktree_key = $1",
+        [worktreeKey]
+      );
+      if (rows.length === 0) return;
+      const row = rows[0] as { released_at: string | null };
+      if (row.released_at) return;
+      await client.execute(
+        "UPDATE worktree_leases SET expires_at = $1 WHERE worktree_key = $2 AND released_at IS NULL",
+        [newExpiresAt, worktreeKey]
+      );
+      renewed = true;
+    });
+    return renewed;
   }
 
   async forceRelease(worktreeKey: string): Promise<void> {

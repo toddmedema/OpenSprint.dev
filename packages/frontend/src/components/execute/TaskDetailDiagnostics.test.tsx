@@ -110,6 +110,36 @@ describe("TaskDetailDiagnostics", () => {
     expect(screen.getByTestId("execution-attempt-1")).toHaveTextContent("Attempt 1");
   });
 
+  it("does not panel-wrap the section; each attempt row uses the shared card surface", () => {
+    render(
+      <TaskDetailDiagnostics
+        task={null}
+        diagnostics={{
+          taskId: "task-1",
+          taskStatus: "blocked",
+          cumulativeAttempts: 1,
+          latestSummary: null,
+          latestOutcome: "failed",
+          timeline: [],
+          attempts: [
+            {
+              attempt: 1,
+              finalPhase: "coding",
+              finalOutcome: "failed",
+              finalSummary: "Attempt failed",
+              sessionAttemptStatuses: [],
+            },
+          ],
+        }}
+        diagnosticsLoading={false}
+      />
+    );
+    const section = screen.getByTestId("execution-diagnostics-section");
+    expect(section.className).not.toMatch(/\bbg-theme-surface\b/);
+    expect(section.className).not.toMatch(/\bborder-theme-border\b/);
+    expect(screen.getByTestId("execution-attempt-1").className).toContain("card");
+  });
+
   it("prioritizes failed command + first error and reveals structured details on demand", async () => {
     const user = userEvent.setup();
     render(

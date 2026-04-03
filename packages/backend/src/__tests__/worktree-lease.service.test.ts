@@ -90,6 +90,18 @@ function createInMemoryLeaseStore() {
       return 1;
     }
 
+    // UPDATE worktree_leases SET expires_at = ... WHERE worktree_key = ... AND released_at IS NULL  (renew)
+    if (norm.includes("update") && norm.includes("expires_at") && norm.includes("released_at is null") && !norm.includes("set released_at")) {
+      const expiresAt = params[0] as string;
+      const key = params[1] as string;
+      const row = rows.get(key);
+      if (row && row.released_at === null) {
+        row.expires_at = expiresAt;
+        return 1;
+      }
+      return 0;
+    }
+
     // UPDATE worktree_leases SET released_at = ... WHERE worktree_key = ...
     if (norm.includes("update") && norm.includes("released_at") && norm.includes("worktree_key")) {
       const releasedAt = params[0] as string;
@@ -307,6 +319,37 @@ describe("WorktreeLeaseService", () => {
       await service.acquire({ ...BASE_PARAMS, projectId: "other-project", ttlMs: 60_000 });
       const active = await service.getActiveForProject("proj-1");
       expect(active).toHaveLength(0);
+    });
+  });
+
+  describe("renew", () => {
+    it("extends the expiry of an active lease", async () => {
+      await service.acquire({ ...BASE_PARAMS, ttlMs: 5000 });
+      const before = memStore.rows.get("task-1")!.expires_at;
+      const renewed = await service.renew("task-1", 120_000);
+      expect(renewed).toBe(true);
+      const after = memStore.rows.get("task-1")!.expires_at;
+      expect(new Date(after).getTime()).toBeGreaterThan(new Date(before).getTime());
+    });
+
+    it("returns false for a released lease", async () => {
+      await service.acquire(BASE_PARAMS);
+      await service.release("task-1", "orchestrator-abc");
+      const renewed = await service.renew("task-1");
+      expect(renewed).toBe(false);
+    });
+
+    it("returns false for a non-existent key", async () => {
+      const renewed = await service.renew("no-such-key");
+      expect(renewed).toBe(false);
+    });
+
+    it("prevents canCleanup from returning true after renewal", async () => {
+      await service.acquire({ ...BASE_PARAMS, ttlMs: 1 });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(await service.canCleanup("task-1")).toBe(true);
+      await service.renew("task-1", 60_000);
+      expect(await service.canCleanup("task-1")).toBe(false);
     });
   });
 

@@ -514,16 +514,23 @@ export class OrchestratorDispatchService {
         }
       }
 
-      await worktreeLeaseService.acquire({
-        worktreeKey,
-        taskId: task.id,
-        projectId,
-        worktreePath: slot.worktreePath,
-        branchName,
-        leaseOwner: `dispatch:${task.id}:${cumulativeAttempts + 1}`,
-      }).catch((err) => {
-        log.warn("Failed to acquire worktree lease (non-fatal)", { taskId: task.id, err });
-      });
+      try {
+        await worktreeLeaseService.acquire({
+          worktreeKey,
+          taskId: task.id,
+          projectId,
+          worktreePath: slot.worktreePath,
+          branchName,
+          leaseOwner: `dispatch:${task.id}:${cumulativeAttempts + 1}`,
+        });
+      } catch (err) {
+        log.error("Failed to acquire worktree lease — worktree will be unprotected from cleanup", {
+          taskId: task.id,
+          worktreeKey,
+          worktreePath: slot.worktreePath,
+          err,
+        });
+      }
     }
 
     if (mergeResumeState) {

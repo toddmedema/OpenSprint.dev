@@ -71,6 +71,7 @@ vi.mock("../services/worktree-lease.service.js", () => ({
   worktreeLeaseService: {
     canCleanup: (...args: unknown[]) => mockCanCleanupLease(...args),
     forceRelease: vi.fn().mockResolvedValue(undefined),
+    get: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -1238,6 +1239,156 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
 
       expect(mockCanCleanupLease).toHaveBeenCalledWith("epic_456");
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("active-slot exclusion prevents worktree destruction (git_entry_missing fix)", () => {
+    function makeAssignment(taskId: string, worktreePath: string, extra?: Partial<Record<string, unknown>>) {
+      return {
+        taskId,
+        projectId: "proj-1",
+        phase: "coding" as const,
+        branchName: `opensprint/${taskId}`,
+        worktreePath,
+        promptPath: path.join(worktreePath, ".opensprint", "active", taskId, "prompt.md"),
+        agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+        attempt: 2,
+        createdAt: new Date().toISOString(),
+        ...extra,
+      };
+    }
+
+    it("does not remove worktree for status_mismatch assignment when task has active slot", async () => {
+      const wtPath = path.join(tmpDir, "worktree-active");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const slottedHost = {
+        getSlottedTaskIds: () => ["task-active"],
+        getActiveAgentIds: () => [] as string[],
+        getSlottedWorktreeKeys: () => ["task-active"],
+        getSlottedWorktreePaths: () => [wtPath],
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-active", status: "open", assignee: "" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-active", assignment: makeAssignment("task-active", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, slottedHost, { includeGupp: true });
+
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+      expect(vi.mocked(taskStore.update)).not.toHaveBeenCalledWith(
+        "proj-1",
+        "task-active",
+        expect.objectContaining({ status: "open" })
+      );
+    });
+
+    it("does not remove worktree when worktree key matches active slot even if task status is not in_progress", async () => {
+      const wtPath = path.join(tmpDir, "worktree-slotted");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const slottedHost = {
+        getSlottedTaskIds: () => ["task-slotted"],
+        getActiveAgentIds: () => [] as string[],
+        getSlottedWorktreeKeys: () => ["task-slotted"],
+        getSlottedWorktreePaths: () => [wtPath],
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-slotted", status: "blocked", assignee: "" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-slotted", assignment: makeAssignment("task-slotted", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, slottedHost, { includeGupp: true });
+
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    });
+
+    it("does not remove worktree when worktree path matches active slot path", async () => {
+      const wtPath = path.join(tmpDir, "worktree-path-match");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const pathMatchHost = {
+        getSlottedTaskIds: () => [] as string[],
+        getActiveAgentIds: () => [] as string[],
+        getSlottedWorktreeKeys: () => [] as string[],
+        getSlottedWorktreePaths: () => [wtPath],
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-path", status: "open", assignee: "" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-path", assignment: makeAssignment("task-path", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, pathMatchHost, { includeGupp: true });
+
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    });
+
+    it("still cleans up non-slotted stale assignments normally", async () => {
+      mockCanCleanupLease.mockResolvedValue(true);
+      const wtPath = path.join(tmpDir, "worktree-stale");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const mixedHost = {
+        getSlottedTaskIds: () => ["task-active"],
+        getActiveAgentIds: () => [] as string[],
+        getSlottedWorktreeKeys: () => ["task-active"],
+        getSlottedWorktreePaths: () => [path.join(tmpDir, "worktree-active")],
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-stale-gone", status: "open", assignee: "" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-stale-gone", assignment: makeAssignment("task-stale-gone", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, mixedHost, { includeGupp: true });
+
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
+        tmpDir,
+        "task-stale-gone",
+        wtPath
+      );
+    });
+
+    it("skips cleanup for activeAgentIds even without explicit slot", async () => {
+      const wtPath = path.join(tmpDir, "worktree-agent");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const agentHost = {
+        getSlottedTaskIds: () => [] as string[],
+        getActiveAgentIds: () => ["task-agent-active"],
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-agent-active", status: "in_progress", assignee: "Gandalf" } as never,
+      ]);
+
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-agent-active", assignment: makeAssignment("task-agent-active", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, agentHost, { includeGupp: true });
+
       expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
     });
   });

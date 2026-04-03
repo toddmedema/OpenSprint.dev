@@ -237,10 +237,7 @@ export function TaskDetailDiagnostics({
   }, [diagnostics?.taskId, diagnostics?.cumulativeAttempts]);
 
   return (
-    <div
-      className="rounded-lg border border-theme-border bg-theme-surface p-4"
-      data-testid="execution-diagnostics-section"
-    >
+    <div data-testid="execution-diagnostics-section">
       {diagnosticsLoading && !diagnostics ? (
         <div className="text-xs text-theme-muted">Loading execution diagnostics...</div>
       ) : diagnostics &&
@@ -270,7 +267,7 @@ export function TaskDetailDiagnostics({
               <div className="mt-2 rounded-md border border-theme-border-subtle bg-theme-code-bg p-2">
                 <button
                   type="button"
-                  className="text-theme-muted hover:text-theme-text transition-colors"
+                  className="rounded text-theme-muted hover:text-theme-text transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-theme-bg"
                   onClick={() => setDetailsExpanded((prev) => !prev)}
                   aria-expanded={detailsExpanded}
                   data-testid="execution-diagnostics-details-toggle"
@@ -353,7 +350,7 @@ export function TaskDetailDiagnostics({
               {diagnostics.attempts.map((attempt) => (
                 <div
                   key={attempt.attempt}
-                  className="rounded-md border border-theme-border-subtle bg-theme-code-bg px-3 py-2 text-xs"
+                  className="card px-3 py-2 text-xs transition-colors hover:bg-theme-surface-muted"
                   data-testid={`execution-attempt-${attempt.attempt}`}
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
