@@ -31,7 +31,10 @@ export function DismissButton({
   return (
     <button
       type="button"
-      onClick={onDismiss}
+      onClick={(e) => {
+        e.stopPropagation();
+        onDismiss();
+      }}
       onKeyDown={handleKeyDown}
       className={`shrink-0 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${VARIANT_CLASSES[variant]}`}
       aria-label={label}

@@ -33,6 +33,8 @@ const intakePrimaryBtn =
   "px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 const intakeSecondaryBtn =
   "px-2 py-1 bg-theme-surface-hover hover:bg-theme-border text-theme-text text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+const intakeDangerBtn =
+  "px-2 py-1 text-xs font-medium rounded border border-theme-error-border text-theme-error-text hover:bg-theme-error-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
 function IntakeTodoistShell({
   description,
