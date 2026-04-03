@@ -469,7 +469,7 @@ describe("EvalPhase feedback form", () => {
     expect(screen.getByTestId("eval-feedback-filter-toolbar")).toBeInTheDocument();
   });
 
-  it("filter toolbar aligns controls to the right", () => {
+  it("filter toolbar is full width with phase styling like Execute", () => {
     const store = createStore({ evalFeedback: mockFeedbackItems });
     const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
     renderWithProviders(
@@ -479,11 +479,14 @@ describe("EvalPhase feedback form", () => {
       { store, queryClient }
     );
     const toolbar = screen.getByTestId("eval-feedback-filter-toolbar");
-    expect(toolbar).toHaveClass("flex", "items-center", "justify-end");
+    expect(toolbar.className).toContain("w-full");
+    expect(toolbar.className).toContain("phase-toolbar");
+    expect(toolbar.className).toContain("relative");
+    expect(toolbar.className).toContain("z-20");
   });
 
   describe("EvalPhase expandable search", () => {
-    it("renders search icon left of filter dropdown when feedback or plans exist", () => {
+    it("renders filter chips before search control (Execute-style layout)", () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(
@@ -496,8 +499,10 @@ describe("EvalPhase feedback form", () => {
       expect(expandBtn).toBeInTheDocument();
       expect(expandBtn).toHaveAttribute("aria-label", "Expand search");
       expect(screen.queryByTestId("eval-search-expanded")).not.toBeInTheDocument();
-      const filter = screen.getByTestId("feedback-status-filter");
-      expect(expandBtn.compareDocumentPosition(filter)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      const segmented = screen.getByTestId("eval-filter-segmented");
+      expect(
+        segmented.compareDocumentPosition(expandBtn) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
     });
 
     it("expands into search input when search icon is clicked", async () => {
@@ -1234,7 +1239,7 @@ describe("EvalPhase feedback form", () => {
       expect(prioritySelect).toHaveClass("px-3");
     });
 
-    it("status filter select has chevron right padding (pl-3, pr from select.input)", async () => {
+    it("status filter uses phase segmented control styling", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(
@@ -1245,12 +1250,11 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const statusFilter = screen.getByTestId("feedback-status-filter");
-      expect(statusFilter).toHaveClass("input");
-      expect(statusFilter).toHaveClass("pl-3");
+      const segmented = screen.getByTestId("eval-filter-segmented");
+      expect(segmented.className).toContain("bg-theme-surface-muted");
     });
 
     it("actions row uses items-stretch so all controls share the same height", async () => {
@@ -1620,11 +1624,10 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("pending");
+      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveAttribute("aria-checked", "true");
     });
 
     it("does not render a header title label in the toolbar", async () => {
@@ -1638,14 +1641,14 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
       expect(
         screen.queryByRole("heading", { name: /feedback & plan reviews/i })
       ).not.toBeInTheDocument();
     });
 
-    it("each dropdown option displays its count (All, Pending = pending + in_review plans, Resolved = resolved + complete plans)", async () => {
+    it("each filter chip displays its count (All, Pending = pending + in_review plans, Resolved = resolved + complete plans)", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(
@@ -1656,15 +1659,18 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      expect(screen.getByRole("option", { name: "All (6)" })).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: "Pending (5)" })).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: "Resolved (1)" })).toBeInTheDocument();
+      expect(screen.getByTestId("eval-filter-chip-all")).toHaveTextContent("All");
+      expect(screen.getByTestId("eval-filter-chip-all")).toHaveTextContent("6");
+      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveTextContent("Pending");
+      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveTextContent("5");
+      expect(screen.getByTestId("eval-filter-chip-resolved")).toHaveTextContent("Resolved");
+      expect(screen.getByTestId("eval-filter-chip-resolved")).toHaveTextContent("1");
     });
 
-    it("dropdown shows All first, then Pending and Resolved options", async () => {
+    it("segmented filter shows All first, then Pending and Resolved", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(
@@ -1675,12 +1681,16 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      const options = Array.from(filterSelect.options).map((o) => o.value);
-      expect(options).toEqual(["all", "pending", "resolved"]);
+      const segmented = screen.getByTestId("eval-filter-segmented");
+      const radios = within(segmented).getAllByRole("radio");
+      expect(radios.map((el) => el.getAttribute("data-testid"))).toEqual([
+        "eval-filter-chip-all",
+        "eval-filter-chip-pending",
+        "eval-filter-chip-resolved",
+      ]);
     });
 
     it("writes filter selection to localStorage on change", async () => {
@@ -1695,18 +1705,18 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBeNull();
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "all");
+      await user.click(screen.getByTestId("eval-filter-chip-all"));
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("all");
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
+      await user.click(screen.getByTestId("eval-filter-chip-resolved"));
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("resolved");
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "pending");
+      await user.click(screen.getByTestId("eval-filter-chip-pending"));
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("pending");
     });
 
@@ -1723,11 +1733,10 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("resolved");
+      expect(screen.getByTestId("eval-filter-chip-resolved")).toHaveAttribute("aria-checked", "true");
     });
 
     it("restores 'all' from localStorage when present", async () => {
@@ -1743,11 +1752,10 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("all");
+      expect(screen.getByTestId("eval-filter-chip-all")).toHaveAttribute("aria-checked", "true");
     });
 
     it("treats invalid filter value as Pending", async () => {
@@ -1763,11 +1771,10 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("pending");
+      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveAttribute("aria-checked", "true");
     });
 
     it("falls back to Pending when localStorage has invalid value", async () => {
@@ -1783,11 +1790,10 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
       });
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("pending");
+      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveAttribute("aria-checked", "true");
     });
 
     it("Pending filter shows both pending and mapped items", async () => {
@@ -1801,10 +1807,9 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("pending");
+      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveAttribute("aria-checked", "true");
 
       // Pending filter shows 5 items: 2 pending + 3 mapped
       expect(screen.getByText("Bug 1")).toBeInTheDocument();
@@ -1836,11 +1841,11 @@ describe("EvalPhase feedback form", () => {
         );
 
         await waitFor(() =>
-          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+          expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument()
         );
 
         // Pending count = 2 feedback + 1 plan = 3
-        expect(screen.getByRole("option", { name: "Pending (3)" })).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-chip-pending")).toHaveTextContent("3");
         expect(screen.getByText("Pending A")).toBeInTheDocument();
         expect(screen.getByText("Pending B")).toBeInTheDocument();
         expect(screen.getByTestId("plan-review-card-auth-plan")).toBeInTheDocument();
@@ -1863,10 +1868,10 @@ describe("EvalPhase feedback form", () => {
         );
 
         await waitFor(() =>
-          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+          expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument()
         );
 
-        expect(screen.getByRole("option", { name: "Resolved (2)" })).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-chip-resolved")).toHaveTextContent("2");
         expect(screen.getByText("Resolved feedback")).toBeInTheDocument();
         expect(screen.getByTestId("plan-review-card-done-plan")).toBeInTheDocument();
       });
@@ -1893,13 +1898,13 @@ describe("EvalPhase feedback form", () => {
         );
 
         await waitFor(() =>
-          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+          expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument()
         );
 
         // All = 3 feedback + 2 plans = 5; Pending = 2 feedback + 1 in_review = 3; Resolved = 1 feedback + 1 complete = 2
-        expect(screen.getByRole("option", { name: "All (5)" })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: "Pending (3)" })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: "Resolved (2)" })).toBeInTheDocument();
+        expect(screen.getByTestId("eval-filter-chip-all")).toHaveTextContent("5");
+        expect(screen.getByTestId("eval-filter-chip-pending")).toHaveTextContent("3");
+        expect(screen.getByTestId("eval-filter-chip-resolved")).toHaveTextContent("2");
       });
 
       it("plan review card shows Plan badge, summary, link left, Mark complete and Reply right (same layout as Feedback card)", async () => {
@@ -1916,7 +1921,7 @@ describe("EvalPhase feedback form", () => {
         );
 
         await waitFor(() =>
-          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+          expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument()
         );
 
         expect(screen.getByTestId("plan-review-card-my-feature-plan")).toBeInTheDocument();
@@ -2164,7 +2169,7 @@ describe("EvalPhase feedback form", () => {
         );
 
         await waitFor(() =>
-          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+          expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument()
         );
 
         expect(screen.getByTestId("plan-review-card-title")).toHaveTextContent("Auth And Deploy");
@@ -2188,7 +2193,7 @@ describe("EvalPhase feedback form", () => {
         );
 
         await waitFor(() =>
-          expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument()
+          expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument()
         );
 
         const list = screen.getByRole("list", {
@@ -2237,10 +2242,9 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      expect(filterSelect.value).toBe("all");
+      expect(screen.getByTestId("eval-filter-chip-all")).toHaveAttribute("aria-checked", "true");
 
       // All filter shows all 6 items (2 pending + 3 mapped + 1 resolved)
       expect(screen.getByText("Bug 1")).toBeInTheDocument();
@@ -2262,16 +2266,16 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
+      await user.click(screen.getByTestId("eval-filter-chip-resolved"));
 
       expect(screen.getByText("Bug 6")).toBeInTheDocument();
       expect(screen.queryByText("Bug 1")).not.toBeInTheDocument();
       expect(screen.queryByText("Bug 3")).not.toBeInTheDocument();
     });
 
-    it("does not show Cancelled option when no feedback has status cancelled", async () => {
+    it("does not show Cancelled chip when no feedback has status cancelled", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       renderWithProviders(
@@ -2281,15 +2285,18 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      const options = Array.from(filterSelect.options).map((o) => o.value);
-      expect(options).toEqual(["all", "pending", "resolved"]);
-      expect(options).not.toContain("cancelled");
+      const segmented = screen.getByTestId("eval-filter-segmented");
+      const radios = within(segmented).getAllByRole("radio");
+      expect(radios.map((el) => el.getAttribute("data-testid"))).toEqual([
+        "eval-filter-chip-all",
+        "eval-filter-chip-pending",
+        "eval-filter-chip-resolved",
+      ]);
     });
 
-    it("shows Cancelled option when at least one feedback has status cancelled", async () => {
+    it("shows Cancelled chip when at least one feedback has status cancelled", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackWithCancelled);
       renderWithProviders(
@@ -2299,12 +2306,10 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      expect(screen.getByRole("option", { name: "Cancelled (1)" })).toBeInTheDocument();
-      const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-      const options = Array.from(filterSelect.options).map((o) => o.value);
-      expect(options).toContain("cancelled");
+      expect(screen.getByTestId("eval-filter-chip-cancelled")).toHaveTextContent("Cancelled");
+      expect(screen.getByTestId("eval-filter-chip-cancelled")).toHaveTextContent("1");
     });
 
     it("Cancelled filter shows only cancelled items", async () => {
@@ -2318,9 +2323,9 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "cancelled");
+      await user.click(screen.getByTestId("eval-filter-chip-cancelled"));
 
       expect(screen.getByText("Bug 7")).toBeInTheDocument();
       expect(screen.queryByText("Bug 6")).not.toBeInTheDocument();
@@ -2338,9 +2343,9 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "resolved");
+      await user.click(screen.getByTestId("eval-filter-chip-resolved"));
 
       expect(screen.getByText("Bug 6")).toBeInTheDocument();
       expect(screen.queryByText("Bug 7")).not.toBeInTheDocument();
@@ -2357,8 +2362,8 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "cancelled");
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
+      await user.click(screen.getByTestId("eval-filter-chip-cancelled"));
 
       // Simulate feedback changing: cancelled item gets resolved (e.g. via WebSocket update)
       act(() => {
@@ -2366,8 +2371,7 @@ describe("EvalPhase feedback form", () => {
       });
 
       await waitFor(() => {
-        const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-        expect(filterSelect.value).toBe("pending");
+        expect(screen.getByTestId("eval-filter-chip-pending")).toHaveAttribute("aria-checked", "true");
       });
     });
 
@@ -2382,9 +2386,9 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
-      await user.selectOptions(screen.getByTestId("feedback-status-filter"), "cancelled");
+      await user.click(screen.getByTestId("eval-filter-chip-cancelled"));
       expect(localStorage.getItem(EVALUATE_FEEDBACK_FILTER_KEY)).toBe("cancelled");
 
       // Re-mount with new key to force fresh mount and verify restore from localStorage
@@ -2398,8 +2402,10 @@ describe("EvalPhase feedback form", () => {
       );
 
       await waitFor(() => {
-        const filterSelect = screen.getByTestId("feedback-status-filter") as HTMLSelectElement;
-        expect(filterSelect.value).toBe("cancelled");
+        expect(screen.getByTestId("eval-filter-chip-cancelled")).toHaveAttribute(
+          "aria-checked",
+          "true"
+        );
       });
     });
 
@@ -2413,7 +2419,7 @@ describe("EvalPhase feedback form", () => {
         { store, queryClient }
       );
 
-      await waitFor(() => expect(screen.getByTestId("feedback-status-filter")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
 
       // Default is Pending, shows 5 items (2 pending + 3 mapped)
       expect(screen.getByText("Bug 1")).toBeInTheDocument();

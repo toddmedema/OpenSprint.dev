@@ -33,11 +33,7 @@ import { useSubmitShortcut } from "../../hooks/useSubmitShortcut";
 import { useScrollToQuestion } from "../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../hooks/useOpenQuestionNotifications";
 import { api } from "../../api/client";
-import {
-  CONTENT_CONTAINER_CLASS,
-  MOBILE_BREAKPOINT,
-  PHASE_TOOLBAR_HEIGHT,
-} from "../../lib/constants";
+import { CONTENT_CONTAINER_CLASS, MOBILE_BREAKPOINT } from "../../lib/constants";
 import { shouldRightAlignDropdown } from "../../lib/dropdownViewport";
 import { getProjectPhasePath } from "../../lib/phaseRouting";
 import { EMPTY_STATE_COPY } from "../../lib/emptyStateCopy";
@@ -49,6 +45,7 @@ import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { CloseButton } from "../../components/CloseButton";
 import { useModalA11y } from "../../hooks/useModalA11y";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
+import { EvaluateFilterToolbar } from "../../components/evaluate/EvaluateFilterToolbar";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -1785,14 +1782,41 @@ export function EvalPhase({
   const [reconcilingFeedbackIds, setReconcilingFeedbackIds] = useState<Set<string>>(new Set());
   const [replyingToPlanId, setReplyingToPlanId] = useState<string | null>(null);
 
-  // Reset filter when "cancelled" is selected but no feedback has status cancelled (option no longer shown)
   const hasCancelled = feedback.some((f) => f.status === "cancelled");
+  const evalFilterChipConfig = useMemo(
+    () => {
+      const chips: { label: string; filter: FeedbackStatusFilter; count: number }[] = [
+        { label: "All", filter: "all", count: countAll(feedback, plansInReview, plansComplete) },
+        { label: "Pending", filter: "pending", count: countPending(feedback, plansInReview) },
+        { label: "Resolved", filter: "resolved", count: countResolved(feedback, plansComplete) },
+      ];
+      if (hasCancelled) {
+        chips.push({
+          label: "Cancelled",
+          filter: "cancelled",
+          count: countByStatus(feedback, "cancelled"),
+        });
+      }
+      return chips;
+    },
+    [feedback, plansInReview, plansComplete, hasCancelled]
+  );
+
+  // Reset filter when "cancelled" is selected but no feedback has status cancelled (chip no longer shown)
   useEffect(() => {
     if (statusFilter === "cancelled" && !hasCancelled) {
       setStatusFilter("pending");
       saveFeedbackStatusFilter("pending");
     }
   }, [statusFilter, hasCancelled]);
+
+  // Reset when Resolved chip is hidden (count 0), mirroring Execute toolbar behavior
+  useEffect(() => {
+    if (statusFilter !== "resolved") return;
+    if (countResolved(feedback, plansComplete) > 0) return;
+    setStatusFilter("pending");
+    saveFeedbackStatusFilter("pending");
+  }, [statusFilter, feedback, plansComplete]);
 
   const handleSubmit = async () => {
     if (!input.trim() || submitting) return;
@@ -2193,99 +2217,21 @@ export function EvalPhase({
 
   return (
     <div className="flex flex-1 flex-col min-h-0 min-w-0 h-full overflow-hidden">
-      <div
-        className="phase-toolbar w-full px-4 sm:px-6 flex items-center py-0.5 bg-theme-surface shrink-0 border-b border-theme-border"
-        style={{ height: PHASE_TOOLBAR_HEIGHT }}
-      >
-        <div
-          className={`${CONTENT_CONTAINER_CLASS} w-full flex items-center justify-end`}
-          data-testid="eval-feedback-filter-toolbar"
-        >
-          {(feedback.length > 0 || plans.length > 0) && (
-            <div className="flex items-center gap-2">
-              {evalSearchExpanded ? (
-                <div
-                  className="flex items-center gap-1 animate-fade-in"
-                  data-testid="eval-search-expanded"
-                >
-                  <input
-                    ref={evalSearchInputRef}
-                    type="text"
-                    value={evalSearchInputValue}
-                    onChange={(e) => setEvalSearchInputValue(e.target.value)}
-                    onKeyDown={handleEvalSearchKeyDown}
-                    placeholder="Search feedback…"
-                    className="w-36 sm:w-48 md:w-56 px-3 py-1.5 text-sm bg-theme-surface-muted rounded-md text-theme-text placeholder:text-theme-muted border border-theme-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:border-brand-500 transition-all"
-                    aria-label="Search feedback"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleEvalSearchClose}
-                    className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
-                    aria-label="Close search"
-                    data-testid="eval-search-close"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleEvalSearchExpand}
-                  className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm text-theme-muted hover:text-theme-text hover:bg-theme-border-subtle transition-colors inline-flex items-center justify-center"
-                  aria-label="Expand search"
-                  data-testid="eval-search-expand"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                </button>
-              )}
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  const value = e.target.value as FeedbackStatusFilter;
-                  setStatusFilter(value);
-                  saveFeedbackStatusFilter(value);
-                }}
-                className="input text-sm min-h-[40px] py-1 pl-3 w-auto min-w-[7rem] bg-theme-input-bg text-theme-input-text ring-theme-ring"
-                aria-label="Filter feedback and plan reviews by status"
-                data-testid="feedback-status-filter"
-              >
-                <option value="all">
-                  All ({countAll(feedback, plansInReview, plansComplete)})
-                </option>
-                <option value="pending">Pending ({countPending(feedback, plansInReview)})</option>
-                <option value="resolved">
-                  Resolved ({countResolved(feedback, plansComplete)})
-                </option>
-                {feedback.some((f) => f.status === "cancelled") && (
-                  <option value="cancelled">
-                    Cancelled ({countByStatus(feedback, "cancelled")})
-                  </option>
-                )}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
+      <EvaluateFilterToolbar
+        chipConfig={evalFilterChipConfig}
+        statusFilter={statusFilter}
+        setStatusFilter={(next) => {
+          setStatusFilter(next);
+          saveFeedbackStatusFilter(next);
+        }}
+        searchExpanded={evalSearchExpanded}
+        searchInputValue={evalSearchInputValue}
+        setSearchInputValue={setEvalSearchInputValue}
+        searchInputRef={evalSearchInputRef}
+        handleSearchExpand={handleEvalSearchExpand}
+        handleSearchClose={handleEvalSearchClose}
+        handleSearchKeyDown={handleEvalSearchKeyDown}
+      />
 
       <div
         ref={feedbackFeedRef}

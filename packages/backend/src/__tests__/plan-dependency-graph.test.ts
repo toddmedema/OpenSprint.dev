@@ -96,7 +96,7 @@ describe("buildDependencyEdgesCore", () => {
     });
 
     it("handles slug matching with hyphens and spaces", () => {
-      // References with and without hyphens should map to the same plan slug.
+      // Consumer markdown references api-layer; hyphenated slugs map to the same plan id.
       const edges = buildDependencyEdgesCore(
         [
           makePlanInfo("consumer", "epic-b", "# Consumer\n\n## Dependencies\n\nUses api-layer."),
