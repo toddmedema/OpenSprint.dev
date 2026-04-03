@@ -21,7 +21,9 @@ import type {
   ApiKeysUpdate,
   MaskedApiKeyEntry,
   MaskedApiKeys,
+  MaskedTodoistOAuthCredentials,
   PreferredEditor,
+  TodoistOAuthCredentials,
 } from "@opensprint/shared";
 import {
   API_KEY_PROVIDERS,
@@ -158,6 +160,17 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   const [updateChecking, setUpdateChecking] = useState(false);
   const initialLoadRef = useRef(true);
   const lastSyncedDatabaseUrlRef = useRef("");
+
+  const [todoistOAuth, setTodoistOAuth] = useState<MaskedTodoistOAuthCredentials | undefined>(
+    undefined
+  );
+  const [todoistClientId, setTodoistClientId] = useState("");
+  const [todoistClientSecret, setTodoistClientSecret] = useState("");
+  const [todoistRedirectUri, setTodoistRedirectUri] = useState("");
+  const [todoistSecretVisible, setTodoistSecretVisible] = useState(false);
+  const [todoistSecretRevealing, setTodoistSecretRevealing] = useState(false);
+  const [todoistError, setTodoistError] = useState<string | null>(null);
+  const [todoistSaveSuccess, setTodoistSaveSuccess] = useState(false);
 
   const [panelTab, setPanelTab] = useState<GlobalSettingsPanelTab>("general");
   const [simpleAgent, setSimpleAgent] = useState<AgentConfig>(() => ({ ...DEFAULT_AGENT_CONFIG }));
@@ -324,8 +337,13 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         lastSyncedDatabaseUrlRef.current = fetchedDatabaseUrl.trim();
         setDatabaseDialect(res.databaseDialect);
         setApiKeys(res.apiKeys);
+        if (res.todoistOAuth) {
+          setTodoistOAuth(res.todoistOAuth);
+          setTodoistClientId(res.todoistOAuth.clientId ?? "");
+          setTodoistClientSecret(res.todoistOAuth.clientSecretMasked ?? "");
+          setTodoistRedirectUri(res.todoistOAuth.redirectUri ?? "");
+        }
         setShowNotificationDotInMenuBar(res.showNotificationDotInMenuBar !== false);
-        setShowRunningAgentCountInMenuBar(res.showRunningAgentCountInMenuBar !== false);
         setPreferredEditor(res.preferredEditor ?? "auto");
         const nextSimple = res.simpleComplexityAgent ?? DEFAULT_AGENT_CONFIG;
         const nextComplex = res.complexComplexityAgent ?? DEFAULT_AGENT_CONFIG;
@@ -485,6 +503,97 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
     }
   };
 
+  const handleTodoistSave = useCallback(async () => {
+    setTodoistError(null);
+    setTodoistSaveSuccess(false);
+    const MASKED_PLACEHOLDER = "••••••••";
+    const clientId = todoistClientId.trim();
+    const redirectUri = todoistRedirectUri.trim();
+    const rawSecret = todoistClientSecret.trim();
+    const secretIsNew = rawSecret !== "" && rawSecret !== MASKED_PLACEHOLDER;
+
+    if (!clientId || (!secretIsNew && !todoistOAuth?.configured) || !redirectUri) {
+      setTodoistError("All three fields are required.");
+      return;
+    }
+
+    const payload: TodoistOAuthCredentials = {
+      clientId,
+      clientSecret: secretIsNew ? rawSecret : "",
+      redirectUri,
+    };
+
+    saveGenerationRef.current += 1;
+    const startTime = Date.now();
+    notifySaveState("saving");
+    try {
+      const res = await api.globalSettings.put({ todoistOAuth: payload });
+      if (res.todoistOAuth) {
+        setTodoistOAuth(res.todoistOAuth);
+        setTodoistClientId(res.todoistOAuth.clientId ?? "");
+        setTodoistClientSecret(res.todoistOAuth.clientSecretMasked ?? "");
+        setTodoistRedirectUri(res.todoistOAuth.redirectUri ?? "");
+        setTodoistSecretVisible(false);
+      }
+      setTodoistSaveSuccess(true);
+      setTimeout(() => setTodoistSaveSuccess(false), 3000);
+      scheduleSaveComplete(startTime);
+    } catch (err) {
+      setTodoistError(
+        isConnectionError(err)
+          ? "Unable to connect. Please check your network and try again."
+          : err instanceof Error
+            ? err.message
+            : "Failed to save"
+      );
+      scheduleSaveComplete(startTime);
+    }
+  }, [todoistClientId, todoistClientSecret, todoistRedirectUri, todoistOAuth, notifySaveState, scheduleSaveComplete]);
+
+  const handleTodoistClear = useCallback(async () => {
+    setTodoistError(null);
+    setTodoistSaveSuccess(false);
+    saveGenerationRef.current += 1;
+    const startTime = Date.now();
+    notifySaveState("saving");
+    try {
+      const res = await api.globalSettings.put({ todoistOAuth: null } as Parameters<typeof api.globalSettings.put>[0]);
+      setTodoistOAuth(res.todoistOAuth);
+      setTodoistClientId("");
+      setTodoistClientSecret("");
+      setTodoistRedirectUri("");
+      setTodoistSecretVisible(false);
+      scheduleSaveComplete(startTime);
+    } catch (err) {
+      setTodoistError(
+        isConnectionError(err)
+          ? "Unable to connect. Please check your network and try again."
+          : err instanceof Error
+            ? err.message
+            : "Failed to clear"
+      );
+      scheduleSaveComplete(startTime);
+    }
+  }, [notifySaveState, scheduleSaveComplete]);
+
+  const handleTodoistRevealSecret = useCallback(async () => {
+    if (todoistSecretVisible) {
+      setTodoistSecretVisible(false);
+      setTodoistClientSecret(todoistOAuth?.clientSecretMasked ?? "");
+      return;
+    }
+    setTodoistSecretRevealing(true);
+    try {
+      const result = await api.globalSettings.revealTodoistSecret();
+      setTodoistClientSecret(result.value);
+      setTodoistSecretVisible(true);
+    } catch {
+      setTodoistError("Failed to reveal secret");
+    } finally {
+      setTodoistSecretRevealing(false);
+    }
+  }, [todoistSecretVisible, todoistOAuth]);
+
   const handleSetupTablesConfirm = useCallback(async () => {
     const trimmed = databaseUrlRef.current.trim();
     if (!trimmed || trimmed.includes("***")) return;
@@ -566,6 +675,130 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
                   {apiKeysError}
                 </p>
               )}
+            </div>
+            <div data-testid="todoist-credentials-section">
+              <h3 className="text-sm font-semibold text-theme-text">Todoist Credentials</h3>
+              <p className="text-xs text-theme-muted mb-3">
+                Enter your Todoist OAuth app credentials. These are stored locally and never
+                sent to any third party.{" "}
+                <a
+                  href="https://developer.todoist.com/appconsole.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Create a Todoist app
+                </a>
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="todoist-client-id"
+                    className="block text-xs font-medium text-theme-muted mb-1"
+                  >
+                    Client ID
+                  </label>
+                  <input
+                    id="todoist-client-id"
+                    type="text"
+                    className="input font-mono text-sm w-full"
+                    placeholder="e.g. abc123def456"
+                    value={todoistClientId}
+                    onChange={(e) => {
+                      setTodoistClientId(e.target.value);
+                      setTodoistError(null);
+                    }}
+                    autoComplete="off"
+                    data-testid="todoist-client-id-input"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="todoist-client-secret"
+                    className="block text-xs font-medium text-theme-muted mb-1"
+                  >
+                    Client Secret
+                  </label>
+                  <div className="relative flex">
+                    <input
+                      id="todoist-client-secret"
+                      type={todoistSecretVisible ? "text" : "password"}
+                      className="input font-mono text-sm w-full pr-10"
+                      placeholder="e.g. secret_xyz..."
+                      value={todoistClientSecret}
+                      onChange={(e) => {
+                        setTodoistClientSecret(e.target.value);
+                        setTodoistError(null);
+                      }}
+                      autoComplete="off"
+                      data-testid="todoist-client-secret-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleTodoistRevealSecret()}
+                      disabled={todoistSecretRevealing}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text p-1 disabled:opacity-50 disabled:cursor-wait"
+                      aria-label={todoistSecretVisible ? "Hide secret" : "Show secret"}
+                      data-testid="todoist-secret-eye-btn"
+                    >
+                      {todoistSecretVisible ? (
+                        <EyeOffIcon className="w-4 h-4" />
+                      ) : (
+                        <EyeIcon className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="todoist-redirect-uri"
+                    className="block text-xs font-medium text-theme-muted mb-1"
+                  >
+                    Redirect URI
+                  </label>
+                  <input
+                    id="todoist-redirect-uri"
+                    type="text"
+                    className="input font-mono text-sm w-full"
+                    placeholder="e.g. http://localhost:3000/api/projects/.../integrations/todoist/oauth/callback"
+                    value={todoistRedirectUri}
+                    onChange={(e) => {
+                      setTodoistRedirectUri(e.target.value);
+                      setTodoistError(null);
+                    }}
+                    autoComplete="off"
+                    data-testid="todoist-redirect-uri-input"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleTodoistSave()}
+                    className="btn-primary text-sm"
+                    data-testid="todoist-credentials-save-btn"
+                  >
+                    Save
+                  </button>
+                  {todoistOAuth?.configured && (
+                    <button
+                      type="button"
+                      onClick={() => void handleTodoistClear()}
+                      className="btn-secondary text-sm text-theme-error-text"
+                      data-testid="todoist-credentials-clear-btn"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {todoistSaveSuccess && (
+                    <span className="text-xs text-green-600 dark:text-green-400">Saved</span>
+                  )}
+                </div>
+                {todoistError && (
+                  <p className="text-sm text-theme-error-text" role="alert" data-testid="todoist-credentials-error">
+                    {todoistError}
+                  </p>
+                )}
+              </div>
             </div>
             {databaseDialect === "sqlite" && (
               <div

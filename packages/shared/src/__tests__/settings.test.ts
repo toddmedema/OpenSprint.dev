@@ -37,6 +37,8 @@ import {
   getSelfImprovementIncludeGeneralReview,
   parsePreferredEditor,
   VALID_PREFERRED_EDITORS,
+  maskTodoistOAuthForResponse,
+  parseTodoistOAuthCredentials,
 } from "../types/settings.ts";
 import type {
   ProjectSettings,
@@ -2313,6 +2315,75 @@ describe("self-improvement reviewer agent settings", () => {
       expect(parsePreferredEditor(undefined)).toBeUndefined();
       expect(parsePreferredEditor("vim")).toBeUndefined();
       expect(parsePreferredEditor(1)).toBeUndefined();
+    });
+  });
+
+  describe("maskTodoistOAuthForResponse", () => {
+    it("returns undefined for undefined input", () => {
+      expect(maskTodoistOAuthForResponse(undefined)).toBeUndefined();
+    });
+
+    it("returns undefined when all fields are empty", () => {
+      expect(
+        maskTodoistOAuthForResponse({ clientId: "", clientSecret: "", redirectUri: "" })
+      ).toBeUndefined();
+    });
+
+    it("masks clientSecret and preserves clientId/redirectUri", () => {
+      const result = maskTodoistOAuthForResponse({
+        clientId: "abc123",
+        clientSecret: "supersecret",
+        redirectUri: "http://localhost:3000/callback",
+      });
+      expect(result).toEqual({
+        clientId: "abc123",
+        clientSecretMasked: "••••••••",
+        redirectUri: "http://localhost:3000/callback",
+        configured: true,
+      });
+    });
+
+    it("sets configured to false when clientId or clientSecret is missing", () => {
+      const result = maskTodoistOAuthForResponse({
+        clientId: "abc",
+        clientSecret: "",
+        redirectUri: "http://localhost:3000/callback",
+      });
+      expect(result?.configured).toBe(false);
+      expect(result?.clientSecretMasked).toBe("");
+    });
+  });
+
+  describe("parseTodoistOAuthCredentials", () => {
+    it("returns undefined for non-objects", () => {
+      expect(parseTodoistOAuthCredentials(null)).toBeUndefined();
+      expect(parseTodoistOAuthCredentials(undefined)).toBeUndefined();
+      expect(parseTodoistOAuthCredentials("string")).toBeUndefined();
+      expect(parseTodoistOAuthCredentials([])).toBeUndefined();
+    });
+
+    it("returns undefined when all fields are empty", () => {
+      expect(
+        parseTodoistOAuthCredentials({ clientId: "", clientSecret: "", redirectUri: "" })
+      ).toBeUndefined();
+    });
+
+    it("parses valid credentials and trims whitespace", () => {
+      const result = parseTodoistOAuthCredentials({
+        clientId: "  abc123  ",
+        clientSecret: " secret ",
+        redirectUri: " http://localhost ",
+      });
+      expect(result).toEqual({
+        clientId: "abc123",
+        clientSecret: "secret",
+        redirectUri: "http://localhost",
+      });
+    });
+
+    it("returns partial credentials when some fields are present", () => {
+      const result = parseTodoistOAuthCredentials({ clientId: "abc" });
+      expect(result).toEqual({ clientId: "abc", clientSecret: "", redirectUri: "" });
     });
   });
 });

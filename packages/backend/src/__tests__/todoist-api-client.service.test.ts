@@ -18,6 +18,10 @@ vi.mock("@doist/todoist-api-typescript", async () => {
   };
 });
 
+vi.mock("../services/global-settings.service.js", () => ({
+  getGlobalSettings: vi.fn(async () => ({})),
+}));
+
 const {
   TodoistApi: MockTodoistApi,
   getAuthStateParameter: mockGetAuthState,
@@ -25,6 +29,10 @@ const {
   getAuthToken: mockGetAuthToken,
   revokeToken: mockRevokeToken,
 } = await import("@doist/todoist-api-typescript");
+
+const { getGlobalSettings: mockGetGlobalSettings } = await import(
+  "../services/global-settings.service.js"
+);
 
 const {
   TodoistApiClient,
@@ -321,16 +329,20 @@ describe("OAuth helpers", () => {
 describe("getTodoistOAuthConfig", () => {
   const origEnv = { ...process.env };
 
+  beforeEach(() => {
+    vi.mocked(mockGetGlobalSettings).mockResolvedValue({});
+  });
+
   afterEach(() => {
     process.env = { ...origEnv };
   });
 
-  it("returns config when all env vars are set", () => {
+  it("returns config when all env vars are set", async () => {
     process.env.TODOIST_CLIENT_ID = "cid";
     process.env.TODOIST_CLIENT_SECRET = "csecret";
     process.env.TODOIST_REDIRECT_URI = "http://localhost:3000/callback";
 
-    const config = getTodoistOAuthConfig();
+    const config = await getTodoistOAuthConfig();
     expect(config).toEqual({
       clientId: "cid",
       clientSecret: "csecret",
@@ -338,28 +350,28 @@ describe("getTodoistOAuthConfig", () => {
     });
   });
 
-  it("throws when TODOIST_CLIENT_ID is missing", () => {
+  it("throws when TODOIST_CLIENT_ID is missing", async () => {
     delete process.env.TODOIST_CLIENT_ID;
     process.env.TODOIST_CLIENT_SECRET = "csecret";
     process.env.TODOIST_REDIRECT_URI = "http://localhost:3000/callback";
 
-    expect(() => getTodoistOAuthConfig()).toThrow(/Missing Todoist OAuth config/);
+    await expect(getTodoistOAuthConfig()).rejects.toThrow(/Missing Todoist OAuth config/);
   });
 
-  it("throws when TODOIST_CLIENT_SECRET is missing", () => {
+  it("throws when TODOIST_CLIENT_SECRET is missing", async () => {
     process.env.TODOIST_CLIENT_ID = "cid";
     delete process.env.TODOIST_CLIENT_SECRET;
     process.env.TODOIST_REDIRECT_URI = "http://localhost:3000/callback";
 
-    expect(() => getTodoistOAuthConfig()).toThrow(/Missing Todoist OAuth config/);
+    await expect(getTodoistOAuthConfig()).rejects.toThrow(/Missing Todoist OAuth config/);
   });
 
-  it("throws when TODOIST_REDIRECT_URI is missing", () => {
+  it("throws when TODOIST_REDIRECT_URI is missing", async () => {
     process.env.TODOIST_CLIENT_ID = "cid";
     process.env.TODOIST_CLIENT_SECRET = "csecret";
     delete process.env.TODOIST_REDIRECT_URI;
 
-    expect(() => getTodoistOAuthConfig()).toThrow(/Missing Todoist OAuth config/);
+    await expect(getTodoistOAuthConfig()).rejects.toThrow(/Missing Todoist OAuth config/);
   });
 });
 

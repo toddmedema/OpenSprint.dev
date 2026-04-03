@@ -11,9 +11,11 @@ import type { ApiResponse } from "@opensprint/shared";
 import {
   maskDatabaseUrl,
   maskApiKeysForResponse,
+  maskTodoistOAuthForResponse,
   validateDatabaseUrl,
   getDatabaseDialect,
   parsePreferredEditor,
+  parseTodoistOAuthCredentials,
   type GlobalSettingsResponse,
   type ApiKeyProvider,
 } from "@opensprint/shared";
@@ -40,6 +42,7 @@ export const globalSettingsRouter = Router();
 
 function buildResponse(settings: GlobalSettings) {
   const effectiveUrl = settings.databaseUrl ?? getDefaultDatabaseUrl();
+  const maskedTodoist = maskTodoistOAuthForResponse(settings.todoistOAuth);
   return {
     databaseUrl: maskDatabaseUrl(effectiveUrl),
     databaseDialect: getDatabaseDialect(effectiveUrl),
@@ -53,6 +56,7 @@ function buildResponse(settings: GlobalSettings) {
       complexComplexityAgent: settings.complexComplexityAgent,
     }),
     preferredEditor: settings.preferredEditor ?? "auto",
+    ...(maskedTodoist && { todoistOAuth: maskedTodoist }),
   };
 }
 
@@ -70,6 +74,19 @@ globalSettingsRouter.get(
       throw new AppError(404, ErrorCodes.NOT_FOUND, "API key not found");
     }
     res.json({ data: { value: entry.value } } as ApiResponse<{ value: string }>);
+  })
+);
+
+// GET /global-settings/reveal-todoist-secret — Returns the raw clientSecret for reveal-on-click.
+globalSettingsRouter.get(
+  "/reveal-todoist-secret",
+  wrapAsync(async (_req, res) => {
+    const settings = await getGlobalSettings();
+    const secret = settings.todoistOAuth?.clientSecret;
+    if (!secret) {
+      throw new AppError(404, ErrorCodes.NOT_FOUND, "Todoist client secret not configured");
+    }
+    res.json({ data: { value: secret } } as ApiResponse<{ value: string }>);
   })
 );
 
@@ -187,6 +204,7 @@ globalSettingsRouter.put(
       simpleComplexityAgent?: unknown;
       complexComplexityAgent?: unknown;
       preferredEditor?: unknown;
+      todoistOAuth?: unknown;
     };
     const updates: GlobalSettingsPartialUpdate = {};
     const previous = await getGlobalSettings();
@@ -253,6 +271,23 @@ globalSettingsRouter.put(
           );
         }
         updates.preferredEditor = pe;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "todoistOAuth")) {
+      if (body.todoistOAuth === null) {
+        updates.todoistOAuth = null;
+      } else if (body.todoistOAuth !== undefined) {
+        const parsed = parseTodoistOAuthCredentials(body.todoistOAuth);
+        if (parsed) {
+          updates.todoistOAuth = parsed;
+        } else {
+          throw new AppError(
+            400,
+            ErrorCodes.INVALID_INPUT,
+            "todoistOAuth must include clientId, clientSecret, and redirectUri"
+          );
+        }
       }
     }
 

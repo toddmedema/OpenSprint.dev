@@ -43,7 +43,7 @@ vi.mock("../services/todoist-api-client.service.js", () => {
       tokenType: "Bearer",
     }),
     revokeAccessToken: vi.fn().mockResolvedValue(true),
-    getTodoistOAuthConfig: vi.fn().mockReturnValue({
+    getTodoistOAuthConfig: vi.fn().mockResolvedValue({
       clientId: "test-client-id",
       clientSecret: "test-client-secret",
       redirectUri:
@@ -69,7 +69,7 @@ function seedTodoistServiceMocks(): void {
     tokenType: "Bearer",
   });
   vi.mocked(mockedService.revokeAccessToken).mockResolvedValue(true);
-  vi.mocked(mockedService.getTodoistOAuthConfig).mockReturnValue({
+  vi.mocked(mockedService.getTodoistOAuthConfig).mockResolvedValue({
     clientId: "test-client-id",
     clientSecret: "test-client-secret",
     redirectUri: "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
@@ -162,9 +162,9 @@ describe("Todoist OAuth Routes", () => {
     });
 
     it("returns 500 when OAuth config env vars are missing", async () => {
-      vi.mocked(mockedService.getTodoistOAuthConfig).mockImplementationOnce(() => {
-        throw new Error("Missing Todoist OAuth config");
-      });
+      vi.mocked(mockedService.getTodoistOAuthConfig).mockRejectedValueOnce(
+        new Error("Missing Todoist OAuth config")
+      );
 
       const deps = makeDeps();
       const app = createTestApp(deps);
@@ -324,9 +324,9 @@ describe("Todoist OAuth Routes", () => {
 
       oauthStateStore.store("config-missing-state", "proj-1");
 
-      vi.mocked(mockedService.getTodoistOAuthConfig).mockImplementationOnce(() => {
-        throw new Error("Missing Todoist OAuth config");
-      });
+      vi.mocked(mockedService.getTodoistOAuthConfig).mockRejectedValueOnce(
+        new Error("Missing Todoist OAuth config")
+      );
 
       const res = await request(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
@@ -1146,9 +1146,9 @@ describe("Todoist OAuth Routes", () => {
     });
 
     it("proceeds with disconnect even when OAuth config is missing", async () => {
-      vi.mocked(mockedService.getTodoistOAuthConfig).mockImplementationOnce(() => {
-        throw new Error("Missing Todoist OAuth config");
-      });
+      vi.mocked(mockedService.getTodoistOAuthConfig).mockRejectedValueOnce(
+        new Error("Missing Todoist OAuth config")
+      );
 
       const deps = makeDeps({
         integrationStore: {
@@ -1168,6 +1168,55 @@ describe("Todoist OAuth Routes", () => {
 
       expect(res.body.data).toEqual({ disconnected: true });
       expect(deps.integrationStore.deleteConnection).toHaveBeenCalled();
+    });
+  });
+
+  describe("GET /status — notConfigured", () => {
+    it("returns notConfigured: true when OAuth config is missing and no connection", async () => {
+      vi.mocked(mockedService.getTodoistOAuthConfig).mockRejectedValueOnce(
+        new Error("Missing Todoist OAuth config")
+      );
+
+      const deps = makeDeps();
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data).toEqual({
+        connected: false,
+        status: "disabled",
+        notConfigured: true,
+      });
+    });
+
+    it("does not include notConfigured when config is present", async () => {
+      const deps = makeDeps();
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data.notConfigured).toBeUndefined();
+    });
+  });
+
+  describe("POST /oauth/start — state store failure", () => {
+    it("returns OAUTH_STATE_STORE_FAILED when state persistence throws", async () => {
+      const deps = makeDeps();
+      const app = createTestApp(deps);
+      vi.spyOn(oauthStateStore, "store").mockImplementationOnce(() => {
+        throw new Error("EACCES: permission denied");
+      });
+
+      const res = await request(app)
+        .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
+        .expect(500);
+
+      expect(res.body.error.code).toBe("OAUTH_STATE_STORE_FAILED");
+      expect(res.body.error.message).toContain("writable");
     });
   });
 

@@ -53,6 +53,11 @@ import type {
   TodoistProjectInfo,
   TodoistProjectSelectionRequest,
   TodoistSyncResult,
+  IntegrationStatusResponse,
+  IntegrationSourceOption,
+  IntegrationSyncResponse,
+  GitHubConnectRequest,
+  GitHubRepoSelectionRequest,
   IntakeItem,
   CommandInterpretation,
   CommandIntent,
@@ -283,6 +288,8 @@ export const api = {
           method: "POST",
         }
       ),
+    revealTodoistSecret: () =>
+      request<{ value: string }>("/global-settings/reveal-todoist-secret"),
     setupTables: (databaseUrl: string) =>
       request<{ ok: boolean }>("/global-settings/setup-tables", {
         method: "POST",
@@ -857,6 +864,36 @@ export const api = {
       disconnect: (projectId: string) =>
         request<{ disconnected: boolean; pendingDeletesWarning?: number }>(
           `/projects/${projectId}/integrations/todoist`,
+          { method: "DELETE" }
+        ),
+    },
+    github: {
+      getStatus: (projectId: string) =>
+        request<IntegrationStatusResponse>(
+          `/projects/${projectId}/integrations/github/status`
+        ),
+      connect: (projectId: string, body: GitHubConnectRequest) =>
+        request<{ success: boolean; user: string }>(
+          `/projects/${projectId}/integrations/github/connect`,
+          { method: "POST", body: JSON.stringify(body) }
+        ),
+      listRepos: (projectId: string) =>
+        request<{ repos: IntegrationSourceOption[] }>(
+          `/projects/${projectId}/integrations/github/repos`
+        ),
+      selectRepo: (projectId: string, body: GitHubRepoSelectionRequest) =>
+        request<{ success: boolean; selectedSource: { id: string; name: string } }>(
+          `/projects/${projectId}/integrations/github/repo`,
+          { method: "PUT", body: JSON.stringify(body) }
+        ),
+      syncNow: (projectId: string) =>
+        request<IntegrationSyncResponse>(
+          `/projects/${projectId}/integrations/github/sync`,
+          { method: "POST" }
+        ),
+      disconnect: (projectId: string) =>
+        request<{ disconnected: boolean }>(
+          `/projects/${projectId}/integrations/github`,
           { method: "DELETE" }
         ),
     },

@@ -587,6 +587,102 @@ describe("Global Settings API", () => {
     });
   });
 
+  describe("Todoist credentials", () => {
+    it("PUT saves todoistOAuth and GET returns masked credentials", async () => {
+      const putRes = await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "my-client-id",
+            clientSecret: "my-secret",
+            redirectUri: "http://localhost:3000/callback",
+          },
+        });
+
+      expect(putRes.status).toBe(200);
+      expect(putRes.body.data.todoistOAuth).toEqual({
+        clientId: "my-client-id",
+        clientSecretMasked: "••••••••",
+        redirectUri: "http://localhost:3000/callback",
+        configured: true,
+      });
+
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.body.data.todoistOAuth).toEqual({
+        clientId: "my-client-id",
+        clientSecretMasked: "••••••••",
+        redirectUri: "http://localhost:3000/callback",
+        configured: true,
+      });
+    });
+
+    it("GET /reveal-todoist-secret returns raw secret", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "id",
+            clientSecret: "the-actual-secret",
+            redirectUri: "http://localhost/cb",
+          },
+        });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/global-settings/reveal-todoist-secret`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.value).toBe("the-actual-secret");
+    });
+
+    it("GET /reveal-todoist-secret returns 404 when not configured", async () => {
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/global-settings/reveal-todoist-secret`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it("PUT with todoistOAuth: null clears stored credentials", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "id",
+            clientSecret: "secret",
+            redirectUri: "http://localhost/cb",
+          },
+        });
+
+      const clearRes = await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({ todoistOAuth: null });
+
+      expect(clearRes.status).toBe(200);
+      expect(clearRes.body.data.todoistOAuth).toBeUndefined();
+
+      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      expect(getRes.body.data.todoistOAuth).toBeUndefined();
+    });
+
+    it("persists todoistOAuth to disk and reads it back", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "persist-id",
+            clientSecret: "persist-secret",
+            redirectUri: "http://localhost/persist",
+          },
+        });
+
+      const settings = await getGlobalSettings();
+      expect(settings.todoistOAuth).toEqual({
+        clientId: "persist-id",
+        clientSecret: "persist-secret",
+        redirectUri: "http://localhost/persist",
+      });
+    });
+  });
+
   describe("local session auth", () => {
     it("rejects PUT /global-settings without bearer or localhost Origin/Referer", async () => {
       const res = await request(app)

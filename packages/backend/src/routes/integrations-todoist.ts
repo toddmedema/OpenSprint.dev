@@ -232,14 +232,14 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       let config;
       try {
-        config = getTodoistOAuthConfig();
+        config = await getTodoistOAuthConfig();
       } catch {
-        log.error("Todoist OAuth not configured — missing env vars");
+        log.error("Todoist OAuth not configured — missing credentials");
         res.status(500).json({
           error: {
             code: "INTEGRATION_NOT_CONFIGURED",
             message:
-              "Todoist OAuth is not configured. Set TODOIST_CLIENT_ID, TODOIST_CLIENT_SECRET, and TODOIST_REDIRECT_URI.",
+              "Todoist OAuth is not configured. Enter your Todoist app credentials in Settings, or set TODOIST_CLIENT_ID, TODOIST_CLIENT_SECRET, and TODOIST_REDIRECT_URI.",
           },
         });
         return;
@@ -247,7 +247,22 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
 
       const { projectId } = req.params;
       const state = generateOAuthState();
-      oauthStateStore.store(state, projectId);
+
+      try {
+        oauthStateStore.store(state, projectId);
+      } catch (err) {
+        log.error("Failed to persist OAuth state", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        res.status(500).json({
+          error: {
+            code: "OAUTH_STATE_STORE_FAILED",
+            message:
+              "Failed to save OAuth state. Check that ~/.opensprint is writable.",
+          },
+        });
+        return;
+      }
 
       const authorizationUrl = buildAuthorizationUrl(config.clientId, OAUTH_SCOPES, state);
 
@@ -281,7 +296,7 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
 
       let config;
       try {
-        config = getTodoistOAuthConfig();
+        config = await getTodoistOAuthConfig();
       } catch {
         res.status(500).json({
           error: {
@@ -347,11 +362,23 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
     validateParams(projectIdParamSchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const { projectId } = req.params;
+
+      let configAvailable = true;
+      try {
+        await getTodoistOAuthConfig();
+      } catch {
+        configAvailable = false;
+      }
+
       const connection = await integrationStore.getConnection(projectId, "todoist");
 
       if (!connection) {
         const body: { data: TodoistIntegrationStatus } = {
-          data: { connected: false, status: "disabled" },
+          data: {
+            connected: false,
+            status: "disabled",
+            ...(configAvailable ? {} : { notConfigured: true }),
+          },
         };
         res.json(body);
         return;
@@ -690,7 +717,7 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
       if (encryptedToken) {
         try {
           const accessToken = tokenEncryption.decryptToken(encryptedToken);
-          const config = getTodoistOAuthConfig();
+          const config = await getTodoistOAuthConfig();
           await revokeAccessToken(config.clientId, config.clientSecret, accessToken);
           log.info("Todoist token revoked", { projectId });
         } catch (err) {

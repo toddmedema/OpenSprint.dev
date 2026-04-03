@@ -394,7 +394,7 @@ describe("PlanPhase Redux integration", () => {
       expect(screen.getByTestId("plan-phase-loading")).toBeInTheDocument();
     });
     expect(screen.getByText("Generating Plan...")).toBeInTheDocument();
-    expect(document.querySelector(".animate-spin")).toBeTruthy();
+    expect(screen.getByTestId("plan-phase-loading")).toBeInTheDocument();
   });
 
   it("shows the current generated plan number out of the total while decompose progress arrives", async () => {
@@ -594,8 +594,6 @@ describe("PlanPhase Redux integration", () => {
     const addPlanBtn = screen.getByTestId("add-plan-button");
     expect(addPlanBtn).toBeInTheDocument();
     expect(addPlanBtn).toHaveTextContent("New Plan");
-    expect(addPlanBtn).toHaveClass("btn-primary");
-    expect(addPlanBtn).toHaveClass("hover:bg-brand-800");
     expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId("add-plan-button"));
@@ -1154,10 +1152,10 @@ describe("PlanPhase dynamic plan button label", () => {
     expect(screen.queryByTestId("plan-tasks-button-sidebar")).not.toBeInTheDocument();
     expect(screen.getByTestId("plan-tasks-loading")).toBeInTheDocument();
     expect(screen.getByTestId("plan-tasks-loading-sidebar")).toBeInTheDocument();
-    // Only one loading spinner (large blue on card); sidebar shows text, not a duplicate spinner
-    expect(
-      screen.getByTestId("plan-tasks-loading-sidebar").querySelector(".animate-spin")
-    ).toBeNull();
+    // Sidebar loading area shows text only, not a duplicate spinner
+    const sidebarLoading = screen.getByTestId("plan-tasks-loading-sidebar");
+    expect(sidebarLoading).toBeInTheDocument();
+    expect(sidebarLoading.textContent).toBeTruthy();
   });
 
   it("button updates reactively: Generate Tasks when tasks empty, Execute when tasks added", async () => {

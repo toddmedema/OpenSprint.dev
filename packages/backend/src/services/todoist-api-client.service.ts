@@ -18,6 +18,7 @@ import type {
   Permission,
 } from "@doist/todoist-api-typescript";
 import { createLogger } from "../utils/logger.js";
+import { getGlobalSettings } from "./global-settings.service.js";
 
 const log = createLogger("todoist-api-client");
 
@@ -202,16 +203,30 @@ export interface TodoistOAuthConfig {
   redirectUri: string;
 }
 
-export function getTodoistOAuthConfig(): TodoistOAuthConfig {
-  const clientId = process.env.TODOIST_CLIENT_ID;
-  const clientSecret = process.env.TODOIST_CLIENT_SECRET;
-  const redirectUri = process.env.TODOIST_REDIRECT_URI;
+/**
+ * Resolve Todoist OAuth config. Precedence: env vars > global settings.
+ * Throws if neither source provides all three required fields.
+ */
+export async function getTodoistOAuthConfig(): Promise<TodoistOAuthConfig> {
+  const envClientId = process.env.TODOIST_CLIENT_ID;
+  const envClientSecret = process.env.TODOIST_CLIENT_SECRET;
+  const envRedirectUri = process.env.TODOIST_REDIRECT_URI;
 
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error(
-      "Missing Todoist OAuth config: TODOIST_CLIENT_ID, TODOIST_CLIENT_SECRET, and TODOIST_REDIRECT_URI must be set"
-    );
+  if (envClientId && envClientSecret && envRedirectUri) {
+    return { clientId: envClientId, clientSecret: envClientSecret, redirectUri: envRedirectUri };
   }
 
-  return { clientId, clientSecret, redirectUri };
+  const settings = await getGlobalSettings();
+  const stored = settings.todoistOAuth;
+  if (stored?.clientId && stored?.clientSecret && stored?.redirectUri) {
+    return {
+      clientId: stored.clientId,
+      clientSecret: stored.clientSecret,
+      redirectUri: stored.redirectUri,
+    };
+  }
+
+  throw new Error(
+    "Missing Todoist OAuth config. Enter your Todoist app credentials in Settings, or set TODOIST_CLIENT_ID, TODOIST_CLIENT_SECRET, and TODOIST_REDIRECT_URI environment variables."
+  );
 }

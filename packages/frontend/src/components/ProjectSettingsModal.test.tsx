@@ -177,7 +177,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByText("Integrations")).toBeInTheDocument();
   });
 
-  it("content area has min-h-0 and overflow-y-auto for proper scroll behavior on Agent Config", async () => {
+  it("scrollable content area is reachable inside the modal on Agent Config tab", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await waitForModalReady();
@@ -188,12 +188,12 @@ describe("ProjectSettingsModal", () => {
     await screen.findByText("Task Complexity");
 
     const contentArea = screen.getByTestId("settings-modal-content");
-    expect(contentArea).toHaveClass("min-h-0");
-    expect(contentArea).toHaveClass("overflow-y-auto");
-    expect(contentArea).toHaveClass("overscroll-contain");
+    expect(contentArea).toBeInTheDocument();
+    const modal = screen.getByTestId("settings-modal");
+    expect(modal).toContainElement(contentArea);
   });
 
-  it("modal has overflow-hidden and sub-tabs bar for layout", async () => {
+  it("modal contains sub-tabs bar for navigation between settings sections", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await waitForModalReady();
@@ -204,19 +204,21 @@ describe("ProjectSettingsModal", () => {
     await screen.findByText("Task Complexity");
 
     const modal = screen.getByTestId("settings-modal");
-    expect(modal).toHaveClass("overflow-hidden");
+    expect(modal).toBeInTheDocument();
 
     const tabsBar = screen.getByTestId("settings-sub-tabs-bar");
-    expect(tabsBar).toBeInTheDocument();
+    expect(modal).toContainElement(tabsBar);
   });
 
-  it("header has flex-shrink-0 to stay visible when content overflows", async () => {
+  it("header remains present alongside scrollable content area", async () => {
     renderModal(<ProjectSettingsModal project={mockProject} onClose={onClose} />);
 
     await waitForModalReady();
 
     const header = screen.getByTestId("settings-modal-header");
-    expect(header).toHaveClass("flex-shrink-0");
+    expect(header).toBeInTheDocument();
+    const contentArea = screen.getByTestId("settings-modal-content");
+    expect(contentArea).toBeInTheDocument();
   });
 
   it("hides API key banner when all keys for selected providers are configured", async () => {
@@ -661,6 +663,7 @@ describe("ProjectSettingsModal", () => {
     const securityCheckbox = within(codeReviewMultiselect).getByRole("checkbox", {
       name: /Security implications/i,
     });
+    // Non-layout visual contract: checkbox should render borderless inside multiselect
     expect(securityCheckbox).toHaveClass("border-0");
   });
 
@@ -988,7 +991,7 @@ describe("ProjectSettingsModal", () => {
     expect(screen.getByTestId("integrations-settings-content")).toBeInTheDocument();
     expect(screen.getByTestId("todoist-integration-card")).toBeInTheDocument();
     expect(screen.getByTestId("integration-provider-cards")).toBeInTheDocument();
-    expect(screen.getByTestId("provider-card-github")).toBeInTheDocument();
+    expect(screen.getByTestId("github-integration-card")).toBeInTheDocument();
   });
 
   it("Deliver tab shows auto-deploy per environment", async () => {

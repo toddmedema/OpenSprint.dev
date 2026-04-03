@@ -98,10 +98,11 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   });
 
   const notConfigured =
-    statusQuery.isError &&
-    isApiError(statusQuery.error) &&
-    (statusQuery.error.code === "INTEGRATION_NOT_CONFIGURED" ||
-      statusQuery.error.message?.includes("not configured"));
+    (statusQuery.isError &&
+      isApiError(statusQuery.error) &&
+      (statusQuery.error.code === "INTEGRATION_NOT_CONFIGURED" ||
+        statusQuery.error.message?.includes("not configured"))) ||
+    (statusQuery.data && !statusQuery.data.connected && statusQuery.data.notConfigured === true);
 
   const startOAuthMutation = useMutation({
     mutationFn: () => api.integrations.todoist.startOAuth(projectId),
@@ -228,7 +229,7 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
     return () => clearInterval(interval);
   }, [oauthPolling, projectId, queryClient, refreshStatus]);
 
-  // Not configured — env vars missing
+  // Not configured — no credentials in Settings or env
   if (notConfigured) {
     return (
       <IntakeTodoistShell
@@ -240,9 +241,9 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
           data-testid="todoist-not-configured"
         >
           <p className="text-xs text-theme-warning-text">
-            Todoist integration requires <code className="font-mono">TODOIST_CLIENT_ID</code> and{" "}
-            <code className="font-mono">TODOIST_CLIENT_SECRET</code> environment variables. Set them
-            in your <code className="font-mono">.env</code> file and restart the server.
+            Todoist integration requires OAuth app credentials. Open{" "}
+            <strong>Settings &rarr; Todoist Credentials</strong> to enter your Client ID, Client
+            Secret, and Redirect URI.
           </p>
         </div>
       </IntakeTodoistShell>
@@ -306,7 +307,9 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
       >
         {startOAuthMutation.isError && (
           <p className="text-xs text-theme-error-text">
-            Failed to start OAuth. Please try again.
+            {isApiError(startOAuthMutation.error)
+              ? startOAuthMutation.error.message
+              : "Failed to start OAuth. Please try again."}
           </p>
         )}
       </IntakeTodoistShell>

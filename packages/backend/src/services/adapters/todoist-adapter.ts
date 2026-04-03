@@ -32,13 +32,13 @@ export class TodoistAdapter implements IntegrationAdapter {
     supportsDelete: true,
   };
 
-  buildAuthorizationUrl(state: string): string {
-    const config = getTodoistOAuthConfig();
+  async buildAuthorizationUrl(state: string): Promise<string> {
+    const config = await getTodoistOAuthConfig();
     return buildAuthorizationUrl(config.clientId, ["data:read_write"], state);
   }
 
   async exchangeToken(code: string, _state: string): Promise<OAuthResult> {
-    const config = getTodoistOAuthConfig();
+    const config = await getTodoistOAuthConfig();
     const result = await exchangeCodeForToken(config.clientId, config.clientSecret, code);
     return {
       accessToken: result.accessToken,
@@ -47,7 +47,7 @@ export class TodoistAdapter implements IntegrationAdapter {
   }
 
   async revokeToken(accessToken: string): Promise<void> {
-    const config = getTodoistOAuthConfig();
+    const config = await getTodoistOAuthConfig();
     await revokeAccessToken(config.clientId, config.clientSecret, accessToken);
   }
 

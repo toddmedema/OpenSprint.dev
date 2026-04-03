@@ -137,14 +137,23 @@ describe("TodoistIntegrationCard", () => {
 
   // ---------- Not configured state ----------
 
-  it("renders not-configured state when TODOIST_CLIENT_ID is missing", async () => {
+  it("renders not-configured state when credentials are missing (error)", async () => {
     mockGetStatus.mockRejectedValue(createApiError("not configured", "INTEGRATION_NOT_CONFIGURED"));
 
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
     expect(await screen.findByTestId("todoist-not-configured")).toBeInTheDocument();
-    expect(screen.getByText(/TODOIST_CLIENT_ID/)).toBeInTheDocument();
-    expect(screen.getByText(/TODOIST_CLIENT_SECRET/)).toBeInTheDocument();
+    expect(screen.getByText(/Todoist Credentials/)).toBeInTheDocument();
+    expect(screen.queryByTestId("todoist-connect-btn")).not.toBeInTheDocument();
+  });
+
+  it("renders not-configured state when status returns notConfigured flag", async () => {
+    mockGetStatus.mockResolvedValue({ connected: false, status: "disabled", notConfigured: true });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-not-configured")).toBeInTheDocument();
+    expect(screen.getByText(/Todoist Credentials/)).toBeInTheDocument();
     expect(screen.queryByTestId("todoist-connect-btn")).not.toBeInTheDocument();
   });
 

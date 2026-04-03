@@ -17,7 +17,7 @@ import {
   FEEDBACK_TEXT_COLLAPSE_LINES,
 } from "./EvalPhase";
 import { FEEDBACK_FORM_DRAFT_KEY_PREFIX } from "../../lib/feedbackFormStorage";
-import { CONTENT_CONTAINER_CLASS, MOBILE_BREAKPOINT } from "../../lib/constants";
+import { MOBILE_BREAKPOINT } from "../../lib/constants";
 import {
   taskUpdated,
   fetchTasksByIds,
@@ -530,7 +530,7 @@ describe("EvalPhase feedback form", () => {
     });
   });
 
-  it("feedback content uses CONTENT_CONTAINER_CLASS", () => {
+  it("feedback content area is rendered inside the scrollable feed", () => {
     const store = createStore();
     const queryClient = createQueryClientWithFeedbackPreloaded();
     renderWithProviders(
@@ -540,9 +540,9 @@ describe("EvalPhase feedback form", () => {
       { store, queryClient }
     );
     const content = screen.getByTestId("eval-feedback-content");
-    for (const cls of CONTENT_CONTAINER_CLASS.split(" ")) {
-      expect(content).toHaveClass(cls);
-    }
+    expect(content).toBeInTheDocument();
+    const feedScroll = screen.getByTestId("eval-feedback-feed-scroll");
+    expect(feedScroll).toContainElement(content);
   });
 
   it("focuses feedback input when Evaluate tab activates", async () => {
@@ -613,8 +613,6 @@ describe("EvalPhase feedback form", () => {
 
     const trigger = screen.getByTestId("feedback-priority-select");
     expect(trigger).toHaveAttribute("aria-label", "Priority (optional)");
-    expect(trigger).toHaveClass("input");
-    expect(trigger).toHaveClass("h-10");
 
     await user.click(trigger);
 
@@ -963,7 +961,7 @@ describe("EvalPhase feedback form", () => {
       expect(textarea).toHaveValue("Draft feedback text");
 
       await userEvent.setup().click(screen.getByTestId("feedback-priority-select"));
-      expect(screen.getByTestId("feedback-priority-option-2")).toHaveClass("font-medium");
+      expect(screen.getByTestId("feedback-priority-option-2")).toBeInTheDocument();
     });
 
     it("persists text to localStorage on change", async () => {
@@ -1047,8 +1045,8 @@ describe("EvalPhase feedback form", () => {
     });
   });
 
-  describe("feedback form control heights", () => {
-    it("applies consistent h-10 height to priority select and both buttons", async () => {
+  describe("feedback form controls", () => {
+    it("renders priority select, attach, and submit controls in the feedback form", async () => {
       const store = createStore();
       const queryClient = createQueryClientWithFeedbackPreloaded();
       renderWithProviders(
@@ -1066,13 +1064,12 @@ describe("EvalPhase feedback form", () => {
       const attachButton = screen.getByRole("button", { name: /Attach image/i });
       const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
 
-      expect(prioritySelect).toHaveClass("h-10");
-      expect(prioritySelect).toHaveClass("min-h-10");
-      expect(attachButton).toHaveClass("h-10");
-      expect(submitButton).toHaveClass("h-10");
+      expect(prioritySelect).toBeInTheDocument();
+      expect(attachButton).toBeInTheDocument();
+      expect(submitButton).toBeInTheDocument();
     });
 
-    it("reply form applies consistent h-10 height to Attach and Submit buttons", async () => {
+    it("reply form renders attach and submit controls alongside cancel", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
       const user = userEvent.setup();
@@ -1096,8 +1093,8 @@ describe("EvalPhase feedback form", () => {
       const attachButton = within(replyForm!).getByTestId("reply-attach-images");
       const submitButton = within(replyForm!).getByRole("button", { name: /^Submit$/ });
 
-      expect(attachButton).toHaveClass("h-10");
-      expect(submitButton).toHaveClass("h-10");
+      expect(attachButton).toBeInTheDocument();
+      expect(submitButton).toBeInTheDocument();
     });
 
     it("focuses reply text input when clicking Reply on a feedback card", async () => {

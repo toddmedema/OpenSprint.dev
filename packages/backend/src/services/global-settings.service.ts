@@ -16,12 +16,14 @@ import type {
   ApiKeysUpdate,
   GlobalSettings,
   PreferredEditor,
+  TodoistOAuthCredentials,
 } from "@opensprint/shared";
 import {
   sanitizeApiKeys,
   mergeApiKeysWithCurrent,
   validateDatabaseUrl,
   parsePreferredEditor,
+  parseTodoistOAuthCredentials,
 } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { agentConfigSchema } from "../schemas/agent-config.js";
@@ -93,6 +95,7 @@ async function load(): Promise<GlobalSettings> {
       const simpleComplexityAgent = parseAgentConfigFromFile(obj.simpleComplexityAgent);
       const complexComplexityAgent = parseAgentConfigFromFile(obj.complexComplexityAgent);
       const preferredEditor = parsePreferredEditor(obj.preferredEditor) ?? "auto";
+      const todoistOAuth = parseTodoistOAuthCredentials(obj.todoistOAuth);
       return {
         ...(apiKeys && { apiKeys }),
         ...(useCustomCli !== undefined && { useCustomCli }),
@@ -103,6 +106,7 @@ async function load(): Promise<GlobalSettings> {
         ...(simpleComplexityAgent && { simpleComplexityAgent }),
         ...(complexComplexityAgent && { complexComplexityAgent }),
         preferredEditor,
+        ...(todoistOAuth && { todoistOAuth }),
       };
     }
   } catch {
@@ -200,6 +204,10 @@ export async function setGlobalSettings(settings: GlobalSettings): Promise<void>
     const p = parsePreferredEditor(settings.preferredEditor);
     if (p) sanitized.preferredEditor = p;
   }
+  if (settings.todoistOAuth !== undefined) {
+    const parsed = parseTodoistOAuthCredentials(settings.todoistOAuth);
+    if (parsed) sanitized.todoistOAuth = parsed;
+  }
   await save(sanitized);
 }
 
@@ -207,13 +215,14 @@ export async function setGlobalSettings(settings: GlobalSettings): Promise<void>
 export type GlobalSettingsPartialUpdate = Partial<
   Omit<
     GlobalSettings,
-    "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent" | "preferredEditor"
+    "apiKeys" | "simpleComplexityAgent" | "complexComplexityAgent" | "preferredEditor" | "todoistOAuth"
   >
 > & {
   apiKeys?: ApiKeysUpdate;
   simpleComplexityAgent?: AgentConfig | null;
   complexComplexityAgent?: AgentConfig | null;
   preferredEditor?: PreferredEditor | null;
+  todoistOAuth?: TodoistOAuthCredentials | null;
 };
 
 /**
@@ -266,6 +275,19 @@ export async function updateGlobalSettings(
       delete merged.preferredEditor;
     } else if (updates.preferredEditor !== undefined) {
       merged.preferredEditor = updates.preferredEditor;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "todoistOAuth")) {
+    if (updates.todoistOAuth === null) {
+      delete merged.todoistOAuth;
+    } else if (updates.todoistOAuth !== undefined) {
+      const parsed = parseTodoistOAuthCredentials(updates.todoistOAuth);
+      if (parsed) {
+        merged.todoistOAuth = parsed;
+      } else {
+        delete merged.todoistOAuth;
+      }
     }
   }
 

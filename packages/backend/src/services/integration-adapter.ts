@@ -66,7 +66,7 @@ export interface IntegrationAdapter {
   readonly capabilities: AdapterCapabilities;
 
   /** Build an OAuth authorization URL. Only called when supportsOAuth is true. */
-  buildAuthorizationUrl?(state: string): string;
+  buildAuthorizationUrl?(state: string): string | Promise<string>;
 
   /** Exchange an OAuth code for tokens. */
   exchangeToken?(code: string, state: string): Promise<OAuthResult>;

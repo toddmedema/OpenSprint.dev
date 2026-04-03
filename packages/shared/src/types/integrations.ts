@@ -51,6 +51,8 @@ export interface TodoistIntegrationStatus {
   lastSyncAt?: string;
   lastError?: string;
   status: IntegrationConnectionStatus;
+  /** True when no Todoist OAuth credentials are configured (env or settings). */
+  notConfigured?: boolean;
 }
 
 /** Todoist project info returned by the project picker endpoint. */
@@ -74,6 +76,21 @@ export interface TodoistSyncResult {
 /** POST /integrations/todoist/project request body */
 export interface TodoistProjectSelectionRequest {
   todoistProjectId: string;
+}
+
+// ---------------------------------------------------------------------------
+// GitHub Issues integration API contract types
+// ---------------------------------------------------------------------------
+
+/** POST /integrations/github/connect request body */
+export interface GitHubConnectRequest {
+  token: string;
+}
+
+/** PUT /integrations/github/repo request body */
+export interface GitHubRepoSelectionRequest {
+  repoId: string;
+  repoFullName: string;
 }
 
 // ---------------------------------------------------------------------------

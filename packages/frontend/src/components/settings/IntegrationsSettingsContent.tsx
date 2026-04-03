@@ -2,9 +2,10 @@ import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import type { IntegrationProvider } from "@opensprint/shared";
 import { TodoistIntegrationCard } from "./TodoistIntegrationCard";
+import { GitHubIntegrationCard } from "./GitHubIntegrationCard";
 import { IntegrationProviderCards } from "../intake/IntegrationProviderCards";
 
-const INTAKE_PLACEHOLDER_PROVIDERS = ["github", "slack", "webhook"] as const satisfies readonly IntegrationProvider[];
+const INTAKE_PLACEHOLDER_PROVIDERS = ["slack", "webhook"] as const satisfies readonly IntegrationProvider[];
 
 export interface IntegrationsSettingsContentProps {
   projectId: string;
@@ -69,18 +70,17 @@ export function IntegrationsSettingsContent({ projectId }: IntegrationsSettingsC
           data-testid="integration-provider-cards"
         >
           <TodoistIntegrationCard projectId={projectId} />
+          <GitHubIntegrationCard projectId={projectId} />
           <IntegrationProviderCards
             asGrid={false}
             providerFilter={INTAKE_PLACEHOLDER_PROVIDERS}
             connections={{}}
             onConnect={(p) => {
-              const label =
-                p === "github" ? "GitHub Issues" : p === "slack" ? "Slack" : "Inbound webhook";
+              const label = p === "slack" ? "Slack" : "Inbound webhook";
               showComingSoon(label);
             }}
             onConfigure={(p) => {
-              const label =
-                p === "github" ? "GitHub Issues" : p === "slack" ? "Slack" : "Inbound webhook";
+              const label = p === "slack" ? "Slack" : "Inbound webhook";
               showComingSoon(label);
             }}
             onSync={noop}

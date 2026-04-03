@@ -568,6 +568,21 @@ export function parsePreferredEditor(raw: unknown): PreferredEditor | undefined 
   return undefined;
 }
 
+/** Todoist OAuth application credentials (user-entered or env-provided). */
+export interface TodoistOAuthCredentials {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}
+
+/** Masked Todoist OAuth credentials for API responses (secrets never exposed). */
+export interface MaskedTodoistOAuthCredentials {
+  clientId: string;
+  clientSecretMasked: string;
+  redirectUri: string;
+  configured: boolean;
+}
+
 /** Global settings stored at ~/.opensprint/global-settings.json */
 export interface GlobalSettings {
   apiKeys?: ApiKeys;
@@ -594,6 +609,8 @@ export interface GlobalSettings {
    * Omitted when unset; clients may default to `auto`.
    */
   preferredEditor?: PreferredEditor;
+  /** Todoist OAuth app credentials entered via Settings UI. Env vars take precedence when set. */
+  todoistOAuth?: TodoistOAuthCredentials;
 }
 
 /** Response shape for GET /global-settings (apiKeys masked) */
@@ -612,6 +629,8 @@ export interface GlobalSettingsResponse {
   complexComplexityAgent?: AgentConfig;
   /** Editor preference for opening worktrees in a desktop app; omitted when unset. */
   preferredEditor?: PreferredEditor;
+  /** Masked Todoist OAuth credentials; present when any field has been configured. */
+  todoistOAuth?: MaskedTodoistOAuthCredentials;
 }
 
 /** Request body for PUT /global-settings */
@@ -628,6 +647,8 @@ export interface GlobalSettingsPutRequest {
   complexComplexityAgent?: AgentConfig | null;
   /** Set preferred external editor for open-in-editor; pass `null` to clear stored preference. */
   preferredEditor?: PreferredEditor | null;
+  /** Set Todoist OAuth credentials; pass `null` to clear. */
+  todoistOAuth?: TodoistOAuthCredentials | null;
 }
 
 /** Read-only runtime cache/probe status for Git fields returned by project settings APIs. */
@@ -794,6 +815,40 @@ export function maskApiKeysForResponse(apiKeys: ApiKeys | undefined): MaskedApiK
     }
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
+ * Mask Todoist OAuth credentials for API responses.
+ * clientSecret is fully masked; clientId and redirectUri are shown in cleartext.
+ */
+export function maskTodoistOAuthForResponse(
+  creds: TodoistOAuthCredentials | undefined
+): MaskedTodoistOAuthCredentials | undefined {
+  if (!creds) return undefined;
+  const configured = Boolean(creds.clientId?.trim() && creds.clientSecret?.trim());
+  if (!creds.clientId && !creds.clientSecret && !creds.redirectUri) return undefined;
+  return {
+    clientId: creds.clientId ?? "",
+    clientSecretMasked: creds.clientSecret ? MASKED_PLACEHOLDER : "",
+    redirectUri: creds.redirectUri ?? "",
+    configured,
+  };
+}
+
+/**
+ * Parse and sanitize Todoist OAuth credentials from raw settings JSON.
+ * Returns undefined if no valid fields are present.
+ */
+export function parseTodoistOAuthCredentials(
+  raw: unknown
+): TodoistOAuthCredentials | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  const clientId = typeof obj.clientId === "string" ? obj.clientId.trim() : "";
+  const clientSecret = typeof obj.clientSecret === "string" ? obj.clientSecret.trim() : "";
+  const redirectUri = typeof obj.redirectUri === "string" ? obj.redirectUri.trim() : "";
+  if (!clientId && !clientSecret && !redirectUri) return undefined;
+  return { clientId, clientSecret, redirectUri };
 }
 
 /** Full project settings stored in global database (~/.opensprint/settings.json) keyed by project_id */
