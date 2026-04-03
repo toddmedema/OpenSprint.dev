@@ -61,11 +61,11 @@ describe("computeWorkspacesFromFiles", () => {
   });
 
   describe("with coverageOnly", () => {
-    it("filters electron from coverage workspaces", () => {
+    it("includes electron in coverage workspaces for shared changes", () => {
       const result = computeWorkspacesFromFiles(["packages/shared/src/types.ts"], {
         coverageOnly: true,
       });
-      expect(result.workspaces).toEqual(["shared", "backend", "frontend"]);
+      expect(result.workspaces).toEqual(["shared", "backend", "frontend", "electron"]);
       expect(result.reason).toBe("git-diff");
     });
 
@@ -77,27 +77,27 @@ describe("computeWorkspacesFromFiles", () => {
       expect(result.reason).toBe("git-diff");
     });
 
-    it("falls back to all coverage workspaces for electron-only changes", () => {
+    it("returns electron only for electron-only changes under coverage", () => {
       const result = computeWorkspacesFromFiles(["packages/electron/main.ts"], {
         coverageOnly: true,
       });
-      expect(result.workspaces).toEqual(["shared", "backend", "frontend"]);
-      expect(result.reason).toBe("coverage-fallback");
+      expect(result.workspaces).toEqual(["electron"]);
+      expect(result.reason).toBe("git-diff");
     });
 
     it("falls back to all coverage workspaces for unmapped file changes", () => {
       const result = computeWorkspacesFromFiles(["README.md"], { coverageOnly: true });
-      expect(result.workspaces).toEqual(["shared", "backend", "frontend"]);
+      expect(result.workspaces).toEqual(["shared", "backend", "frontend", "electron"]);
       expect(result.reason).toBe("coverage-fallback");
     });
 
-    it("falls back for mix of unmapped and electron-only files", () => {
+    it("returns electron when electron and unmapped files change under coverage", () => {
       const result = computeWorkspacesFromFiles(
         ["packages/electron/main.ts", "docs/guide.md", "CONTRIBUTING.md"],
         { coverageOnly: true }
       );
-      expect(result.workspaces).toEqual(["shared", "backend", "frontend"]);
-      expect(result.reason).toBe("coverage-fallback");
+      expect(result.workspaces).toEqual(["electron"]);
+      expect(result.reason).toBe("git-diff");
     });
 
     it("does not fall back when no files changed", () => {
@@ -111,7 +111,7 @@ describe("computeWorkspacesFromFiles", () => {
         ["packages/electron/main.ts", "packages/backend/src/index.ts"],
         { coverageOnly: true }
       );
-      expect(result.workspaces).toEqual(["backend"]);
+      expect(result.workspaces).toEqual(["backend", "electron"]);
       expect(result.reason).toBe("git-diff");
     });
 

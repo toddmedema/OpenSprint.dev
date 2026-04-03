@@ -663,6 +663,52 @@ describe("Global Settings API", () => {
       expect(getRes.body.data.todoistOAuth).toBeUndefined();
     });
 
+    it("preserves existing secret when updating clientId/redirectUri with empty secret", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "id-original",
+            clientSecret: "secret-original",
+            redirectUri: "http://localhost/original",
+          },
+        });
+
+      const updateRes = await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "id-updated",
+            clientSecret: "",
+            redirectUri: "http://localhost/updated",
+          },
+        });
+
+      expect(updateRes.status).toBe(200);
+      const settings = await getGlobalSettings();
+      expect(settings.todoistOAuth).toEqual({
+        clientId: "id-updated",
+        clientSecret: "secret-original",
+        redirectUri: "http://localhost/updated",
+      });
+    });
+
+    it("rejects todoistOAuth updates missing a usable clientSecret", async () => {
+      const res = await authedSupertest(app)
+        .put(`${API_PREFIX}/global-settings`)
+        .send({
+          todoistOAuth: {
+            clientId: "id-only",
+            clientSecret: "",
+            redirectUri: "http://localhost/callback",
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe("INVALID_INPUT");
+      expect(res.body.error?.message).toContain("clientSecret");
+    });
+
     it("persists todoistOAuth to disk and reads it back", async () => {
       await authedSupertest(app)
         .put(`${API_PREFIX}/global-settings`)

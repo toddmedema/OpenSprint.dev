@@ -280,7 +280,20 @@ globalSettingsRouter.put(
       } else if (body.todoistOAuth !== undefined) {
         const parsed = parseTodoistOAuthCredentials(body.todoistOAuth);
         if (parsed) {
-          updates.todoistOAuth = parsed;
+          // Preserve existing secret when UI submits masked/empty secret while editing other fields.
+          const clientSecret = parsed.clientSecret || previous.todoistOAuth?.clientSecret || "";
+          if (!parsed.clientId || !clientSecret || !parsed.redirectUri) {
+            throw new AppError(
+              400,
+              ErrorCodes.INVALID_INPUT,
+              "todoistOAuth must include clientId, clientSecret, and redirectUri"
+            );
+          }
+          updates.todoistOAuth = {
+            clientId: parsed.clientId,
+            clientSecret,
+            redirectUri: parsed.redirectUri,
+          };
         } else {
           throw new AppError(
             400,

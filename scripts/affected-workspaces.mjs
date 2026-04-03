@@ -4,7 +4,7 @@ import path from "node:path";
 import process from "node:process";
 
 const WORKSPACE_ORDER = ["shared", "backend", "frontend", "electron"];
-const COVERAGE_WORKSPACES = new Set(["shared", "backend", "frontend"]);
+const COVERAGE_WORKSPACES = new Set(["shared", "backend", "frontend", "electron"]);
 const ALWAYS_ALL_PREFIXES = [
   ".github/",
   "scripts/",

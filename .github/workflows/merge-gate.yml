@@ -109,6 +109,15 @@ jobs:
             --reporter=json \
             --outputFile.junit=../../artifacts/test-results/frontend-junit.xml \
             --outputFile.json=../../artifacts/test-results/frontend-results.json
+      - name: Run electron tests with coverage
+        if: matrix.gate == 'test' && contains(steps.affected_tests.outputs.workspaces, 'electron')
+        run: |
+          timeout 20m npm run test:coverage -w packages/electron -- \
+            --reporter=default \
+            --reporter=junit \
+            --reporter=json \
+            --outputFile.junit=../../artifacts/test-results/electron-junit.xml \
+            --outputFile.json=../../artifacts/test-results/electron-results.json
       - name: Summarize test reports
         if: always() && matrix.gate == 'test'
         run: node scripts/ci/summarize-test-results.mjs artifacts/test-results

@@ -24,4 +24,11 @@ describe("merge-gate workflow", () => {
     expect(workflow).toContain("node scripts/ci/summarize-test-results.mjs artifacts/test-results");
     expect(workflow).toContain("merge-gate-test-reports-run-${{ github.run_id }}");
   });
+
+  it("runs electron coverage when the electron workspace is affected", () => {
+    const workflow = readFileSync(workflowPath, "utf-8");
+    expect(workflow).toContain("Run electron tests with coverage");
+    expect(workflow).toContain("test:coverage -w packages/electron");
+    expect(workflow).toContain("electron-junit.xml");
+  });
 });

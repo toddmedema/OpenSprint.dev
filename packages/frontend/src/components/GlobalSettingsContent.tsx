@@ -344,6 +344,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
           setTodoistRedirectUri(res.todoistOAuth.redirectUri ?? "");
         }
         setShowNotificationDotInMenuBar(res.showNotificationDotInMenuBar !== false);
+        setShowRunningAgentCountInMenuBar(res.showRunningAgentCountInMenuBar !== false);
         setPreferredEditor(res.preferredEditor ?? "auto");
         const nextSimple = res.simpleComplexityAgent ?? DEFAULT_AGENT_CONFIG;
         const nextComplex = res.complexComplexityAgent ?? DEFAULT_AGENT_CONFIG;
