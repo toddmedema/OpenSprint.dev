@@ -57,13 +57,18 @@ export function Toast({
         <button
           key={a.label}
           type="button"
-          onClick={a.onClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            a.onClick();
+          }}
           className="shrink-0 text-sm font-semibold underline underline-offset-2 opacity-90 hover:opacity-100"
         >
           {a.label}
         </button>
       ))}
-      <DismissButton onDismiss={onDismiss} variant="muted" />
+      <span className="shrink-0">
+        <DismissButton onDismiss={onDismiss} variant="muted" />
+      </span>
     </div>
   );
 }

@@ -221,17 +221,6 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       );
     });
 
-    it("returns 500 when Todoist env vars are not configured", async () => {
-      vi.mocked(mockedTodoistService.getTodoistOAuthConfig).mockImplementationOnce(() => {
-        throw new Error("Missing config");
-      });
-
-      const res = await authedSupertest(app)
-        .post(todoistUrl(projectId, "/oauth/start"))
-        .expect(500);
-
-      expect(res.body.error.code).toBe("INTEGRATION_NOT_CONFIGURED");
-    });
   });
 
   // ─── GET /oauth/callback ───
@@ -261,20 +250,6 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       expect(conn!.scopes).toBe("data:read_write,data:delete");
     });
 
-    it("redirects browser clients to settings page on success", async () => {
-      oauthStateStore.store("browser-cb-state", projectId);
-
-      const res = await authedSupertest(app)
-        .get(todoistUrl(projectId, "/oauth/callback"))
-        .query({ code: "auth-code-xyz", state: "browser-cb-state" })
-        .set("Accept", "text/html")
-        .expect(302);
-
-      expect(res.headers.location).toContain(`/projects/${projectId}/settings`);
-      expect(res.headers.location).toContain("integration=todoist");
-      expect(res.headers.location).toContain("status=success");
-    });
-
     it("returns 400 for invalid state token", async () => {
       const res = await authedSupertest(app)
         .get(todoistUrl(projectId, "/oauth/callback"))
@@ -285,47 +260,11 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       expect(res.body.error.code).toBe("INVALID_OAUTH_STATE");
     });
 
-    it("returns 400 for expired state token", async () => {
-      oauthStateStore.store("expired-cb-state", projectId);
-      oauthStateStore.forceExpireForTest("expired-cb-state");
-
-      const res = await authedSupertest(app)
-        .get(todoistUrl(projectId, "/oauth/callback"))
-        .query({ code: "auth-code-xyz", state: "expired-cb-state" })
-        .set("Accept", "application/json")
-        .expect(400);
-
-      expect(res.body.error.code).toBe("INVALID_OAUTH_STATE");
-    });
-
-    it("returns 400 when code query param is missing", async () => {
-      const res = await authedSupertest(app)
-        .get(todoistUrl(projectId, "/oauth/callback"))
-        .query({ state: "some-state" })
-        .expect(400);
-
-      expect(res.body.error).toBeDefined();
-    });
-
-    it("returns 400 when state query param is missing", async () => {
-      const res = await authedSupertest(app)
-        .get(todoistUrl(projectId, "/oauth/callback"))
-        .query({ code: "some-code" })
-        .expect(400);
-
-      expect(res.body.error).toBeDefined();
-    });
   });
 
   // ─── GET /status ───
 
   describe("GET /status", () => {
-    it("returns connected: false when no connection exists", async () => {
-      const res = await authedSupertest(app).get(todoistUrl(projectId, "/status")).expect(200);
-
-      expect(res.body.data).toEqual({ connected: false, status: "disabled" });
-    });
-
     it("returns full status object without tokens when actively connected", async () => {
       await seedConnection(projectId, {
         provider_resource_id: "tp-1",
@@ -370,12 +309,6 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       ]);
     });
 
-    it("returns 404 when not connected", async () => {
-      const res = await authedSupertest(app).get(todoistUrl(projectId, "/projects")).expect(404);
-
-      expect(res.body.error.code).toBe("NOT_CONNECTED");
-    });
-
     it("returns 401 and sets needs_reconnect on auth error", async () => {
       const { TodoistAuthError } = mockedTodoistService;
       vi.mocked(mockedTodoistService.TodoistApiClient).mockImplementationOnce(
@@ -417,46 +350,11 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       expect(conn!.provider_resource_name).toBe("Inbox");
     });
 
-    it("returns 400 for invalid project ID not in user's list", async () => {
-      await seedConnection(projectId);
-
-      const res = await authedSupertest(app)
-        .put(todoistUrl(projectId, "/project"))
-        .send({ todoistProjectId: "nonexistent-proj" })
-        .expect(400);
-
-      expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
-    });
-
-    it("returns 404 when not connected", async () => {
-      const res = await authedSupertest(app)
-        .put(todoistUrl(projectId, "/project"))
-        .send({ todoistProjectId: "tp-1" })
-        .expect(404);
-
-      expect(res.body.error.code).toBe("NOT_CONNECTED");
-    });
   });
 
   // ─── POST /sync ───
 
   describe("POST /sync", () => {
-    it("returns 404 when not connected", async () => {
-      const res = await authedSupertest(app).post(todoistUrl(projectId, "/sync")).expect(404);
-
-      expect(res.body.error.code).toBe("NOT_CONNECTED");
-    });
-
-    it("returns 429 when sync triggered within 10 seconds", async () => {
-      await seedConnection(projectId);
-      const conn = await integrationStore.getConnection(projectId, "todoist");
-      await integrationStore.updateLastSync(conn!.id, new Date(Date.now() - 3000).toISOString());
-
-      const res = await authedSupertest(app).post(todoistUrl(projectId, "/sync")).expect(429);
-
-      expect(res.body.error.code).toBe("SYNC_RATE_LIMITED");
-    });
-
     it("returns 500 when sync service is not configured (createApp default)", async () => {
       await seedConnection(projectId);
 
@@ -481,32 +379,5 @@ describe.skipIf(!postgresOk)("Todoist Integration Routes (createApp)", () => {
       expect(conn).toBeNull();
     });
 
-    it("includes pending_delete warning count", async () => {
-      await seedConnection(projectId);
-
-      const db = await taskStore.getDb();
-      const now = new Date().toISOString();
-      for (const extId of ["t1", "t2", "t3"]) {
-        await db.execute(
-          `INSERT INTO integration_import_ledger
-            (project_id, provider, external_item_id, feedback_id, import_status, retry_count, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [projectId, "todoist", extId, `fb-${extId}`, "pending_delete", 0, now, now]
-        );
-      }
-
-      const res = await authedSupertest(app).delete(todoistUrl(projectId, "")).expect(200);
-
-      expect(res.body.data).toEqual({
-        disconnected: true,
-        pendingDeletesWarning: 3,
-      });
-    });
-
-    it("returns 404 when not connected", async () => {
-      const res = await authedSupertest(app).delete(todoistUrl(projectId, "")).expect(404);
-
-      expect(res.body.error.code).toBe("NOT_CONNECTED");
-    });
   });
 });

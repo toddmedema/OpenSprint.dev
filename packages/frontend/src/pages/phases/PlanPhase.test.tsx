@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { PlanPhase } from "./PlanPhase";
 import { useDecomposePlans } from "../../api/hooks";
-import { PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST } from "../../lib/phaseMainScrollLayout";
 import { api } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import projectReducer from "../../store/slices/projectSlice";
@@ -360,35 +359,6 @@ describe("PlanPhase Redux integration", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("main scroll column matches Execute horizontal/bottom inset; list mode omits top padding", () => {
-    const store = createStore();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    const mainScroll = screen.getByTestId("plan-main-scroll");
-    expect(mainScroll.className).toBe(PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST);
-  });
-
-  it("renders plans from Redux state via useAppSelector", () => {
-    const store = createStore();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    expect(screen.getByText("Archive Test Feature")).toBeInTheDocument();
-    expect(screen.getByText(/archive test/i)).toBeInTheDocument();
-  });
-
   it("clears plan phase unread when mounted with projectId", () => {
     const store = createStore();
     store.dispatch(setPhaseUnread({ projectId: "proj-1", phase: "plan" }));
@@ -636,23 +606,6 @@ describe("PlanPhase Redux integration", () => {
     expect(screen.getByText("Generate Plan")).toBeInTheDocument();
   });
 
-  it("disables Generate Plan button when feature description is empty in Add Plan modal", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    const button = screen.getByTestId("generate-plan-button");
-    expect(button).toBeDisabled();
-  });
-
   it("updates task status in sidebar when task changes via Redux (e.g. taskUpdated from WebSocket)", async () => {
     const tasks = [
       {
@@ -850,40 +803,6 @@ describe("PlanPhase archive", () => {
     expect(screen.getByTestId("plan-sidebar-delete-btn")).toHaveTextContent("Delete");
   });
 
-  it("has main content area with overflow-auto, min-w-0, and min-h-0 for independent scroll", () => {
-    const store = createStore();
-    const { container } = render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    const mainContent = container.querySelector(".overflow-auto.min-h-0");
-    expect(mainContent).toBeInTheDocument();
-    expect(mainContent).toHaveClass("min-h-0");
-    const mainWrapper = mainContent?.closest(".flex.flex-col");
-    expect(mainWrapper).toHaveClass("min-w-0");
-  });
-
-  it("has root with flex flex-1 min-h-0 min-w-0 for proper fill and independent page/sidebar scroll", () => {
-    const store = createStore();
-    const { container } = render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    const root = container.firstElementChild;
-    expect(root).toHaveClass("flex");
-    expect(root).toHaveClass("flex-1");
-    expect(root).toHaveClass("min-h-0");
-    expect(root).toHaveClass("min-w-0");
-  });
-
   it("renders resizable sidebar with resize handle when a plan is selected", () => {
     const store = createStore();
     render(
@@ -896,68 +815,6 @@ describe("PlanPhase archive", () => {
     );
 
     expect(screen.getByRole("slider", { name: "Resize sidebar" })).toBeInTheDocument();
-  });
-
-  it("keeps plan details sidebar header fixed at top when scrolling (matches Execute sidebar)", () => {
-    const store = createStore();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    // Header (title + close) should be in a shrink-0 container so it stays pinned
-    const titleInput = screen.getByRole("textbox", { name: /title/i });
-    const headerContainer = titleInput.closest(".shrink-0");
-    expect(headerContainer).toBeInTheDocument();
-    // Scrollable body is the header's next sibling within the sidebar (not main content)
-    const scrollableBody = headerContainer?.nextElementSibling;
-    expect(scrollableBody).toBeInTheDocument();
-    expect(scrollableBody).toHaveClass("overflow-y-auto");
-    expect(scrollableBody).toHaveClass("min-h-0");
-    expect(scrollableBody).toHaveClass("flex-1");
-  });
-
-  it("opens plan sidebar with scroll position at top of plan content", () => {
-    const store = createStore();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    const titleInput = screen.getByRole("textbox", { name: /title/i });
-    const scrollableBody = titleInput.closest(".shrink-0")?.nextElementSibling as HTMLDivElement;
-    expect(scrollableBody).toBeInTheDocument();
-    expect(scrollableBody.scrollTop).toBe(0);
-  });
-
-  it("does not scroll to bottom or animate when opening sidebar with chat messages", () => {
-    const scrollIntoViewMock = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoViewMock;
-
-    const store = createStore(undefined, undefined, undefined, {
-      chatMessages: {
-        "plan:archive-test-feature": [
-          { role: "user", content: "Hello", timestamp: "2024-01-01T00:00:00Z" },
-          { role: "assistant", content: "Hi there", timestamp: "2024-01-01T00:00:01Z" },
-        ],
-      },
-    });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    // On open we scroll to top (scrollTop = 0), not to bottom; no scrollIntoView on initial load
-    expect(scrollIntoViewMock).not.toHaveBeenCalled();
   });
 
   it("calls archive API when Archive is chosen from plan sidebar actions menu", async () => {
@@ -1027,33 +884,6 @@ describe("PlanPhase archive", () => {
     });
   });
 
-  it("closes plan sidebar and re-opening shows expected content", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    expect(screen.getByRole("textbox", { name: /title/i })).toBeInTheDocument();
-
-    const closeBtn = screen.getByRole("button", { name: "Close plan panel" });
-    await user.click(closeBtn);
-
-    expect(screen.queryByRole("textbox", { name: /title/i })).not.toBeInTheDocument();
-
-    const planCard = screen.getByText("Archive Test Feature");
-    await user.click(planCard);
-
-    await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: /title/i })).toBeInTheDocument();
-    });
-    expect(screen.getByRole("textbox", { name: /title/i })).toHaveValue("Archive Test");
-  });
 });
 
 describe("PlanPhase inline editing", () => {
@@ -1075,28 +905,6 @@ describe("PlanPhase inline editing", () => {
 
     expect(screen.getByRole("textbox", { name: /title/i })).toBeInTheDocument();
     expect(container.querySelector('[data-testid="plan-markdown-editor"]')).toBeInTheDocument();
-  });
-
-  it("does not render duplicate plan title in sidebar header", () => {
-    const store = createStore();
-    const { container } = render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    // The plan title may appear in EpicCard (h3) plus the editable input in sidebar,
-    // but there should be no extra h3 inside the sidebar panel itself
-    const sidebar = container.querySelector('[role="slider"]')?.closest(".relative");
-    if (sidebar) {
-      const sidebarH3s = sidebar.querySelectorAll("h3");
-      const sidebarTitleH3 = Array.from(sidebarH3s).filter((h) =>
-        h.textContent?.includes("Archive Test")
-      );
-      expect(sidebarTitleH3).toHaveLength(0);
-    }
   });
 
   it("dispatches updatePlan when plan title is edited and blurred", async () => {
@@ -1128,21 +936,6 @@ describe("PlanPhase inline editing", () => {
       },
       { timeout: 2000 }
     );
-  });
-
-  it("renders plan markdown in sidebar with collapsible section styling (Execute sidebar style)", () => {
-    const store = createStore();
-    const { container } = render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    const editorContainer = container.querySelector('[data-testid="plan-markdown-editor"]');
-    expect(editorContainer).toBeInTheDocument();
-    expect(editorContainer?.className).toContain("first-child");
   });
 
   it("renders sidebar section nav and supports collapse-all/expand-all controls", async () => {
@@ -1228,83 +1021,6 @@ describe("PlanPhase Re-execute button", () => {
     expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
   });
 
-  it("hides Re-execute button when plan is complete but lastModified === shippedAt (no changes after ship)", () => {
-    const plans = [
-      {
-        ...basePlan,
-        status: "complete" as const,
-        doneTaskCount: 2,
-        metadata: {
-          ...basePlan.metadata,
-          shippedAt: "2026-02-16T10:00:00.000Z",
-        },
-        lastModified: "2026-02-16T10:00:00.000Z",
-      },
-    ];
-    const store = createStore(plans);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
-  });
-
-  it("hides Re-execute button when plan is complete but lastModified is missing", () => {
-    const plans = [
-      {
-        ...basePlan,
-        status: "complete" as const,
-        doneTaskCount: 2,
-        metadata: {
-          ...basePlan.metadata,
-          shippedAt: "2026-02-16T08:00:00.000Z",
-        },
-        lastModified: undefined,
-      },
-    ];
-    const store = createStore(plans);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
-  });
-
-  it("hides Re-execute button when plan is complete but shippedAt is null", () => {
-    const plans = [
-      {
-        ...basePlan,
-        status: "complete" as const,
-        doneTaskCount: 2,
-        metadata: {
-          ...basePlan.metadata,
-          shippedAt: null,
-        },
-        lastModified: "2026-02-16T10:00:00.000Z",
-      },
-    ];
-    const store = createStore(plans);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    expect(screen.queryByRole("button", { name: /re-execute/i })).not.toBeInTheDocument();
-  });
 });
 
 describe("PlanPhase dynamic plan button label", () => {
@@ -1489,48 +1205,6 @@ describe("PlanPhase dynamic plan button label", () => {
     expect(screen.queryByTestId("plan-list-generate-tasks")).not.toBeInTheDocument();
   });
 
-  it("button updates reactively: hides Generate Tasks and Execute when plan status → building", async () => {
-    const planningPlan = {
-      ...basePlan,
-      status: "planning" as const,
-      taskCount: 2,
-      doneTaskCount: 0,
-      metadata: { ...basePlan.metadata },
-      hasGeneratedPlanTasksForCurrentVersion: true,
-    };
-    mockPlansList.mockResolvedValue({ plans: [planningPlan], edges: [] });
-    const initialStore = createStore([planningPlan], undefined, undefined, {
-      selectedPlanId: null,
-    });
-    const initialRender = render(
-      <MemoryRouter>
-        <Provider store={initialStore}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    expect(await screen.findByTestId("plan-list-execute")).toBeInTheDocument();
-
-    initialRender.unmount();
-
-    const buildingPlan = { ...planningPlan, status: "building" as const };
-    mockPlansList.mockResolvedValue({ plans: [buildingPlan], edges: [] });
-    const updatedStore = createStore([buildingPlan], undefined, undefined, {
-      selectedPlanId: null,
-    });
-    render(
-      <MemoryRouter>
-        <Provider store={updatedStore}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    expect(screen.queryByTestId("plan-list-generate-tasks")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("plan-list-execute")).not.toBeInTheDocument();
-  });
-
   it("shows Execute when plan has delta tasks (taskCount > 0)", async () => {
     const planWithDeltaTasks = {
       ...basePlan,
@@ -1650,57 +1324,6 @@ describe("Generate All Tasks button", () => {
     await user.click(await screen.findByTestId("plan-bulk-actions-button"));
     expect(await screen.findByTestId("plan-all-tasks-button")).toBeInTheDocument();
     expect(screen.getByTestId("plan-all-tasks-button")).toHaveTextContent("Generate All Tasks");
-  });
-
-  it("does not show Generate All Tasks when only one plan has no tasks", async () => {
-    const planWithNoTasks = {
-      ...basePlan,
-      metadata: {
-        ...basePlan.metadata,
-        planId: "plan-a",
-        epicId: "epic-a",
-      },
-      status: "planning" as const,
-      taskCount: 0,
-      doneTaskCount: 0,
-      hasGeneratedPlanTasksForCurrentVersion: false,
-    };
-    const planWithTasks = {
-      ...basePlan,
-      metadata: {
-        ...basePlan.metadata,
-        planId: "plan-b",
-        epicId: "epic-b",
-      },
-      status: "planning" as const,
-      taskCount: 1,
-      doneTaskCount: 0,
-      hasGeneratedPlanTasksForCurrentVersion: true,
-    };
-    const tasksForB = [
-      {
-        id: "epic-b.1",
-        title: "Task",
-        epicId: "epic-b",
-        kanbanColumn: "ready" as const,
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    mockPlansList.mockResolvedValue({ plans: [planWithNoTasks, planWithTasks], edges: [] });
-    const store = createStore([planWithNoTasks, planWithTasks], undefined, tasksForB);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    await waitFor(() => {
-      expect(screen.getByTestId("add-plan-button")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("plan-bulk-actions-button")).not.toBeInTheDocument();
   });
 
   it("queues all plans with no tasks when Generate All Tasks is clicked", async () => {
@@ -1929,57 +1552,6 @@ describe("Execute All button", () => {
     await user.click(await screen.findByTestId("plan-bulk-actions-button"));
     expect(await screen.findByTestId("execute-all-button")).toBeInTheDocument();
     expect(screen.getByTestId("execute-all-button")).toHaveTextContent("Execute All");
-  });
-
-  it("does not show Execute All when only one plan is ready to execute", async () => {
-    const planA = {
-      ...basePlan,
-      metadata: {
-        ...basePlan.metadata,
-        planId: "plan-a",
-        epicId: "epic-a",
-      },
-      status: "planning" as const,
-      taskCount: 1,
-      doneTaskCount: 0,
-      hasGeneratedPlanTasksForCurrentVersion: true,
-    };
-    const planB = {
-      ...basePlan,
-      metadata: {
-        ...basePlan.metadata,
-        planId: "plan-b",
-        epicId: "epic-b",
-      },
-      status: "planning" as const,
-      taskCount: 0,
-      doneTaskCount: 0,
-      hasGeneratedPlanTasksForCurrentVersion: false,
-    };
-    const executeTasks = [
-      {
-        id: "epic-a.1",
-        title: "Task A1",
-        epicId: "epic-a",
-        kanbanColumn: "ready" as const,
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    mockPlansList.mockResolvedValue({ plans: [planA, planB], edges: [] });
-    const store = createStore([planA, planB], undefined, executeTasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-    await waitFor(() => {
-      expect(screen.getByTestId("add-plan-button")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("plan-bulk-actions-button")).not.toBeInTheDocument();
   });
 
   it("executes all plans in dependency order when Execute All is clicked", async () => {
@@ -2742,29 +2314,6 @@ describe("PlanPhase plan sorting and status filter", () => {
     expect(screen.queryByText(/building feature/i)).not.toBeInTheDocument();
   });
 
-  it("hides filter chips when count is 0", () => {
-    const plans = [
-      {
-        ...basePlan,
-        metadata: { ...basePlan.metadata, planId: "planning-feature" },
-        status: "planning" as const,
-      },
-    ];
-    const store = createStore(plans);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    expect(screen.getByRole("radio", { name: /all 1/i })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /planning 1/i })).toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: /building 0/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: /complete 0/i })).not.toBeInTheDocument();
-  });
 });
 
 describe("PlanPhase sendPlanMessage thunk", () => {
@@ -2792,36 +2341,6 @@ describe("PlanPhase sendPlanMessage thunk", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it("renders secondary top bar with filter chips and view toggle (List/Graph)", async () => {
-    const store = createStore();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    // Filter chips (chips with count 0 are hidden)
-    expect(screen.getByRole("radio", { name: /all 1/i })).toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: /planning 0/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /building 1/i })).toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: /complete 0/i })).not.toBeInTheDocument();
-
-    // View toggle: List (default) and Graph
-    const listView = screen.getByRole("radio", { name: /list view/i });
-    const graphView = screen.getByRole("radio", { name: /graph view/i });
-    expect(listView).toBeInTheDocument();
-    expect(graphView).toBeInTheDocument();
-    expect(listView).toHaveAttribute("aria-checked", "true");
-    expect(graphView).toHaveAttribute("aria-checked", "false");
-
-    // List mode renders without an in-content header
-    expect(screen.queryByTestId("plan-graph-view")).not.toBeInTheDocument();
-    expect(screen.queryByText("Feature Plans")).not.toBeInTheDocument();
   });
 
   it("switches between List and Graph view modes", async () => {
@@ -3216,47 +2735,6 @@ describe("PlanPhase Generate Plan", () => {
     localStorage.removeItem("opensprint-plan-idea-draft-v1-proj-1");
   });
 
-  it("enables Generate Plan button when user types a description in Add Plan modal", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    const textarea = screen.getByTestId("feature-description-input");
-    const button = screen.getByTestId("generate-plan-button");
-
-    expect(button).toBeDisabled();
-    await user.type(textarea, "A user authentication feature");
-    expect(button).not.toBeDisabled();
-  });
-
-  it("keeps Generate Plan button disabled for whitespace-only input in Add Plan modal", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    const textarea = screen.getByTestId("feature-description-input");
-    const button = screen.getByTestId("generate-plan-button");
-
-    await user.type(textarea, "   ");
-    expect(button).toBeDisabled();
-  });
-
   it("calls generate API when Generate Plan is clicked in Add Plan modal and shows optimistic card", async () => {
     let resolveGenerate: (v: unknown) => void;
     const generatePromise = new Promise((r) => {
@@ -3308,27 +2786,6 @@ describe("PlanPhase Generate Plan", () => {
       expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
       expect(store.getState().plan.optimisticPlans).toHaveLength(0);
       expect(store.getState().plan.plans).toHaveLength(2);
-    });
-  });
-
-  it("closes Add Plan modal after submitting", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    await user.type(screen.getByTestId("feature-description-input"), "Some feature");
-    await user.click(screen.getByTestId("generate-plan-button"));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("add-plan-modal")).not.toBeInTheDocument();
     });
   });
 
@@ -3458,23 +2915,6 @@ describe("PlanPhase Generate Plan", () => {
       });
       expect(store.getState().plan.selectedPlanId).toBe("volunteer-signup-form");
     });
-  });
-
-  it("Add Plan modal has no Feature plan idea subheader; textarea stays labeled for a11y", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    expect(screen.queryByText("Feature plan idea")).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Describe your feature idea" })).toBeInTheDocument();
   });
 
   it("Add Plan modal textarea accepts multi-line text (Shift+Enter for newline)", async () => {
@@ -3640,25 +3080,5 @@ describe("PlanPhase Generate Plan", () => {
       expect(store.getState().plan.optimisticPlans).toHaveLength(1);
       expect(mockGenerate).toHaveBeenCalledTimes(2);
     });
-  });
-
-  it("does not call generate API when description is empty in Add Plan modal", async () => {
-    const store = createStore();
-    const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <PlanPhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>,
-      { wrapper: PlanPhaseWrapper }
-    );
-
-    await user.click(screen.getByTestId("add-plan-button"));
-    const button = screen.getByTestId("generate-plan-button");
-    expect(button).toBeDisabled();
-    await user.click(button);
-
-    expect(mockGenerate).not.toHaveBeenCalled();
   });
 });

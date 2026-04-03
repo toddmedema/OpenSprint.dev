@@ -94,7 +94,7 @@ describe("TodoistIntegrationCard", () => {
       screen.getByText("Import feedback from Todoist tasks into Evaluate")
     ).toBeInTheDocument();
     expect(screen.getByTestId("todoist-connect-btn")).toBeInTheDocument();
-    expect(screen.getByTestId("todoist-connect-btn")).toHaveTextContent("Connect Todoist");
+    expect(screen.getByTestId("todoist-connect-btn")).toHaveTextContent("Connect");
   });
 
   it("starts OAuth flow when Connect button is clicked", async () => {
@@ -250,7 +250,7 @@ describe("TodoistIntegrationCard", () => {
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
     expect(await screen.findByTestId("todoist-reconnect-banner")).toBeInTheDocument();
-    expect(screen.getByTestId("todoist-status-badge")).toHaveTextContent("Needs reconnect");
+    expect(screen.getByTestId("todoist-status-badge")).toHaveTextContent("Needs Reconnect");
     expect(screen.getByTestId("todoist-reconnect-btn")).toBeInTheDocument();
   });
 

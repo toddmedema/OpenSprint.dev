@@ -380,6 +380,12 @@ export class RecoveryService {
         if (resolvedWtPath) recoveredWorktreePaths.push(resolvedWtPath);
       };
 
+      const trackRequeue = () => {
+        requeued.push(taskId);
+        recoveredWorktreeKeys.push(worktreeKey);
+        if (resolvedWtPath) recoveredWorktreePaths.push(resolvedWtPath);
+      };
+
       if (!pidAlive && host.handleCompletedAssignment) {
         const terminalResult = await this.readTerminalAssignmentResult(assignment);
         if (terminalResult) {
@@ -458,7 +464,7 @@ export class RecoveryService {
         assignment.worktreeKey
       );
       await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
-      requeued.push(taskId);
+      trackRequeue();
     }
 
     return { reattached, requeued, worktreeKeys: recoveredWorktreeKeys, worktreePaths: recoveredWorktreePaths };

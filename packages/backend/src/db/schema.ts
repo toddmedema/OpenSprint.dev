@@ -438,6 +438,49 @@ CREATE TABLE IF NOT EXISTS worktree_leases (
 );
 CREATE INDEX IF NOT EXISTS idx_worktree_leases_project ON worktree_leases(project_id);
 CREATE INDEX IF NOT EXISTS idx_worktree_leases_task ON worktree_leases(task_id);
+
+-- Intake items: normalized work items from integration providers
+CREATE TABLE IF NOT EXISTS intake_items (
+    id                  TEXT PRIMARY KEY,
+    project_id          TEXT NOT NULL,
+    provider            TEXT NOT NULL,
+    external_item_id    TEXT NOT NULL,
+    source_ref          TEXT,
+    title               TEXT NOT NULL,
+    body                TEXT,
+    author              TEXT,
+    labels              TEXT DEFAULT '[]',
+    triage_status       TEXT NOT NULL DEFAULT 'new',
+    triage_suggestion   TEXT,
+    converted_feedback_id TEXT,
+    converted_task_id   TEXT,
+    external_created_at TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    UNIQUE (project_id, provider, external_item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_intake_items_project_provider ON intake_items(project_id, provider);
+CREATE INDEX IF NOT EXISTS idx_intake_items_triage_status ON intake_items(project_id, triage_status);
+CREATE INDEX IF NOT EXISTS idx_intake_items_created_at ON intake_items(project_id, created_at);
+
+-- Command runs: audit log for NL command execution
+CREATE TABLE IF NOT EXISTS command_runs (
+    id                    TEXT PRIMARY KEY,
+    project_id            TEXT NOT NULL,
+    actor                 TEXT NOT NULL,
+    raw_input             TEXT NOT NULL,
+    interpreted_command   TEXT,
+    risk_level            TEXT,
+    status                TEXT NOT NULL DEFAULT 'interpreting',
+    preview               TEXT,
+    result                TEXT,
+    idempotency_key       TEXT,
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_command_runs_project ON command_runs(project_id);
+CREATE INDEX IF NOT EXISTS idx_command_runs_project_status ON command_runs(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_command_runs_idempotency ON command_runs(idempotency_key);
 `;
 
 /** SQLite schema: SERIAL -> INTEGER PRIMARY KEY AUTOINCREMENT; ALTER ADD COLUMN IF NOT EXISTS supported in 3.35+. */
@@ -850,6 +893,49 @@ CREATE TABLE IF NOT EXISTS worktree_leases (
 );
 CREATE INDEX IF NOT EXISTS idx_worktree_leases_project ON worktree_leases(project_id);
 CREATE INDEX IF NOT EXISTS idx_worktree_leases_task ON worktree_leases(task_id);
+
+-- Intake items: normalized work items from integration providers
+CREATE TABLE IF NOT EXISTS intake_items (
+    id                  TEXT PRIMARY KEY,
+    project_id          TEXT NOT NULL,
+    provider            TEXT NOT NULL,
+    external_item_id    TEXT NOT NULL,
+    source_ref          TEXT,
+    title               TEXT NOT NULL,
+    body                TEXT,
+    author              TEXT,
+    labels              TEXT DEFAULT '[]',
+    triage_status       TEXT NOT NULL DEFAULT 'new',
+    triage_suggestion   TEXT,
+    converted_feedback_id TEXT,
+    converted_task_id   TEXT,
+    external_created_at TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    UNIQUE (project_id, provider, external_item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_intake_items_project_provider ON intake_items(project_id, provider);
+CREATE INDEX IF NOT EXISTS idx_intake_items_triage_status ON intake_items(project_id, triage_status);
+CREATE INDEX IF NOT EXISTS idx_intake_items_created_at ON intake_items(project_id, created_at);
+
+-- Command runs: audit log for NL command execution
+CREATE TABLE IF NOT EXISTS command_runs (
+    id                    TEXT PRIMARY KEY,
+    project_id            TEXT NOT NULL,
+    actor                 TEXT NOT NULL,
+    raw_input             TEXT NOT NULL,
+    interpreted_command   TEXT,
+    risk_level            TEXT,
+    status                TEXT NOT NULL DEFAULT 'interpreting',
+    preview               TEXT,
+    result                TEXT,
+    idempotency_key       TEXT,
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_command_runs_project ON command_runs(project_id);
+CREATE INDEX IF NOT EXISTS idx_command_runs_project_status ON command_runs(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_command_runs_idempotency ON command_runs(idempotency_key);
 `;
 
 /** Strip leading comment-only and empty lines so statements starting with "-- Comment\nCREATE ..." are executed. */

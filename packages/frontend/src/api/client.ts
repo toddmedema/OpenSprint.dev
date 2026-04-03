@@ -53,6 +53,12 @@ import type {
   TodoistProjectInfo,
   TodoistProjectSelectionRequest,
   TodoistSyncResult,
+  IntakeItem,
+  CommandInterpretation,
+  CommandIntent,
+  CommandPreview,
+  CommandExecutionResult,
+  CommandRun,
 } from "@opensprint/shared";
 import type { TaskListResponse } from "./taskList";
 import type { PrdProposedDiffResponse, PrdVersionDiffResponse } from "./prdDiffTypes";
@@ -854,5 +860,52 @@ export const api = {
           { method: "DELETE" }
         ),
     },
+  },
+
+  // ─── Intake ───
+  intake: {
+    list: (projectId: string, params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+      return request<{ items: IntakeItem[]; total: number }>(`/projects/${projectId}/intake${qs}`);
+    },
+    get: (projectId: string, itemId: string) =>
+      request<IntakeItem>(`/projects/${projectId}/intake/${itemId}`),
+    convert: (projectId: string, itemId: string, body: { action: string; linkTaskId?: string }) =>
+      request<{ intakeItemId: string; action: string }>(`/projects/${projectId}/intake/${itemId}/convert`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    ignore: (projectId: string, itemId: string) =>
+      request<IntakeItem>(`/projects/${projectId}/intake/${itemId}/ignore`, { method: "POST" }),
+    bulk: (projectId: string, body: { itemIds: string[]; action: string; dryRun?: boolean }) =>
+      request<{ processed: number; errors: number; results: unknown[] }>(`/projects/${projectId}/intake/bulk`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  },
+
+  // ─── Commands ───
+  commands: {
+    interpret: (projectId: string, input: string) =>
+      request<{ interpretation: CommandInterpretation; commandRunId: string }>(
+        `/projects/${projectId}/commands/interpret`,
+        { method: "POST", body: JSON.stringify({ input }) }
+      ),
+    preview: (projectId: string, intent: CommandIntent) =>
+      request<{ preview: CommandPreview; commandRunId: string }>(
+        `/projects/${projectId}/commands/preview`,
+        { method: "POST", body: JSON.stringify({ intent }) }
+      ),
+    apply: (projectId: string, commandRunId: string, idempotencyKey?: string) =>
+      request<{ result: CommandExecutionResult; commandRunId: string }>(
+        `/projects/${projectId}/commands/apply`,
+        { method: "POST", body: JSON.stringify({ commandRunId, idempotencyKey }) }
+      ),
+    history: (projectId: string, params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+      return request<{ runs: CommandRun[]; total: number }>(`/projects/${projectId}/commands/history${qs}`);
+    },
+    getRun: (projectId: string, runId: string) =>
+      request<CommandRun>(`/projects/${projectId}/commands/${runId}`),
   },
 };

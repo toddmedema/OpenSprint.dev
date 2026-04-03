@@ -1466,5 +1466,54 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       expect(pruneExcludeKeys.has("epic_shared")).toBe(true);
       expect(pruneExcludePaths.has(path.resolve(epicWtPath))).toBe(true);
     });
+
+    it("propagates requeued shared epic worktree key/path to prune exclusion sets", async () => {
+      mockCanCleanupLease.mockResolvedValue(false);
+
+      const epicWtPath = path.join(tmpDir, "epic_requeue_shared");
+      await fs.mkdir(epicWtPath, { recursive: true });
+
+      const requeueHost = {
+        getSlottedTaskIds: () => [] as string[],
+        getActiveAgentIds: () => [] as string[],
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "task-epic-requeue", status: "in_progress", assignee: "Agent" } as never,
+      ]);
+
+      mockReadHeartbeat.mockResolvedValue(null);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        {
+          taskId: "task-epic-requeue",
+          assignment: makeAssignment("task-epic-requeue", epicWtPath, {
+            worktreeKey: "epic_requeue_shared",
+          }),
+        },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, requeueHost, { includeGupp: true });
+
+      expect(vi.mocked(taskStore.update)).toHaveBeenCalledWith(
+        "proj-1",
+        "task-epic-requeue",
+        expect.objectContaining({ status: "open", assignee: "" })
+      );
+      expect(mockPruneOrphanWorktrees).toHaveBeenCalledWith(
+        tmpDir,
+        "proj-1",
+        expect.any(Set),
+        expect.objectContaining({ has: expect.any(Function) }),
+        expect.objectContaining({ has: expect.any(Function) }),
+        expect.anything()
+      );
+
+      const pruneCall = mockPruneOrphanWorktrees.mock.calls[0];
+      const pruneExcludeKeys: Set<string> = pruneCall[3];
+      const pruneExcludePaths: Set<string> = pruneCall[4];
+      expect(pruneExcludeKeys.has("epic_requeue_shared")).toBe(true);
+      expect(pruneExcludePaths.has(path.resolve(epicWtPath))).toBe(true);
+    });
   });
 });

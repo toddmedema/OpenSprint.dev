@@ -19,7 +19,7 @@ import { SaveIndicator } from "./SaveIndicator";
 import { SettingsTopBar } from "./settings/SettingsTopBar";
 import { SettingsSubTabsBar, type SettingsSubTab } from "./settings/SettingsSubTabsBar";
 import { WorkflowSettingsContent } from "./settings/WorkflowSettingsContent";
-import { TodoistIntegrationCard } from "./settings/TodoistIntegrationCard";
+import { IntegrationsSettingsContent } from "./settings/IntegrationsSettingsContent";
 import { api, isConnectionError } from "../api/client";
 import type {
   Project,
@@ -2164,7 +2164,7 @@ export const ProjectSettingsModal = forwardRef<ProjectSettingsModalRef, ProjectS
 
                 {activeTab === "integrations" && (
                   <div className="space-y-4" data-testid="integrations-tab-content">
-                    <TodoistIntegrationCard projectId={project.id} />
+                    <IntegrationsSettingsContent projectId={project.id} />
                   </div>
                 )}
               </>

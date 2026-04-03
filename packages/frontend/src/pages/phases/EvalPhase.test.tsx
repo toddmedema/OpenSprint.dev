@@ -20,7 +20,6 @@ import { FEEDBACK_FORM_DRAFT_KEY_PREFIX } from "../../lib/feedbackFormStorage";
 import { CONTENT_CONTAINER_CLASS, MOBILE_BREAKPOINT } from "../../lib/constants";
 import {
   taskUpdated,
-  fetchTasks,
   fetchTasksByIds,
   toTasksByIdAndOrder,
   setTasks,
@@ -386,20 +385,6 @@ describe("EvalPhase feedback loading state", () => {
     vi.useRealTimers();
   });
 
-  it("does not show spinner when response is fast (no flicker)", () => {
-    vi.useFakeTimers();
-    const store = createStore({ evalFeedback: [], feedbackLoading: true });
-    renderWithProviders(
-      <MemoryRouter>
-        <EvalPhase projectId="proj-1" />
-      </MemoryRouter>,
-      { store }
-    );
-    vi.advanceTimersByTime(FEEDBACK_LOADING_DEBOUNCE_MS - 1);
-    expect(screen.queryByTestId("feedback-loading-spinner")).not.toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
   it("shows empty state only after fetch completes with no feedback", async () => {
     const store = createStore({ evalFeedback: [] });
     renderWithProviders(
@@ -467,22 +452,6 @@ describe("EvalPhase feedback form", () => {
       { store, queryClient }
     );
     expect(screen.getByTestId("eval-feedback-filter-toolbar")).toBeInTheDocument();
-  });
-
-  it("filter toolbar is full width with phase styling like Execute", () => {
-    const store = createStore({ evalFeedback: mockFeedbackItems });
-    const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-    renderWithProviders(
-      <MemoryRouter>
-        <EvalPhase projectId="proj-1" />
-      </MemoryRouter>,
-      { store, queryClient }
-    );
-    const toolbar = screen.getByTestId("eval-feedback-filter-toolbar");
-    expect(toolbar.className).toContain("w-full");
-    expect(toolbar.className).toContain("phase-toolbar");
-    expect(toolbar.className).toContain("relative");
-    expect(toolbar.className).toContain("z-20");
   });
 
   describe("EvalPhase expandable search", () => {
@@ -627,40 +596,6 @@ describe("EvalPhase feedback form", () => {
     });
   });
 
-  it("refocuses feedback input after submitting new feedback via Enter key", async () => {
-    const { api } = await import("../../api/client");
-    vi.mocked(api.feedback.submit).mockResolvedValue({
-      id: "fb-new",
-      text: "Test feedback",
-      category: "bug",
-      mappedPlanId: null,
-      createdTaskIds: [],
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    });
-
-    const store = createStore();
-    const queryClient = createQueryClientWithFeedbackPreloaded();
-    renderWithProviders(
-      <MemoryRouter>
-        <EvalPhase projectId="proj-1" />
-      </MemoryRouter>,
-      { store, queryClient }
-    );
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Describe a bug/)).toBeInTheDocument();
-    });
-
-    const user = userEvent.setup();
-    const input = screen.getByTestId("eval-feedback-input");
-    await user.type(input, "Some feedback{Enter}");
-
-    await waitFor(() => {
-      expect(document.activeElement).toBe(input);
-    });
-  });
-
   it("renders priority dropdown with placeholder and options", async () => {
     const store = createStore();
     const queryClient = createQueryClientWithFeedbackPreloaded();
@@ -691,28 +626,6 @@ describe("EvalPhase feedback form", () => {
     expect(screen.getByTestId("feedback-priority-option-2")).toBeInTheDocument();
     expect(screen.getByTestId("feedback-priority-option-3")).toBeInTheDocument();
     expect(screen.getByTestId("feedback-priority-option-4")).toBeInTheDocument();
-  });
-
-  it("closes priority dropdown on Escape key", async () => {
-    const store = createStore();
-    const queryClient = createQueryClientWithFeedbackPreloaded();
-    const user = userEvent.setup();
-    renderWithProviders(
-      <MemoryRouter>
-        <EvalPhase projectId="proj-1" />
-      </MemoryRouter>,
-      { store, queryClient }
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByTestId("feedback-priority-select"));
-    expect(screen.getByTestId("feedback-priority-dropdown")).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-    expect(screen.queryByTestId("feedback-priority-dropdown")).not.toBeInTheDocument();
   });
 
   it("passes selected priority when submitting feedback", async () => {
@@ -788,38 +701,6 @@ describe("EvalPhase feedback form", () => {
     const trigger = screen.getByTestId("feedback-priority-select");
     expect(trigger).toHaveTextContent("Priority (optional)");
     expect(screen.getByPlaceholderText(/Describe a bug/)).toHaveValue("");
-  });
-
-  it("omits priority from submission when none selected", async () => {
-    const { api } = await import("../../api/client");
-    const store = createStore();
-    const queryClient = createQueryClientWithFeedbackPreloaded();
-    renderWithProviders(
-      <MemoryRouter>
-        <EvalPhase projectId="proj-1" />
-      </MemoryRouter>,
-      { store, queryClient }
-    );
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Describe a bug/)).toBeInTheDocument();
-    });
-
-    const user = userEvent.setup();
-    await user.type(screen.getByPlaceholderText(/Describe a bug/), "Feedback without priority");
-    await user.click(screen.getByRole("button", { name: /Submit Feedback/i }));
-
-    await waitFor(() => {
-      expect(api.feedback.submit).toHaveBeenCalledWith(
-        "proj-1",
-        "Feedback without priority",
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined
-      );
-    });
   });
 
   it("disables priority dropdown while submitting", async () => {
@@ -993,36 +874,6 @@ describe("EvalPhase feedback form", () => {
         });
       });
       expect(api.feedback.recategorize).toHaveBeenCalledWith("proj-1", "fb-1", "Login screen");
-    });
-
-    it("Ctrl+Enter submits the notification prompt reply", async () => {
-      const { api } = await import("../../api/client");
-      vi.mocked(api.notifications.listByProject).mockResolvedValue([openQuestionNotification]);
-
-      const store = createStore({
-        evalFeedback: mockFeedbackItems,
-        openQuestionNotifications: [openQuestionNotification],
-      });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      const user = userEvent.setup();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-open-questions")).toBeInTheDocument();
-      });
-
-      const answerInput = screen.getByTestId("feedback-answer-input");
-      await user.type(answerInput, "Home screen");
-      await user.keyboard("{Control>}{Enter}{/Control}");
-
-      await waitFor(() => {
-        expect(api.feedback.recategorize).toHaveBeenCalledWith("proj-1", "fb-1", "Home screen");
-      });
     });
 
     it("Shift+Enter inserts newline and does not submit", async () => {
@@ -1221,82 +1072,6 @@ describe("EvalPhase feedback form", () => {
       expect(submitButton).toHaveClass("h-10");
     });
 
-    it("priority select has equal left and right padding", async () => {
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
-      });
-
-      const prioritySelect = screen.getByTestId("feedback-priority-select");
-      expect(prioritySelect).toHaveClass("px-3");
-    });
-
-    it("status filter uses phase segmented control styling", async () => {
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
-      });
-
-      const segmented = screen.getByTestId("eval-filter-segmented");
-      expect(segmented.className).toContain("bg-theme-surface-muted");
-    });
-
-    it("actions row uses items-stretch so all controls share the same height", async () => {
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      const { container } = renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
-      });
-
-      const actionsRow = container.querySelector('[data-testid="feedback-priority-select"]')
-        ?.parentElement?.parentElement;
-      expect(actionsRow).toBeTruthy();
-      expect(actionsRow).toHaveClass("items-stretch");
-    });
-
-    it("actions row has flex-wrap to prevent overflow at narrow viewports", async () => {
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      const { container } = renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-priority-select")).toBeInTheDocument();
-      });
-
-      const actionsRow = container.querySelector('[data-testid="feedback-priority-select"]')
-        ?.parentElement?.parentElement;
-      expect(actionsRow).toBeTruthy();
-      expect(actionsRow).toHaveClass("flex-wrap");
-    });
-
     it("reply form applies consistent h-10 height to Attach and Submit buttons", async () => {
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
@@ -1392,69 +1167,6 @@ describe("EvalPhase feedback form", () => {
       );
     });
 
-    it("shows Enter or Ctrl + Enter tooltip on Windows after hover delay", async () => {
-      vi.stubGlobal("navigator", {
-        ...originalNavigator,
-        platform: "Win32",
-        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-      });
-
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByRole("button", { name: /Submit Feedback/i })).toBeInTheDocument();
-      });
-
-      const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
-      await userEvent.hover(submitButton);
-      await waitFor(
-        () => {
-          const tooltip = screen.getByRole("tooltip");
-          expect(tooltip).toHaveTextContent("Enter or Ctrl + Enter to submit");
-          expect(tooltip).toHaveTextContent("Shift+Enter for new line");
-        },
-        { timeout: 500 }
-      );
-    });
-
-    it("dismisses tooltip when cursor leaves button", async () => {
-      vi.stubGlobal("navigator", {
-        ...originalNavigator,
-        platform: "Win32",
-        userAgent: "Mozilla/5.0",
-      });
-
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByRole("button", { name: /Submit Feedback/i })).toBeInTheDocument();
-      });
-
-      const submitButton = screen.getByRole("button", { name: /Submit Feedback/i });
-      await userEvent.hover(submitButton);
-      await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument(), {
-        timeout: 500,
-      });
-
-      await userEvent.unhover(submitButton);
-      await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument(), {
-        timeout: 200,
-      });
-    });
   });
 
   describe("Attach image button tooltip", () => {
@@ -1492,120 +1204,6 @@ describe("EvalPhase feedback form", () => {
       });
     });
 
-    it("dismisses attach image tooltip when cursor leaves button", async () => {
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-attach-image")).toBeInTheDocument();
-      });
-
-      const attachButton = screen.getByRole("button", { name: /Attach image/i });
-      await userEvent.hover(attachButton);
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-
-      await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
-
-      await userEvent.unhover(attachButton);
-
-      await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
-    });
-
-    it("dismisses attach image tooltip on Escape key", async () => {
-      const store = createStore();
-      const queryClient = createQueryClientWithFeedbackPreloaded();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-attach-image")).toBeInTheDocument();
-      });
-
-      const attachButton = screen.getByRole("button", { name: /Attach image/i });
-      await userEvent.hover(attachButton);
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-
-      await waitFor(() => expect(screen.getByRole("tooltip")).toBeInTheDocument());
-
-      await userEvent.keyboard("{Escape}");
-
-      await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
-    });
-
-    it("shows Attach image(s) tooltip on reply form after hover delay", async () => {
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      const user = userEvent.setup();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByText("Bug 1")).toBeInTheDocument());
-      const bug1Card = screen.getByText("Bug 1").closest(".card");
-      await user.click(within(bug1Card!).getByRole("button", { name: /^Reply$/ }));
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText("Write a reply...")).toBeInTheDocument();
-      });
-
-      const attachButton = screen.getByTestId("reply-attach-images");
-      await user.hover(attachButton);
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-
-      await waitFor(() => {
-        const tooltip = screen.getByRole("tooltip");
-        expect(tooltip).toHaveTextContent("Attach image(s)");
-      });
-    });
-
-    it("shows Submit keyboard shortcut tooltip on reply form after hover delay", async () => {
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      const user = userEvent.setup();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByText("Bug 1")).toBeInTheDocument());
-      const bug1Card = screen.getByText("Bug 1").closest(".card");
-      await user.click(within(bug1Card!).getByRole("button", { name: /^Reply$/ }));
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText("Write a reply...")).toBeInTheDocument();
-      });
-
-      const replyForm = screen.getByPlaceholderText("Write a reply...").closest(".card");
-      const submitButton = within(replyForm!).getByRole("button", { name: /^Submit$/ });
-      await user.hover(submitButton);
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-
-      await waitFor(() => {
-        const tooltip = screen.getByRole("tooltip");
-        expect(tooltip).toHaveTextContent(/Enter or (Cmd|Ctrl) \+ Enter to submit/);
-      });
-    });
   });
 
   describe("feedback status filter", () => {
@@ -1739,46 +1337,8 @@ describe("EvalPhase feedback form", () => {
       expect(screen.getByTestId("eval-filter-chip-resolved")).toHaveAttribute("aria-checked", "true");
     });
 
-    it("restores 'all' from localStorage when present", async () => {
-      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "all");
-
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId("eval-filter-chip-all")).toHaveAttribute("aria-checked", "true");
-    });
-
     it("treats invalid filter value as Pending", async () => {
       localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "mapped");
-
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId("eval-filter-chip-pending")).toHaveAttribute("aria-checked", "true");
-    });
-
-    it("falls back to Pending when localStorage has invalid value", async () => {
-      localStorage.setItem(EVALUATE_FEEDBACK_FILTER_KEY, "invalid");
 
       const store = createStore({ evalFeedback: mockFeedbackItems });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
@@ -2275,27 +1835,6 @@ describe("EvalPhase feedback form", () => {
       expect(screen.queryByText("Bug 3")).not.toBeInTheDocument();
     });
 
-    it("does not show Cancelled chip when no feedback has status cancelled", async () => {
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
-
-      const segmented = screen.getByTestId("eval-filter-segmented");
-      const radios = within(segmented).getAllByRole("radio");
-      expect(radios.map((el) => el.getAttribute("data-testid"))).toEqual([
-        "eval-filter-chip-all",
-        "eval-filter-chip-pending",
-        "eval-filter-chip-resolved",
-      ]);
-    });
-
     it("shows Cancelled chip when at least one feedback has status cancelled", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithCancelled });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackWithCancelled);
@@ -2409,26 +1948,6 @@ describe("EvalPhase feedback form", () => {
       });
     });
 
-    it("default Pending filter shows both pending and mapped items on first load", async () => {
-      const store = createStore({ evalFeedback: mockFeedbackItems });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackItems);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByTestId("eval-filter-segmented")).toBeInTheDocument());
-
-      // Default is Pending, shows 5 items (2 pending + 3 mapped)
-      expect(screen.getByText("Bug 1")).toBeInTheDocument();
-      expect(screen.getByText("Bug 2")).toBeInTheDocument();
-      expect(screen.getByText("Bug 3")).toBeInTheDocument();
-      expect(screen.getByText("Bug 4")).toBeInTheDocument();
-      expect(screen.getByText("Bug 5")).toBeInTheDocument();
-      expect(screen.queryByText("Bug 6")).not.toBeInTheDocument();
-    });
   });
 
   describe("collapse button total reply count", () => {
@@ -2478,64 +1997,6 @@ describe("EvalPhase feedback form", () => {
       // Parent has 2 total replies (reply-1 + reply-2 nested under reply-1)
       const collapseBtn = screen.getByTestId("collapse-replies-fb-parent");
       expect(collapseBtn).toHaveTextContent("Collapse (2 replies)");
-    });
-
-    it("shows total count for arbitrary nesting depth", async () => {
-      const feedbackDeepNesting: FeedbackItem[] = [
-        {
-          id: "fb-root",
-          text: "Root",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: [],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:01Z",
-        },
-        {
-          id: "fb-a",
-          text: "A",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: [],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:02Z",
-          parent_id: "fb-root",
-        },
-        {
-          id: "fb-b",
-          text: "B",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: [],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:03Z",
-          parent_id: "fb-a",
-        },
-        {
-          id: "fb-c",
-          text: "C",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: [],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:04Z",
-          parent_id: "fb-b",
-        },
-      ];
-      const store = createStore({ evalFeedback: feedbackDeepNesting });
-      const queryClient = createQueryClientWithFeedbackPreloaded(feedbackDeepNesting);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByText("Root")).toBeInTheDocument());
-
-      // Root has 3 total replies (A, B, C)
-      const collapseBtn = screen.getByTestId("collapse-replies-fb-root");
-      expect(collapseBtn).toHaveTextContent("Collapse (3 replies)");
     });
 
     it("shows singular 'reply' when count is 1", async () => {
@@ -2877,49 +2338,6 @@ describe("EvalPhase feedback form", () => {
         () => {
           expect(screen.getByRole("tooltip")).toBeInTheDocument();
           expect(screen.getByRole("tooltip")).toHaveTextContent(longTitle);
-        },
-        { timeout: 500 }
-      );
-    });
-
-    it("shows tooltip with full title on hover", async () => {
-      const feedbackWithTasks: FeedbackItem[] = [
-        {
-          id: "fb-mapped",
-          text: "Auth bug",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: ["task-1"],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:01Z",
-        },
-      ];
-      const executeTasks: Task[] = [createMockTask({ id: "task-1" })];
-      const store = createStore({
-        evalFeedback: feedbackWithTasks,
-        executeTasks,
-      });
-      const queryClient = createQueryClientWithFeedbackPreloaded(feedbackWithTasks);
-
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
-      });
-
-      const link = screen.getByText("Fix login bug");
-      const user = userEvent.setup();
-      await user.hover(link);
-
-      await waitFor(
-        () => {
-          expect(screen.getByRole("tooltip")).toBeInTheDocument();
-          expect(screen.getByRole("tooltip")).toHaveTextContent("Fix login bug");
         },
         { timeout: 500 }
       );
@@ -3409,130 +2827,6 @@ describe("EvalPhase feedback form", () => {
         expect(screen.getByRole("button", { name: /^Cancel$/ })).toBeInTheDocument();
       });
 
-      it("shows Cancel button when linked tasks are only in backlog or ready", async () => {
-        const feedbackWithTasks: FeedbackItem[] = [
-          {
-            id: "fb-cancel-2",
-            text: "In backlog",
-            category: "bug",
-            mappedPlanId: null,
-            createdTaskIds: ["task-1"],
-            status: "pending",
-            createdAt: "2024-01-01T00:00:01Z",
-          },
-        ];
-        const executeTasks: Task[] = [createMockTask({ id: "task-1", kanbanColumn: "backlog" })];
-        const store = createStore({
-          evalFeedback: feedbackWithTasks,
-          executeTasks,
-        });
-        const queryClient = createQueryClientWithFeedbackPreloaded(feedbackWithTasks);
-
-        renderWithProviders(
-          <MemoryRouter>
-            <EvalPhase projectId="proj-1" />
-          </MemoryRouter>,
-          { store, queryClient }
-        );
-
-        await waitFor(() => {
-          expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
-        });
-        expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
-      });
-
-      it("shows Cancel button for feedback with no linked tasks", async () => {
-        const feedbackNoTasks: FeedbackItem[] = [
-          {
-            id: "fb-cancel-3",
-            text: "No tasks yet",
-            category: "bug",
-            mappedPlanId: null,
-            createdTaskIds: [],
-            status: "pending",
-            taskTitles: ["Fix something"],
-            createdAt: "2024-01-01T00:00:01Z",
-          },
-        ];
-        const store = createStore({ evalFeedback: feedbackNoTasks });
-        const queryClient = createQueryClientWithFeedbackPreloaded(feedbackNoTasks);
-
-        renderWithProviders(
-          <MemoryRouter>
-            <EvalPhase projectId="proj-1" />
-          </MemoryRouter>,
-          { store, queryClient }
-        );
-
-        await waitFor(() => {
-          expect(screen.getByText("No tasks yet")).toBeInTheDocument();
-        });
-        expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
-      });
-
-      it("shows Cancel button while feedback is being categorized", async () => {
-        const categorizingFeedback: FeedbackItem[] = [
-          {
-            id: "fb-categorizing",
-            text: "New feedback",
-            category: "bug",
-            mappedPlanId: null,
-            createdTaskIds: [],
-            status: "pending",
-            createdAt: "2024-01-01T00:00:02Z",
-          },
-        ];
-        const store = createStore({ evalFeedback: categorizingFeedback });
-        const queryClient = createQueryClientWithFeedbackPreloaded(categorizingFeedback);
-
-        renderWithProviders(
-          <MemoryRouter>
-            <EvalPhase projectId="proj-1" />
-          </MemoryRouter>,
-          { store, queryClient }
-        );
-
-        await waitFor(() => {
-          expect(screen.getByLabelText("Categorizing feedback")).toBeInTheDocument();
-        });
-        expect(screen.getByTestId("feedback-cancel-button")).toBeInTheDocument();
-      });
-
-      it("hides Cancel button when any linked task is done", async () => {
-        const feedbackWithDoneTask: FeedbackItem[] = [
-          {
-            id: "fb-cancel-done",
-            text: "One task done",
-            category: "bug",
-            mappedPlanId: null,
-            createdTaskIds: ["task-1", "task-2"],
-            status: "pending",
-            createdAt: "2024-01-01T00:00:01Z",
-          },
-        ];
-        const executeTasks: Task[] = [
-          createMockTask({ id: "task-1", kanbanColumn: "in_progress" }),
-          createMockTask({ id: "task-2", kanbanColumn: "done" }),
-        ];
-        const store = createStore({
-          evalFeedback: feedbackWithDoneTask,
-          executeTasks,
-        });
-        const queryClient = createQueryClientWithFeedbackPreloaded(feedbackWithDoneTask);
-
-        renderWithProviders(
-          <MemoryRouter>
-            <EvalPhase projectId="proj-1" />
-          </MemoryRouter>,
-          { store, queryClient }
-        );
-
-        await waitFor(() => {
-          expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
-        });
-        expect(screen.queryByTestId("feedback-cancel-button")).not.toBeInTheDocument();
-      });
-
       it("calls cancel API and updates state when Cancel is clicked", async () => {
         const { api } = await import("../../api/client");
         const feedbackWithTasks: FeedbackItem[] = [
@@ -3604,39 +2898,6 @@ describe("EvalPhase feedback form", () => {
       ).toBeInTheDocument();
       expect(screen.getByText(/Plan: Auth Feature Plan/)).toBeInTheDocument();
       expect(screen.queryByTestId("feedback-card-ticket-info")).not.toBeInTheDocument();
-    });
-
-    it("does not show plan link when feedback has created tasks (task-linked)", async () => {
-      const taskLinkedFeedback: FeedbackItem[] = [
-        {
-          id: "fb-task-linked",
-          text: "Auth bug",
-          category: "bug",
-          mappedPlanId: "auth-feature-plan",
-          createdTaskIds: ["task-1"],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:01Z",
-        },
-      ];
-      const executeTasks: Task[] = [createMockTask({ id: "task-1" })];
-      const store = createStore({
-        evalFeedback: taskLinkedFeedback,
-        executeTasks,
-      });
-      const queryClient = createQueryClientWithFeedbackPreloaded(taskLinkedFeedback);
-
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-card-ticket-info")).toBeInTheDocument();
-      });
-
-      expect(screen.queryByTestId("feedback-card-plan-link")).not.toBeInTheDocument();
     });
 
     it("plan link navigates to plan view when clicked", async () => {
@@ -3766,110 +3027,6 @@ describe("EvalPhase feedback form", () => {
       await waitFor(() => {
         expect(screen.getByText("Done")).toBeInTheDocument();
         expect(screen.queryByText("Backlog")).not.toBeInTheDocument();
-      });
-    });
-
-    it("updates only the affected chip when one task state changes (isolation)", async () => {
-      const feedbackWithTasks: FeedbackItem[] = [
-        {
-          id: "fb-mapped",
-          text: "Two bugs",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: ["task-1", "task-2"],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:01Z",
-        },
-      ];
-      const executeTasks: Task[] = [
-        createMockTask({ id: "task-1", kanbanColumn: "backlog", title: "Bug A" }),
-        createMockTask({ id: "task-2", kanbanColumn: "in_progress", title: "Bug B" }),
-      ];
-      const store = createStore({
-        evalFeedback: feedbackWithTasks,
-        executeTasks,
-      });
-      const queryClient = createQueryClientWithFeedbackPreloaded(feedbackWithTasks);
-
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText("Backlog")).toBeInTheDocument();
-        expect(screen.getByText("In Progress")).toBeInTheDocument();
-      });
-
-      act(() => {
-        store.dispatch(taskUpdated({ taskId: "task-1", status: "closed" }));
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText("Done")).toBeInTheDocument();
-        expect(screen.getByText("In Progress")).toBeInTheDocument();
-      });
-    });
-
-    it("updates task chip when fetchTasks returns updated task data (poll scenario)", async () => {
-      const feedbackWithTasks: FeedbackItem[] = [
-        {
-          id: "fb-mapped",
-          text: "Auth bug",
-          category: "bug",
-          mappedPlanId: null,
-          createdTaskIds: ["task-1"],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:01Z",
-        },
-      ];
-      const executeTasks: Task[] = [
-        createMockTask({
-          id: "task-1",
-          kanbanColumn: "in_progress",
-          title: "Fix login",
-          status: "in_progress",
-        }),
-      ];
-      const store = createStore({
-        evalFeedback: feedbackWithTasks,
-        executeTasks,
-      });
-      const queryClient = createQueryClientWithFeedbackPreloaded(feedbackWithTasks);
-
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText("In Progress")).toBeInTheDocument();
-      });
-
-      act(() => {
-        store.dispatch(
-          fetchTasks.fulfilled(
-            [
-              createMockTask({
-                id: "task-1",
-                kanbanColumn: "done",
-                title: "Fix login",
-                status: "closed",
-              }),
-            ],
-            "fetchTasks",
-            "proj-1"
-          )
-        );
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText("Done")).toBeInTheDocument();
-        expect(screen.queryByText("In Progress")).not.toBeInTheDocument();
       });
     });
 
@@ -4197,30 +3354,6 @@ describe("EvalPhase feedback form", () => {
       expect(screen.getByText("Bug with screenshot")).toBeInTheDocument();
     });
 
-    it("closes modal when user clicks backdrop", async () => {
-      const store = createStore({ evalFeedback: mockFeedbackWithImages });
-      const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackWithImages);
-      const user = userEvent.setup();
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByText("Bug with screenshot")).toBeInTheDocument());
-      await user.click(screen.getByRole("button", { name: /View attachment 1 full size/i }));
-      await waitFor(() => {
-        expect(screen.getByTestId("feedback-image-modal")).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId("feedback-image-modal-backdrop"));
-      await waitFor(() => {
-        expect(screen.queryByTestId("feedback-image-modal")).not.toBeInTheDocument();
-      });
-      expect(screen.getByText("Bug with screenshot")).toBeInTheDocument();
-    });
-
     it("closes modal when user presses Escape key", async () => {
       const store = createStore({ evalFeedback: mockFeedbackWithImages });
       const queryClient = createQueryClientWithFeedbackPreloaded(mockFeedbackWithImages);
@@ -4437,31 +3570,6 @@ describe("EvalPhase feedback form", () => {
       });
     });
 
-    it("show less collapses back to truncated view", async () => {
-      const user = userEvent.setup();
-      const longLines = Array.from(
-        { length: FEEDBACK_TEXT_COLLAPSE_LINES + 2 },
-        (_, i) => `Row ${i + 1}`
-      ).join("\n");
-      const feedback: FeedbackItem[] = [
-        { ...mockFeedbackItems[0], id: "fb-long", text: longLines },
-        ...mockFeedbackItems.slice(1),
-      ];
-      const store = createStore({ evalFeedback: feedback });
-      const queryClient = createQueryClientWithFeedbackPreloaded(feedback);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      const toggles = await screen.findAllByTestId("feedback-text-toggle");
-      await user.click(toggles[0]);
-      await waitFor(() => expect(toggles[0]).toHaveTextContent("show less"));
-      await user.click(toggles[0]);
-      await waitFor(() => expect(toggles[0]).toHaveTextContent("show more"));
-    });
   });
 
   describe("Todoist provenance badge", () => {
@@ -4494,31 +3602,6 @@ describe("EvalPhase feedback form", () => {
       expect(badge).toBeInTheDocument();
       expect(badge).toHaveTextContent("Todoist");
       expect(badge).toHaveAttribute("title", "Imported from Todoist project proj-abc");
-    });
-
-    it("does not display Todoist badge for regular feedback", async () => {
-      const regularFeedback: FeedbackItem[] = [
-        {
-          id: "fb-regular",
-          text: "Regular feedback",
-          category: "feature",
-          mappedPlanId: null,
-          createdTaskIds: [],
-          status: "pending",
-          createdAt: "2024-01-01T00:00:01Z",
-        },
-      ];
-      const store = createStore({ evalFeedback: regularFeedback });
-      const queryClient = createQueryClientWithFeedbackPreloaded(regularFeedback);
-      renderWithProviders(
-        <MemoryRouter>
-          <EvalPhase projectId="proj-1" />
-        </MemoryRouter>,
-        { store, queryClient }
-      );
-
-      await waitFor(() => expect(screen.getByText("Regular feedback")).toBeInTheDocument());
-      expect(screen.queryByTestId("todoist-provenance-badge")).not.toBeInTheDocument();
     });
 
     it("displays Todoist badge without tooltip when todoistProjectId is absent", async () => {

@@ -35,6 +35,14 @@ describe("EvaluateFilterToolbar", () => {
           handleSearchExpand={() => {}}
           handleSearchClose={() => {}}
           handleSearchKeyDown={() => {}}
+          viewMode="feedback"
+          onViewModeChange={() => {}}
+          intakeProviderFilter=""
+          setIntakeProviderFilter={() => {}}
+          intakeTriageStatusFilter=""
+          setIntakeTriageStatusFilter={() => {}}
+          intakeSearchQuery=""
+          setIntakeSearchQuery={() => {}}
         />
       </ThemeProvider>
     );

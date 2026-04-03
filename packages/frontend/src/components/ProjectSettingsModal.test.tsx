@@ -985,7 +985,10 @@ describe("ProjectSettingsModal", () => {
     await userEvent.click(integrationsTab);
 
     expect(screen.getByTestId("integrations-tab-content")).toBeInTheDocument();
+    expect(screen.getByTestId("integrations-settings-content")).toBeInTheDocument();
     expect(screen.getByTestId("todoist-integration-card")).toBeInTheDocument();
+    expect(screen.getByTestId("integration-provider-cards")).toBeInTheDocument();
+    expect(screen.getByTestId("provider-card-github")).toBeInTheDocument();
   });
 
   it("Deliver tab shows auto-deploy per environment", async () => {

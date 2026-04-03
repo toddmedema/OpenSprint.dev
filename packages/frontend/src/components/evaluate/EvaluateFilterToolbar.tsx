@@ -1,8 +1,27 @@
 import type { KeyboardEvent, RefObject } from "react";
 import { SegmentedControl } from "../controls/SegmentedControl";
 import { FilterBar } from "../controls/FilterBar";
+import { ViewToggle } from "../execute/ViewToggle";
 
 export type EvaluateStatusFilterChip = "all" | "pending" | "resolved" | "cancelled";
+export type EvaluateViewMode = "feedback" | "intake";
+
+function FeedbackIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function InboxIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  );
+}
 
 interface EvaluateFilterToolbarProps {
   chipConfig: { label: string; filter: EvaluateStatusFilterChip; count: number }[];
@@ -15,6 +34,17 @@ interface EvaluateFilterToolbarProps {
   handleSearchExpand: () => void;
   handleSearchClose: () => void;
   handleSearchKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  viewMode: EvaluateViewMode;
+  onViewModeChange: (mode: EvaluateViewMode) => void;
+  /** Intake view: source / status / search (single top bar with view toggle). */
+  intakeProviderFilter: string;
+  setIntakeProviderFilter: (v: string) => void;
+  intakeTriageStatusFilter: string;
+  setIntakeTriageStatusFilter: (v: string) => void;
+  intakeSearchQuery: string;
+  setIntakeSearchQuery: (v: string) => void;
+  /** Shown next to intake filters when the list query has returned successfully. */
+  intakeItemCount?: number;
 }
 
 export function EvaluateFilterToolbar({
@@ -28,8 +58,19 @@ export function EvaluateFilterToolbar({
   handleSearchExpand,
   handleSearchClose,
   handleSearchKeyDown,
+  viewMode,
+  onViewModeChange,
+  intakeProviderFilter,
+  setIntakeProviderFilter,
+  intakeTriageStatusFilter,
+  setIntakeTriageStatusFilter,
+  intakeSearchQuery,
+  setIntakeSearchQuery,
+  intakeItemCount,
 }: EvaluateFilterToolbarProps) {
-  const left = (
+  const isFeedback = viewMode === "feedback";
+
+  const left = isFeedback ? (
     <SegmentedControl
       size="phase"
       dataTestId="eval-filter-segmented"
@@ -48,11 +89,57 @@ export function EvaluateFilterToolbar({
           ariaLabel: `${label} ${count}${statusFilter === filter ? ", selected" : ""}`,
         }))}
     />
+  ) : (
+    <div className="flex items-center gap-2 min-w-0 flex-1">
+      <select
+        value={intakeProviderFilter}
+        onChange={(e) => setIntakeProviderFilter(e.target.value)}
+        className="text-xs bg-theme-surface-muted border border-theme-border rounded-sm px-2 py-1.5 min-h-[32px] max-w-[7.5rem] sm:max-w-[9rem] shrink-0 text-theme-text"
+        data-testid="intake-provider-filter"
+        aria-label="Filter by source"
+      >
+        <option value="">All Sources</option>
+        <option value="todoist">Todoist</option>
+        <option value="github">GitHub</option>
+        <option value="slack">Slack</option>
+        <option value="webhook">Webhook</option>
+      </select>
+      <select
+        value={intakeTriageStatusFilter}
+        onChange={(e) => setIntakeTriageStatusFilter(e.target.value)}
+        className="text-xs bg-theme-surface-muted border border-theme-border rounded-sm px-2 py-1.5 min-h-[32px] max-w-[7.5rem] sm:max-w-[9rem] shrink-0 text-theme-text"
+        data-testid="intake-status-filter"
+        aria-label="Filter by triage status"
+      >
+        <option value="">All Statuses</option>
+        <option value="new">New</option>
+        <option value="triaged">Triaged</option>
+        <option value="converted">Converted</option>
+        <option value="ignored">Ignored</option>
+      </select>
+      <input
+        type="text"
+        value={intakeSearchQuery}
+        onChange={(e) => setIntakeSearchQuery(e.target.value)}
+        placeholder="Search intake…"
+        className="flex-1 min-w-[6rem] text-xs bg-theme-surface-muted border border-theme-border rounded-sm px-2 py-1.5 min-h-[32px] text-theme-text placeholder:text-theme-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:border-brand-500"
+        data-testid="intake-search"
+        aria-label="Search intake items"
+      />
+      {typeof intakeItemCount === "number" && (
+        <span
+          className="text-[10px] text-theme-muted whitespace-nowrap shrink-0"
+          data-testid="intake-item-count"
+        >
+          {intakeItemCount} items
+        </span>
+      )}
+    </div>
   );
 
   const right = (
     <>
-      {searchExpanded ? (
+      {isFeedback && (searchExpanded ? (
         <div
           className="flex items-center gap-1 animate-fade-in"
           data-testid="eval-search-expanded"
@@ -106,7 +193,16 @@ export function EvaluateFilterToolbar({
             <path d="m21 21-4.35-4.35" />
           </svg>
         </button>
-      )}
+      ))}
+      <ViewToggle
+        compact
+        options={[
+          { value: "feedback" as EvaluateViewMode, icon: <FeedbackIcon className="w-3 h-3" />, label: "Feedback view" },
+          { value: "intake" as EvaluateViewMode, icon: <InboxIcon className="w-3 h-3" />, label: "Intake view" },
+        ]}
+        value={viewMode}
+        onChange={onViewModeChange}
+      />
     </>
   );
 

@@ -8,6 +8,7 @@ import { ProjectShell } from "./pages/ProjectShell";
 import { ProjectView } from "./pages/ProjectView";
 import { GlobalKeyboardShortcuts } from "./components/GlobalKeyboardShortcuts";
 import { FindBar } from "./components/FindBar";
+import { CommandBar } from "./components/commands/CommandBar";
 import { RouteFallback } from "./components/RouteFallback";
 
 const SettingsPage = lazy(() =>
@@ -44,6 +45,7 @@ export function App() {
   return (
     <>
       <FindBar />
+      <CommandBar />
       <GlobalKeyboardShortcuts />
       <Routes>
         <Route path="/" element={<Home />} />

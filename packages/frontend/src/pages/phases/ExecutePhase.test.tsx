@@ -489,41 +489,6 @@ describe("ExecutePhase epic completed checkmark", () => {
     expect(checkmark).toBeInTheDocument();
   });
 
-  it("does not show checkmark when any child task is not Done", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "done",
-        priority: 0,
-        assignee: null,
-      },
-      {
-        id: "epic-1.2",
-        title: "Task B",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 1,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    fireEvent.click(screen.getByTestId("filter-chip-in_progress"));
-    const epicCard = screen.getByTestId("epic-card-epic-1");
-    expect(
-      epicCard.querySelector('[data-testid="epic-completed-checkmark"]')
-    ).not.toBeInTheDocument();
-  });
-
   it("updates checkmark when task status changes via Redux (simulates WebSocket)", async () => {
     const tasks = [
       {
@@ -576,58 +541,6 @@ describe("ExecutePhase top bar", () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it("does not show Execute heading or progress bar in top bar", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.queryByRole("heading", { name: "Execute" })).not.toBeInTheDocument();
-    // Top bar (filter chips area) has no progress bar; epic cards have their own
-    const topBar = screen.getByTestId("execute-filter-toolbar");
-    expect(topBar?.querySelector('[role="progressbar"]')).not.toBeInTheDocument();
-  });
-
-  it("keeps the filter toolbar outside the main scroll column (matches Plan)", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const mainScroll = screen.getByTestId("execute-main-scroll");
-    const toolbar = screen.getByTestId("execute-filter-toolbar");
-    expect(mainScroll.contains(toolbar)).toBe(false);
-    expect(mainScroll.parentElement).toContainElement(toolbar);
   });
 
   it("shows status filter chips with task counts (All, Ready, Done; Blocked only when count > 0; no Planning or Up Next chips)", () => {
@@ -739,46 +652,6 @@ describe("ExecutePhase top bar", () => {
     );
 
     expect(screen.getByTestId("filter-chip-ready")).toHaveTextContent("1");
-    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("Blocked");
-    expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
-  });
-
-  it("counts only kanbanColumn blocked for Blocked chip", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "planning",
-        priority: 0,
-        assignee: null,
-      },
-      {
-        id: "epic-1.2",
-        title: "Task B",
-        epicId: "epic-1",
-        kanbanColumn: "backlog",
-        priority: 1,
-        assignee: null,
-      },
-      {
-        id: "epic-1.3",
-        title: "Task C",
-        epicId: "epic-1",
-        kanbanColumn: "blocked",
-        priority: 2,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("Blocked");
     expect(screen.getByTestId("filter-chip-blocked")).toHaveTextContent("1");
   });
@@ -975,82 +848,8 @@ describe("ExecutePhase top bar", () => {
     expect(container).not.toHaveTextContent("Done task");
   });
 
-  it("All chip is active by default", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByTestId("filter-chip-all")).toHaveAttribute("aria-checked", "true");
-  });
-
-  it("does not render play or pause buttons in the header", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.queryByRole("button", { name: /pick up next task/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /pause/i })).not.toBeInTheDocument();
-  });
-
   it("defaults to All when persisted filter has no visible tasks (e.g. In Progress with 0 tasks)", async () => {
     localStorage.setItem("opensprint.executeStatusFilter", "in_progress");
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Ready task",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("filter-chip-all")).toHaveAttribute("aria-checked", "true");
-    });
-    expect(localStorage.getItem("opensprint.executeStatusFilter")).toBe("all");
-  });
-
-  it("defaults to All when persisted filter is Blocked but no blocked tasks exist", async () => {
-    localStorage.setItem("opensprint.executeStatusFilter", "blocked");
     const tasks = [
       {
         id: "epic-1.1",
@@ -1124,28 +923,6 @@ describe("ExecutePhase top bar", () => {
     expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
   });
 
-  it("does not show awaiting approval when awaitingApproval is false", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.queryByText("Awaiting approval")).not.toBeInTheDocument();
-  });
 });
 
 describe("ExecutePhase epic merge mode indicator", () => {
@@ -1181,32 +958,6 @@ describe("ExecutePhase epic merge mode indicator", () => {
     expect(indicator).toHaveTextContent("Epic merge mode");
   });
 
-  it("does not show epic merge mode indicator when mergeStrategy is per_task or missing", async () => {
-    mockGetSettings.mockResolvedValue({ teamMembers: [], mergeStrategy: "per_task" });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-    await waitFor(() => {
-      expect(screen.getByTestId("execute-filter-toolbar")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("execute-epic-merge-indicator")).not.toBeInTheDocument();
-  });
-
   it("shows self-improvement indicator when selfImprovementRunInProgress is true", async () => {
     const tasks = [
       {
@@ -1230,34 +981,6 @@ describe("ExecutePhase epic merge mode indicator", () => {
       expect(screen.getByTestId("execute-filter-toolbar")).toBeInTheDocument();
     });
     expect(screen.getByTestId("execute-self-improvement-indicator")).toBeInTheDocument();
-    expect(screen.getByText("Self-improvement review in progress")).toBeInTheDocument();
-  });
-
-  it("shows audit indicator text when selfImprovementRunMode is audit", async () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, {
-      selfImprovementRunInProgress: true,
-      selfImprovementRunMode: "audit",
-    });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-    await waitFor(() => {
-      expect(screen.getByTestId("execute-self-improvement-indicator")).toBeInTheDocument();
-    });
     expect(screen.getByText("Self-improvement review in progress")).toBeInTheDocument();
   });
 
@@ -1289,30 +1012,6 @@ describe("ExecutePhase epic merge mode indicator", () => {
     expect(screen.getByText("Agent enhancement experiment in progress")).toBeInTheDocument();
   });
 
-  it("hides self-improvement indicator when selfImprovementRunInProgress is false", async () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selfImprovementRunInProgress: false });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-    await waitFor(() => {
-      expect(screen.getByTestId("execute-filter-toolbar")).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId("execute-self-improvement-indicator")).not.toBeInTheDocument();
-  });
 });
 
 describe("ExecutePhase expandable search bar", () => {
@@ -1380,34 +1079,6 @@ describe("ExecutePhase expandable search bar", () => {
     expect(screen.queryByTestId("execute-search-expand")).not.toBeInTheDocument();
   });
 
-  it("shows X close button when input is visible", async () => {
-    const user = userEvent.setup();
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await user.click(screen.getByTestId("execute-search-expand"));
-
-    const closeBtn = screen.getByTestId("execute-search-close");
-    expect(closeBtn).toBeInTheDocument();
-    expect(closeBtn).toHaveAttribute("aria-label", "Close search");
-  });
-
   it("clicking X clears input, hides input, and reverts to icon state", async () => {
     const user = userEvent.setup();
     const tasks = [
@@ -1440,33 +1111,6 @@ describe("ExecutePhase expandable search bar", () => {
     expect(screen.queryByTestId("execute-search-expanded")).not.toBeInTheDocument();
     expect(screen.getByTestId("execute-search-expand")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Search tickets…")).not.toBeInTheDocument();
-  });
-
-  it("input receives focus automatically on expand", async () => {
-    const user = userEvent.setup();
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await user.click(screen.getByTestId("execute-search-expand"));
-
-    const input = screen.getByPlaceholderText("Search tickets…");
-    expect(document.activeElement).toBe(input);
   });
 
   it("pressing Escape closes and clears the search bar", async () => {
@@ -1832,31 +1476,6 @@ describe("ExecutePhase mobile layout", () => {
     localStorage.setItem("opensprint.executeView", "kanban");
   });
 
-  it("main scroll area, filter toolbar, and kanban grid render", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByTestId("execute-main-scroll")).toBeInTheDocument();
-    expect(screen.getByTestId("execute-filter-toolbar")).toBeInTheDocument();
-    expect(document.querySelector('[data-testid="execute-section-ready"]')).toBeInTheDocument();
-  });
-
   it("task detail sidebar renders inline (no overlay, no backdrop) on mobile viewport (< 768px)", async () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { value: MOBILE_BREAKPOINT - 1, writable: true });
@@ -1975,38 +1594,6 @@ describe("ExecutePhase view toggle", () => {
     expect(screen.getByTestId("view-toggle-kanban")).toHaveAttribute("aria-checked", "true");
   });
 
-  it("toggling between Kanban and Timeline works", async () => {
-    const user = userEvent.setup();
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
-
-    await user.click(screen.getByTestId("view-toggle-kanban"));
-    expect(screen.getByTestId("epic-card-epic-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("timeline-list")).not.toBeInTheDocument();
-
-    await user.click(screen.getByTestId("view-toggle-timeline"));
-    expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
-    expect(screen.queryByTestId("epic-card-epic-1")).not.toBeInTheDocument();
-  });
-
   it("filter chips and search apply in Timeline mode", async () => {
     const user = userEvent.setup();
     const tasks = [
@@ -2085,29 +1672,6 @@ describe("ExecutePhase view toggle", () => {
     expect(screen.getByTestId("timeline-section-ready")).not.toContainElement(
       screen.getByTestId("timeline-row-epic-1.1")
     );
-  });
-
-  it("Queue view with All filter hides Failures section when no blocked tasks", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Ready task",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.queryByTestId("timeline-section-blocked")).not.toBeInTheDocument();
   });
 
   it("Failures filter shows only failed tickets in Timeline view", async () => {
@@ -2229,59 +1793,12 @@ describe("ExecutePhase view toggle", () => {
     expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
   });
 
-  it("invalid localStorage value defaults to timeline (queue/list)", () => {
-    localStorage.setItem(STORAGE_KEY, "invalid");
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "ready",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
-    expect(screen.queryByTestId("epic-card-epic-1")).not.toBeInTheDocument();
-    expect(screen.getByTestId("view-toggle-timeline")).toHaveAttribute("aria-checked", "true");
-  });
 });
 
 describe("ExecutePhase Redux integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.setItem("opensprint.executeView", "kanban");
-  });
-
-  it("main scroll column renders when sidebar layout is active", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-    expect(screen.getByTestId("execute-main-scroll")).toBeInTheDocument();
   });
 
   it("renders OpenQuestionsBlock in task detail when coder has open questions", async () => {
@@ -2515,29 +2032,6 @@ describe("ExecutePhase Redux integration", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("has kanban scroll area with min-h-0 and overflow-auto for independent scroll", () => {
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks);
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-    const scrollArea = document.querySelector("[data-testid='execute-main-scroll']");
-    expect(scrollArea).toBeInTheDocument();
-  });
-
   it("main task list scroll container is scrollable when sidebar is open", async () => {
     mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
     const tasks = [
@@ -2579,161 +2073,6 @@ describe("ExecutePhase Redux integration", () => {
       scrollContainer.scrollTop = 200;
     });
     expect(scrollContainer.scrollTop).toBe(200);
-  });
-
-  it("main task list scrolls when sidebar is open at mobile viewport (375×667)", async () => {
-    const originalInnerWidth = window.innerWidth;
-    const originalInnerHeight = window.innerHeight;
-    Object.defineProperty(window, "innerWidth", { value: 375, writable: true });
-    Object.defineProperty(window, "innerHeight", { value: 667, writable: true });
-
-    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const scrollContainer = screen.getByTestId("execute-main-scroll");
-    Object.defineProperty(scrollContainer, "scrollHeight", { value: 800, configurable: true });
-    Object.defineProperty(scrollContainer, "clientHeight", { value: 300, configurable: true });
-
-    act(() => {
-      scrollContainer.scrollTop = 150;
-    });
-    expect(scrollContainer.scrollTop).toBe(150);
-
-    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
-    Object.defineProperty(window, "innerHeight", { value: originalInnerHeight, writable: true });
-  });
-
-  it("main task list scrolls when sidebar is open at tablet viewport (768×1024)", async () => {
-    const originalInnerWidth = window.innerWidth;
-    const originalInnerHeight = window.innerHeight;
-    Object.defineProperty(window, "innerWidth", { value: 768, writable: true });
-    Object.defineProperty(window, "innerHeight", { value: 1024, writable: true });
-
-    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const scrollContainer = screen.getByTestId("execute-main-scroll");
-    Object.defineProperty(scrollContainer, "scrollHeight", { value: 1200, configurable: true });
-    Object.defineProperty(scrollContainer, "clientHeight", { value: 600, configurable: true });
-
-    act(() => {
-      scrollContainer.scrollTop = 250;
-    });
-    expect(scrollContainer.scrollTop).toBe(250);
-
-    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
-    Object.defineProperty(window, "innerHeight", { value: originalInnerHeight, writable: true });
-  });
-
-  it("main task list scrolls when sidebar is open at desktop viewport (1024px)", async () => {
-    const originalInnerWidth = window.innerWidth;
-    Object.defineProperty(window, "innerWidth", { value: 1024, writable: true });
-
-    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const scrollContainer = screen.getByTestId("execute-main-scroll");
-    Object.defineProperty(scrollContainer, "scrollHeight", { value: 1200, configurable: true });
-    Object.defineProperty(scrollContainer, "clientHeight", { value: 600, configurable: true });
-
-    act(() => {
-      scrollContainer.scrollTop = 300;
-    });
-    expect(scrollContainer.scrollTop).toBe(300);
-
-    Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, writable: true });
-  });
-
-  it("has no overlay or backdrop when sidebar is open (no tap-to-close)", async () => {
-    mockGet.mockResolvedValue({ id: "epic-1.1", title: "Task A", kanbanColumn: "in_progress" });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const backdrop = document.querySelector("[aria-label='Dismiss task detail']");
-    expect(backdrop).toBeNull();
   });
 
   it("renders a root container for page/sidebar layout", () => {
@@ -3129,93 +2468,6 @@ describe("ExecutePhase Redux integration", () => {
     expect(taskLabels).toHaveLength(0);
   });
 
-  it("task title renders exactly once in detail sidebar, status badge visible without redundant title", async () => {
-    const uniqueTitle = "Single Display Task Title";
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: uniqueTitle,
-      kanbanColumn: "in_progress",
-      description: "Desc",
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: uniqueTitle,
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    // Title appears immediately from cached list data
-    const header = screen.getByTestId("task-detail-title");
-    expect(header).toHaveTextContent(uniqueTitle);
-
-    // Status (In Progress) remains visible in metadata row (may also appear in filter chips)
-    expect(screen.getAllByText("In Progress").length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("task detail sidebar does not display task type (Task text removed per feedback)", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Fix login bug",
-      kanbanColumn: "in_progress",
-      description: "Bug description",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Fix login bug",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    // Task type should not be displayed in the details sidebar (feedback: remove Task text)
-    // The metadata row used to show "title · task · priority"; we no longer show the type
-    const metadataSection = document.body.textContent ?? "";
-    expect(metadataSection).not.toMatch(/\s·\s*task\s*·/);
-  });
-
   it("task description renders fully and is scrollable when long", async () => {
     const longDescription = "Line 1\n".repeat(100) + "Final line";
     mockGet.mockResolvedValue({
@@ -3256,308 +2508,6 @@ describe("ExecutePhase Redux integration", () => {
       timeout: 5000,
     });
     expect(descriptionContainer).toHaveTextContent("Final line");
-  });
-
-  it("task description markdown has theme-aware prose styles for WCAG AA contrast", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Task A",
-      kanbanColumn: "in_progress",
-      description: "## Heading\n\nParagraph with **bold** and `inline code`.\n\n- List item",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const markdownContainer = await screen.findByTestId("task-description-markdown");
-    expect(markdownContainer).toBeInTheDocument();
-    // Styles are in .prose-task-description (index.css @apply) and .prose-execute-task; element uses those classes
-    const cn = markdownContainer.className;
-    expect(cn).toMatch(/prose-task-description/);
-    expect(cn).toMatch(/prose-execute-task/);
-  });
-
-  it("shows collapsible Description header and description markdown when task has description", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Task with description",
-      kanbanColumn: "in_progress",
-      description: "Implement the feature",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task with description",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const descHeader = await screen.findByRole("button", { name: /description/i });
-    expect(descHeader).toBeInTheDocument();
-    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
-    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent(
-      "Implement the feature"
-    );
-  });
-
-  it("collapses and expands Description section when header is clicked", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Task A",
-      kanbanColumn: "in_progress",
-      description: "Task details",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const toggleBtn = await screen.findByRole("button", { name: /description/i });
-    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
-
-    await userEvent.click(toggleBtn);
-    expect(screen.queryByTestId("task-description-markdown")).not.toBeInTheDocument();
-
-    await userEvent.click(toggleBtn);
-    expect(screen.getByTestId("task-description-markdown")).toBeInTheDocument();
-  });
-
-  it("Description section defaults to expanded", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Task A",
-      kanbanColumn: "in_progress",
-      description: "Visible by default",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const markdown = await screen.findByTestId("task-description-markdown");
-    expect(markdown).toBeInTheDocument();
-    expect(markdown).toHaveTextContent("Visible by default");
-  });
-
-  it("shows Description header above Source Feedback when task has both", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Feedback task",
-      kanbanColumn: "in_progress",
-      description: "Implement from feedback",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-      sourceFeedbackId: "fb-xyz",
-    });
-    mockFeedbackGet.mockResolvedValue({
-      id: "fb-xyz",
-      text: "Add dark mode",
-      category: "feature",
-      mappedPlanId: "plan-1",
-      createdTaskIds: ["epic-1.1"],
-      status: "pending",
-      createdAt: "2026-02-17T10:00:00Z",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Feedback task",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-xyz");
-    });
-
-    const sourceFeedbackBtn = screen.getByRole("button", { name: /source feedback/i });
-    const descriptionBtn = screen.getByRole("button", { name: /description/i });
-    const sourceFeedbackIdx = Array.from(document.body.querySelectorAll("button")).indexOf(
-      sourceFeedbackBtn
-    );
-    const descriptionIdx = Array.from(document.body.querySelectorAll("button")).indexOf(
-      descriptionBtn
-    );
-    expect(descriptionIdx).toBeLessThan(sourceFeedbackIdx);
-    expect(screen.getByTestId("task-description-markdown")).toHaveTextContent(
-      "Implement from feedback"
-    );
-  });
-
-  it("Description, Source Feedback, and Live Output headers use identical structure when all three visible", async () => {
-    mockGet.mockResolvedValue({
-      id: "epic-1.1",
-      title: "Task with both",
-      kanbanColumn: "in_progress",
-      description: "Implement from feedback",
-      type: "task",
-      status: "in_progress",
-      labels: [],
-      dependencies: [],
-      priority: 0,
-      assignee: null,
-      epicId: "epic-1",
-      createdAt: "",
-      updatedAt: "",
-      sourceFeedbackId: "fb-xyz",
-    });
-    mockFeedbackGet.mockResolvedValue({
-      id: "fb-xyz",
-      text: "Add dark mode",
-      category: "feature",
-      mappedPlanId: "plan-1",
-      createdTaskIds: ["epic-1.1"],
-      status: "pending",
-      createdAt: "2026-02-17T10:00:00Z",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task with both",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    const { container } = render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-xyz");
-    });
-
-    const sourceFeedbackHeader = container.querySelector("#source-feedback-header-fb-xyz");
-    const descriptionHeader = container.querySelector("#description-header");
-    const artifactsHeader = container.querySelector("#artifacts-header");
-
-    expect(sourceFeedbackHeader).toBeInTheDocument();
-    expect(descriptionHeader).toBeInTheDocument();
-    expect(artifactsHeader).toBeInTheDocument();
-
-    // Each collapsible section header contains an h4 heading
-    for (const header of [sourceFeedbackHeader, descriptionHeader, artifactsHeader]) {
-      const h4 = header?.querySelector("h4");
-      expect(h4).toBeInTheDocument();
-    }
   });
 
   it("omits Description section when task has no description content", async () => {
@@ -3607,52 +2557,6 @@ describe("ExecutePhase Redux integration", () => {
 describe("ExecutePhase task detail plan link", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it("shows plan link when task has epicId and matching plan exists", async () => {
-    const taskDetail = {
-      id: "epic-1.1",
-      title: "Task A",
-      epicId: "epic-1",
-      kanbanColumn: "in_progress" as const,
-      priority: 0,
-      assignee: "agent",
-      description: "",
-      type: "task" as const,
-      status: "in_progress" as const,
-      labels: [],
-      dependencies: [],
-      createdAt: "",
-      updatedAt: "",
-    };
-    mockGet.mockResolvedValue(taskDetail);
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: "agent",
-      },
-    ];
-    const onNavigateToPlan = vi.fn();
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" onNavigateToPlan={onNavigateToPlan} />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
-    });
-
-    const planLink = await screen.findByTestId("sidebar-view-plan-btn");
-    expect(planLink).toBeInTheDocument();
-    expect(planLink).toHaveTextContent(/plan:\s*build test/i);
   });
 
   it("does not show plan link when onNavigateToPlan is not provided", async () => {
@@ -3990,119 +2894,6 @@ describe("ExecutePhase Source feedback section", () => {
     expect(screen.queryByText("Feedback ID: fb-abc")).not.toBeInTheDocument();
   });
 
-  it("displays full feedback card when Source feedback section is expanded", async () => {
-    const taskDetail = {
-      id: "epic-1.1",
-      title: "Implement feature",
-      epicId: "epic-1",
-      kanbanColumn: "in_progress" as const,
-      priority: 0,
-      assignee: "agent",
-      description: "Task details",
-      type: "task" as const,
-      status: "in_progress" as const,
-      labels: [],
-      dependencies: [],
-      createdAt: "",
-      updatedAt: "",
-      sourceFeedbackId: "fb-xyz",
-    };
-    mockGet.mockResolvedValue(taskDetail);
-    mockFeedbackGet.mockResolvedValue({
-      id: "fb-xyz",
-      text: "Please add dark mode support",
-      category: "feature",
-      mappedPlanId: "build-test-feature",
-      createdTaskIds: ["epic-1.1"],
-      status: "pending",
-      createdAt: "2026-02-17T10:00:00Z",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Implement feature",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: "agent",
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    await vi.waitFor(() => {
-      expect(mockFeedbackGet).toHaveBeenCalledWith("proj-1", "fb-xyz");
-    });
-
-    expect(await screen.findByTestId("source-feedback-card")).toBeInTheDocument();
-    expect(await screen.findByText("Please add dark mode support")).toBeInTheDocument();
-    // Category chip and Mapped plan are not shown in Execute sidebar (reduced clutter)
-    expect(screen.queryByText("Feature")).not.toBeInTheDocument();
-    expect(screen.queryByText(/mapped plan:/i)).not.toBeInTheDocument();
-  });
-
-  it("collapses and expands Source feedback section when icon button is clicked", async () => {
-    const taskDetail = {
-      id: "epic-1.1",
-      title: "Implement feature",
-      epicId: "epic-1",
-      kanbanColumn: "in_progress" as const,
-      priority: 0,
-      assignee: "agent",
-      description: "Task details",
-      type: "task" as const,
-      status: "in_progress" as const,
-      labels: [],
-      dependencies: [],
-      createdAt: "",
-      updatedAt: "",
-      sourceFeedbackId: "fb-xyz",
-    };
-    mockGet.mockResolvedValue(taskDetail);
-    mockFeedbackGet.mockResolvedValue({
-      id: "fb-xyz",
-      text: "Please add dark mode support",
-      category: "feature",
-      mappedPlanId: "build-test-feature",
-      createdTaskIds: ["epic-1.1"],
-      status: "pending",
-      createdAt: "2026-02-17T10:00:00Z",
-    });
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Implement feature",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: "agent",
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const toggleBtn = await screen.findByRole("button", { name: /source feedback/i });
-    expect(await screen.findByTestId("source-feedback-card")).toBeInTheDocument();
-
-    await userEvent.click(toggleBtn);
-    expect(screen.queryByTestId("source-feedback-card")).not.toBeInTheDocument();
-
-    await userEvent.click(toggleBtn);
-    expect(screen.getByTestId("source-feedback-card")).toBeInTheDocument();
-  });
-
   it("persists Source Feedback collapsed state when switching tasks and back", async () => {
     const taskWithFeedback = {
       id: "epic-1.1",
@@ -4274,99 +3065,6 @@ describe("ExecutePhase task detail cached state", () => {
     pendingAbort?.abort();
   });
 
-  it("shows task title immediately in sidebar header from cached list data (no wait for detail API)", () => {
-    mockGet.mockImplementation(() => neverResolves());
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Cached Task Title",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: "Frodo",
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const title = screen.getByTestId("task-detail-title");
-    expect(title).toHaveTextContent("Cached Task Title");
-    expect(screen.getByTestId("task-detail-loading")).toBeInTheDocument();
-  });
-
-  it("shows status and assignee in detail section (status in row 1, assignee in active-agent section)", async () => {
-    mockGet.mockImplementation(() => neverResolves());
-    const startedAt = new Date(Date.now() - 60000).toISOString();
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_review",
-        priority: 0,
-        assignee: "Frodo",
-      },
-    ];
-    const store = createStore(tasks, {
-      selectedTaskId: "epic-1.1",
-      activeTasks: [{ taskId: "epic-1.1", phase: "review", startedAt }],
-    });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    // Header shows only title
-    const header = screen.getByTestId("task-detail-title");
-    expect(header).toHaveTextContent("Task A");
-    expect(screen.queryByTestId("task-detail-metadata")).not.toBeInTheDocument();
-
-    // Row 1: Status and priority share first row
-    const row = screen.getByTestId("task-detail-priority-state-row");
-    expect(row).toHaveTextContent("In Review");
-
-    // Row 2: Active agent section shows assignee when agent is active
-    const callout = screen.getByTestId("task-detail-active-callout");
-    expect(callout).toHaveTextContent("Frodo");
-  });
-
-  it("shows status with color indicator and icon in row 1", () => {
-    mockGet.mockImplementation(() => new Promise(() => {}));
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "done",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const row = screen.getByTestId("task-detail-priority-state-row");
-    expect(row).toHaveTextContent("Done");
-    // TaskStatusBadge renders with title attribute for accessibility
-    const badge = row.querySelector('[title="Done"]');
-    expect(badge).toBeInTheDocument();
-  });
-
   it("task detail shows Waiting to Merge when list task has kanbanColumn waiting_to_merge", () => {
     mockGet.mockImplementation(() => neverResolves());
     const tasks = [
@@ -4420,40 +3118,6 @@ describe("ExecutePhase task detail cached state", () => {
     );
   });
 
-  it("shows running time in active-agent section when task has active agent", async () => {
-    mockGet.mockImplementation(() => new Promise(() => {}));
-    const startedAt = new Date(Date.now() - 125000).toISOString(); // 2m 5s ago
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task A",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: "Frodo",
-      },
-    ];
-    const store = createStore(tasks, {
-      selectedTaskId: "epic-1.1",
-      activeTasks: [{ taskId: "epic-1.1", phase: "coding", startedAt }],
-      taskIdToStartedAt: { "epic-1.1": startedAt },
-    });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    const callout = screen.getByTestId("task-detail-active-callout");
-    expect(callout).toHaveTextContent("Frodo");
-    // Wait for async agents fetch to populate running time in active-agent section (formatUptime produces "2m 5s" or similar)
-    await vi.waitFor(() => {
-      expect(callout.textContent).toMatch(/\d+m\s+\d+s/);
-    });
-  });
-
   it("shows loading skeleton for detail-dependent fields while fetching", () => {
     mockGet.mockImplementation(() => neverResolves());
     const tasks = [
@@ -4479,29 +3143,4 @@ describe("ExecutePhase task detail cached state", () => {
     expect(screen.getByTestId("artifacts-loading")).toBeInTheDocument();
   });
 
-  it("shows error state below header without clearing task name when detail fetch fails", async () => {
-    mockGet.mockRejectedValue(new Error("Network error"));
-    const tasks = [
-      {
-        id: "epic-1.1",
-        title: "Task With Error",
-        epicId: "epic-1",
-        kanbanColumn: "in_progress",
-        priority: 0,
-        assignee: null,
-      },
-    ];
-    const store = createStore(tasks, { selectedTaskId: "epic-1.1" });
-    render(
-      <MemoryRouter>
-        <Provider store={store}>
-          <ExecutePhase projectId="proj-1" />
-        </Provider>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task With Error");
-    const errorEl = await vi.waitFor(() => screen.getByTestId("task-detail-error"));
-    expect(errorEl).toHaveTextContent("Network error");
-  });
 });

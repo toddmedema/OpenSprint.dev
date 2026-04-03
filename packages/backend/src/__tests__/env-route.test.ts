@@ -676,7 +676,14 @@ describe("Env API", () => {
     it("useCustomCli reflects global settings", async () => {
       await setGlobalSettings({ useCustomCli: true });
 
-      const res = await request(app).get(`${API_PREFIX}/env/global-status`);
+      const fetchStatus = () => request(app).get(`${API_PREFIX}/env/global-status`).timeout(10_000);
+      const res = await fetchStatus().catch(async (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/socket hang up/i.test(msg)) {
+          return fetchStatus();
+        }
+        throw err;
+      });
       expect(res.status).toBe(200);
       expect(res.body.data.useCustomCli).toBe(true);
     });

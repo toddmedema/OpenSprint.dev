@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, isApiError } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
@@ -20,6 +20,59 @@ function relativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+const INTAKE_STATUS_BADGE = {
+  active: { label: "Connected", className: "text-green-400 bg-green-500/10" },
+  needs_reconnect: { label: "Needs Reconnect", className: "text-orange-400 bg-orange-500/10" },
+  disconnected: { label: "Not Connected", className: "text-theme-text-secondary bg-theme-surface-hover" },
+  loading: { label: "Loading…", className: "text-theme-text-secondary bg-theme-surface-hover" },
+} as const;
+
+const intakePrimaryBtn =
+  "px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+const intakeSecondaryBtn =
+  "px-2 py-1 bg-theme-surface-hover hover:bg-theme-border text-theme-text text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+
+function IntakeTodoistShell({
+  description,
+  badge,
+  children,
+  footer,
+}: {
+  description: string;
+  badge: { label: string; className: string };
+  children?: ReactNode;
+  footer?: ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-lg border border-theme-border bg-theme-surface p-4 flex flex-col gap-3 h-full"
+      data-testid="todoist-integration-card"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <TodoistIcon />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-theme-text">Todoist</p>
+            <p className="text-xs text-theme-text-secondary">{description}</p>
+          </div>
+        </div>
+        <span
+          className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-medium ${badge.className}`}
+          data-testid="todoist-status-badge"
+        >
+          {badge.label}
+        </span>
+      </div>
+      {children}
+      {footer != null ? (
+        <div className="flex flex-wrap items-center gap-2 mt-auto pt-2 border-t border-theme-border">
+          {footer}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProps) {
@@ -176,77 +229,52 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   // Not configured — env vars missing
   if (notConfigured) {
     return (
-      <div
-        className="rounded-lg border border-theme-border bg-theme-bg-elevated p-4"
-        data-testid="todoist-integration-card"
+      <IntakeTodoistShell
+        description="Import feedback from Todoist tasks into Evaluate"
+        badge={INTAKE_STATUS_BADGE.disconnected}
       >
-        <div className="flex items-start gap-3">
-          <TodoistIcon />
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-theme-text">Todoist</h3>
-            <p className="text-xs text-theme-muted mt-0.5">
-              Import feedback from Todoist tasks into Evaluate
-            </p>
-            <div
-              className="mt-3 p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
-              data-testid="todoist-not-configured"
-            >
-              <p className="text-xs text-theme-warning-text">
-                Todoist integration requires <code className="font-mono">TODOIST_CLIENT_ID</code>{" "}
-                and <code className="font-mono">TODOIST_CLIENT_SECRET</code> environment variables.
-                Set them in your <code className="font-mono">.env</code> file and restart the
-                server.
-              </p>
-            </div>
-          </div>
+        <div
+          className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+          data-testid="todoist-not-configured"
+        >
+          <p className="text-xs text-theme-warning-text">
+            Todoist integration requires <code className="font-mono">TODOIST_CLIENT_ID</code> and{" "}
+            <code className="font-mono">TODOIST_CLIENT_SECRET</code> environment variables. Set them
+            in your <code className="font-mono">.env</code> file and restart the server.
+          </p>
         </div>
-      </div>
+      </IntakeTodoistShell>
     );
   }
 
   // Loading state
   if (statusQuery.isLoading) {
     return (
-      <div
-        className="rounded-lg border border-theme-border bg-theme-bg-elevated p-4"
-        data-testid="todoist-integration-card"
-      >
-        <div className="flex items-center gap-3">
-          <TodoistIcon />
-          <div className="flex-1">
-            <h3 className="text-sm font-medium text-theme-text">Todoist</h3>
-            <p className="text-xs text-theme-muted mt-0.5">Loading integration status…</p>
-          </div>
-        </div>
-      </div>
+      <IntakeTodoistShell
+        description="Loading integration status…"
+        badge={INTAKE_STATUS_BADGE.loading}
+      />
     );
   }
 
   // Error state (non-configuration)
   if (statusQuery.isError && !notConfigured) {
     return (
-      <div
-        className="rounded-lg border border-theme-border bg-theme-bg-elevated p-4"
-        data-testid="todoist-integration-card"
+      <IntakeTodoistShell
+        description="Import feedback from Todoist tasks into Evaluate"
+        badge={INTAKE_STATUS_BADGE.disconnected}
+        footer={
+          <button type="button" className={intakeSecondaryBtn} onClick={refreshStatus}>
+            Retry
+          </button>
+        }
       >
-        <div className="flex items-start gap-3">
-          <TodoistIcon />
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-theme-text">Todoist</h3>
-            <p className="text-xs text-theme-muted mt-0.5">
-              Import feedback from Todoist tasks into Evaluate
-            </p>
-            <div className="mt-3 p-3 rounded-lg bg-theme-error-bg border border-theme-error-border">
-              <p className="text-xs text-theme-error-text">
-                Failed to load Todoist status. Please try again.
-              </p>
-            </div>
-            <button type="button" className="btn-secondary text-sm mt-3" onClick={refreshStatus}>
-              Retry
-            </button>
-          </div>
+        <div className="p-3 rounded-lg bg-theme-error-bg border border-theme-error-border">
+          <p className="text-xs text-theme-error-text">
+            Failed to load Todoist status. Please try again.
+          </p>
         </div>
-      </div>
+      </IntakeTodoistShell>
     );
   }
 
@@ -255,38 +283,31 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   // Disconnected state
   if (!status?.connected) {
     return (
-      <div
-        className="rounded-lg border border-theme-border bg-theme-bg-elevated p-4"
-        data-testid="todoist-integration-card"
+      <IntakeTodoistShell
+        description="Import feedback from Todoist tasks into Evaluate"
+        badge={INTAKE_STATUS_BADGE.disconnected}
+        footer={
+          <button
+            type="button"
+            className={intakePrimaryBtn}
+            onClick={() => startOAuthMutation.mutate()}
+            disabled={startOAuthMutation.isPending || oauthPolling}
+            data-testid="todoist-connect-btn"
+          >
+            {oauthPolling
+              ? "Waiting for authorization…"
+              : startOAuthMutation.isPending
+                ? "Starting…"
+                : "Connect"}
+          </button>
+        }
       >
-        <div className="flex items-start gap-3">
-          <TodoistIcon />
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-theme-text">Todoist</h3>
-            <p className="text-xs text-theme-muted mt-0.5">
-              Import feedback from Todoist tasks into Evaluate
-            </p>
-            <button
-              type="button"
-              className="btn-secondary text-sm mt-3"
-              onClick={() => startOAuthMutation.mutate()}
-              disabled={startOAuthMutation.isPending || oauthPolling}
-              data-testid="todoist-connect-btn"
-            >
-              {oauthPolling
-                ? "Waiting for authorization…"
-                : startOAuthMutation.isPending
-                  ? "Starting…"
-                  : "Connect Todoist"}
-            </button>
-            {startOAuthMutation.isError && (
-              <p className="text-xs text-theme-error-text mt-2">
-                Failed to start OAuth. Please try again.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+        {startOAuthMutation.isError && (
+          <p className="text-xs text-theme-error-text">
+            Failed to start OAuth. Please try again.
+          </p>
+        )}
+      </IntakeTodoistShell>
     );
   }
 
@@ -296,233 +317,206 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   const selectedProject = status.selectedProject;
 
   return (
-    <div
-      className="rounded-lg border border-theme-border bg-theme-bg-elevated p-4"
-      data-testid="todoist-integration-card"
-    >
-      <div className="flex items-start gap-3">
-        <TodoistIcon />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-medium text-theme-text">Todoist</h3>
-            <span
-              className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${
-                needsReconnect
-                  ? "bg-theme-warning-bg text-theme-warning-text"
-                  : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-              }`}
-              data-testid="todoist-status-badge"
+    <IntakeTodoistShell
+      description="Import feedback from Todoist tasks into Evaluate"
+      badge={needsReconnect ? INTAKE_STATUS_BADGE.needs_reconnect : INTAKE_STATUS_BADGE.active}
+      footer={
+        <>
+          {selectedProject ? (
+            <button
+              type="button"
+              className={`${intakeSecondaryBtn} inline-flex items-center gap-1.5`}
+              onClick={() => syncNowMutation.mutate()}
+              disabled={syncNowMutation.isPending}
+              data-testid="todoist-sync-now-btn"
             >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${needsReconnect ? "bg-yellow-500" : "bg-green-500"}`}
-              />
-              {needsReconnect ? "Needs reconnect" : "Connected"}
-            </span>
-          </div>
-
-          {/* Status line */}
-          <p className="text-xs text-theme-muted mt-1" data-testid="todoist-status-line">
-            Connected to {email}
-            {selectedProject && <> · Project: {selectedProject.name}</>}
-            {status.lastSyncAt && <> · Last sync: {relativeTime(status.lastSyncAt)}</>}
-          </p>
-
-          {/* Needs reconnect banner */}
-          {needsReconnect && (
+              {syncNowMutation.isPending && (
+                <span
+                  className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"
+                  data-testid="todoist-sync-spinner"
+                />
+              )}
+              {syncNowMutation.isPending ? "Syncing…" : "Sync Now"}
+            </button>
+          ) : null}
+          {!showDisconnectConfirm ? (
+            <button
+              type="button"
+              className={`${intakeDangerBtn} ${selectedProject ? "ml-auto" : ""}`}
+              onClick={() => setShowDisconnectConfirm(true)}
+              data-testid="todoist-disconnect-btn"
+            >
+              Disconnect
+            </button>
+          ) : null}
+          {showDisconnectConfirm ? (
             <div
-              className="mt-3 p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
-              data-testid="todoist-reconnect-banner"
+              className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-theme-error-bg border border-theme-error-border w-full"
+              data-testid="todoist-disconnect-confirm"
             >
-              <p className="text-xs text-theme-warning-text">
-                Your Todoist connection needs to be re-authorized. Please reconnect to continue
-                syncing.
+              <p className="text-xs text-theme-error-text flex-1 min-w-[12rem]">
+                This will revoke the Todoist token permanently. Continue?
               </p>
               <button
                 type="button"
-                className="btn-secondary text-xs mt-2"
-                onClick={() => startOAuthMutation.mutate()}
-                disabled={startOAuthMutation.isPending || oauthPolling}
-                data-testid="todoist-reconnect-btn"
+                className="text-xs font-medium text-theme-error-text hover:underline"
+                onClick={() => disconnectMutation.mutate()}
+                disabled={disconnectMutation.isPending}
+                data-testid="todoist-disconnect-confirm-btn"
               >
-                {oauthPolling ? "Waiting for authorization…" : "Reconnect"}
+                {disconnectMutation.isPending ? "Disconnecting…" : "Yes, disconnect"}
               </button>
-            </div>
-          )}
-
-          {/* Error banner (non-reconnect) */}
-          {status.lastError && !needsReconnect && !errorDismissed && (
-            <div
-              className="mt-3 p-3 rounded-lg bg-theme-error-bg border border-theme-error-border"
-              data-testid="todoist-error-banner"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs text-theme-error-text">{status.lastError}</p>
-                  <p className="text-xs text-theme-error-text mt-1 opacity-75">
-                    Check your Todoist connection or try syncing again.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-theme-error-text hover:opacity-70 flex-shrink-0"
-                  onClick={() => setErrorDismissed(true)}
-                  aria-label="Dismiss error"
-                  data-testid="todoist-error-dismiss-btn"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Project picker */}
-          {shouldShowPicker ? (
-            <ProjectPicker
-              pickerOpen={shouldShowPicker}
-              projectsQuery={projectsQuery}
-              selectedPickerProjectId={selectedPickerProjectId}
-              importExistingTasks={importExistingTasks}
-              selectProjectMutation={selectProjectMutation}
-              selectedProject={selectedProject ?? null}
-              onOpen={() => setPickerOpen(true)}
-              onCancel={() => {
-                setPickerOpen(false);
-                setSelectedPickerProjectId(selectedProject?.id ?? "");
-              }}
-              onSelectChange={setSelectedPickerProjectId}
-              onImportToggle={setImportExistingTasks}
-              onRetryFetch={() => void projectsQuery.refetch()}
-            />
-          ) : selectedProject ? (
-            <div className="mt-3" data-testid="todoist-project-info">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-theme-muted">
-                  Project:{" "}
-                  <span className="font-medium text-theme-text">{selectedProject.name}</span>
-                  <span className="ml-1 text-theme-muted">({selectedProject.id})</span>
-                </span>
-                <button
-                  type="button"
-                  className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                  onClick={() => {
-                    setPickerOpen(true);
-                    setSelectedPickerProjectId(selectedProject.id);
-                  }}
-                  data-testid="todoist-change-project-btn"
-                >
-                  Change
-                </button>
-              </div>
-              {saveSuccess && (
-                <p
-                  className="text-xs text-green-600 dark:text-green-400 mt-1"
-                  data-testid="todoist-save-success"
-                >
-                  Project saved successfully.
-                </p>
-              )}
+              <button
+                type="button"
+                className="text-xs text-theme-muted hover:underline"
+                onClick={() => setShowDisconnectConfirm(false)}
+                data-testid="todoist-disconnect-cancel-btn"
+              >
+                Cancel
+              </button>
             </div>
           ) : null}
+        </>
+      }
+    >
+      <p className="text-xs text-theme-muted" data-testid="todoist-status-line">
+        Connected to {email}
+        {selectedProject && <> · Project: {selectedProject.name}</>}
+        {status.lastSyncAt && <> · Last sync: {relativeTime(status.lastSyncAt)}</>}
+      </p>
 
-          {/* Sync Now + helper text */}
-          {selectedProject && (
-            <div className="mt-3" data-testid="todoist-sync-section">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary text-sm inline-flex items-center gap-1.5"
-                  onClick={() => syncNowMutation.mutate()}
-                  disabled={syncNowMutation.isPending}
-                  data-testid="todoist-sync-now-btn"
-                >
-                  {syncNowMutation.isPending && (
-                    <span
-                      className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"
-                      data-testid="todoist-sync-spinner"
-                    />
-                  )}
-                  {syncNowMutation.isPending ? "Syncing…" : "Sync Now"}
-                </button>
-              </div>
-              {syncMessage && (
-                <p
-                  className={`text-xs mt-1.5 ${
-                    syncMessage.severity === "success"
-                      ? "text-green-600 dark:text-green-400"
-                      : syncMessage.severity === "warning"
-                        ? "text-theme-warning-text"
-                        : "text-theme-error-text"
-                  }`}
-                  data-testid="todoist-sync-message"
-                >
-                  {syncMessage.text}
-                </p>
-              )}
-              <p className="text-xs text-theme-muted mt-2" data-testid="todoist-delete-warning">
-                Tasks will be permanently deleted from Todoist after successful import.
+      {needsReconnect && (
+        <div
+          className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+          data-testid="todoist-reconnect-banner"
+        >
+          <p className="text-xs text-theme-warning-text">
+            Your Todoist connection needs to be re-authorized. Please reconnect to continue syncing.
+          </p>
+          <button
+            type="button"
+            className={`${intakeSecondaryBtn} mt-2`}
+            onClick={() => startOAuthMutation.mutate()}
+            disabled={startOAuthMutation.isPending || oauthPolling}
+            data-testid="todoist-reconnect-btn"
+          >
+            {oauthPolling ? "Waiting for authorization…" : "Reconnect"}
+          </button>
+        </div>
+      )}
+
+      {status.lastError && !needsReconnect && !errorDismissed && (
+        <div
+          className="p-3 rounded-lg bg-theme-error-bg border border-theme-error-border"
+          data-testid="todoist-error-banner"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs text-theme-error-text">{status.lastError}</p>
+              <p className="text-xs text-theme-error-text mt-1 opacity-75">
+                Check your Todoist connection or try syncing again.
               </p>
             </div>
-          )}
-
-          {/* Disconnect */}
-          <div className="mt-3 flex items-center gap-2">
-            {!showDisconnectConfirm ? (
-              <button
-                type="button"
-                className="text-xs text-theme-error-text hover:underline"
-                onClick={() => setShowDisconnectConfirm(true)}
-                data-testid="todoist-disconnect-btn"
-              >
-                Disconnect
-              </button>
-            ) : (
-              <div
-                className="flex items-center gap-2 p-2 rounded-lg bg-theme-error-bg border border-theme-error-border"
-                data-testid="todoist-disconnect-confirm"
-              >
-                <p className="text-xs text-theme-error-text">
-                  This will revoke the Todoist token permanently. Continue?
-                </p>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-theme-error-text hover:underline"
-                  onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
-                  data-testid="todoist-disconnect-confirm-btn"
-                >
-                  {disconnectMutation.isPending ? "Disconnecting…" : "Yes, disconnect"}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-theme-muted hover:underline"
-                  onClick={() => setShowDisconnectConfirm(false)}
-                  data-testid="todoist-disconnect-cancel-btn"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              className="text-theme-error-text hover:opacity-70 flex-shrink-0"
+              onClick={() => setErrorDismissed(true)}
+              aria-label="Dismiss error"
+              data-testid="todoist-error-dismiss-btn"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
-
-          {/* Pending deletes warning from disconnect */}
-          {disconnectMutation.isSuccess &&
-            disconnectMutation.data?.pendingDeletesWarning != null &&
-            disconnectMutation.data.pendingDeletesWarning > 0 && (
-              <div
-                className="mt-2 p-2 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
-                data-testid="todoist-pending-deletes-warning"
-              >
-                <p className="text-xs text-theme-warning-text">
-                  {disconnectMutation.data.pendingDeletesWarning} imported task(s) had pending
-                  deletions in Todoist that could not be completed.
-                </p>
-              </div>
-            )}
         </div>
-      </div>
-    </div>
+      )}
+
+      {shouldShowPicker ? (
+        <ProjectPicker
+          pickerOpen={shouldShowPicker}
+          projectsQuery={projectsQuery}
+          selectedPickerProjectId={selectedPickerProjectId}
+          importExistingTasks={importExistingTasks}
+          selectProjectMutation={selectProjectMutation}
+          selectedProject={selectedProject ?? null}
+          onOpen={() => setPickerOpen(true)}
+          onCancel={() => {
+            setPickerOpen(false);
+            setSelectedPickerProjectId(selectedProject?.id ?? "");
+          }}
+          onSelectChange={setSelectedPickerProjectId}
+          onImportToggle={setImportExistingTasks}
+          onRetryFetch={() => void projectsQuery.refetch()}
+          secondaryButtonClass={intakeSecondaryBtn}
+          primaryButtonClass={intakePrimaryBtn}
+        />
+      ) : selectedProject ? (
+        <div data-testid="todoist-project-info">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-theme-muted">
+              Project: <span className="font-medium text-theme-text">{selectedProject.name}</span>
+              <span className="ml-1 text-theme-muted">({selectedProject.id})</span>
+            </span>
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              onClick={() => {
+                setPickerOpen(true);
+                setSelectedPickerProjectId(selectedProject.id);
+              }}
+              data-testid="todoist-change-project-btn"
+            >
+              Change
+            </button>
+          </div>
+          {saveSuccess && (
+            <p
+              className="text-xs text-green-600 dark:text-green-400 mt-1"
+              data-testid="todoist-save-success"
+            >
+              Project saved successfully.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {selectedProject ? (
+        <div data-testid="todoist-sync-section">
+          {syncMessage && (
+            <p
+              className={`text-xs ${
+                syncMessage.severity === "success"
+                  ? "text-green-600 dark:text-green-400"
+                  : syncMessage.severity === "warning"
+                    ? "text-theme-warning-text"
+                    : "text-theme-error-text"
+              }`}
+              data-testid="todoist-sync-message"
+            >
+              {syncMessage.text}
+            </p>
+          )}
+          <p className="text-xs text-theme-muted mt-2" data-testid="todoist-delete-warning">
+            Tasks will be permanently deleted from Todoist after successful import.
+          </p>
+        </div>
+      ) : null}
+
+      {disconnectMutation.isSuccess &&
+        disconnectMutation.data?.pendingDeletesWarning != null &&
+        disconnectMutation.data.pendingDeletesWarning > 0 && (
+          <div
+            className="p-2 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
+            data-testid="todoist-pending-deletes-warning"
+          >
+            <p className="text-xs text-theme-warning-text">
+              {disconnectMutation.data.pendingDeletesWarning} imported task(s) had pending deletions
+              in Todoist that could not be completed.
+            </p>
+          </div>
+        )}
+    </IntakeTodoistShell>
   );
 }
 
@@ -548,6 +542,8 @@ interface ProjectPickerProps {
   onSelectChange: (value: string) => void;
   onImportToggle: (value: boolean) => void;
   onRetryFetch: () => void;
+  secondaryButtonClass?: string;
+  primaryButtonClass?: string;
 }
 
 function ProjectPicker({
@@ -562,6 +558,8 @@ function ProjectPicker({
   onSelectChange,
   onImportToggle,
   onRetryFetch,
+  secondaryButtonClass = "btn-secondary text-sm",
+  primaryButtonClass = "btn-primary text-sm",
 }: ProjectPickerProps) {
   const projects = projectsQuery.data?.projects ?? [];
   const isLoading = projectsQuery.isLoading || projectsQuery.isFetching;
@@ -570,10 +568,10 @@ function ProjectPicker({
 
   if (!pickerOpen) {
     return (
-      <div className="mt-3">
+      <div>
         <button
           type="button"
-          className="btn-secondary text-sm"
+          className={secondaryButtonClass}
           onClick={onOpen}
           data-testid="todoist-open-picker-btn"
         >
@@ -584,7 +582,7 @@ function ProjectPicker({
   }
 
   return (
-    <div className="mt-3" data-testid="todoist-project-picker">
+    <div data-testid="todoist-project-picker">
       <label
         htmlFor="todoist-project-select"
         className="block text-xs font-medium text-theme-text mb-1"
@@ -655,7 +653,7 @@ function ProjectPicker({
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
-              className="btn-primary text-sm"
+              className={primaryButtonClass}
               disabled={!selectedPickerProjectId || selectProjectMutation.isPending}
               onClick={() => selectProjectMutation.mutate(selectedPickerProjectId)}
               data-testid="todoist-save-project-btn"
@@ -665,7 +663,7 @@ function ProjectPicker({
             {selectedProject && (
               <button
                 type="button"
-                className="btn-secondary text-sm"
+                className={secondaryButtonClass}
                 onClick={onCancel}
                 disabled={selectProjectMutation.isPending}
                 data-testid="todoist-cancel-picker-btn"
@@ -689,10 +687,10 @@ function ProjectPicker({
 function TodoistIcon() {
   return (
     <div
-      className="w-8 h-8 rounded-md bg-[#E44332] flex items-center justify-center flex-shrink-0"
+      className="w-7 h-7 rounded-md bg-[#E44332] flex items-center justify-center flex-shrink-0"
       aria-hidden="true"
     >
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
         <path
           d="M2 4.5L6.5 7L11 4.5M2 8L6.5 10.5L11 8M2 11.5L6.5 14L11 11.5"
           stroke="white"

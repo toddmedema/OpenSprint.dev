@@ -47,6 +47,18 @@ describe("NotificationBar", () => {
     expect(store.getState().notification.items).toHaveLength(0);
   });
 
+  it("dismisses when clicking the notification body", async () => {
+    const user = userEvent.setup();
+    const store = createStore([{ id: "n1", message: "Tap to close", severity: "info" }]);
+    render(
+      <Provider store={store}>
+        <NotificationBar />
+      </Provider>
+    );
+    await user.click(screen.getByText("Tap to close"));
+    expect(store.getState().notification.items).toHaveLength(0);
+  });
+
   it("has role=alert on notification", () => {
     const store = createStore([{ id: "n1", message: "Alert", severity: "error" }]);
     render(

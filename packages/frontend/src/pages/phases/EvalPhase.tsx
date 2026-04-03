@@ -45,7 +45,9 @@ import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { CloseButton } from "../../components/CloseButton";
 import { useModalA11y } from "../../hooks/useModalA11y";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../components/PhaseEmptyState";
-import { EvaluateFilterToolbar } from "../../components/evaluate/EvaluateFilterToolbar";
+import { EvaluateFilterToolbar, type EvaluateViewMode } from "../../components/evaluate/EvaluateFilterToolbar";
+import { IntakeInbox } from "../../components/intake/IntakeInbox";
+import { useIntakeItems } from "../../api/hooks/intake";
 
 /** Reply icon (message turn / corner up-right) */
 function ReplyIcon({ className }: { className?: string }) {
@@ -1713,6 +1715,24 @@ export function EvalPhase({
   const [statusFilter, setStatusFilter] = useState<FeedbackStatusFilter>(() =>
     loadFeedbackStatusFilter()
   );
+  const [evalViewMode, setEvalViewMode] = useState<EvaluateViewMode>("feedback");
+
+  const [intakeProviderFilter, setIntakeProviderFilter] = useState("");
+  const [intakeTriageStatusFilter, setIntakeTriageStatusFilter] = useState("");
+  const [intakeSearchQuery, setIntakeSearchQuery] = useState("");
+  const intakeListParams = useMemo(() => {
+    const p: Record<string, string> = {};
+    if (intakeProviderFilter) p.provider = intakeProviderFilter;
+    if (intakeTriageStatusFilter) p.triageStatus = intakeTriageStatusFilter;
+    if (intakeSearchQuery) p.search = intakeSearchQuery;
+    return Object.keys(p).length > 0 ? p : undefined;
+  }, [intakeProviderFilter, intakeTriageStatusFilter, intakeSearchQuery]);
+  const {
+    data: intakeListData,
+    isLoading: intakeListLoading,
+    isError: intakeListError,
+  } = useIntakeItems(projectId, intakeListParams, { enabled: evalViewMode === "intake" });
+
   /* Expand-on-click search (mirrors Execute phase): icon by default, expand to input on click. */
   const [evalSearchExpanded, setEvalSearchExpanded] = useState(false);
   const [evalSearchInputValue, setEvalSearchInputValue] = useState("");
@@ -2231,8 +2251,27 @@ export function EvalPhase({
         handleSearchExpand={handleEvalSearchExpand}
         handleSearchClose={handleEvalSearchClose}
         handleSearchKeyDown={handleEvalSearchKeyDown}
+        viewMode={evalViewMode}
+        onViewModeChange={setEvalViewMode}
+        intakeProviderFilter={intakeProviderFilter}
+        setIntakeProviderFilter={setIntakeProviderFilter}
+        intakeTriageStatusFilter={intakeTriageStatusFilter}
+        setIntakeTriageStatusFilter={setIntakeTriageStatusFilter}
+        intakeSearchQuery={intakeSearchQuery}
+        setIntakeSearchQuery={setIntakeSearchQuery}
+        intakeItemCount={intakeListData?.total}
       />
 
+      {evalViewMode === "intake" ? (
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden" data-testid="eval-intake-view">
+          <IntakeInbox
+            projectId={projectId}
+            items={intakeListData?.items ?? []}
+            isLoading={intakeListLoading}
+            isError={intakeListError}
+          />
+        </div>
+      ) : (<>
       <div
         ref={feedbackFeedRef}
         className="flex-1 min-h-0 min-w-0 overflow-y-auto pt-3 sm:pt-4 pb-4 sm:pb-6 w-full"
@@ -2573,6 +2612,7 @@ export function EvalPhase({
             </div>
           );
         })()}
+    </>)}
     </div>
   );
 }
