@@ -46,7 +46,6 @@ export function TaskDetailDescription({
       collapseAriaLabel="Collapse Description"
       contentId="description-content"
       headerId="description-header"
-      contentClassName="px-4 pt-0 pb-0"
       sectionNavId={sectionNavId}
       sectionNavTitle={sectionNavTitle}
     >

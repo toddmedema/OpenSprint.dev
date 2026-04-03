@@ -451,8 +451,8 @@ html[data-theme="dark"] {
    * Uses !important to override prose-neutral/prose-invert defaults for WCAG AA contrast.
    * No border/container (feedback bwe92b) — description displays without visible box.
    * No nested scrolling: this block must expand and rely on the sidebar's outer scroll container.
-   * CollapsibleSection content wrapper uses px-4 pt-0 pb-0 to avoid left overflow clipping (feedback 2tnq0z).
-   * Tight vertical spacing to match layout density (feedback ese6j4). */
+   * Description uses CollapsibleSection default content padding (p-4 pt-0) so bottom spacing matches sibling sections (feedback f3g0ew).
+   * Horizontal px matches other sections; prose utilities keep markdown vertically compact (feedback ese6j4). */
   .prose-task-description {
     @apply prose prose-sm prose-neutral dark:prose-invert prose-execute-task max-w-none text-xs;
     @apply !text-gray-900 dark:!text-gray-100;
