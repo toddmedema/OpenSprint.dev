@@ -57,7 +57,7 @@ export interface ExecuteState {
   awaitingApproval: boolean;
   /** Active tasks being worked on by orchestrator agents (v2 multi-slot) */
   activeTasks: ActiveTaskInfo[];
-  /** Full active agents from fetchActiveAgents (for ActiveAgentsList, AgentDashboard) */
+  /** Full active agents from fetchActiveAgents (for ActiveAgentsList) */
   activeAgents: ActiveAgent[];
   /** True after first fetchActiveAgents completes (fulfilled or rejected) — used to avoid showing "No agents running" during initial load */
   activeAgentsLoadedOnce: boolean;

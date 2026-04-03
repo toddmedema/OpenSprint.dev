@@ -182,8 +182,24 @@ export class TaskPhaseCoordinator {
     if (!angle && this.expectedReviewKeys.size === 1) {
       return [...this.expectedReviewKeys][0]!;
     }
-    if (angle) return angle;
-    return DEFAULT_REVIEW_KEY;
+    if (!angle) {
+      if (this.expectedReviewKeys.has(DEFAULT_REVIEW_KEY)) return DEFAULT_REVIEW_KEY;
+      const unfilled = [...this.expectedReviewKeys].find((k) => !this.reviewOutcomes.has(k));
+      if (unfilled) {
+        log.warn("Review outcome without angle mapped to unfilled expected key", {
+          taskId: this.taskId,
+          mappedTo: unfilled,
+        });
+        return unfilled;
+      }
+      return DEFAULT_REVIEW_KEY;
+    }
+    log.warn(
+      "Review outcome received for unexpected angle; adding to expected keys to prevent join stall",
+      { taskId: this.taskId, angle, expectedKeys: [...this.expectedReviewKeys] }
+    );
+    this.expectedReviewKeys.add(angle);
+    return angle;
   }
 
   private getAggregatedReviewOutcome(): ReviewOutcome | null {

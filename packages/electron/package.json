@@ -65,7 +65,8 @@
       "dist/boot-screen.js",
       "dist/window-options.js",
       "dist/runtime-branding.js",
-      "dist/open-in-editor.js"
+      "dist/open-in-editor.js",
+      "dist/desktop-crash-log.js"
     ],
     "extraResources": [
       {

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  ERROR_CODE_HINTS,
-  FAILURE_TYPE_TITLES,
   QUALITY_GATE_FAILURE_MESSAGE,
   REMEDIATION_ENVIRONMENT_SETUP,
   REMEDIATION_PREFLIGHT_DEPENDENCY,
@@ -29,14 +27,6 @@ describe("getErrorCodeHint", () => {
 
   it("returns null for undefined", () => {
     expect(getErrorCodeHint(undefined)).toBeNull();
-  });
-});
-
-describe("ERROR_CODE_HINTS", () => {
-  it("includes repo_preflight and environment_setup related codes", () => {
-    expect(ERROR_CODE_HINTS.DEPENDENCY_SETUP_FAILED).toContain("npm ci");
-    expect(ERROR_CODE_HINTS.REPO_DEPENDENCIES_INVALID).toBeDefined();
-    expect(ERROR_CODE_HINTS.GIT_IDENTITY_REQUIRED).toBeDefined();
   });
 });
 
@@ -94,10 +84,8 @@ describe("getRemediationForFailureType", () => {
   });
 });
 
-describe("FAILURE_TYPE_TITLES and QUALITY_GATE_FAILURE_MESSAGE", () => {
-  it("exports expected titles", () => {
-    expect(FAILURE_TYPE_TITLES.environment_setup).toBe("Environment setup failed");
-    expect(FAILURE_TYPE_TITLES.quality_gate).toBe("Quality gate failed");
+describe("QUALITY_GATE_FAILURE_MESSAGE", () => {
+  it("exports expected message", () => {
     expect(QUALITY_GATE_FAILURE_MESSAGE).toContain("Pre-merge quality gates failed");
   });
 });

@@ -108,7 +108,12 @@ export function parseReviewAgentResult(raw: string | null | undefined): ReviewAg
     return null;
   }
 
-  return candidate.summary.trim() ? candidate : null;
+  if (!candidate.summary.trim()) {
+    candidate.summary =
+      candidate.status === "approved" ? "Approved (no summary provided)" : "Rejected (no summary provided)";
+  }
+
+  return candidate;
 }
 
 export function parseMergerAgentResult(raw: string | null | undefined): MergerAgentResult | null {

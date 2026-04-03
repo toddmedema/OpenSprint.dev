@@ -63,7 +63,6 @@ import type {
   CommandIntent,
   CommandPreview,
   CommandExecutionResult,
-  CommandRun,
 } from "@opensprint/shared";
 import type { TaskListResponse } from "./taskList";
 import type { PrdProposedDiffResponse, PrdVersionDiffResponse } from "./prdDiffTypes";
@@ -938,11 +937,5 @@ export const api = {
         `/projects/${projectId}/commands/apply`,
         { method: "POST", body: JSON.stringify({ commandRunId, idempotencyKey }) }
       ),
-    history: (projectId: string, params?: Record<string, string>) => {
-      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-      return request<{ runs: CommandRun[]; total: number }>(`/projects/${projectId}/commands/history${qs}`);
-    },
-    getRun: (projectId: string, runId: string) =>
-      request<CommandRun>(`/projects/${projectId}/commands/${runId}`),
   },
 };

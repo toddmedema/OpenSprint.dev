@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PLAN_MARKDOWN_SECTIONS, getPlanTemplate, validatePlanContent } from "../plan-template.js";
+import { PLAN_MARKDOWN_SECTIONS, validatePlanContent } from "../plan-template.js";
 
 describe("plan-template", () => {
   describe("PLAN_MARKDOWN_SECTIONS", () => {
@@ -20,35 +20,10 @@ describe("plan-template", () => {
     });
   });
 
-  describe("getPlanTemplate", () => {
-    it("returns template with feature title as H1", () => {
-      const result = getPlanTemplate("User Authentication");
-      expect(result).toContain("# User Authentication");
-      expect(result).not.toContain("# Feature");
-    });
-
-    it("includes all required sections", () => {
-      const result = getPlanTemplate("My Feature");
-      for (const section of PLAN_MARKDOWN_SECTIONS) {
-        expect(result).toContain(`## ${section}`);
-      }
-    });
-
-    it("handles empty title by using 'Feature'", () => {
-      const result = getPlanTemplate("");
-      expect(result).toContain("# Feature");
-    });
-
-    it("trims whitespace from title", () => {
-      const result = getPlanTemplate("  Auth  ");
-      expect(result).toContain("# Auth");
-    });
-  });
-
   describe("validatePlanContent", () => {
     it("returns no missing sections when all are present", () => {
-      const content = getPlanTemplate("Test Feature");
-      const result = validatePlanContent(content);
+      const content = PLAN_MARKDOWN_SECTIONS.map((s) => `## ${s}\n\nContent.\n`).join("\n");
+      const result = validatePlanContent(`# Test Feature\n\n${content}`);
       expect(result.missing).toHaveLength(0);
       expect(result.warnings).toHaveLength(0);
     });

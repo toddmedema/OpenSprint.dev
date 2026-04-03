@@ -75,20 +75,10 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   OLLAMA_UNREACHABLE: "Ensure Ollama is installed, running, and the endpoint is correct.",
 };
 
-/**
- * Returns the user-facing message for an error code, or null if unknown.
- */
-export function getMessageForErrorCode(code: string | undefined): string | null {
+/** Returns the user-facing hint for an error code, or null if unknown. */
+export function getErrorCodeHint(code: string | undefined): string | null {
   if (!code) return null;
   return ERROR_CODE_MESSAGES[code] ?? null;
-}
-
-/** Alias for UI/notification hints (one-line actionable guidance). */
-export const ERROR_CODE_HINTS = ERROR_CODE_MESSAGES;
-
-/** Returns the same as getMessageForErrorCode (alias for compatibility). */
-export function getErrorCodeHint(code: string | undefined): string | null {
-  return getMessageForErrorCode(code);
 }
 
 /** Execution failure types (used by orchestrator, failure-handler, UI). */
@@ -138,9 +128,6 @@ export const QUALITY_GATE_FAILED_LABEL = "Quality gate failed";
 /** "Quality gate blocked" when task is blocked after quality gate failure. */
 export const QUALITY_GATE_BLOCKED_LABEL = "Quality gate blocked";
 
-/** Display label for the quality_gate merge stage (e.g. in execution timeline). */
-export const QUALITY_GATE_STAGE_LABEL = "Quality gate";
-
 /** Default reason when quality gate fails (used in summaries). */
 export const QUALITY_GATE_FAILURE_MESSAGE = "Pre-merge quality gates failed";
 
@@ -158,13 +145,6 @@ export function getFailureTypeTitle(type: FailureType | "quality_gate"): string 
   const key = type === "quality_gate" ? "merge_quality_gate" : type;
   return FAILURE_TYPE_LABELS[key as FailureType] ?? type;
 }
-
-/** Titles for failure types used in orchestrator/diagnostics (environment_setup, quality_gate, repo_preflight). */
-export const FAILURE_TYPE_TITLES: Record<string, string> = {
-  environment_setup: FAILURE_TYPE_LABELS.environment_setup,
-  quality_gate: FAILURE_TYPE_LABELS.merge_quality_gate,
-  repo_preflight: FAILURE_TYPE_LABELS.repo_preflight,
-};
 
 /** Remediation for repo preflight when the failure is Git-related. */
 export const REPO_PREFLIGHT_REMEDIATION_GIT =

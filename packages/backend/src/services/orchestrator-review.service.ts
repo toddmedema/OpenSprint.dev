@@ -132,42 +132,6 @@ export interface OrchestratorReviewHost {
 export class OrchestratorReviewService {
   constructor(private host: OrchestratorReviewHost) {}
 
-  private isPendingValidationFragment(text: string): boolean {
-    const normalized = text.toLowerCase();
-    const mentionsPending = normalized.includes("pending");
-    const mentionsOrchestrator = normalized.includes("orchestrator");
-    const mentionsValidation =
-      normalized.includes("validation") ||
-      normalized.includes("test status") ||
-      normalized.includes("orchestrator-test-status");
-    const mentionsStatusFile = normalized.includes("orchestrator-test-status.md");
-    if (
-      !(mentionsPending && ((mentionsOrchestrator && mentionsValidation) || mentionsStatusFile))
-    ) {
-      return false;
-    }
-
-    return !/\bpackages\/|\.tsx?\b|\.jsx?\b|line\s+\d+/i.test(text);
-  }
-
-  private isPendingValidationOnlyRejection(result: ReviewAgentResult): boolean {
-    const summary = result.summary?.trim() ?? "";
-    const notes = result.notes?.trim() ?? "";
-    const issues = (result.issues ?? []).map((issue) => issue.trim()).filter(Boolean);
-    const fragments = [summary, ...issues, notes].filter(Boolean);
-    if (fragments.length === 0) return false;
-
-    const hasPendingMention = fragments.some((fragment) =>
-      this.isPendingValidationFragment(fragment)
-    );
-    if (!hasPendingMention) return false;
-
-    if (summary && !this.isPendingValidationFragment(summary)) return false;
-    if (issues.some((issue) => !this.isPendingValidationFragment(issue))) return false;
-
-    return true;
-  }
-
   public async clearRateLimitNotifications(projectId: string): Promise<void> {
     try {
       const resolved = await notificationService.resolveRateLimitNotifications(projectId);
@@ -775,7 +739,9 @@ export class OrchestratorReviewService {
           );
           return;
         }
-        const r = testOutcome.results!;
+        const r =
+          testOutcome.results ??
+          { passed: 0, failed: 0, skipped: 0, total: 0, details: [] };
         await this.host.failureHandler.handleTaskFailure(
           projectId,
           repoPath,
@@ -824,14 +790,6 @@ export class OrchestratorReviewService {
       if (reviewOutcome.status === "approved") {
         await this.host.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
       } else if (reviewOutcome.status === "rejected") {
-        if (this.isPendingValidationOnlyRejection(reviewOutcome.result!)) {
-          log.warn("Ignoring review rejection caused only by pending validation status", {
-            projectId,
-            taskId: task.id,
-          });
-          await this.host.mergeCoordinator.performMergeAndDone(projectId, repoPath, task, branchName);
-          return;
-        }
         await this.handleReviewRejection(
           projectId,
           repoPath,

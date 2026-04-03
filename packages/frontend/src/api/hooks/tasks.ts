@@ -214,7 +214,7 @@ export function useAgentChatSupport(
   });
 }
 
-/** Active agents (for Execute phase / AgentDashboard). Use refetchInterval for polling. */
+/** Active agents (for Execute phase). Use refetchInterval for polling. */
 export function useActiveAgents(
   projectId: string | undefined,
   options?: { enabled?: boolean; refetchInterval?: number }

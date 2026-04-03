@@ -211,13 +211,20 @@ describe("agent-result-validation", () => {
       expect(parseReviewAgentResult(JSON.stringify({ summary: "x" }))).toBeNull();
     });
 
-    it("returns null when summary is empty after trim", () => {
-      expect(
-        parseReviewAgentResult(JSON.stringify({ status: "approved", summary: "" }))
-      ).toBeNull();
-      expect(
-        parseReviewAgentResult(JSON.stringify({ status: "approved", summary: "  " }))
-      ).toBeNull();
+    it("applies fallback summary when summary is empty after trim", () => {
+      const approved = parseReviewAgentResult(
+        JSON.stringify({ status: "approved", summary: "" })
+      );
+      expect(approved).not.toBeNull();
+      expect(approved!.status).toBe("approved");
+      expect(approved!.summary).toBe("Approved (no summary provided)");
+
+      const rejected = parseReviewAgentResult(
+        JSON.stringify({ status: "rejected", summary: "  " })
+      );
+      expect(rejected).not.toBeNull();
+      expect(rejected!.status).toBe("rejected");
+      expect(rejected!.summary).toBe("Rejected (no summary provided)");
     });
 
     it("returns null when normalized status is not approved or rejected", () => {

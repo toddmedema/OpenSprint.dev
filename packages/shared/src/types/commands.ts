@@ -116,20 +116,6 @@ export type CommandIntent =
 /** Extracts the commandType string literal from the intent union. */
 export type CommandType = CommandIntent["commandType"];
 
-/** All valid command type strings. */
-export const COMMAND_TYPES: readonly CommandType[] = [
-  "list_intake",
-  "convert_intake",
-  "start_execute",
-  "pause_integration",
-  "resume_integration",
-  "list_tasks",
-  "create_task",
-  "sync_integration",
-  "show_project_status",
-  "unrecognized",
-] as const;
-
 // ---------------------------------------------------------------------------
 // Interpretation result
 // ---------------------------------------------------------------------------
@@ -204,44 +190,9 @@ export interface CommandRun {
 // API request / response contracts
 // ---------------------------------------------------------------------------
 
-/** POST /commands/interpret */
-export interface CommandInterpretRequest {
-  input: string;
-}
-
-export interface CommandInterpretResponse {
-  interpretation: CommandInterpretation;
-}
-
-/** POST /commands/preview */
-export interface CommandPreviewRequest {
-  intent: CommandIntent;
-}
-
-export interface CommandPreviewResponse {
-  preview: CommandPreview;
-  commandRunId: string;
-}
-
-/** POST /commands/apply */
-export interface CommandApplyRequest {
-  commandRunId: string;
-  idempotencyKey?: string;
-}
-
-export interface CommandApplyResponse {
-  result: CommandExecutionResult;
-  commandRunId: string;
-}
-
 /** GET /commands/history */
 export interface CommandHistoryFilters {
   limit?: number;
   offset?: number;
   status?: CommandStatus;
-}
-
-export interface CommandHistoryResponse {
-  runs: CommandRun[];
-  total: number;
 }

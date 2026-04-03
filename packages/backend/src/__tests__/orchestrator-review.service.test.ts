@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ReviewAgentResult } from "@opensprint/shared";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -161,61 +160,6 @@ describe("OrchestratorReviewService", () => {
       service.applyRecoveredTestOutcome(phaseResult, outcome, status);
       expect(phaseResult.validationCommand).toBe("jest");
       expect(phaseResult.testOutput).toBe("err output");
-    });
-  });
-
-  describe("isPendingValidationOnlyRejection (via resolveTestAndReview)", () => {
-    it("detects pending-only orchestrator status rejection", () => {
-      const isPendingOnly = (
-        service as unknown as {
-          isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
-        }
-      ).isPendingValidationOnlyRejection.bind(service);
-
-      expect(
-        isPendingOnly({
-          status: "rejected",
-          summary:
-            "Review rejected: Orchestrator test status in .opensprint/active/os-1234/context/orchestrator-test-status.md is PENDING.",
-          notes: "",
-        })
-      ).toBe(true);
-
-      expect(
-        isPendingOnly({
-          status: "rejected",
-          summary:
-            "Review rejected: Orchestrator test status in .opensprint/active/os-1234/context/orchestrator-test-status.md is PENDING.",
-          issues: ["packages/backend/src/x.ts:12 regression in parsing"],
-          notes: "",
-        })
-      ).toBe(false);
-    });
-
-    it("returns false for generic rejections", () => {
-      const isPendingOnly = (
-        service as unknown as {
-          isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
-        }
-      ).isPendingValidationOnlyRejection.bind(service);
-
-      expect(
-        isPendingOnly({
-          status: "rejected",
-          summary: "Code does not handle edge cases",
-          issues: ["Missing null check"],
-        })
-      ).toBe(false);
-    });
-
-    it("returns false for empty fragments", () => {
-      const isPendingOnly = (
-        service as unknown as {
-          isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
-        }
-      ).isPendingValidationOnlyRejection.bind(service);
-
-      expect(isPendingOnly({ status: "rejected" })).toBe(false);
     });
   });
 

@@ -519,12 +519,22 @@ export class OrchestratorService {
 
   /**
    * Centralized state transition with logging and broadcasting.
+   * Validates the transition before mutating any state — invalid transitions
+   * are logged and skipped to prevent counter/slot drift.
    */
   private transition(projectId: string, t: TransitionTarget): void {
     const state = this.getState(projectId);
     const existingSlot = state.slots.get(t.taskId);
     const currentPhase = existingSlot?.phase ?? "idle";
-    validateTransition(t.taskId, currentPhase, t.to);
+    if (!validateTransition(t.taskId, currentPhase, t.to)) {
+      log.error("Blocked invalid state transition — no state mutation applied", {
+        projectId,
+        taskId: t.taskId,
+        from: currentPhase,
+        to: t.to,
+      });
+      return;
+    }
 
     switch (t.to) {
       case "start_task": {
@@ -610,6 +620,46 @@ export class OrchestratorService {
       state.summarizerCache.delete(taskId);
     }
     state.status.activeTasks = this.buildActiveTasks(state);
+  }
+
+  /**
+   * Unified slot finalization: heartbeat + worktree + assignment cleanup, then removeSlot.
+   * All non-transition slot removal paths should go through this to keep cleanup consistent.
+   */
+  private async cleanupAndRemoveSlot(
+    projectId: string,
+    repoPath: string,
+    state: OrchestratorState,
+    taskId: string,
+    reason: string,
+    options?: { broadcast?: boolean }
+  ): Promise<void> {
+    const slot = state.slots.get(taskId);
+    if (!slot) return;
+
+    log.info("Finalizing slot", { projectId, taskId, reason, phase: slot.phase });
+
+    const wtPath = slot.worktreePath ?? repoPath;
+    await heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
+
+    if (slot.worktreePath && slot.worktreePath !== repoPath) {
+      try {
+        await this.branchManager.removeTaskWorktree(
+          repoPath,
+          slot.worktreeKey ?? taskId,
+          slot.worktreePath
+        );
+      } catch {
+        // Best effort; worktree may already be gone
+      }
+    }
+
+    await this.deleteAssignmentAt(repoPath, taskId, slot.worktreePath ?? undefined);
+    this.removeSlot(state, taskId);
+
+    if (options?.broadcast !== false) {
+      broadcastToProject(projectId, this.buildExecuteStatusPayload(projectId, state));
+    }
   }
 
   /** Delete assignment.json for a task (from main repo or from given base path e.g. worktree) */
@@ -765,21 +815,9 @@ export class OrchestratorService {
         taskId,
         context,
       });
-      const wtPath = slot?.worktreePath ?? repoPath;
-      await heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
-      if (slot?.worktreePath && slot.worktreePath !== repoPath) {
-        try {
-          await this.branchManager.removeTaskWorktree(
-            repoPath,
-            slot.worktreeKey ?? taskId,
-            slot.worktreePath
-          );
-        } catch {
-          // Best effort; worktree may already be gone
-        }
-      }
-      await this.deleteAssignmentAt(repoPath, taskId, slot?.worktreePath ?? undefined);
-      if (slot) this.removeSlot(state, taskId);
+      await this.cleanupAndRemoveSlot(projectId, repoPath, state, taskId, "project_deleted", {
+        broadcast: false,
+      });
       return false;
     }
   }
@@ -855,29 +893,9 @@ export class OrchestratorService {
         continue;
       }
       log.warn("Removing stale slot: task no longer in task store", { projectId, taskId });
-      if (slot.agent.activeProcess) {
-        try {
-          slot.agent.activeProcess.kill();
-        } catch {
-          /* may be dead */
-        }
-        slot.agent.activeProcess = null;
-      }
-      const wtPath = slot.worktreePath ?? repoPath;
-      await heartbeatService.deleteHeartbeat(wtPath, taskId);
-      if (slot.worktreePath && slot.worktreePath !== repoPath) {
-        try {
-          await this.branchManager.removeTaskWorktree(
-            repoPath,
-            slot.worktreeKey ?? taskId,
-            slot.worktreePath
-          );
-        } catch {
-          // Best effort; worktree may already be gone
-        }
-      }
-      await this.deleteAssignmentAt(repoPath, taskId, slot.worktreePath ?? undefined);
-      this.removeSlot(state, taskId);
+      await this.cleanupAndRemoveSlot(projectId, repoPath, state, taskId, "task_removed", {
+        broadcast: false,
+      });
       removed = true;
     }
 
@@ -924,40 +942,18 @@ export class OrchestratorService {
     if (!slot) return;
 
     log.info("Stopping agent for user-marked-done task", { projectId, taskId });
-    if (slot.agent.activeProcess) {
-      try {
-        slot.agent.activeProcess.kill();
-      } catch {
-        // Process may already be dead
-      }
-      slot.agent.activeProcess = null;
-    }
     try {
       const repoPath = await this.projectService.getRepoPath(projectId);
-      const wtPath = slot.worktreePath ?? repoPath;
-      await heartbeatService.deleteHeartbeat(wtPath, taskId);
-      if (slot.worktreePath && slot.worktreePath !== repoPath) {
-        try {
-          await this.branchManager.removeTaskWorktree(
-            repoPath,
-            slot.worktreeKey ?? taskId,
-            slot.worktreePath
-          );
-        } catch {
-          // Best effort; worktree may already be gone
-        }
-      }
-      await this.deleteAssignmentAt(repoPath, taskId, slot.worktreePath ?? undefined);
+      await this.cleanupAndRemoveSlot(projectId, repoPath, state, taskId, "user_stopped");
     } catch (err) {
       log.warn("Cleanup on stopTaskAndFreeSlot failed, still freeing slot", {
         projectId,
         taskId,
         err,
       });
+      this.removeSlot(state, taskId);
+      broadcastToProject(projectId, this.buildExecuteStatusPayload(projectId, state));
     }
-    this.removeSlot(state, taskId);
-
-    broadcastToProject(projectId, this.buildExecuteStatusPayload(projectId, state));
     this.nudge(projectId);
   }
 
@@ -1545,32 +1541,9 @@ export class OrchestratorService {
   /** Remove a slot for recovery (stale task or cleanup). Used by RecoveryService. */
   async removeStaleSlot(projectId: string, taskId: string, repoPath: string): Promise<void> {
     const state = this.getState(projectId);
-    const slot = state.slots.get(taskId);
-    if (!slot) return;
-
-    if (slot.agent.activeProcess) {
-      try {
-        slot.agent.activeProcess.kill();
-      } catch {
-        // Process may already be dead
-      }
-      slot.agent.activeProcess = null;
-    }
-    const wtPath = slot.worktreePath ?? repoPath;
-    await heartbeatService.deleteHeartbeat(wtPath, taskId);
-    if (slot.worktreePath && slot.worktreePath !== repoPath) {
-      try {
-        await this.branchManager.removeTaskWorktree(
-          repoPath,
-          slot.worktreeKey ?? taskId,
-          slot.worktreePath
-        );
-      } catch {
-        // Best effort; worktree may already be gone
-      }
-    }
-    await this.deleteAssignmentAt(repoPath, taskId, slot.worktreePath ?? undefined);
-    this.removeSlot(state, taskId);
+    await this.cleanupAndRemoveSlot(projectId, repoPath, state, taskId, "recovery_cleanup", {
+      broadcast: false,
+    });
   }
 
   /** Handle recoverable heartbeat gap (reattach or resume with suspend reason). Used by RecoveryService. */
@@ -2137,22 +2110,7 @@ export class OrchestratorService {
     }
 
     await this.taskStore.update(projectId, task.id, { status: "open", assignee: "" });
-    const wtPath = slot.worktreePath ?? repoPath;
-    await heartbeatService.deleteHeartbeat(wtPath, task.id).catch(() => {});
-    if (slot.worktreePath && slot.worktreePath !== repoPath) {
-      try {
-        await this.branchManager.removeTaskWorktree(
-          repoPath,
-          slot.worktreeKey ?? task.id,
-          slot.worktreePath
-        );
-      } catch {
-        // Best effort
-      }
-    }
-    await this.deleteAssignmentAt(repoPath, task.id, slot.worktreePath ?? undefined);
-    this.removeSlot(state, task.id);
-    broadcastToProject(projectId, this.buildExecuteStatusPayload(projectId, state));
+    await this.cleanupAndRemoveSlot(projectId, repoPath, state, task.id, "api_exhausted");
     await this.persistCounters(projectId, repoPath);
   }
 
@@ -2434,8 +2392,11 @@ export class OrchestratorService {
       }
 
       const reviewMode = settings.reviewMode ?? DEFAULT_REVIEW_MODE;
+      const skipReview =
+        reviewMode === "never" ||
+        (reviewMode === "on-failure-only" && slot.attempt <= 1);
 
-      if (reviewMode === "never") {
+      if (skipReview) {
         const scopedResult = await this.runAdaptiveValidation(
           projectId,
           wtPath,
@@ -2588,22 +2549,7 @@ export class OrchestratorService {
           status: "blocked",
           block_reason: OPEN_QUESTION_BLOCK_REASON,
         });
-        const wtPathForCleanup = slot.worktreePath ?? repoPath;
-        await heartbeatService.deleteHeartbeat(wtPathForCleanup, task.id).catch(() => {});
-        if (slot.worktreePath && slot.worktreePath !== repoPath) {
-          try {
-            await this.branchManager.removeTaskWorktree(
-              repoPath,
-              slot.worktreeKey ?? task.id,
-              slot.worktreePath
-            );
-          } catch {
-            // Best effort
-          }
-        }
-        await this.deleteAssignment(repoPath, task.id);
-        this.removeSlot(state, task.id);
-        broadcastToProject(projectId, this.buildExecuteStatusPayload(projectId, state));
+        await this.cleanupAndRemoveSlot(projectId, repoPath, state, task.id, "open_questions");
         await this.persistCounters(projectId, repoPath);
         return;
       }

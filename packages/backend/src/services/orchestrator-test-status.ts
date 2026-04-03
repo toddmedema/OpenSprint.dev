@@ -104,7 +104,8 @@ export function buildOrchestratorTestStatusContent(status: OrchestratorTestStatu
   switch (status.status) {
     case "pending":
       content +=
-        "The orchestrator is still running automated validation. This includes merge quality gates when configured. Before approving, re-open this file. Do not approve while the status is `PENDING`.\n";
+        "The orchestrator is running automated validation (tests and merge quality gates) in parallel. " +
+        "The orchestrator will check these results independently before merging — base your review on code quality, correctness, and design rather than the validation status shown here.\n";
       break;
     case "passed":
       content += buildResultsSummary(status.results);
