@@ -21,7 +21,10 @@ export type ArchiveProjectFlowDeps = {
   invalidateProjectGitRuntime: (projectId: string) => void;
 };
 
-export async function runArchiveProjectFlow(deps: ArchiveProjectFlowDeps, id: string): Promise<void> {
+export async function runArchiveProjectFlow(
+  deps: ArchiveProjectFlowDeps,
+  id: string
+): Promise<void> {
   const project = await deps.getProject(id);
   const repoPath = project.repoPath;
   await stopOrchestratorForProject(id);

@@ -15,10 +15,7 @@ import * as projectIndex from "./project-index.js";
 import { projectGitRuntimeCache } from "./project-git-runtime-cache.js";
 import { assertSupportedRepoPath } from "../utils/repo-path-policy.js";
 import { getNextScheduledSelfImprovementRunAt } from "./project/project-scheduling.js";
-import {
-  buildDefaultSettings,
-  normalizeRepoPath,
-} from "./project/project-settings-helpers.js";
+import { buildDefaultSettings, normalizeRepoPath } from "./project/project-settings-helpers.js";
 import { buildProjectListFromIndex } from "./project/project-list-operations.js";
 import { runCreateProjectFlow } from "./project/project-create-flow.js";
 import { runScaffoldProjectFlow } from "./project/project-scaffold-flow.js";

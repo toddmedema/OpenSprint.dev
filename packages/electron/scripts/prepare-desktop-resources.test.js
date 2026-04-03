@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 const require = createRequire(import.meta.url);
 const {
   buildElectronRebuildArgs,
+  generateIconComposerAssets,
   normalizeElectronVersion,
   resolveConfiguredElectronVersion,
   resolveElectronVersion,
@@ -67,21 +68,23 @@ describe("prepare-desktop-resources", () => {
     ]);
   });
 
-  it("includes light, dark, and tinted Icon Composer variants for macOS builds", () => {
+  it("includes light, dark, and tinted Icon Composer variants for macOS builds", async () => {
+    await generateIconComposerAssets();
     const iconJsonPath = path.join(__dirname, "..", "build", "OpenSprint.icon", "icon.json");
     const iconJson = JSON.parse(fs.readFileSync(iconJsonPath, "utf8"));
     const layer = iconJson.groups[0].layers[0];
     const specializations = layer["image-name-specializations"];
 
     expect(specializations).toEqual([
-      { value: "light.png" },
-      { appearance: "dark", value: "dark.png" },
-      { appearance: "tinted", value: "tinted.png" },
+      { value: "Assets/light.png" },
+      { appearance: "dark", value: "Assets/dark.png" },
+      { appearance: "tinted", value: "Assets/tinted.png" },
     ]);
     expect(layer.position["translation-in-points"]).toEqual([0, 0]);
   });
 
   it("keeps the rasterized artwork optically shifted toward center", async () => {
+    await generateIconComposerAssets();
     const sharp = require("sharp");
     const lightIconPath = path.join(
       __dirname,

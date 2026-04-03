@@ -9,6 +9,8 @@ const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const backendDir = path.join(repoRoot, "packages", "backend");
 const frontendDir = path.join(repoRoot, "packages", "frontend");
 const electronPackageDir = path.join(repoRoot, "packages", "electron");
+const iconComposerDir = path.join(electronPackageDir, "build", "OpenSprint.icon");
+const iconComposerAssetsDir = path.join(iconComposerDir, "Assets");
 const runtimeDepsTemplateDir = path.join(repoRoot, "packages", "electron", "runtime-deps");
 const outDir = path.join(repoRoot, "packages", "electron", "desktop-resources");
 // Keep only native modules external; bundle pure JS deps so runtime install is minimal.
@@ -280,6 +282,7 @@ async function run() {
   if (selectedPython) {
     console.log(`Using Python for native module rebuilds: ${selectedPython}`);
   }
+  await generateIconComposerAssets();
 
   if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
@@ -331,6 +334,77 @@ async function run() {
   await generateTrayIcons(frontendOut);
 
   console.log("Desktop resources ready at", outDir);
+}
+
+async function generateIconComposerAssets() {
+  const iconJsonPath = path.join(iconComposerDir, "icon.json");
+  const logoIconSvg = path.join(frontendDir, "public", "logo-icon.svg");
+  if (!fs.existsSync(iconJsonPath)) {
+    return;
+  }
+  if (!fs.existsSync(logoIconSvg)) {
+    console.warn(
+      `Skipping Icon Composer asset generation: source logo SVG is missing at ${logoIconSvg}`
+    );
+    return;
+  }
+
+  let sharp;
+  try {
+    sharp = require("sharp");
+  } catch (err) {
+    console.warn(
+      `Skipping Icon Composer asset generation: sharp is unavailable (${
+        err instanceof Error ? err.message : String(err)
+      })`
+    );
+    return;
+  }
+
+  const baseSvg = fs.readFileSync(logoIconSvg, "utf8");
+  const lightSvg = baseSvg;
+  const darkSvg = baseSvg
+    .replace(/#c7d2fe/gi, "#dbeafe")
+    .replace(/#818cf8/gi, "#a5b4fc")
+    .replace(/#4f46e5/gi, "#6366f1");
+  const tintedSvg = baseSvg.replace(/fill="#[^"]+"/gi, 'fill="#ffffff"');
+  const variants = [
+    { fileName: "light.png", svg: lightSvg },
+    { fileName: "dark.png", svg: darkSvg },
+    { fileName: "tinted.png", svg: tintedSvg },
+  ];
+
+  fs.mkdirSync(iconComposerAssetsDir, { recursive: true });
+
+  for (const variant of variants) {
+    const png = await renderIconComposerVariant(variant.svg, sharp);
+    fs.writeFileSync(path.join(iconComposerAssetsDir, variant.fileName), png);
+  }
+
+  console.log(`Generated Icon Composer image variants in ${iconComposerAssetsDir}`);
+}
+
+async function renderIconComposerVariant(svg, sharp) {
+  const canvasSize = 1024;
+  const renderSize = Math.round(canvasSize * 0.9);
+  const opticalShiftX = 46;
+  const top = Math.round((canvasSize - renderSize) / 2);
+  const left = Math.round((canvasSize - renderSize) / 2 + opticalShiftX);
+  const layer = await sharp(Buffer.from(svg))
+    .resize(renderSize, renderSize, { fit: "contain" })
+    .png()
+    .toBuffer();
+  return sharp({
+    create: {
+      width: canvasSize,
+      height: canvasSize,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: layer, left, top }])
+    .png()
+    .toBuffer();
 }
 
 function ensureSqliteRuntimeLoadable(
@@ -773,6 +847,7 @@ if (require.main === module) {
 
 module.exports = {
   buildElectronRebuildArgs,
+  generateIconComposerAssets,
   parseCliOptions,
   resolveElectronVersion,
   resolveInstalledElectronVersion,

@@ -171,8 +171,7 @@ export async function runCreateProjectFlow(
   const { aiAutonomyLevel, hilConfig } = resolveAiAutonomyAndHil(input);
   const detected = await detectTestFramework(repoPath);
   const testFramework = input.testFramework ?? detected?.framework ?? null;
-  const testCommand =
-    (detected?.testCommand ?? getTestCommandForFramework(testFramework)) || null;
+  const testCommand = (detected?.testCommand ?? getTestCommandForFramework(testFramework)) || null;
   const gitWorkingMode = input.gitWorkingMode === "branches" ? "branches" : "worktree";
   const effectiveMaxConcurrentCoders =
     gitWorkingMode === "branches" ? 1 : (input.maxConcurrentCoders ?? 1);

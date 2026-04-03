@@ -95,10 +95,7 @@ export async function runUpdateSettingsFlow(
     delete workingRaw.highComplexityAgent;
   } else if (complexUpdate !== undefined) {
     try {
-      workingRaw.complexComplexityAgent = parseAgentConfig(
-        complexUpdate,
-        "complexComplexityAgent"
-      );
+      workingRaw.complexComplexityAgent = parseAgentConfig(complexUpdate, "complexComplexityAgent");
       delete workingRaw.highComplexityAgent;
     } catch (err) {
       const msg = getErrorMessage(err, "Invalid complex complexity agent configuration");
@@ -134,8 +131,7 @@ export async function runUpdateSettingsFlow(
       : (current.aiAutonomyLevel ?? DEFAULT_AI_AUTONOMY_LEVEL);
   const hilConfig = hilConfigFromAiAutonomyLevel(aiAutonomyLevel);
   const gitWorkingMode =
-    sanitizedUpdates.gitWorkingMode === "worktree" ||
-    sanitizedUpdates.gitWorkingMode === "branches"
+    sanitizedUpdates.gitWorkingMode === "worktree" || sanitizedUpdates.gitWorkingMode === "branches"
       ? sanitizedUpdates.gitWorkingMode
       : (current.gitWorkingMode ?? "worktree");
   const teamMembers =

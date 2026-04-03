@@ -101,8 +101,7 @@ export async function runScaffoldProjectFlow(
     });
   }
 
-  const agentConfig = (input.simpleComplexityAgent ??
-    DEFAULT_AGENT_CONFIG) as AgentConfigInput & {
+  const agentConfig = (input.simpleComplexityAgent ?? DEFAULT_AGENT_CONFIG) as AgentConfigInput & {
     type:
       | "cursor"
       | "claude"
