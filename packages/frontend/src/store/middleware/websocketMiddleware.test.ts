@@ -915,6 +915,148 @@ describe("websocketMiddleware", () => {
       });
     });
 
+    it("coalesces repeated agent.activity invalidations within the throttle window", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      try {
+        const store = createStore();
+        store.dispatch(wsConnect({ projectId: "proj-1" }));
+        wsInstance!.simulateOpen();
+        await vi.waitFor(() => store.getState().websocket.connected);
+
+        const waiting = {
+          type: "agent.activity" as const,
+          taskId: "task-1",
+          phase: "coding" as const,
+          activity: "waiting_on_tool" as const,
+        };
+
+        wsInstance!.simulateMessage(waiting);
+        await vi.waitFor(() => {
+          expect(mockInvalidateQueries).toHaveBeenCalledWith({
+            queryKey: queryKeys.execute.diagnostics("proj-1", "task-1"),
+          });
+        });
+
+        mockInvalidateQueries.mockClear();
+        vi.setSystemTime(100);
+
+        wsInstance!.simulateMessage(waiting);
+        wsInstance!.simulateMessage(waiting);
+        wsInstance!.simulateMessage(waiting);
+        expect(mockInvalidateQueries).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.execute.diagnostics("proj-1", "task-1"),
+        });
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: ["agents", "active", "proj-1"],
+        });
+        const diagCalls = mockInvalidateQueries.mock.calls.filter(
+          (c) =>
+            Array.isArray(c[0]?.queryKey) &&
+            c[0].queryKey[0] === "execute" &&
+            c[0].queryKey[3] === "diagnostics"
+        );
+        expect(diagCalls.length).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("dedupes diagnostics invalidation for the same task across coalesced agent.activity events", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      try {
+        const store = createStore();
+        store.dispatch(wsConnect({ projectId: "proj-1" }));
+        wsInstance!.simulateOpen();
+        await vi.waitFor(() => store.getState().websocket.connected);
+
+        const toolCompleted = {
+          type: "agent.activity" as const,
+          taskId: "task-1",
+          phase: "coding" as const,
+          activity: "tool_completed" as const,
+        };
+
+        wsInstance!.simulateMessage(toolCompleted);
+        await vi.waitFor(() => {
+          expect(mockInvalidateQueries).toHaveBeenCalled();
+        });
+        mockInvalidateQueries.mockClear();
+        vi.setSystemTime(50);
+
+        wsInstance!.simulateMessage(toolCompleted);
+        wsInstance!.simulateMessage({
+          ...toolCompleted,
+          taskId: "task-2",
+        });
+
+        await vi.advanceTimersByTimeAsync(1000);
+        const diagCalls = mockInvalidateQueries.mock.calls.filter(
+          (c) =>
+            Array.isArray(c[0]?.queryKey) &&
+            c[0].queryKey[0] === "execute" &&
+            c[0].queryKey[3] === "diagnostics"
+        );
+        expect(diagCalls.map((c) => c[0].queryKey)).toEqual(
+          expect.arrayContaining([
+            queryKeys.execute.diagnostics("proj-1", "task-1"),
+            queryKeys.execute.diagnostics("proj-1", "task-2"),
+          ])
+        );
+        expect(diagCalls.length).toBe(2);
+        expect(
+          mockInvalidateQueries.mock.calls.some(
+            (c) =>
+              Array.isArray(c[0]?.queryKey) &&
+              c[0].queryKey[0] === "agents" &&
+              c[0].queryKey[1] === "active"
+          )
+        ).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("flushes agent.activity immediately on resumed without waiting for throttle", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      try {
+        const store = createStore();
+        store.dispatch(wsConnect({ projectId: "proj-1" }));
+        wsInstance!.simulateOpen();
+        await vi.waitFor(() => store.getState().websocket.connected);
+
+        wsInstance!.simulateMessage({
+          type: "agent.activity",
+          taskId: "task-1",
+          phase: "coding",
+          activity: "waiting_on_tool",
+        });
+        await vi.waitFor(() => expect(mockInvalidateQueries).toHaveBeenCalled());
+        mockInvalidateQueries.mockClear();
+        vi.setSystemTime(100);
+
+        wsInstance!.simulateMessage({
+          type: "agent.activity",
+          taskId: "task-1",
+          phase: "coding",
+          activity: "resumed",
+        });
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: queryKeys.execute.diagnostics("proj-1", "task-1"),
+        });
+        expect(mockInvalidateQueries).toHaveBeenCalledWith({
+          queryKey: ["agents", "active", "proj-1"],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("dispatches setCompletionState on agent.completed", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));

@@ -128,6 +128,9 @@ const HOME_SENTINEL = "__home__";
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
+/** Max rate for agent.activity → React Query invalidations (diagnostics + active agents). Suspended/resumed flush immediately. */
+const AGENT_ACTIVITY_QUERY_THROTTLE_MS = 1000;
+
 /**
  * Browsers cannot set WebSocket upgrade headers; append the same local session token used for
  * `Authorization: Bearer` on API fetch (see `api/client.ts`).
@@ -150,6 +153,48 @@ export const websocketMiddleware: Middleware = (storeApi) => {
   /** True after first successful connect; used to invalidate queries on reconnect (graceful recovery) */
   let hadConnection = false;
 
+  /** Coalesce agent.activity invalidations to avoid refetch storms during long agent runs */
+  let lastAgentActivityQueryFlushAt = -AGENT_ACTIVITY_QUERY_THROTTLE_MS;
+  let agentActivityQueryFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  const pendingAgentActivityDiagnosticsTaskIds = new Set<string>();
+  let pendingAgentActivityInvalidateActiveAgents = false;
+
+  function clearAgentActivityQueryFlushTimer() {
+    if (agentActivityQueryFlushTimer) {
+      clearTimeout(agentActivityQueryFlushTimer);
+      agentActivityQueryFlushTimer = null;
+    }
+  }
+
+  function resetAgentActivityQueryCoalescing() {
+    clearAgentActivityQueryFlushTimer();
+    pendingAgentActivityDiagnosticsTaskIds.clear();
+    pendingAgentActivityInvalidateActiveAgents = false;
+    lastAgentActivityQueryFlushAt = -AGENT_ACTIVITY_QUERY_THROTTLE_MS;
+  }
+
+  function flushAgentActivityQueryInvalidations(projectId: string) {
+    const taskIds = [...pendingAgentActivityDiagnosticsTaskIds];
+    const invalidateActive = pendingAgentActivityInvalidateActiveAgents;
+    pendingAgentActivityDiagnosticsTaskIds.clear();
+    pendingAgentActivityInvalidateActiveAgents = false;
+    agentActivityQueryFlushTimer = null;
+    lastAgentActivityQueryFlushAt = Date.now();
+    try {
+      const client = getQueryClient();
+      for (const taskId of taskIds) {
+        void client.invalidateQueries({
+          queryKey: queryKeys.execute.diagnostics(projectId, taskId),
+        });
+      }
+      if (invalidateActive) {
+        void client.invalidateQueries({ queryKey: ["agents", "active", projectId] });
+      }
+    } catch {
+      // QueryClient may not be set in tests
+    }
+  }
+
   /** Pending agent.subscribe messages to replay when connection opens (fixes stuck live output) */
   const pendingSubscribes: Array<{ type: "agent.subscribe"; taskId: string }> = [];
   /** Pending plan.agent.subscribe messages to replay when connection opens */
@@ -157,6 +202,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
 
   function cleanup() {
     intentionalClose = true;
+    resetAgentActivityQueryCoalescing();
     pendingSubscribes.length = 0;
     pendingPlanSubscribes.length = 0;
     if (reconnectTimer) {
@@ -460,12 +506,30 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         void qc.invalidateQueries({ queryKey: ["agents", "active", projectId] });
         break;
 
-      case "agent.activity":
-        void qc.invalidateQueries({
-          queryKey: queryKeys.execute.diagnostics(projectId, event.taskId),
-        });
-        void qc.invalidateQueries({ queryKey: ["agents", "active", projectId] });
+      case "agent.activity": {
+        pendingAgentActivityDiagnosticsTaskIds.add(event.taskId);
+        pendingAgentActivityInvalidateActiveAgents = true;
+        const forceImmediate = event.activity === "suspended" || event.activity === "resumed";
+        if (forceImmediate) {
+          clearAgentActivityQueryFlushTimer();
+          flushAgentActivityQueryInvalidations(projectId);
+        } else {
+          const now = Date.now();
+          if (now - lastAgentActivityQueryFlushAt >= AGENT_ACTIVITY_QUERY_THROTTLE_MS) {
+            clearAgentActivityQueryFlushTimer();
+            flushAgentActivityQueryInvalidations(projectId);
+          } else if (!agentActivityQueryFlushTimer) {
+            const delay = Math.max(
+              0,
+              AGENT_ACTIVITY_QUERY_THROTTLE_MS - (now - lastAgentActivityQueryFlushAt)
+            );
+            agentActivityQueryFlushTimer = setTimeout(() => {
+              flushAgentActivityQueryInvalidations(projectId);
+            }, delay);
+          }
+        }
         break;
+      }
 
       case "agent.completed": {
         const completed = event as AgentCompletedEvent;

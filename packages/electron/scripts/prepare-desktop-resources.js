@@ -376,6 +376,14 @@ function ensureSqliteRuntimeLoadable(
     };
   }
   let probe = runSqliteProbeWithElectron(backendOut);
+  if (probe.skipped) {
+    console.warn(probe.reason);
+    return {
+      ...initialDiagnostics,
+      recoveredViaSourceRebuild: false,
+      probe,
+    };
+  }
   if (probe.ok) {
     console.log(`${SQLITE_MODULE_NAME} verification passed.`);
     return {
@@ -455,7 +463,18 @@ function collectSqliteRuntimeDiagnostics(backendOut, electronVersion, targetPlat
 }
 
 function runSqliteProbeWithElectron(backendOut) {
-  const electronBinary = resolveElectronBinaryPath();
+  const electronBinaryResolution = resolveElectronBinaryPath();
+  if (!electronBinaryResolution.path) {
+    return {
+      ok: null,
+      skipped: true,
+      reason: electronBinaryResolution.error,
+      stdout: "",
+      stderr: "",
+      code: "skipped",
+    };
+  }
+  const electronBinary = electronBinaryResolution.path;
   const script = `
 const path = require("path");
 const backendOut = process.argv[1];
@@ -504,19 +523,34 @@ console.log("sqlite-probe-ok");
 }
 
 function resolveElectronBinaryPath() {
+  const fromEnv = process.env.OPENSPRINT_ELECTRON_BINARY_PATH?.trim();
+  if (fromEnv) {
+    if (fs.existsSync(fromEnv)) {
+      return { path: fromEnv, error: null };
+    }
+    return {
+      path: null,
+      error: `Skipping SQLite runtime verification: OPENSPRINT_ELECTRON_BINARY_PATH is set but file does not exist (${fromEnv}).`,
+    };
+  }
+
   try {
     const binaryPath = require("electron");
     if (typeof binaryPath === "string" && binaryPath.trim()) {
-      return binaryPath;
+      return { path: binaryPath, error: null };
     }
   } catch (err) {
-    throw new Error(
-      `Could not resolve Electron binary path for SQLite runtime verification: ${
+    return {
+      path: null,
+      error: `Skipping SQLite runtime verification because Electron binary path could not be resolved: ${
         err instanceof Error ? err.message : String(err)
-      }`
-    );
+      }`,
+    };
   }
-  throw new Error("Could not resolve Electron binary path for SQLite runtime verification.");
+  return {
+    path: null,
+    error: "Skipping SQLite runtime verification because Electron binary path is empty.",
+  };
 }
 
 function logProbeFailure(message, probe, diagnostics) {
