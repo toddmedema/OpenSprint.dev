@@ -1109,12 +1109,13 @@ describe("RecoveryService — stale heartbeat recovery", () => {
   });
 
   describe("worktree lease integration", () => {
-    function makeAssignment(taskId: string, worktreePath: string) {
+    function makeAssignment(taskId: string, worktreePath: string, worktreeKey?: string) {
       return {
         taskId,
         projectId: "proj-1",
         phase: "coding",
         branchName: `opensprint/${taskId}`,
+        ...(worktreeKey ? { worktreeKey } : {}),
         worktreePath,
         promptPath: path.join(worktreePath, ".opensprint", "active", taskId, "prompt.md"),
         agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
@@ -1194,6 +1195,50 @@ describe("RecoveryService — stale heartbeat recovery", () => {
         "task-err",
         wtPath
       );
+    });
+
+    it("checks cleanup lease and removal using assignment worktreeKey for epic worktrees", async () => {
+      mockCanCleanupLease.mockResolvedValue(false);
+
+      const wtPath = path.join(tmpDir, "epic_123");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "123.1", assignment: makeAssignment("123.1", wtPath, "epic_123") },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(mockCanCleanupLease).toHaveBeenCalledWith("epic_123");
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    });
+
+    it("derives epic worktreeKey from path when assignment omits worktreeKey", async () => {
+      mockCanCleanupLease.mockResolvedValue(false);
+
+      const wtPath = path.join(tmpDir, "epic_456");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "456.2", assignment: makeAssignment("456.2", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(mockCanCleanupLease).toHaveBeenCalledWith("epic_456");
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
     });
   });
 });

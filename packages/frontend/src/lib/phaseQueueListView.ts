@@ -45,4 +45,4 @@ export const PHASE_QUEUE_ROW_META_MUTED_CLASSNAME = "shrink-0 text-xs text-theme
  * bottom border to match the list visual.
  */
 export const PHASE_QUEUE_ROW_VIRTUAL_OUTER_CLASSNAME =
-  "border-b border-theme-border-subtle min-h-[52px]";
+  "border-b border-theme-border-subtle min-h-[52px] flex w-full items-center";

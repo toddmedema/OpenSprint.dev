@@ -1,4 +1,12 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Task } from "@opensprint/shared";
 import type { Plan } from "@opensprint/shared";
@@ -25,7 +33,6 @@ import {
   PHASE_QUEUE_ROW_TITLE_CLASSNAME,
   PHASE_QUEUE_ROW_VIRTUAL_OUTER_CLASSNAME,
   phaseQueueRowSurfaceClassName,
-  phaseQueueRowPrimaryButtonClassName,
 } from "../../lib/phaseQueueListView";
 
 const ACTIVE_TASK_TICK_MS = 10_000;
@@ -158,18 +165,30 @@ function TimelineRow({
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const rightLabel = getTimelineRightLabel(task, epicName);
 
-  const rowOuterClass = `min-h-[52px] ${phaseQueueRowSurfaceClassName(isSelected)}${
+  const rowOuterClass = `flex w-full min-h-[52px] cursor-pointer items-center outline-none focus-visible:outline-none ${phaseQueueRowSurfaceClassName(isSelected)}${
     assigneeDropdownOpen ? " relative z-[1000]" : ""
   }`;
+  const rowSurfaceHandlers = {
+    "aria-label": task.title,
+    "aria-current": (isSelected ? "true" : undefined) as "true" | undefined,
+    "data-queue-row-selected": isSelected ? "true" : "false",
+    tabIndex: 0 as const,
+    onClick: (e: MouseEvent<HTMLElement>) => {
+      const el = e.target as HTMLElement;
+      if (el.closest('[data-testid="task-row-assignee"]')) return;
+      if (el.closest("button")) return;
+      onTaskSelect(task.id);
+    },
+    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (document.activeElement !== e.currentTarget) return;
+      e.preventDefault();
+      onTaskSelect(task.id);
+    },
+  };
   const rowInner = (
     <div className={PHASE_QUEUE_ROW_INNER_CLASSNAME}>
-      <button
-        type="button"
-        onClick={() => onTaskSelect(task.id)}
-        className={phaseQueueRowPrimaryButtonClassName(isSelected)}
-        aria-current={isSelected ? "true" : undefined}
-        data-queue-row-selected={isSelected ? "true" : "false"}
-      >
+      <div className="flex min-h-0 min-w-0 flex-1 items-center gap-3 text-left text-sm">
         <PriorityIcon priority={task.priority ?? 1} size="xs" />
         <span className={PHASE_QUEUE_ROW_TITLE_CLASSNAME} title={task.title}>
           {task.title}
@@ -183,44 +202,46 @@ function TimelineRow({
             Self-improvement
           </span>
         )}
+      </div>
+      <div className="ml-auto min-w-0 shrink-0 inline-flex items-center justify-end gap-3 text-right">
         {rightLabel && (
           <span
-            className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} truncate max-w-[120px] min-[1000px]:max-w-[240px]`}
+            className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} truncate max-w-[120px] min-[1000px]:max-w-[240px] text-right`}
             title={rightLabel.title}
             data-testid={rightLabel.testId}
           >
             {rightLabel.text}
           </span>
         )}
-        <span className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} tabular-nums`}>
+        <span className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} tabular-nums text-right`}>
           {relativeTime}
         </span>
-      </button>
-      <span
-        className="shrink-0 w-fit max-w-fit tabular-nums inline-flex items-center min-w-0"
-        data-testid="task-row-assignee"
-        role="presentation"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-        tabIndex={-1}
-      >
-        {enableHumanTeammates ? (
-          <AssigneeSelector
-            projectId={projectId}
-            taskId={task.id}
-            currentAssignee={task.assignee ?? null}
-            teamMembers={teamMembers}
-            readOnly={isDone || isInProgress}
-            isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
-            matchTaskNameTypography
-            onOpenChange={setAssigneeDropdownOpen}
-          />
-        ) : (
-          <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME}>
-            {task.assignee?.trim() ? task.assignee : null}
-          </span>
-        )}
-      </span>
+        <span
+          className="shrink-0 w-fit max-w-fit tabular-nums inline-flex items-center min-w-0 text-right"
+          data-testid="task-row-assignee"
+          role="presentation"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          tabIndex={-1}
+        >
+          {enableHumanTeammates ? (
+            <AssigneeSelector
+              projectId={projectId}
+              taskId={task.id}
+              currentAssignee={task.assignee ?? null}
+              teamMembers={teamMembers}
+              readOnly={isDone || isInProgress}
+              isAgentAssignee={!!task.assignee && isAgentAssignee(task.assignee)}
+              matchTaskNameTypography
+              onOpenChange={setAssigneeDropdownOpen}
+            />
+          ) : (
+            <span className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} text-right`}>
+              {task.assignee?.trim() ? task.assignee : null}
+            </span>
+          )}
+        </span>
+      </div>
       {isBlocked && onUnblock && (
         <button
           type="button"
@@ -249,14 +270,22 @@ function TimelineRow({
 
   if (asListItem) {
     return (
-      <li data-testid={`timeline-row-${task.id}`} className={rowOuterClass}>
+      <li
+        data-testid={`timeline-row-${task.id}`}
+        className={rowOuterClass}
+        {...rowSurfaceHandlers}
+      >
         {rowInner}
       </li>
     );
   }
 
   return (
-    <div data-testid={`timeline-row-${task.id}`} className={rowOuterClass}>
+    <div
+      data-testid={`timeline-row-${task.id}`}
+      className={rowOuterClass}
+      {...rowSurfaceHandlers}
+    >
       {rowInner}
     </div>
   );

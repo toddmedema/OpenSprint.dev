@@ -100,12 +100,10 @@ describe("PlanListView", () => {
 
     const rowA = screen.getByTestId("plan-list-row-plan-a");
     const rowB = screen.getByTestId("plan-list-row-plan-b");
-    const btnA = within(rowA).getByRole("button", { name: /Plan A/i });
-    const btnB = within(rowB).getByRole("button", { name: /Plan B/i });
-    expect(btnA).toHaveAttribute("data-queue-row-selected", "false");
-    expect(btnB).toHaveAttribute("data-queue-row-selected", "true");
-    expect(btnB).toHaveAttribute("aria-current", "true");
-    expect(btnA).not.toHaveAttribute("aria-current");
+    expect(rowA).toHaveAttribute("data-queue-row-selected", "false");
+    expect(rowB).toHaveAttribute("data-queue-row-selected", "true");
+    expect(rowB).toHaveAttribute("aria-current", "true");
+    expect(rowA).not.toHaveAttribute("aria-current");
   });
 
   it("shows Generate tasks for planning plan with zero tasks", () => {

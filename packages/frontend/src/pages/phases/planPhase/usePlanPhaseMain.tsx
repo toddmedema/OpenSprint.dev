@@ -79,7 +79,10 @@ import { useOpenQuestionNotifications } from "../../../hooks/useOpenQuestionNoti
 import { formatPlanIdAsTitle } from "../../../lib/formatting";
 import { matchesPlanSearchQuery } from "../../../lib/planSearchFilter";
 import { parseDetailParams, getProjectPhasePath } from "../../../lib/phaseRouting";
-import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../../lib/phaseMainScrollLayout";
+import {
+  PHASE_MAIN_SCROLL_CLASSNAME,
+  PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST,
+} from "../../../lib/phaseMainScrollLayout";
 import {
   pollPlanExecuteBatchUntilDone,
   hasGeneratedPlanTasksForCurrentVersion,
@@ -1194,7 +1197,12 @@ export function usePlanPhaseMain({
           handleSearchKeyDown={handleSearchKeyDown}
         />
 
-        <div className={PHASE_MAIN_SCROLL_CLASSNAME} data-testid="plan-main-scroll">
+        <div
+          className={
+            viewMode === "graph" ? PHASE_MAIN_SCROLL_CLASSNAME : PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST
+          }
+          data-testid="plan-main-scroll"
+        >
           {/* Error banner — inline, dismissible */}
           {planError && (
             <PlanPhaseErrorBanner

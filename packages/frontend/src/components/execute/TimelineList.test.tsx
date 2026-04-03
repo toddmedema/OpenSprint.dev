@@ -411,12 +411,10 @@ describe("TimelineList", () => {
 
     const rowA = screen.getByTestId("timeline-row-task-a");
     const rowB = screen.getByTestId("timeline-row-task-b");
-    const hitA = within(rowA).getByRole("button", { name: /First task/i });
-    const hitB = within(rowB).getByRole("button", { name: /Second task/i });
-    expect(hitA).toHaveAttribute("data-queue-row-selected", "false");
-    expect(hitB).toHaveAttribute("data-queue-row-selected", "true");
-    expect(hitB).toHaveAttribute("aria-current", "true");
-    expect(hitA).not.toHaveAttribute("aria-current");
+    expect(rowA).toHaveAttribute("data-queue-row-selected", "false");
+    expect(rowB).toHaveAttribute("data-queue-row-selected", "true");
+    expect(rowB).toHaveAttribute("aria-current", "true");
+    expect(rowA).not.toHaveAttribute("aria-current");
   });
 
   it("displays epic name in timeline rows when task has an associated plan", () => {

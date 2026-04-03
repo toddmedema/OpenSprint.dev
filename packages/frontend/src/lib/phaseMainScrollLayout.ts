@@ -5,5 +5,12 @@
 export const PHASE_MAIN_SCROLL_CLASSNAME =
   "flex-1 min-h-0 overflow-auto pt-2 sm:pt-3 px-4 md:px-6 pb-4 sm:pb-6";
 
+/**
+ * Plan phase card/list: no top padding so the first sticky section header sits flush under the
+ * filter toolbar (scroll `pt-*` is not canceled by sticky `top` until the bar sticks).
+ */
+export const PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST =
+  "flex-1 min-h-0 overflow-auto pt-0 px-4 md:px-6 pb-4 sm:pb-6";
+
 /** Execute scroll column: same inset as Plan; min-width + isolate for timeline/layout stability. */
 export const EXECUTE_MAIN_SCROLL_CLASSNAME = `${PHASE_MAIN_SCROLL_CLASSNAME} min-w-0 isolate`;

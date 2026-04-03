@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import type { Plan, PlanDependencyEdge, PlanStatus } from "@opensprint/shared";
 import { canCreateSubPlan, sortPlansByStatus } from "@opensprint/shared";
 import { formatPlanIdAsTitle } from "../../lib/formatting";
@@ -136,7 +143,6 @@ function PlanListRowInner({
   reExecutingPlanId,
   planTasksPlanIds,
   executeError,
-  onSelect,
   onShip,
   onPlanTasks,
   onReship,
@@ -158,7 +164,6 @@ function PlanListRowInner({
   reExecutingPlanId: string | null;
   planTasksPlanIds: string[];
   executeError: { planId: string; message: string } | null;
-  onSelect: () => void;
   onShip: (planId: string, lastExecutedVersionNumber?: number) => void;
   onPlanTasks: (planId: string) => void;
   onReship: (planId: string) => void;
@@ -215,15 +220,12 @@ function PlanListRowInner({
           Generating tasks
         </span>
       )}
-      <div className={PHASE_QUEUE_ROW_INNER_CLASSNAME} style={{ paddingLeft: rowPadLeft }}>
+      <div
+        className={`${PHASE_QUEUE_ROW_INNER_CLASSNAME} min-h-[52px]`}
+        style={{ paddingLeft: rowPadLeft }}
+      >
         {leadingControl}
-        <button
-          type="button"
-          onClick={() => onSelect()}
-          className={phaseQueueRowPrimaryButtonClassName(isSelected)}
-          aria-current={isSelected ? "true" : undefined}
-          data-queue-row-selected={isSelected ? "true" : "false"}
-        >
+        <div className={phaseQueueRowPrimaryButtonClassName(isSelected)}>
           <span className={PHASE_QUEUE_ROW_TITLE_CLASSNAME} title={formatPlanIdAsTitle(planId)}>
             {formatPlanIdAsTitle(planId)}
           </span>
@@ -263,9 +265,10 @@ function PlanListRowInner({
               May be stuck
             </span>
           )}
-        </button>
+        </div>
         <span
           className="shrink-0 flex items-center gap-1.5"
+          data-testid="plan-list-action-cluster"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           role="presentation"
@@ -478,12 +481,31 @@ function PlanTreeItem({
 
   const isSelected = rowProps.selectedPlanId === planId;
 
+  const rowSurfaceHandlers = {
+    "aria-current": (isSelected ? "true" : undefined) as "true" | undefined,
+    "data-queue-row-selected": isSelected ? "true" : "false",
+    tabIndex: 0 as const,
+    onClick: (e: MouseEvent<HTMLLIElement>) => {
+      const el = e.target as HTMLElement;
+      if (el.closest('[data-testid="plan-list-action-cluster"]')) return;
+      if (el.closest("button")) return;
+      rowProps.onSelectPlan(node.plan);
+    },
+    onKeyDown: (e: KeyboardEvent<HTMLLIElement>) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (document.activeElement !== e.currentTarget) return;
+      e.preventDefault();
+      rowProps.onSelectPlan(node.plan);
+    },
+  };
+
   return (
     <li
       role="treeitem"
       aria-selected={isSelected}
       data-testid={`plan-list-row-${planId}`}
-      className={`min-w-0 ${phaseQueueRowSurfaceClassName(isSelected)}`}
+      className={`flex w-full min-w-0 cursor-pointer flex-col outline-none focus-visible:outline-none ${phaseQueueRowSurfaceClassName(isSelected)}`}
+      {...rowSurfaceHandlers}
     >
       <PlanListRowInner
         plan={node.plan}
@@ -496,7 +518,6 @@ function PlanTreeItem({
         reExecutingPlanId={rowProps.reExecutingPlanId}
         planTasksPlanIds={rowProps.planTasksPlanIds}
         executeError={rowProps.executeError}
-        onSelect={() => rowProps.onSelectPlan(node.plan)}
         onShip={rowProps.onShip}
         onPlanTasks={rowProps.onPlanTasks}
         onReship={rowProps.onReship}

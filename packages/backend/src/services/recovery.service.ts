@@ -307,7 +307,12 @@ export class RecoveryService {
       if (!task) {
         this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "task_not_found", assignment);
         log.warn("Recovery: task not found, cleaning up assignment", { projectId, taskId });
-        await this.removeWorktreeIfNeeded(repoPath, taskId, assignment.worktreePath);
+        await this.removeWorktreeIfNeeded(
+          repoPath,
+          taskId,
+          assignment.worktreePath,
+          assignment.worktreeKey
+        );
         await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
         continue;
       }
@@ -319,7 +324,12 @@ export class RecoveryService {
           taskId,
           status: task.status,
         });
-        await this.removeWorktreeIfNeeded(repoPath, taskId, assignment.worktreePath);
+        await this.removeWorktreeIfNeeded(
+          repoPath,
+          taskId,
+          assignment.worktreePath,
+          assignment.worktreeKey
+        );
         await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
         continue;
       }
@@ -403,7 +413,12 @@ export class RecoveryService {
       } catch (err) {
         log.warn("Recovery: failed to requeue task", { projectId, taskId, err });
       }
-      await this.removeWorktreeIfNeeded(repoPath, taskId, assignment.worktreePath);
+      await this.removeWorktreeIfNeeded(
+        repoPath,
+        taskId,
+        assignment.worktreePath,
+        assignment.worktreeKey
+      );
       await this.deleteAssignment(repoPath, taskId, assignment.worktreePath);
       requeued.push(taskId);
     }
@@ -1276,23 +1291,42 @@ export class RecoveryService {
    * In Branches mode assignment.worktreePath === repoPath; in Worktree mode it's a temp path.
    * Uses actual path so we clean up correctly when os.tmpdir() changed since creation.
    */
+  private resolveCleanupWorktreeKey(
+    taskId: string,
+    assignmentWorktreeKey?: string,
+    worktreePath?: string
+  ): string {
+    if (assignmentWorktreeKey && assignmentWorktreeKey.trim().length > 0) {
+      return assignmentWorktreeKey;
+    }
+    if (worktreePath) {
+      const worktreeBasename = path.basename(path.resolve(worktreePath));
+      if (worktreeBasename.startsWith("epic_")) {
+        return worktreeBasename;
+      }
+    }
+    return taskId;
+  }
+
   private async removeWorktreeIfNeeded(
     repoPath: string,
     taskId: string,
-    worktreePath?: string
+    worktreePath?: string,
+    assignmentWorktreeKey?: string
   ): Promise<void> {
     if (!worktreePath) return;
     const repoResolved = path.resolve(repoPath);
     const wtResolved = path.resolve(worktreePath);
     if (repoResolved === wtResolved) return; // Branches mode: no worktree
-    const canCleanup = await worktreeLeaseService.canCleanup(taskId).catch(() => true);
+    const worktreeKey = this.resolveCleanupWorktreeKey(taskId, assignmentWorktreeKey, worktreePath);
+    const canCleanup = await worktreeLeaseService.canCleanup(worktreeKey).catch(() => true);
     if (!canCleanup) {
-      log.info("Skipping worktree removal: active lease exists", { taskId, worktreePath });
+      log.info("Skipping worktree removal: active lease exists", { taskId, worktreeKey, worktreePath });
       return;
     }
     try {
-      await this.branchManager.removeTaskWorktree(repoPath, taskId, worktreePath);
-      await worktreeLeaseService.forceRelease(taskId).catch(() => {});
+      await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
+      await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
     } catch {
       // Best effort; worktree may already be gone
     }

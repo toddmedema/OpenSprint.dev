@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureStore } from "@reduxjs/toolkit";
 import { PlanPhase } from "./PlanPhase";
 import { useDecomposePlans } from "../../api/hooks";
-import { PHASE_MAIN_SCROLL_CLASSNAME } from "../../lib/phaseMainScrollLayout";
+import { PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST } from "../../lib/phaseMainScrollLayout";
 import { api } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import projectReducer from "../../store/slices/projectSlice";
@@ -360,7 +360,7 @@ describe("PlanPhase Redux integration", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("main scroll column uses the same inset tokens as Execute phase", () => {
+  it("main scroll column matches Execute horizontal/bottom inset; list mode omits top padding", () => {
     const store = createStore();
     render(
       <MemoryRouter>
@@ -371,7 +371,7 @@ describe("PlanPhase Redux integration", () => {
       { wrapper: PlanPhaseWrapper }
     );
     const mainScroll = screen.getByTestId("plan-main-scroll");
-    expect(mainScroll.className).toBe(PHASE_MAIN_SCROLL_CLASSNAME);
+    expect(mainScroll.className).toBe(PHASE_MAIN_SCROLL_CLASSNAME_PLAN_LIST);
   });
 
   it("renders plans from Redux state via useAppSelector", () => {
@@ -2632,10 +2632,10 @@ describe("PlanPhase plan sorting and status filter", () => {
     );
 
     const listView = await screen.findByTestId("plan-list-view");
-    const planningCard = within(listView).getByText("Planning Feature").closest("button");
-    const buildingCard = within(listView).getByText("Building Feature").closest("button");
-    const inReviewCard = within(listView).getByText("In Review Feature").closest("button");
-    const doneCard = within(listView).getByText("Done Feature").closest("button");
+    const planningCard = within(listView).getByTestId("plan-list-row-planning-feature");
+    const buildingCard = within(listView).getByTestId("plan-list-row-building-feature");
+    const inReviewCard = within(listView).getByTestId("plan-list-row-in-review-feature");
+    const doneCard = within(listView).getByTestId("plan-list-row-done-feature");
     expect(planningCard).toBeInTheDocument();
     expect(buildingCard).toBeInTheDocument();
     expect(inReviewCard).toBeInTheDocument();

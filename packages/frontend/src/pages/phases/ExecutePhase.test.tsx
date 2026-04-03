@@ -2170,7 +2170,7 @@ describe("ExecutePhase view toggle", () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByTestId("timeline-row-epic-1.1").querySelector("button")!);
+    await user.click(screen.getByTestId("timeline-row-epic-1.1"));
 
     await waitFor(() => {
       expect(mockGet).toHaveBeenCalledWith("proj-1", "epic-1.1");
