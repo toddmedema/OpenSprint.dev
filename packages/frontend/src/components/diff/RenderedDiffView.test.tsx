@@ -307,9 +307,6 @@ describe("RenderedDiffView", () => {
 
   describe("parse error fallback (SPEC: raw fallback when markdown parsing fails)", () => {
     it("renders parse-error notice with guidance to use raw mode", async () => {
-      const { computeMarkdownBlockDiff } = await import("../../lib/markdownBlockDiff");
-      const orig = computeMarkdownBlockDiff;
-
       const mod = await import("../../lib/markdownBlockDiff");
       const spy = vi.spyOn(mod, "computeMarkdownBlockDiff").mockReturnValue({
         blocks: [],

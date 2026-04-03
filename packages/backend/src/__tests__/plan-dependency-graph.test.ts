@@ -9,20 +9,6 @@ function makePlanInfo(planId: string, epicId: string, content = ""): PlanInfo {
   return { planId, epicId, content };
 }
 
-function makeTaskWithBlocker(
-  id: string,
-  blockerId: string,
-  epicPrefix?: string
-): StoredTask {
-  const epicId = epicPrefix ?? id.split(".")[0];
-  return {
-    id: `${epicId}.${id}`,
-    title: id,
-    status: "open",
-    dependencies: [{ depends_on_id: `${blockerId.split(".")[0]}.${blockerId}`, type: "blocks" }],
-  } as unknown as StoredTask;
-}
-
 describe("buildDependencyEdgesCore", () => {
   describe("task-store blocker edges", () => {
     it("creates cross-plan edge when task in one epic blocks task in another", () => {
@@ -110,11 +96,7 @@ describe("buildDependencyEdgesCore", () => {
     });
 
     it("handles slug matching with hyphens and spaces", () => {
-      const plans: PlanInfo[] = [
-        makePlanInfo("api-layer", "epic-a", "# API\n\n## Dependencies\n\nRequires api layer."),
-        makePlanInfo("api-layer", "epic-a", "# API\n\nSelf."),
-      ];
-      // Self-loop via markdown: the plan references its own slug
+      // References with and without hyphens should map to the same plan slug.
       const edges = buildDependencyEdgesCore(
         [
           makePlanInfo("consumer", "epic-b", "# Consumer\n\n## Dependencies\n\nUses api-layer."),

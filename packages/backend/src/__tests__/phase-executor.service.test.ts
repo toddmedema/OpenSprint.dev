@@ -172,6 +172,7 @@ describe("PhaseExecutorService", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockResolveExecuteReplayMetadata.mockResolvedValue(null);
+    mockIsWorktreeCheckoutUsable.mockResolvedValue(true);
     await fs.mkdir(repoPath, { recursive: true });
     await fs.mkdir(path.join(repoPath, ".opensprint"), { recursive: true });
 
@@ -449,6 +450,7 @@ describe("PhaseExecutorService", () => {
       const slot = { ...makeSlot(), worktreePath: stalePath };
       const slots = new Map([[task.id, slot]]);
       mockGetState.mockReturnValue({ slots, status: { queueDepth: 0 } });
+      mockIsWorktreeCheckoutUsable.mockResolvedValueOnce(false);
 
       await phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot, {
         useExistingBranch: true,
