@@ -19,6 +19,7 @@ import {
 } from "./merge-quality-gates.js";
 import type { ToolchainProfile } from "@opensprint/shared";
 import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
+import { ValidationWorkspaceService } from "./validation-workspace.service.js";
 
 const log = createLogger("merge-quality-gate-runner");
 const QUALITY_GATE_FAILURE_OUTPUT_LIMIT = 4000;
@@ -1156,6 +1157,30 @@ export async function runMergeQualityGates(
     worktreePath: normWt,
     repoPath: normRepo,
   };
+
+  const validationService = new ValidationWorkspaceService();
+  const healthCheck = await validationService.verifyWorkspaceHealth(
+    normRepo,
+    normWt,
+    gateOptions.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree")
+  );
+  if (!healthCheck.healthy) {
+    log.warn("Workspace health check failed before running quality gates", {
+      taskId: gateOptions.taskId,
+      worktreePath: normWt,
+      errors: healthCheck.errors,
+    });
+    return {
+      command: "workspace_health_check",
+      reason: `Workspace not ready: ${healthCheck.errors.join("; ")}`,
+      output: healthCheck.errors.join("\n"),
+      worktreePath: normWt,
+      validationWorkspace: gateOptions.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree"),
+      category: "environment_setup",
+      classificationConfidence: "high",
+      classificationReason: "unified workspace health check failed before gate execution",
+    };
+  }
 
   const runCommand = deps.runCommand ?? runCommandDefault;
   const qualityGateProfile = gateOptions.qualityGateProfile ?? "deterministic";

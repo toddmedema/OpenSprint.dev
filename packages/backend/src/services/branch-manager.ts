@@ -1262,16 +1262,20 @@ export class BranchManager {
     const worktreeKey = options?.worktreeKey ?? taskId;
     const branchName = options?.branchName ?? `opensprint/${taskId}`;
     const wtPath = this.getWorktreePath(worktreeKey, repoPath);
+
+    // Normalize base branch (and create initial commit if needed) *before* checking whether the
+    // primary clone still has the task branch checked out. Otherwise a human (or tooling) on
+    // `opensprint/<task>` would block `git worktree add` for that branch — ensureBaseBranchExists
+    // moves the main repo to `baseBranch` when possible so the worktree can claim the task branch.
+    await ensureRepoHasInitialCommit(repoPath, baseBranch);
     const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
 
     if (currentBranch === branchName) {
       throw new UnsafeCleanupPathError(
-        `Refusing to create worktree for ${branchName}: the main repo is currently checked out to that task branch, so cleanup would be unsafe.`,
+        `Refusing to create worktree for ${branchName}: the main repo is still checked out to that branch after normalizing the base branch, so cleanup would be unsafe.`,
         repoPath
       );
     }
-
-    await ensureRepoHasInitialCommit(repoPath, baseBranch);
 
     const isEpic = options?.worktreeKey != null;
 

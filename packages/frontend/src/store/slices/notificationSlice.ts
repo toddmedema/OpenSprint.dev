@@ -9,7 +9,7 @@ export interface Notification {
   message: string;
   severity: NotificationSeverity;
   presentation?: NotificationPresentation;
-  /** Auto-dismiss timeout in ms. 0 = persistent. Default: 8000 for info/success, 0 for error/warning. */
+  /** Auto-dismiss timeout in ms. 0 = persistent. Default: 15000 for all toasts. */
   timeout?: number;
   createdAt: number;
 }
@@ -23,14 +23,14 @@ export interface AddNotificationPayload {
   timeout?: number;
 }
 
-const DEFAULT_AUTO_DISMISS_MS = 8000;
+const DEFAULT_AUTO_DISMISS_MS = 15000;
 
 function nextId(): string {
   return `notif-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function getDefaultTimeout(severity: NotificationSeverity): number {
-  return severity === "error" || severity === "warning" ? 0 : DEFAULT_AUTO_DISMISS_MS;
+function getDefaultTimeout(): number {
+  return DEFAULT_AUTO_DISMISS_MS;
 }
 
 export interface NotificationState {
@@ -53,7 +53,7 @@ export const notificationSlice = createSlice({
         );
         if (hasConnectionToast) return;
       }
-      const effectiveTimeout = timeout !== undefined ? timeout : getDefaultTimeout(severity);
+      const effectiveTimeout = timeout !== undefined ? timeout : getDefaultTimeout();
       state.items.push({
         id: nextId(),
         message,

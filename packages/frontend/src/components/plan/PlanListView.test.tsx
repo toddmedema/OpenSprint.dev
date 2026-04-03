@@ -77,6 +77,37 @@ describe("PlanListView", () => {
     expect(within(listView).getAllByTestId(/^plan-list-row-/)).toHaveLength(4);
   });
 
+  it("marks the selected plan row for sidebar/detail context", () => {
+    const plans: Plan[] = [
+      makePlan("plan-a", "planning", 0),
+      makePlan("plan-b", "planning", 0),
+    ];
+    render(
+      <PlanListView
+        plans={plans}
+        selectedPlanId="plan-b"
+        executingPlanId={null}
+        reExecutingPlanId={null}
+        planTasksPlanIds={[]}
+        executeError={null}
+        onSelectPlan={vi.fn()}
+        onShip={vi.fn()}
+        onPlanTasks={vi.fn()}
+        onReship={vi.fn()}
+        onClearError={vi.fn()}
+      />
+    );
+
+    const rowA = screen.getByTestId("plan-list-row-plan-a");
+    const rowB = screen.getByTestId("plan-list-row-plan-b");
+    const btnA = within(rowA).getByRole("button", { name: /Plan A/i });
+    const btnB = within(rowB).getByRole("button", { name: /Plan B/i });
+    expect(btnA).toHaveAttribute("data-queue-row-selected", "false");
+    expect(btnB).toHaveAttribute("data-queue-row-selected", "true");
+    expect(btnB).toHaveAttribute("aria-current", "true");
+    expect(btnA).not.toHaveAttribute("aria-current");
+  });
+
   it("shows Generate tasks for planning plan with zero tasks", () => {
     const plans = [makePlan("planning-feature", "planning", 0)];
     render(
@@ -519,6 +550,277 @@ describe("PlanListView", () => {
     );
 
     expect(screen.getByTestId("plan-list-max-depth-hint")).toHaveTextContent("Max depth");
+  });
+
+  describe("keyboard accessibility", () => {
+    it("toggle button has aria-expanded reflecting collapse state", async () => {
+      const user = userEvent.setup();
+      const plans: Plan[] = [
+        makePlan("root-plan", "planning", 0, false, { childPlanIds: ["child-plan"] }),
+        makePlan("child-plan", "planning", 0, false, { parentPlanId: "root-plan" }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const toggle = screen.getByTestId("plan-tree-toggle-root-plan");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+      await user.click(toggle);
+      await waitFor(() => {
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+      });
+
+      await user.click(toggle);
+      await waitFor(() => {
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+      });
+    });
+
+    it("toggle button can be activated via keyboard (Enter)", async () => {
+      const user = userEvent.setup();
+      const plans: Plan[] = [
+        makePlan("root-plan", "planning", 0, false, { childPlanIds: ["child-plan"] }),
+        makePlan("child-plan", "planning", 0, false, { parentPlanId: "root-plan" }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const toggle = screen.getByTestId("plan-tree-toggle-root-plan");
+      toggle.focus();
+      await user.keyboard("{Enter}");
+      await waitFor(() => {
+        expect(screen.queryByTestId("plan-list-row-child-plan")).not.toBeInTheDocument();
+      });
+    });
+
+    it("tree items have treeitem role and aria-selected", () => {
+      const plans: Plan[] = [
+        makePlan("plan-a", "planning", 0),
+        makePlan("plan-b", "planning", 0),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId="plan-a"
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const rowA = screen.getByTestId("plan-list-row-plan-a");
+      const rowB = screen.getByTestId("plan-list-row-plan-b");
+      expect(rowA).toHaveAttribute("role", "treeitem");
+      expect(rowA).toHaveAttribute("aria-selected", "true");
+      expect(rowB).toHaveAttribute("role", "treeitem");
+      expect(rowB).toHaveAttribute("aria-selected", "false");
+    });
+
+    it("section lists have tree role with accessible label", () => {
+      const plans: Plan[] = [makePlan("plan-x", "planning", 0)];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const section = screen.getByTestId("plan-list-section-planning");
+      const tree = within(section).getByRole("tree", { name: /Planning plans/i });
+      expect(tree).toBeInTheDocument();
+    });
+
+    it("sub-plan group has accessible label referencing parent", () => {
+      const plans: Plan[] = [
+        makePlan("root-plan", "planning", 0, false, { childPlanIds: ["child-plan"] }),
+        makePlan("child-plan", "planning", 0, false, { parentPlanId: "root-plan" }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const rootRow = screen.getByTestId("plan-list-row-root-plan");
+      const subGroup = within(rootRow).getByRole("group", {
+        name: /Sub-plans under Root Plan/i,
+      });
+      expect(subGroup).toBeInTheDocument();
+    });
+
+    it("toggle button has accessible label describing its action", () => {
+      const plans: Plan[] = [
+        makePlan("root-plan", "planning", 0, false, { childPlanIds: ["child-plan"] }),
+        makePlan("child-plan", "planning", 0, false, { parentPlanId: "root-plan" }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const toggle = screen.getByTestId("plan-tree-toggle-root-plan");
+      expect(toggle).toHaveAttribute(
+        "aria-label",
+        expect.stringContaining("sub-plans under Root Plan")
+      );
+    });
+  });
+
+  describe("task count display and cap", () => {
+    it("shows done/total task counts for non-planning plans", () => {
+      const plan = makePlan("building-feature", "building", 10);
+      plan.doneTaskCount = 7;
+      render(
+        <PlanListView
+          plans={[plan]}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const row = screen.getByTestId("plan-list-row-building-feature");
+      expect(within(row).getByText("7/10 tasks")).toBeInTheDocument();
+    });
+
+    it("shows 'No tasks' when task count is zero for non-planning plans", () => {
+      const plan = makePlan("building-empty", "building", 0, true);
+      render(
+        <PlanListView
+          plans={[plan]}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const row = screen.getByTestId("plan-list-row-building-empty");
+      expect(within(row).getByText("No tasks")).toBeInTheDocument();
+    });
+
+    it("max-depth hint tooltip explains the depth restriction", () => {
+      const plans: Plan[] = [
+        makePlan("deep-plan", "planning", 0, false, { depth: MAX_PLAN_DEPTH }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const hint = screen.getByTestId("plan-list-max-depth-hint");
+      expect(hint).toHaveTextContent("Max depth");
+      expect(hint).toHaveAttribute("title", expect.stringContaining("maximum sub-plan depth"));
+    });
+
+    it("does not show max-depth hint when plan is below max depth", () => {
+      const plans: Plan[] = [
+        makePlan("shallow-plan", "planning", 0, false, { depth: 2 }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      expect(screen.queryByTestId("plan-list-max-depth-hint")).not.toBeInTheDocument();
+    });
   });
 
   it("treats a plan as a section root when its parent is absent from the list", () => {

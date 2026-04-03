@@ -44,6 +44,8 @@ import { RepoPreflightError, resolveBaseBranch } from "../utils/git-repo-state.j
 import { resolveExecuteReplayMetadata } from "./execute-replay-metadata.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import { isWorktreeCheckoutUsable, IncompleteWorktreeError } from "../utils/worktree-health.js";
+import { AppError } from "../middleware/error-handler.js";
+import { ErrorCodes } from "../middleware/error-codes.js";
 
 const log = createLogger("phase-executor");
 
@@ -132,6 +134,43 @@ export class PhaseExecutorService {
         ? ` Suggested commands: ${error.commands.join(" ; ")}`
         : "";
     return `[${error.code}] ${error.message}${commands}`;
+  }
+
+  private static readonly PREFLIGHT_ERROR_CODES: ReadonlySet<string> = new Set([
+    ErrorCodes.GIT_BASE_BRANCH_INVALID,
+    ErrorCodes.GIT_CHECKOUT_CONFLICT,
+    ErrorCodes.GIT_REF_MISSING,
+    ErrorCodes.GIT_REMOTE_UNREACHABLE,
+  ]);
+
+  private classifyPhaseError(error: unknown): {
+    failureType: "repo_preflight" | "workspace_invalid" | "agent_crash";
+    failureReason: string;
+  } {
+    if (error instanceof RepoPreflightError) {
+      return {
+        failureType: "repo_preflight",
+        failureReason: this.formatRepoPreflightFailure(error),
+      };
+    }
+    if (error instanceof IncompleteWorktreeError) {
+      return {
+        failureType: "workspace_invalid",
+        failureReason: String(error),
+      };
+    }
+    if (error instanceof AppError && PhaseExecutorService.PREFLIGHT_ERROR_CODES.has(error.code)) {
+      const details = error.details as Record<string, unknown> | undefined;
+      const detail = details?.detail ? ` (${String(details.detail).slice(0, 200)})` : "";
+      return {
+        failureType: "repo_preflight",
+        failureReason: `[${error.code}] ${error.message}${detail}`,
+      };
+    }
+    return {
+      failureType: "agent_crash",
+      failureReason: String(error),
+    };
   }
 
   private isTaskStillActive(projectId: string, taskId: string): boolean {
@@ -398,6 +437,23 @@ export class PhaseExecutorService {
         return;
       }
 
+      if (wtPath !== repoPath) {
+        const wtUsable = await this.hasUsableExistingWorktree(repoPath, wtPath);
+        if (!wtUsable) {
+          log.error("Fail-closed: worktree unusable after creation/validation", {
+            taskId: task.id, worktreePath: wtPath,
+          });
+          await this.callbacks.handleTaskFailure(
+            projectId, repoPath, task, branchName,
+            `Worktree at ${wtPath} is not usable after setup (missing .git or source files). ` +
+              "Blocking task to prevent dispatch to a broken workspace.",
+            null,
+            "workspace_invalid"
+          );
+          return;
+        }
+      }
+
       if (retryContext?.useExistingBranch && !retryContext.structuredOutputRepairAttempted) {
         await this.host.branchManager.waitForGitReady(wtPath);
         let rebaseConflict: RebaseConflictError | null = null;
@@ -648,12 +704,7 @@ export class PhaseExecutorService {
         return;
       }
       log.error(`Coding phase failed for task ${task.id}`, { projectId, taskId: task.id, branchName, error });
-      const isPreflightLike =
-        error instanceof RepoPreflightError || error instanceof IncompleteWorktreeError;
-      const failureReason =
-        error instanceof RepoPreflightError
-          ? this.formatRepoPreflightFailure(error)
-          : String(error);
+      const { failureType, failureReason } = this.classifyPhaseError(error);
       await this.callbacks.handleTaskFailure(
         projectId,
         repoPath,
@@ -661,7 +712,7 @@ export class PhaseExecutorService {
         branchName,
         failureReason,
         null,
-        isPreflightLike ? "repo_preflight" : "agent_crash"
+        failureType
       );
     }
   }
@@ -1096,10 +1147,7 @@ export class PhaseExecutorService {
       await this.host.persistCounters(projectId, repoPath);
     } catch (error) {
       log.error(`Review phase failed for task ${task.id}`, { projectId, taskId: task.id, branchName, error });
-      const failureReason =
-        error instanceof RepoPreflightError
-          ? this.formatRepoPreflightFailure(error)
-          : String(error);
+      const { failureType, failureReason } = this.classifyPhaseError(error);
       await this.callbacks.handleTaskFailure(
         projectId,
         repoPath,
@@ -1107,7 +1155,7 @@ export class PhaseExecutorService {
         branchName,
         failureReason,
         null,
-        error instanceof RepoPreflightError ? "repo_preflight" : "agent_crash"
+        failureType
       );
     }
   }

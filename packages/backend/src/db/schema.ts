@@ -422,6 +422,22 @@ CREATE TABLE IF NOT EXISTS integration_import_ledger (
     UNIQUE (project_id, provider, external_item_id)
 );
 CREATE INDEX IF NOT EXISTS idx_integration_import_ledger_project_provider_status ON integration_import_ledger(project_id, provider, import_status);
+
+-- Worktree leases: durable ownership tracking to prevent recovery/cleanup races
+CREATE TABLE IF NOT EXISTS worktree_leases (
+    worktree_key   TEXT PRIMARY KEY,
+    task_id        TEXT NOT NULL,
+    project_id     TEXT NOT NULL,
+    worktree_path  TEXT NOT NULL,
+    branch_name    TEXT,
+    lease_owner    TEXT NOT NULL,
+    generation     INTEGER NOT NULL DEFAULT 1,
+    acquired_at    TEXT NOT NULL,
+    expires_at     TEXT NOT NULL,
+    released_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_worktree_leases_project ON worktree_leases(project_id);
+CREATE INDEX IF NOT EXISTS idx_worktree_leases_task ON worktree_leases(task_id);
 `;
 
 /** SQLite schema: SERIAL -> INTEGER PRIMARY KEY AUTOINCREMENT; ALTER ADD COLUMN IF NOT EXISTS supported in 3.35+. */
@@ -818,6 +834,22 @@ CREATE INDEX IF NOT EXISTS idx_integration_import_ledger_project_provider_status
 ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS debug_artifact_summary TEXT;
 ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS repair_iterations INTEGER;
 ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS root_cause_category TEXT;
+
+-- Worktree leases: durable ownership tracking to prevent recovery/cleanup races
+CREATE TABLE IF NOT EXISTS worktree_leases (
+    worktree_key   TEXT PRIMARY KEY,
+    task_id        TEXT NOT NULL,
+    project_id     TEXT NOT NULL,
+    worktree_path  TEXT NOT NULL,
+    branch_name    TEXT,
+    lease_owner    TEXT NOT NULL,
+    generation     INTEGER NOT NULL DEFAULT 1,
+    acquired_at    TEXT NOT NULL,
+    expires_at     TEXT NOT NULL,
+    released_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_worktree_leases_project ON worktree_leases(project_id);
+CREATE INDEX IF NOT EXISTS idx_worktree_leases_task ON worktree_leases(task_id);
 `;
 
 /** Strip leading comment-only and empty lines so statements starting with "-- Comment\nCREATE ..." are executed. */

@@ -17,6 +17,7 @@ const mockRemoveTaskWorktree = vi.fn();
 const mockDeleteBranch = vi.fn();
 const mockPruneOrphanWorktrees = vi.fn();
 const mockListTaskWorktrees = vi.fn();
+const mockCanCleanupLease = vi.fn();
 
 vi.mock("../services/heartbeat.service.js", () => ({
   heartbeatService: {
@@ -63,6 +64,13 @@ vi.mock("../services/worktree-cleanup-intent.service.js", () => ({
   worktreeCleanupIntentService: {
     list: (...args: unknown[]) => mockListCleanupIntents(...args),
     removeBestEffort: (...args: unknown[]) => mockRemoveCleanupIntent(...args),
+  },
+}));
+
+vi.mock("../services/worktree-lease.service.js", () => ({
+  worktreeLeaseService: {
+    canCleanup: (...args: unknown[]) => mockCanCleanupLease(...args),
+    forceRelease: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -114,6 +122,7 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     mockDeleteBranch.mockResolvedValue(undefined);
     mockPruneOrphanWorktrees.mockResolvedValue([]);
     mockListTaskWorktrees.mockResolvedValue([]);
+    mockCanCleanupLease.mockResolvedValue(true);
     vi.mocked(taskStore.listInProgressWithAgentAssignee).mockResolvedValue([]);
     vi.mocked(taskStore.listInProgressWithoutAssignee).mockResolvedValue([]);
     vi.mocked(taskStore.show).mockResolvedValue({
@@ -1095,6 +1104,95 @@ describe("RecoveryService — stale heartbeat recovery", () => {
             reason: "task_not_found",
           }),
         })
+      );
+    });
+  });
+
+  describe("worktree lease integration", () => {
+    function makeAssignment(taskId: string, worktreePath: string) {
+      return {
+        taskId,
+        projectId: "proj-1",
+        phase: "coding",
+        branchName: `opensprint/${taskId}`,
+        worktreePath,
+        promptPath: path.join(worktreePath, ".opensprint", "active", taskId, "prompt.md"),
+        agentConfig: { type: "cursor", model: "gpt-5", cliCommand: null },
+        attempt: 1,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    it("skips worktree removal when active lease exists (canCleanup returns false)", async () => {
+      mockCanCleanupLease.mockResolvedValue(false);
+
+      const wtPath = path.join(tmpDir, "worktree-leased");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-leased", assignment: makeAssignment("task-leased", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(mockCanCleanupLease).toHaveBeenCalledWith("task-leased");
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    });
+
+    it("proceeds with worktree removal when lease is released (canCleanup returns true)", async () => {
+      mockCanCleanupLease.mockResolvedValue(true);
+
+      const wtPath = path.join(tmpDir, "worktree-released");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-released", assignment: makeAssignment("task-released", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(mockCanCleanupLease).toHaveBeenCalledWith("task-released");
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
+        tmpDir,
+        "task-released",
+        wtPath
+      );
+    });
+
+    it("defaults to allowing cleanup when canCleanup throws", async () => {
+      mockCanCleanupLease.mockRejectedValue(new Error("DB unavailable"));
+
+      const wtPath = path.join(tmpDir, "worktree-err");
+      await fs.mkdir(wtPath, { recursive: true });
+
+      const guppHost = {
+        ...host,
+        handleCompletedAssignment: vi.fn().mockResolvedValue(false),
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([]);
+      mockFindOrphanedAssignments.mockResolvedValue([
+        { taskId: "task-err", assignment: makeAssignment("task-err", wtPath) },
+      ]);
+
+      await service.runFullRecovery("proj-1", tmpDir, guppHost, { includeGupp: true });
+
+      expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
+        tmpDir,
+        "task-err",
+        wtPath
       );
     });
   });

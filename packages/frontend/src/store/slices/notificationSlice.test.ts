@@ -25,25 +25,25 @@ describe("notificationSlice", () => {
     expect(items).toHaveLength(1);
     expect(items[0].message).toBe("Test message");
     expect(items[0].severity).toBe("info");
-    expect(items[0].timeout).toBe(8000);
+    expect(items[0].timeout).toBe(15000);
     expect(items[0].id).toMatch(/^notif-/);
     expect(items[0].createdAt).toBeGreaterThan(0);
   });
 
-  it("addNotification with error severity has persistent timeout", () => {
+  it("addNotification with error severity uses default auto-dismiss timeout", () => {
     const store = createStore();
     store.dispatch(addNotification({ message: "Error!", severity: "error" }));
     const items = store.getState().notification.items;
     expect(items[0].severity).toBe("error");
-    expect(items[0].timeout).toBe(0);
+    expect(items[0].timeout).toBe(15000);
   });
 
-  it("addNotification with warning severity has persistent timeout", () => {
+  it("addNotification with warning severity uses default auto-dismiss timeout", () => {
     const store = createStore();
     store.dispatch(addNotification({ message: "Warning!", severity: "warning" }));
     const items = store.getState().notification.items;
     expect(items[0].severity).toBe("warning");
-    expect(items[0].timeout).toBe(0);
+    expect(items[0].timeout).toBe(15000);
   });
 
   it("addNotification with custom timeout", () => {

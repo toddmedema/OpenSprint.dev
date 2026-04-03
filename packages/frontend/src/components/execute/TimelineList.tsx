@@ -24,6 +24,7 @@ import {
   PHASE_QUEUE_ROW_META_MUTED_CLASSNAME,
   PHASE_QUEUE_ROW_TITLE_CLASSNAME,
   PHASE_QUEUE_ROW_VIRTUAL_OUTER_CLASSNAME,
+  phaseQueueRowSurfaceClassName,
   phaseQueueRowPrimaryButtonClassName,
 } from "../../lib/phaseQueueListView";
 
@@ -135,6 +136,7 @@ function TimelineRow({
   teamMembers,
   enableHumanTeammates,
   asListItem = true,
+  isSelected = false,
 }: {
   task: Task;
   epicName: string;
@@ -147,6 +149,7 @@ function TimelineRow({
   enableHumanTeammates?: boolean;
   /** False when row is inside a flat virtual list (section headers break ul/li grouping). */
   asListItem?: boolean;
+  isSelected?: boolean;
 }) {
   const isBlocked = task.kanbanColumn === "blocked";
   const isUnblocking = (unblockInflightByTaskId?.[task.id] ?? 0) > 0;
@@ -155,13 +158,17 @@ function TimelineRow({
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const rightLabel = getTimelineRightLabel(task, epicName);
 
-  const rowOuterClass = `min-h-[52px]${assigneeDropdownOpen ? " relative z-[1000]" : ""}`;
+  const rowOuterClass = `min-h-[52px] ${phaseQueueRowSurfaceClassName(isSelected)}${
+    assigneeDropdownOpen ? " relative z-[1000]" : ""
+  }`;
   const rowInner = (
     <div className={PHASE_QUEUE_ROW_INNER_CLASSNAME}>
       <button
         type="button"
         onClick={() => onTaskSelect(task.id)}
-        className={phaseQueueRowPrimaryButtonClassName(false)}
+        className={phaseQueueRowPrimaryButtonClassName(isSelected)}
+        aria-current={isSelected ? "true" : undefined}
+        data-queue-row-selected={isSelected ? "true" : "false"}
       >
         <PriorityIcon priority={task.priority ?? 1} size="xs" />
         <span className={PHASE_QUEUE_ROW_TITLE_CLASSNAME} title={task.title}>
@@ -475,6 +482,7 @@ export function TimelineList({
                       teamMembers={teamMembers}
                       enableHumanTeammates={enableHumanTeammates}
                       asListItem={false}
+                      isSelected={selectedTaskId === item.task.id}
                     />
                   </div>
                 )}
@@ -509,6 +517,7 @@ export function TimelineList({
                     projectId={projectId}
                     teamMembers={teamMembers}
                     enableHumanTeammates={enableHumanTeammates}
+                    isSelected={selectedTaskId === task.id}
                   />
                 ))}
               </ul>

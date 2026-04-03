@@ -308,7 +308,7 @@ export async function ensureBaseBranchExists(repoPath: string, baseBranch: strin
     throw new AppError(
       400,
       ErrorCodes.GIT_BASE_BRANCH_INVALID,
-      `Invalid base branch: ${baseBranch}`,
+      `Invalid base branch name: ${baseBranch}`,
       { baseBranch }
     );
   }
@@ -322,8 +322,43 @@ export async function ensureBaseBranchExists(repoPath: string, baseBranch: strin
   if (hasHead) {
     if (currentBranch === baseBranch) return;
     if (existsLocally) {
-      await shellExec(`git checkout ${baseBranch}`, { cwd: repoPath, timeout: GIT_TIMEOUT_MS });
+      try {
+        await shellExec(`git checkout ${baseBranch}`, { cwd: repoPath, timeout: GIT_TIMEOUT_MS });
+      } catch (err) {
+        const msg = String(err);
+        if (/your local changes|would be overwritten|conflict/i.test(msg)) {
+          throw new AppError(
+            409,
+            ErrorCodes.GIT_CHECKOUT_CONFLICT,
+            `Cannot checkout ${baseBranch}: local changes would be overwritten. ` +
+              "Stash or commit changes first.",
+            { baseBranch, detail: msg.slice(0, 500) }
+          );
+        }
+        throw new AppError(
+          500,
+          ErrorCodes.GIT_BASE_BRANCH_INVALID,
+          `Failed to checkout base branch ${baseBranch}: ${msg.slice(0, 300)}`,
+          { baseBranch }
+        );
+      }
       return;
+    }
+    const remote = await detectRemoteMode(repoPath);
+    if (remote.hasOrigin && remote.originReachable) {
+      const remoteRef = await runGit(
+        repoPath,
+        `git ls-remote --heads origin ${shellQuote(baseBranch)}`,
+        GIT_TIMEOUT_MS
+      );
+      if (!remoteRef) {
+        throw new AppError(
+          404,
+          ErrorCodes.GIT_REF_MISSING,
+          `Base branch '${baseBranch}' does not exist locally or on remote.`,
+          { baseBranch }
+        );
+      }
     }
     await shellExec(`git checkout -b ${baseBranch}`, { cwd: repoPath, timeout: GIT_TIMEOUT_MS });
     return;

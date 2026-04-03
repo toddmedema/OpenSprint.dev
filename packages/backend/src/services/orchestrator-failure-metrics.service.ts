@@ -187,5 +187,24 @@ export function resolveFailureMetricsWindow(days?: number): {
   };
 }
 
+/**
+ * Emit a baseline failure-type distribution snapshot as an orchestrator event.
+ * Called periodically (e.g. by watchdog/recovery) to track KPI trends over time.
+ */
+export function buildFailureBaselineSnapshot(
+  events: OrchestratorEvent[],
+  windowMs: number = 60 * 60 * 1000
+): Record<string, number> {
+  const cutoff = new Date(Date.now() - windowMs).toISOString();
+  const distribution: Record<string, number> = {};
+  for (const ev of events) {
+    if (ev.event !== "task.failed") continue;
+    if (ev.timestamp < cutoff) continue;
+    const ft = asString(ev.data?.failureType) ?? "unknown";
+    distribution[ft] = (distribution[ft] ?? 0) + 1;
+  }
+  return distribution;
+}
+
 export const FAILURE_METRICS_DEFAULT_DAYS = DEFAULT_DAYS;
 export const FAILURE_METRICS_MAX_DAYS = MAX_DAYS;

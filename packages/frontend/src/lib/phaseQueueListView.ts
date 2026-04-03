@@ -11,14 +11,26 @@ export const PHASE_QUEUE_LIST_SECTION_BODY_CLASSNAME =
 export const PHASE_QUEUE_ROW_INNER_CLASSNAME =
   "flex items-center gap-2 px-4 py-2.5 group overflow-x-auto md:overflow-x-visible min-w-0";
 
-const PHASE_QUEUE_ROW_PRIMARY_BASE =
-  "flex-1 flex items-center gap-3 text-left hover:bg-theme-info-bg/50 transition-colors text-sm min-w-0 rounded px-1 -mx-1 py-1 -my-0.5";
+const PHASE_QUEUE_ROW_PRIMARY_LAYOUT =
+  "flex-1 flex items-center gap-3 text-left text-sm min-w-0 focus:outline-none focus-visible:outline-none";
+
+const PHASE_QUEUE_ROW_SURFACE_BASE = "transition-colors";
+
+/** Unselected rows: neutral hover (distinct from selected accent treatment). */
+const PHASE_QUEUE_ROW_SURFACE_UNSELECTED = `${PHASE_QUEUE_ROW_SURFACE_BASE} hover:bg-theme-surface-muted`;
+
+/** Selected row: match active-project subtle blue surface (no box/ring effect). */
+const PHASE_QUEUE_ROW_SURFACE_SELECTED = `${PHASE_QUEUE_ROW_SURFACE_BASE} bg-theme-info-bg`;
+
+/** Outer row surface for full-width hover/selected treatment. */
+export function phaseQueueRowSurfaceClassName(isSelected: boolean): string {
+  return isSelected ? PHASE_QUEUE_ROW_SURFACE_SELECTED : PHASE_QUEUE_ROW_SURFACE_UNSELECTED;
+}
 
 /** Main row hit target (open plan / task detail). */
 export function phaseQueueRowPrimaryButtonClassName(isSelected: boolean): string {
-  return isSelected
-    ? `${PHASE_QUEUE_ROW_PRIMARY_BASE} bg-theme-info-bg/50`
-    : PHASE_QUEUE_ROW_PRIMARY_BASE;
+  void isSelected;
+  return PHASE_QUEUE_ROW_PRIMARY_LAYOUT;
 }
 
 /** Primary title / label cell in the row button. */

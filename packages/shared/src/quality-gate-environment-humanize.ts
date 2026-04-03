@@ -61,6 +61,12 @@ const ENV_SETUP_RULES: Rule[] = [
       "The temporary folder used for merge validation was missing or could not be accessed.",
   },
   {
+    test: /Workspace not ready:/i,
+    userTitle: "Workspace not ready",
+    userSummary:
+      "The pre-gate health check found missing dependencies, lockfiles, or an invalid git state in the workspace.",
+  },
+  {
     test: /git is not available in PATH for merge validation/i,
     userTitle: "Git unavailable",
     userSummary: "Git is required for merge validation but was not found in the environment path.",

@@ -87,6 +87,11 @@ vi.mock("../services/validation-workspace.service.js", () => ({
   validationWorkspaceService: {
     createBaselineWorkspace: createBaselineWorkspaceMock,
   },
+  ValidationWorkspaceService: class {
+    async verifyWorkspaceHealth() {
+      return { healthy: true, errors: [] };
+    }
+  },
 }));
 
 vi.mock("../services/event-log.service.js", () => ({

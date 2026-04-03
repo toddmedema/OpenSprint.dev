@@ -73,6 +73,7 @@ import {
 } from "./task-phase-coordinator.js";
 import { validateTransition } from "./task-state-machine.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
+import { AppError } from "../middleware/error-handler.js";
 import { isExhausted } from "./api-key-exhausted.service.js";
 import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 import {
@@ -3065,9 +3066,18 @@ export class OrchestratorService {
     try {
       await ensureBaseBranchExists(repoPath, repoState.baseBranch);
     } catch (error) {
+      const gitPreflightCodes: readonly string[] = [
+        ErrorCodes.GIT_BASE_BRANCH_INVALID,
+        ErrorCodes.GIT_CHECKOUT_CONFLICT,
+        ErrorCodes.GIT_REF_MISSING,
+      ];
+      const code =
+        error instanceof AppError && gitPreflightCodes.includes(error.code)
+          ? error.code
+          : ErrorCodes.GIT_BASE_BRANCH_INVALID;
       throw new RepoPreflightError(
         error instanceof Error ? error.message : String(error),
-        ErrorCodes.GIT_BASE_BRANCH_INVALID
+        code
       );
     }
 

@@ -10,6 +10,7 @@ import {
   PHASE_QUEUE_ROW_INNER_CLASSNAME,
   PHASE_QUEUE_ROW_META_MUTED_CLASSNAME,
   PHASE_QUEUE_ROW_TITLE_CLASSNAME,
+  phaseQueueRowSurfaceClassName,
   phaseQueueRowPrimaryButtonClassName,
 } from "../../lib/phaseQueueListView";
 
@@ -220,6 +221,8 @@ function PlanListRowInner({
           type="button"
           onClick={() => onSelect()}
           className={phaseQueueRowPrimaryButtonClassName(isSelected)}
+          aria-current={isSelected ? "true" : undefined}
+          data-queue-row-selected={isSelected ? "true" : "false"}
         >
           <span className={PHASE_QUEUE_ROW_TITLE_CLASSNAME} title={formatPlanIdAsTitle(planId)}>
             {formatPlanIdAsTitle(planId)}
@@ -480,7 +483,7 @@ function PlanTreeItem({
       role="treeitem"
       aria-selected={isSelected}
       data-testid={`plan-list-row-${planId}`}
-      className="min-w-0"
+      className={`min-w-0 ${phaseQueueRowSurfaceClassName(isSelected)}`}
     >
       <PlanListRowInner
         plan={node.plan}

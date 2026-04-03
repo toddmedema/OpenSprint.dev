@@ -478,6 +478,11 @@ vi.mock("../services/validation-workspace.service.js", () => ({
   validationWorkspaceService: {
     createBaselineWorkspace: (...args: unknown[]) => mockCreateBaselineWorkspace(...args),
   },
+  ValidationWorkspaceService: class {
+    async verifyWorkspaceHealth() {
+      return { healthy: true, errors: [] };
+    }
+  },
 }));
 
 vi.mock("../utils/git-repo-state.js", async (importOriginal) => {

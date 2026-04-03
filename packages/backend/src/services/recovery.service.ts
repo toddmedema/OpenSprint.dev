@@ -25,6 +25,8 @@ import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.
 import type { RetryContext } from "./orchestrator-phase-context.js";
 import { isProcessAlive, terminateProcessGroup } from "../utils/process-group.js";
 import { createLogger } from "../utils/logger.js";
+import { buildFailureBaselineSnapshot } from "./orchestrator-failure-metrics.service.js";
+import { worktreeLeaseService } from "./worktree-lease.service.js";
 
 const log = createLogger("recovery");
 
@@ -240,7 +242,33 @@ export class RecoveryService {
       result.cleaned.push(...staleInactive.map((id) => `stale_inactive_worktree:${id}`));
     }
 
+    // 10. Emit failure-type baseline snapshot for KPI tracking
+    this.emitFailureBaselineSnapshot(projectId, repoPath).catch(() => {});
+
     return result;
+  }
+
+  private async emitFailureBaselineSnapshot(
+    projectId: string,
+    repoPath: string
+  ): Promise<void> {
+    try {
+      const windowMs = 60 * 60 * 1000;
+      const sinceIso = new Date(Date.now() - windowMs).toISOString();
+      const events = await eventLogService.readSinceByProjectId(projectId, sinceIso);
+      const distribution = buildFailureBaselineSnapshot(events, windowMs);
+      const total = Object.values(distribution).reduce((s, n) => s + n, 0);
+      if (total === 0) return;
+      await eventLogService.append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: "_system",
+        event: "metrics.failure_baseline_snapshot",
+        data: { windowMs, distribution, totalFailures: total },
+      });
+    } catch (err) {
+      log.debug("Failed to emit failure baseline snapshot", { err });
+    }
   }
 
   // ─── GUPP: scan assignment.json files ───
@@ -1257,8 +1285,14 @@ export class RecoveryService {
     const repoResolved = path.resolve(repoPath);
     const wtResolved = path.resolve(worktreePath);
     if (repoResolved === wtResolved) return; // Branches mode: no worktree
+    const canCleanup = await worktreeLeaseService.canCleanup(taskId).catch(() => true);
+    if (!canCleanup) {
+      log.info("Skipping worktree removal: active lease exists", { taskId, worktreePath });
+      return;
+    }
     try {
       await this.branchManager.removeTaskWorktree(repoPath, taskId, worktreePath);
+      await worktreeLeaseService.forceRelease(taskId).catch(() => {});
     } catch {
       // Best effort; worktree may already be gone
     }

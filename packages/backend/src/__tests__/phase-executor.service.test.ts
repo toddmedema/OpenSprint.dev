@@ -23,6 +23,19 @@ vi.mock("../services/execute-replay-metadata.service.js", () => ({
   resolveExecuteReplayMetadata: mockResolveExecuteReplayMetadata,
 }));
 
+const { mockIsWorktreeCheckoutUsable } = vi.hoisted(() => ({
+  mockIsWorktreeCheckoutUsable: vi.fn(),
+}));
+vi.mock("../utils/worktree-health.js", () => ({
+  isWorktreeCheckoutUsable: mockIsWorktreeCheckoutUsable,
+  IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "IncompleteWorktreeError";
+    }
+  },
+}));
+
 const mockCreateTaskWorktree = vi.fn();
 const mockCreateOrCheckoutBranch = vi.fn();
 const mockEnsureRepoNodeModules = vi.fn();

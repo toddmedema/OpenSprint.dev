@@ -305,6 +305,64 @@ describe("RenderedDiffView", () => {
     });
   });
 
+  describe("parse error fallback (SPEC: raw fallback when markdown parsing fails)", () => {
+    it("renders parse-error notice with guidance to use raw mode", async () => {
+      const { computeMarkdownBlockDiff } = await import("../../lib/markdownBlockDiff");
+      const orig = computeMarkdownBlockDiff;
+
+      const mod = await import("../../lib/markdownBlockDiff");
+      const spy = vi.spyOn(mod, "computeMarkdownBlockDiff").mockReturnValue({
+        blocks: [],
+        parseError: true,
+      });
+
+      render(<RenderedDiffView fromContent="# Title" toContent="# Title\n\nNew." />);
+
+      expect(screen.getByTestId("diff-view-parse-error")).toBeInTheDocument();
+      expect(screen.getByText("Markdown parsing failed")).toBeInTheDocument();
+      expect(screen.getByText(/raw mode/i)).toBeInTheDocument();
+
+      spy.mockRestore();
+    });
+
+    it("calls onParseError callback when parse fails", async () => {
+      const mod = await import("../../lib/markdownBlockDiff");
+      const spy = vi.spyOn(mod, "computeMarkdownBlockDiff").mockReturnValue({
+        blocks: [],
+        parseError: true,
+      });
+
+      const onParseError = vi.fn();
+      render(
+        <RenderedDiffView
+          fromContent="# Title"
+          toContent="# Title\n\nNew."
+          onParseError={onParseError}
+        />
+      );
+
+      expect(onParseError).toHaveBeenCalled();
+
+      spy.mockRestore();
+    });
+
+    it("does not render the diff-view-rendered container on parse error", async () => {
+      const mod = await import("../../lib/markdownBlockDiff");
+      const spy = vi.spyOn(mod, "computeMarkdownBlockDiff").mockReturnValue({
+        blocks: [],
+        parseError: true,
+      });
+
+      render(<RenderedDiffView fromContent="# Title" toContent="# Title\n\nNew." />);
+
+      expect(screen.queryByTestId("diff-view-rendered")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("diff-view-no-changes")).not.toBeInTheDocument();
+      expect(screen.getByTestId("diff-view-parse-error")).toBeInTheDocument();
+
+      spy.mockRestore();
+    });
+  });
+
   describe("block cap (show first N blocks + expand)", () => {
     function buildLargeContent(blockCount: number): string {
       const lines: string[] = [];

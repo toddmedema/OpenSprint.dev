@@ -808,7 +808,7 @@ describe("BranchManager", () => {
       );
     });
 
-    it("refuses to treat the main repo checkout as a disposable worktree", async () => {
+    it("creates the task worktree when the main repo was checked out to the task branch", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
       await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
@@ -819,11 +819,18 @@ describe("BranchManager", () => {
       const taskId = `wt-main-branch-${Date.now()}`;
       await execAsync(`git checkout -b opensprint/${taskId}`, { cwd: repoPath });
 
-      await expect(branchManager.createTaskWorktree(repoPath, taskId)).rejects.toThrow(
-        /main repo is currently checked out/
-      );
-      await expect(fs.readFile(path.join(repoPath, "README"), "utf-8")).resolves.toBe("initial");
-      await expect(fs.access(path.join(repoPath, ".git"))).resolves.toBeUndefined();
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      worktreePaths.push(wtPath);
+
+      const { stdout: mainBranch } = await execAsync("git rev-parse --abbrev-ref HEAD", {
+        cwd: repoPath,
+      });
+      expect(mainBranch.trim()).toBe("main");
+
+      const { stdout: wtBranch } = await execAsync("git rev-parse --abbrev-ref HEAD", {
+        cwd: wtPath,
+      });
+      expect(wtBranch.trim()).toBe(`opensprint/${taskId}`);
     });
 
     it("should remove a worktree cleanly", async () => {

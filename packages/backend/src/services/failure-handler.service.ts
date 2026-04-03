@@ -45,8 +45,14 @@ import {
   type NoResultReasonCode,
 } from "./no-result-reason.service.js";
 import { suggestPolicyFromArtifact, summarizeDebugArtifact } from "./agentic-repair.service.js";
+import { worktreeLeaseService } from "./worktree-lease.service.js";
 
 const log = createLogger("failure-handler");
+
+function extractPreflightSubCode(reason: string): string | null {
+  const match = reason.match(/^\[([A-Z_]+)\]/);
+  return match?.[1] ?? null;
+}
 
 const INFRA_FAILURE_TYPES: FailureType[] = ["agent_crash", "timeout", "merge_conflict", "workspace_invalid"];
 const MAX_INFRA_RETRIES = 2;
@@ -68,6 +74,7 @@ const FAILURE_RETRY_CAPS: Partial<Record<FailureType, number>> = {
 const RUNAWAY_WINDOW_MS = 2 * 60 * 60 * 1000;
 const RUNAWAY_MAX_ATTEMPTS_PER_WINDOW = 6;
 const RUNAWAY_MAX_REPEAT_SIGNATURE = 3;
+const MERGE_GATE_REPEAT_FINGERPRINT_CAP = 2;
 const FAILURE_DIAGNOSTIC_OUTPUT_LIMIT = 1800;
 const FAILURE_DIAGNOSTIC_LINE_LIMIT = 300;
 const FAILURE_DIAGNOSTIC_REASON_PATTERNS: RegExp[] = [
@@ -238,6 +245,7 @@ export class FailureHandlerService {
     reason: string;
     diagnostic: FailureDiagnosticDetail | null;
     noResultReasonCode?: NoResultReasonCode;
+    qualityGateDetail?: RetryQualityGateDetail | null;
   }): string {
     const reasonLine = this.firstActionableReasonLine(params.reason)?.toLowerCase() ?? "";
     const command = params.diagnostic?.command?.toLowerCase() ?? "";
@@ -245,6 +253,8 @@ export class FailureHandlerService {
     const output = params.diagnostic?.outputSnippet?.toLowerCase() ?? "";
     const noResultCode = params.noResultReasonCode ?? "";
     const normalizedOutput = output.slice(0, 240);
+    const gateCategory = params.qualityGateDetail?.category ?? "";
+    const gateValidationWorkspace = params.qualityGateDetail?.validationWorkspace ?? "";
     return [
       params.failureType,
       command,
@@ -252,6 +262,8 @@ export class FailureHandlerService {
       reasonLine,
       normalizedOutput,
       noResultCode,
+      gateCategory,
+      gateValidationWorkspace,
     ].join("|");
   }
 
@@ -308,6 +320,17 @@ export class FailureHandlerService {
         shouldBlock: true,
         nextActionOverride: `Blocked after ${repeatedSignatureCount} repeated identical failure signatures`,
         blockReason: "Repeated identical failure",
+      };
+    }
+
+    if (
+      params.failureType === "merge_quality_gate" &&
+      repeatedSignatureCount >= MERGE_GATE_REPEAT_FINGERPRINT_CAP
+    ) {
+      return {
+        shouldBlock: true,
+        nextActionOverride: `Blocked: identical merge quality gate failure repeated ${repeatedSignatureCount} times`,
+        blockReason: "Repeated identical merge quality gate failure",
       };
     }
 
@@ -853,6 +876,21 @@ export class FailureHandlerService {
       }
     }
 
+    const preflightSubCode =
+      failureType === "repo_preflight"
+        ? extractPreflightSubCode(effectiveReason)
+        : null;
+
+    const earlyFailureFingerprint = failureType === "merge_quality_gate"
+      ? this.buildFailureSignature({
+          failureType,
+          reason: effectiveReason,
+          diagnostic: failureDiagnosticDetail,
+          noResultReasonCode: options?.noResultReasonCode,
+          qualityGateDetail: slot.phaseResult.qualityGateDetail,
+        }).slice(0, 300)
+      : null;
+
     // Log all failures (including review rejections) to event log for Execution Diagnostics
     eventLogService
       .append(repoPath, {
@@ -871,6 +909,8 @@ export class FailureHandlerService {
           policyDecision: artifactPolicyDecision,
           exitCode: options?.exitCode ?? null,
           signal: options?.signal ?? null,
+          ...(preflightSubCode ? { preflightSubCode } : {}),
+          ...(earlyFailureFingerprint ? { failureFingerprint: earlyFailureFingerprint } : {}),
           ...commonFailureContext,
           ...this.failureDiagnosticFields(failureDiagnosticDetail),
         },
@@ -938,6 +978,7 @@ export class FailureHandlerService {
       reason: effectiveReason,
       diagnostic: failureDiagnosticDetail,
       noResultReasonCode: options?.noResultReasonCode,
+      qualityGateDetail: slot.phaseResult.qualityGateDetail,
     });
     const persistedRetryContext = this.buildPersistedRetryContext({
       failureType,
@@ -1504,19 +1545,22 @@ export class FailureHandlerService {
     options?: { deleteBranch?: boolean; baseBranch?: string }
   ): Promise<void> {
     const baseBranch = options?.baseBranch ?? "main";
+    const worktreeKey = slot.worktreeKey ?? taskId;
     if (gitWorkingMode === "branches") {
       await this.host.branchManager.revertAndReturnToMain(repoPath, branchName, baseBranch);
       slot.worktreePath = null;
+      await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
       return;
     }
     if (slot.worktreePath) {
       await this.host.branchManager.removeTaskWorktree(
         repoPath,
-        slot.worktreeKey ?? taskId,
+        worktreeKey,
         slot.worktreePath
       );
       slot.worktreePath = null;
     }
+    await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
     if (options?.deleteBranch) {
       await this.host.branchManager.deleteBranch(repoPath, branchName);
     }

@@ -2,6 +2,18 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../services/validation-workspace.service.js", () => ({
+  ValidationWorkspaceService: class {
+    async verifyWorkspaceHealth() {
+      return { healthy: true, errors: [] };
+    }
+  },
+  validationWorkspaceService: {
+    verifyWorkspaceHealth: async () => ({ healthy: true, errors: [] }),
+  },
+}));
+
 import { runMergeQualityGates } from "../services/merge-quality-gate-runner.js";
 
 describe("runMergeQualityGates", () => {

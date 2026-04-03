@@ -117,18 +117,19 @@ export class ValidationWorkspaceService {
     return assertWorktreeIntegrity(repoPath, worktreePath, taskId, "merge");
   }
 
-  private async verifyWorkspaceReady(
+  async verifyWorkspaceHealth(
     repoPath: string,
     worktreePath: string,
-    kind: ValidationWorkspaceKind
-  ): Promise<void> {
+    label: ValidationWorkspaceKind | "task_worktree" | "repo_root" = "task_worktree"
+  ): Promise<{ healthy: boolean; errors: string[] }> {
+    const errors: string[] = [];
     const isNpmWorkspace = await this.repoHasFile(repoPath, "package.json");
     if (isNpmWorkspace) {
       const packageJsonPath = path.join(worktreePath, "package.json");
       try {
         await fs.access(packageJsonPath);
       } catch {
-        throw new Error(`Validation workspace package.json is missing: ${packageJsonPath}`);
+        errors.push(`package.json missing at ${packageJsonPath}`);
       }
 
       const workspaceLockfilePath = path.join(worktreePath, "package-lock.json");
@@ -137,37 +138,39 @@ export class ValidationWorkspaceService {
         try {
           await fs.access(workspaceLockfilePath);
         } catch {
-          throw new Error(
-            `Validation workspace package-lock.json is missing: ${workspaceLockfilePath}`
-          );
+          errors.push(`package-lock.json missing at ${workspaceLockfilePath}`);
         }
       }
 
       const nodeModulesPath = path.join(worktreePath, "node_modules");
       if (!(await this.isNodeModulesUsable(nodeModulesPath))) {
-        throw new Error(
-          `Validation workspace node_modules is missing or unusable at ${nodeModulesPath}`
-        );
+        errors.push(`node_modules missing or unusable at ${nodeModulesPath}`);
       }
     }
 
     try {
       await this.runCommand(
-        {
-          command: "git",
-          args: ["rev-parse", "--verify", "HEAD"],
-        },
-        {
-          cwd: worktreePath,
-          timeout: 30_000,
-        }
+        { command: "git", args: ["rev-parse", "--verify", "HEAD"] },
+        { cwd: worktreePath, timeout: 30_000 }
       );
-    } catch (err) {
-      throw new Error(
-        `${kind} workspace git validation failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
+    } catch {
+      errors.push(`git HEAD not valid in ${label} workspace at ${worktreePath}`);
+    }
+
+    if (errors.length > 0) {
+      log.warn(`Workspace health check failed for ${label}`, { worktreePath, errors });
+    }
+    return { healthy: errors.length === 0, errors };
+  }
+
+  private async verifyWorkspaceReady(
+    repoPath: string,
+    worktreePath: string,
+    kind: ValidationWorkspaceKind
+  ): Promise<void> {
+    const { healthy, errors } = await this.verifyWorkspaceHealth(repoPath, worktreePath, kind);
+    if (!healthy) {
+      throw new Error(`Validation workspace not ready (${kind}): ${errors.join("; ")}`);
     }
   }
 
@@ -302,7 +305,7 @@ export class ValidationWorkspaceService {
    * Returns a result describing the outcome so callers (and the gate runner's
    * repair loop) can decide what to do next.
    */
-  private async ensureWorktreeNodeModules(
+  async ensureWorktreeNodeModules(
     repoPath: string,
     worktreePath: string,
     kind: ValidationWorkspaceKind

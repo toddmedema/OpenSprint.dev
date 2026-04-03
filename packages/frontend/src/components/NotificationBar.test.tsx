@@ -13,7 +13,7 @@ function createStore(initialItems: { id: string; message: string; severity: stri
       notification: {
         items: initialItems.map((i) => ({
           ...i,
-          timeout: i.severity === "error" || i.severity === "warning" ? 0 : 8000,
+          timeout: 15000,
           createdAt: Date.now(),
         })),
       },

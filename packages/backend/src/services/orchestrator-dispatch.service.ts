@@ -15,6 +15,7 @@ import type {
 import { resolveBaseBranch } from "../utils/git-repo-state.js";
 import { assertWorktreeIntegrity, rebuildWorktreeIfInvalid } from "../utils/worktree-health.js";
 import { createLogger } from "../utils/logger.js";
+import { worktreeLeaseService } from "./worktree-lease.service.js";
 
 const log = createLogger("orchestrator-dispatch");
 
@@ -512,6 +513,17 @@ export class OrchestratorDispatchService {
           });
         }
       }
+
+      await worktreeLeaseService.acquire({
+        worktreeKey,
+        taskId: task.id,
+        projectId,
+        worktreePath: slot.worktreePath,
+        branchName,
+        leaseOwner: `dispatch:${task.id}:${cumulativeAttempts + 1}`,
+      }).catch((err) => {
+        log.warn("Failed to acquire worktree lease (non-fatal)", { taskId: task.id, err });
+      });
     }
 
     if (mergeResumeState) {

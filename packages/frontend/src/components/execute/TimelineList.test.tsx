@@ -382,6 +382,43 @@ describe("TimelineList", () => {
     expect(screen.getByText("Authentication")).toBeInTheDocument();
   });
 
+  it("marks the selected task row for sidebar/detail context", () => {
+    const tasks = [
+      createMockTask({
+        id: "task-a",
+        title: "First task",
+        kanbanColumn: "ready",
+        epicId: "epic-1",
+      }),
+      createMockTask({
+        id: "task-b",
+        title: "Second task",
+        kanbanColumn: "ready",
+        epicId: "epic-1",
+      }),
+    ];
+    const plans = [createMockPlan("epic-1", "Shared Epic")];
+
+    renderWithProviders(
+      <TimelineList
+        tasks={tasks}
+        plans={plans}
+        onTaskSelect={vi.fn()}
+        selectedTaskId="task-b"
+        {...defaultListProps}
+      />
+    );
+
+    const rowA = screen.getByTestId("timeline-row-task-a");
+    const rowB = screen.getByTestId("timeline-row-task-b");
+    const hitA = within(rowA).getByRole("button", { name: /First task/i });
+    const hitB = within(rowB).getByRole("button", { name: /Second task/i });
+    expect(hitA).toHaveAttribute("data-queue-row-selected", "false");
+    expect(hitB).toHaveAttribute("data-queue-row-selected", "true");
+    expect(hitB).toHaveAttribute("aria-current", "true");
+    expect(hitA).not.toHaveAttribute("aria-current");
+  });
+
   it("displays epic name in timeline rows when task has an associated plan", () => {
     const tasks = [
       createMockTask({
