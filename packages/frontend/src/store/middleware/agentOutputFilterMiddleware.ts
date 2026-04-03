@@ -6,30 +6,45 @@ import {
 } from "../slices/executeSlice";
 import { createAgentOutputFilter, filterAgentOutput } from "../../utils/agentOutputFilter";
 
-/** Batch window in ms: collect chunks for this duration before dispatching. */
-const BATCH_MS = 150;
+/**
+ * Max time to hold buffered chunks (background tabs throttle rAF; this caps latency).
+ */
+const BATCH_MAX_MS = 150;
+
+const hasRaf =
+  typeof globalThis.requestAnimationFrame === "function" &&
+  typeof globalThis.cancelAnimationFrame === "function";
 
 /**
  * Middleware that holds an isolated agent output filter instance.
- * Intercepts appendAgentOutput to filter chunks, batches them for ~100-200ms,
- * then dispatches a single append with concatenated content to reduce Redux
- * dispatch frequency and React re-renders during heavy streaming.
+ * Intercepts appendAgentOutput to filter chunks, buffers WS chunks, then flushes
+ * on the next animation frame (when available) and/or after a short interval so
+ * Redux/React update at a stable rate instead of once per chunk.
  * Flushes pending content on setSelectedTaskId to ensure no loss.
  * Also filters setAgentOutputBackfill and resets filter on setSelectedTaskId.
  */
 export const agentOutputFilterMiddleware: Middleware = (store) => {
   const filter = createAgentOutputFilter();
   const buffer = new Map<string, string[]>();
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let rafId: number | null = null;
+  let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const cancelScheduledFlush = (): void => {
+    if (rafId != null && hasRaf) {
+      globalThis.cancelAnimationFrame!(rafId);
+      rafId = null;
+    }
+    if (maxWaitTimer) {
+      clearTimeout(maxWaitTimer);
+      maxWaitTimer = null;
+    }
+  };
 
   const flush = (
     next: (a: ReturnType<typeof appendAgentOutput>) => unknown,
     preserveCompletion?: boolean
   ) => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
+    cancelScheduledFlush();
     for (const [taskId, chunks] of buffer) {
       const concatenated = chunks.join("");
       if (concatenated) {
@@ -43,6 +58,37 @@ export const agentOutputFilterMiddleware: Middleware = (store) => {
       }
     }
     buffer.clear();
+  };
+
+  const scheduleBufferedFlush = (
+    next: (a: ReturnType<typeof appendAgentOutput>) => unknown
+  ): void => {
+    if (hasRaf && rafId == null) {
+      rafId = globalThis.requestAnimationFrame!(() => {
+        rafId = null;
+        if (buffer.size === 0) {
+          if (maxWaitTimer) {
+            clearTimeout(maxWaitTimer);
+            maxWaitTimer = null;
+          }
+          return;
+        }
+        flush(next);
+      });
+    }
+    if (maxWaitTimer == null) {
+      maxWaitTimer = setTimeout(() => {
+        maxWaitTimer = null;
+        if (buffer.size === 0) {
+          if (rafId != null && hasRaf) {
+            globalThis.cancelAnimationFrame!(rafId);
+            rafId = null;
+          }
+          return;
+        }
+        flush(next);
+      }, BATCH_MAX_MS);
+    }
   };
 
   return (next) => (action) => {
@@ -61,9 +107,7 @@ export const agentOutputFilterMiddleware: Middleware = (store) => {
         list.push(filtered);
         buffer.set(taskId, list);
       }
-      if (!flushTimer) {
-        flushTimer = setTimeout(() => flush(next), BATCH_MS);
-      }
+      scheduleBufferedFlush(next);
       return next({ type: "@@agentOutputFilter/batched" });
     }
     if (setAgentOutputBackfill.match(action)) {
@@ -86,9 +130,8 @@ export const agentOutputFilterMiddleware: Middleware = (store) => {
 
       // Discard buffered chunks for this task — the backfill supersedes them.
       buffer.delete(taskId);
-      if (buffer.size === 0 && flushTimer) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
+      if (buffer.size === 0) {
+        cancelScheduledFlush();
       }
       // Reset incremental filter so subsequent WS chunks are not processed
       // against stale partial-line state from before the backfill.

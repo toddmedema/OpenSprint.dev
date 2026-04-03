@@ -190,15 +190,16 @@ describe("executeSlice", () => {
       const store = createStore();
       store.dispatch(setSelectedTaskId("task-1"));
       store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "hi\n" }));
-      vi.advanceTimersByTime(200);
+      // Middleware flushes on requestAnimationFrame (~16ms) before the max-wait timer.
+      vi.advanceTimersToNextFrame();
       expect(store.getState().execute.agentOutputLastReceivedAt["task-1"]).toBe(
-        "2025-06-01T12:00:00.150Z"
+        "2025-06-01T12:00:00.016Z"
       );
       vi.setSystemTime(new Date("2025-06-01T12:00:10.000Z"));
       store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: "there\n" }));
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersToNextFrame();
       expect(store.getState().execute.agentOutputLastReceivedAt["task-1"]).toBe(
-        "2025-06-01T12:00:10.150Z"
+        "2025-06-01T12:00:10.016Z"
       );
       vi.useRealTimers();
     });

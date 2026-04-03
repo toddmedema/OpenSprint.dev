@@ -39,6 +39,32 @@ describe("agentOutputFilterMiddleware", () => {
     vi.useRealTimers();
   });
 
+  it("flushes buffered output when requestAnimationFrame runs before the max-wait timer", () => {
+    vi.useFakeTimers();
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    const store = createStore();
+    store.dispatch(setSelectedTaskId("task-1"));
+    store.dispatch(appendAgentOutput({ taskId: "task-1", chunk: '{"type":"text","text":"x"}\n' }));
+
+    expect(store.getState().execute.agentOutput["task-1"]).toBeUndefined();
+    expect(rafCallbacks).toHaveLength(1);
+
+    rafCallbacks[0]!(performance.now());
+    expect(store.getState().execute.agentOutput["task-1"]).toEqual(["x"]);
+
+    vi.advanceTimersByTime(500);
+    expect(store.getState().execute.agentOutput["task-1"]).toEqual(["x"]);
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
   it("flushes on setSelectedTaskId without waiting for batch window", () => {
     const store = createStore();
     store.dispatch(setSelectedTaskId("task-1"));
