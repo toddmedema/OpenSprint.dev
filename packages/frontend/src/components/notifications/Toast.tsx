@@ -52,7 +52,20 @@ export function Toast({
       data-testid={testId ?? `notification-${severity}`}
     >
       <span className="mt-0.5">{icon ?? <NotificationIcon severity={severity} size={16} />}</span>
-      <span className="flex-1 min-w-0 text-sm font-medium">{message}</span>
+      <span
+        role="button"
+        tabIndex={0}
+        className="flex-1 min-w-0 text-sm font-medium cursor-pointer rounded outline-none focus-visible:ring-2 focus-visible:ring-theme-accent focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        onClick={onDismiss}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onDismiss();
+          }
+        }}
+      >
+        {message}
+      </span>
       {actions?.map((a) => (
         <button
           key={a.label}
