@@ -51,6 +51,7 @@ vi.mock("../services/branch-manager.js", () => {
     BranchManager: vi.fn().mockImplementation(() => ({
       waitForGitReady: vi.fn(),
       commitWip: vi.fn(),
+      prepareWorktreeForRemoval: vi.fn(),
       removeTaskWorktree: vi.fn(),
       deleteBranch: vi.fn(),
       getChangedFiles: vi.fn(),
@@ -69,6 +70,7 @@ vi.mock("../services/branch-manager.js", () => {
 });
 
 const mockRemoveTaskWorktree = vi.fn();
+const mockPrepareWorktreeForRemoval = vi.fn();
 const mockDeleteBranch = vi.fn();
 const mockGetSettings = vi.fn();
 const mockGitQueueDrain = vi.fn();
@@ -187,6 +189,9 @@ vi.mock("../services/final-review.service.js", () => ({
 
 vi.mock("../utils/worktree-health.js", () => ({
   assertWorktreeIntegrity: vi.fn().mockResolvedValue({ valid: true, phase: "merge", worktreePath: "", taskId: "" }),
+  evaluateWorktreeCleanupProtection: vi.fn().mockResolvedValue({ forbid: false }),
+  getWorktreeCleanupAssignmentGuardMs: vi.fn().mockReturnValue(30_000),
+  logWorktreeCleanupBlocked: vi.fn(),
 }));
 
 vi.mock("../utils/failure-fingerprint.js", () => ({
@@ -342,6 +347,7 @@ describe("MergeCoordinatorService", () => {
       branchManager: {
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
+        prepareWorktreeForRemoval: mockPrepareWorktreeForRemoval.mockResolvedValue(undefined),
         removeTaskWorktree: mockRemoveTaskWorktree.mockResolvedValue(undefined),
         deleteBranch: mockDeleteBranch.mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
@@ -401,6 +407,7 @@ describe("MergeCoordinatorService", () => {
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
     await vi.waitFor(() => {
+      expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith(taskId);
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
       expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
       expect(mockRegisterCleanupIntent).toHaveBeenCalledWith(
@@ -464,6 +471,7 @@ describe("MergeCoordinatorService", () => {
     await coordinator.performMergeAndDone(projectId, repoPath, makeTask(), branchName);
 
     await vi.waitFor(() => {
+      expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith(taskId);
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
       expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
     });
@@ -472,6 +480,7 @@ describe("MergeCoordinatorService", () => {
   it("always calls deleteBranch regardless of gitWorkingMode", async () => {
     for (const mode of ["worktree", "branches"] as const) {
       vi.clearAllMocks();
+      mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
       mockRemoveTaskWorktree.mockResolvedValue(undefined);
       mockDeleteBranch.mockResolvedValue(undefined);
 
@@ -507,6 +516,7 @@ describe("MergeCoordinatorService", () => {
 
     await coordinator.postCompletionAsync(projectId, repoPath, "os-abc.1");
 
+    expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith("epic_42");
     expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
       repoPath,
       "epic_42",
@@ -1875,6 +1885,7 @@ describe("MergeCoordinatorService", () => {
         })
       );
       await vi.waitFor(() => {
+        expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith(epicWorktreeKey);
         expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
           repoPath,
           epicWorktreeKey,

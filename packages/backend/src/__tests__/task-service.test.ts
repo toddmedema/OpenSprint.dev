@@ -12,6 +12,7 @@ const { mockTaskStoreState, mockBranchManagerInstance, mockOrchestrator } =
     mockTaskStoreState: { listAll: [] as StoredTask[], readyCalls: 0 },
     mockBranchManagerInstance: {
       listTaskWorktrees: vi.fn().mockResolvedValue([]),
+      prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
       removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
       revertAndReturnToMain: vi.fn().mockResolvedValue(undefined),
       createOrCheckoutBranch: vi.fn().mockResolvedValue(undefined),

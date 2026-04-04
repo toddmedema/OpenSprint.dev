@@ -629,6 +629,7 @@ export class TaskService {
       const found = worktrees.find((w) => w.taskId === taskId);
       if (found) {
         try {
+          await this.branchManager.prepareWorktreeForRemoval(taskId);
           await this.branchManager.removeTaskWorktree(repoPath, taskId, found.worktreePath);
         } catch (err) {
           log.warn("Remove-worktree-on-unblock failed", { taskId, err });
@@ -709,6 +710,7 @@ export class TaskService {
       const found = worktrees.find((w) => w.taskId === taskId);
       if (found) {
         try {
+          await this.branchManager.prepareWorktreeForRemoval(taskId);
           await this.branchManager.removeTaskWorktree(repoPath, taskId, found.worktreePath);
         } catch (err) {
           log.warn("Remove-worktree-on-force-retry failed", { taskId, err });

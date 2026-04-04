@@ -1,3 +1,5 @@
+import path from "path";
+
 /**
  * MergeCoordinator — merge-to-main, push, conflict resolution, and post-completion.
  * Extracted from OrchestratorService. Owns all git merge/push logic and the push mutex.
@@ -38,7 +40,12 @@ import { appendCrashLog } from "../utils/crash-log.js";
 import { appendRuntimeTrace } from "../utils/runtime-trace.js";
 import { buildTaskLastExecutionSummary, compactExecutionText } from "./task-execution-summary.js";
 import { inspectGitRepoState, resolveBaseBranch } from "../utils/git-repo-state.js";
-import { assertWorktreeIntegrity } from "../utils/worktree-health.js";
+import {
+  assertWorktreeIntegrity,
+  evaluateWorktreeCleanupProtection,
+  getWorktreeCleanupAssignmentGuardMs,
+  logWorktreeCleanupBlocked,
+} from "../utils/worktree-health.js";
 import { buildFailureFingerprint } from "../utils/failure-fingerprint.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import type { MergeQualityGateProfile } from "./merge-quality-gates.js";
@@ -205,6 +212,7 @@ export interface MergeCoordinatorHost {
     waitForGitReady(wtPath: string): Promise<void>;
     commitWip(wtPath: string, taskId: string): Promise<void>;
     removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
+    prepareWorktreeForRemoval(worktreeKey: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     revertAndReturnToMain?(
       repoPath: string,
@@ -456,6 +464,27 @@ export class MergeCoordinatorService {
           }
         } else {
           const key = target.worktreeKey ?? target.taskId;
+          if (target.worktreePath) {
+            const resolvedWt = path.resolve(target.worktreePath);
+            const protection = await evaluateWorktreeCleanupProtection(
+              projectId,
+              resolvedWt,
+              (pid, tid) => this.host.taskStore.show(pid, tid),
+              getWorktreeCleanupAssignmentGuardMs()
+            );
+            if (protection.forbid) {
+              logWorktreeCleanupBlocked("merge_push_cleanup", {
+                projectId,
+                worktreePath: resolvedWt,
+                reason: protection.reason ?? "unknown",
+                referencingTaskIds: protection.referencingTaskIds,
+                cleanupTrigger: "merge_success_push",
+                intentTaskId: target.taskId,
+              });
+              continue;
+            }
+          }
+          await this.host.branchManager.prepareWorktreeForRemoval(key);
           await this.host.branchManager.removeTaskWorktree(
             repoPath,
             key,
@@ -1883,6 +1912,32 @@ export class MergeCoordinatorService {
             failureReason: integrity.failureReason,
             worktreePath: wtPath,
           });
+          this.traceMergeLifecycle(
+            "worktree_integrity_failed",
+            projectId,
+            task.id,
+            { branchName, worktreePath: wtPath, failureReason: integrity.failureReason },
+            { mirrorToCrashLog: true }
+          );
+          try {
+            await this.host.taskStore.update(projectId, task.id, {
+              status: "open",
+              assignee: "",
+              extra: {
+                last_merge_failure_reason: "workspace_invalid",
+                worktree_integrity_detail: integrity.detail ?? "unknown",
+              },
+            });
+          } catch (err) {
+            log.warn("performMergeAndDone: failed to requeue task after integrity failure", {
+              taskId: task.id,
+              err,
+            });
+          }
+          await this.releaseMergeSlot(projectId, repoPath, "fail", task.id);
+          await broadcastAuthoritativeTaskUpdated(broadcastToProject, projectId, task.id);
+          this.host.nudge(projectId);
+          return;
         }
       }
 

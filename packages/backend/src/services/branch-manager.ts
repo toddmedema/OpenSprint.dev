@@ -14,13 +14,19 @@ import {
 } from "../utils/git-repo-state.js";
 import { formatClosedCommitMessage, parseClosedCommitMessage } from "../utils/commit-message.js";
 import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
-import { validateWorktreeCheckout } from "../utils/worktree-health.js";
+import {
+  evaluateWorktreeCleanupProtection,
+  getWorktreeCleanupAssignmentGuardMs,
+  logWorktreeCleanupBlocked,
+  validateWorktreeCheckout,
+} from "../utils/worktree-health.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
 import { heartbeatService } from "./heartbeat.service.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
 import { worktreeRegistry } from "./worktree-registry.js";
+import { worktreeLeaseService } from "./worktree-lease.service.js";
 
 /** Paths we must not commit from worktrees (runtime-only; would block merge in main). Agent stats, event log, and orchestrator counters are now DB-only. */
 const RUNTIME_EXCLUDE_FOR_WIP = [
@@ -1319,6 +1325,7 @@ export class BranchManager {
     }
 
     // Remove stale worktree at our path if it exists
+    await this.prepareWorktreeForRemoval(worktreeKey);
     await this.removeTaskWorktree(repoPath, worktreeKey);
 
     // If branch is checked out in a different path (stale/wrong entry), free it
@@ -1846,6 +1853,17 @@ export class BranchManager {
   }
 
   /**
+   * Clears in-memory registry state and releases the DB worktree lease so {@link removeTaskWorktree}
+   * can run. Call when intentionally destroying a worktree (slot finalization, admin cleanup,
+   * reclaiming a path before recreate). Do not call on recovery paths that rely on the lease to
+   * block removal while another process may still hold the worktree.
+   */
+  async prepareWorktreeForRemoval(worktreeKey: string): Promise<void> {
+    worktreeRegistry.retire(worktreeKey);
+    await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
+  }
+
+  /**
    * Remove a task or epic worktree. Safe to call even if the worktree doesn't exist.
    * Logs errors so stale worktrees can be diagnosed; always attempts cleanup.
    * @param worktreeKey - Task ID (per-task) or worktree key (e.g. epic_<epicId>) for epic worktree.
@@ -1864,6 +1882,15 @@ export class BranchManager {
       log.warn("Skipping worktree removal: active lease prevents cleanup", {
         worktreeKey,
         entry: worktreeRegistry.get(worktreeKey),
+      });
+      return;
+    }
+
+    const dbCanCleanup = await worktreeLeaseService.canCleanup(worktreeKey).catch(() => true);
+    if (!dbCanCleanup) {
+      log.warn("Skipping worktree removal: active DB lease prevents cleanup", {
+        worktreeKey,
+        worktreePath: wtPath,
       });
       return;
     }
@@ -2120,6 +2147,8 @@ export class BranchManager {
     const idToStatus = new Map(allIssues.map((i) => [i.id, (i.status as string) ?? ""]));
     const pruned: string[] = [];
 
+    const assignmentGuardMs = getWorktreeCleanupAssignmentGuardMs();
+
     for (const { taskId, worktreePath } of worktrees) {
       const resolvedPath = path.resolve(worktreePath);
       if (excludeTaskIds.has(taskId)) continue;
@@ -2128,6 +2157,22 @@ export class BranchManager {
       const status = idToStatus.get(taskId);
       // Remove if task doesn't exist or is closed
       if (status === undefined || status === "closed") {
+        const protection = await evaluateWorktreeCleanupProtection(
+          projectId,
+          resolvedPath,
+          (pid, tid) => this.taskStore.show(pid, tid),
+          assignmentGuardMs
+        );
+        if (protection.forbid) {
+          logWorktreeCleanupBlocked("prune_orphan_worktrees", {
+            projectId,
+            worktreePath: resolvedPath,
+            reason: protection.reason ?? "unknown",
+            referencingTaskIds: protection.referencingTaskIds,
+            cleanupTrigger: "prune_orphan",
+          });
+          continue;
+        }
         log.info("Pruning orphan worktree", { taskId, worktreePath, status: status ?? "no-task" });
         try {
           await this.removeTaskWorktree(repoPath, taskId, worktreePath);

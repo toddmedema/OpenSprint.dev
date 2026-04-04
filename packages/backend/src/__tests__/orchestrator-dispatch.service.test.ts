@@ -19,6 +19,20 @@ vi.mock("../utils/git-repo-state.js", () => ({
   resolveBaseBranch: (...args: unknown[]) => mockResolveBaseBranch(...args),
 }));
 
+const mockAcquireLease = vi.fn().mockResolvedValue(undefined);
+vi.mock("../services/worktree-lease.service.js", () => ({
+  worktreeLeaseService: {
+    acquire: (...args: unknown[]) => mockAcquireLease(...args),
+  },
+}));
+
+const mockTransition = vi.fn().mockReturnValue(true);
+vi.mock("../services/worktree-registry.js", () => ({
+  worktreeRegistry: {
+    transition: (...args: unknown[]) => mockTransition(...args),
+  },
+}));
+
 describe("OrchestratorDispatchService", () => {
   const projectId = "proj-1";
   const repoPath = "/tmp/repo";
@@ -49,6 +63,10 @@ describe("OrchestratorDispatchService", () => {
     }) as StoredTask;
 
   beforeEach(() => {
+    mockAcquireLease.mockClear();
+    mockAcquireLease.mockResolvedValue(undefined);
+    mockTransition.mockClear();
+    mockTransition.mockReturnValue(true);
     state = { nextCoderIndex: 0, status: { queueDepth: 0 }, slots: new Map() };
     taskStore = {
       update: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +105,7 @@ describe("OrchestratorDispatchService", () => {
       getBranchManager: vi.fn().mockReturnValue({
         ensureOnMain: vi.fn().mockResolvedValue(undefined),
         getWorktreePath: vi.fn().mockImplementation((key: string) => `/tmp/repo/.worktrees/${key}`),
+        prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         createTaskWorktree: vi.fn().mockImplementation(
           (_repoPath: string, taskId: string, _baseBranch: string, opts?: { worktreeKey?: string }) =>
@@ -261,6 +280,31 @@ describe("OrchestratorDispatchService", () => {
     const slot = executeCodingPhase.mock.calls[0]?.[3] as DispatchSlotLike;
     expect(slot.worktreePath).toBe("/tmp/repo/.worktrees/os-wt01");
     expect(host.getBranchManager().getWorktreePath).toHaveBeenCalledWith("os-wt01", repoPath);
+  });
+
+  it("acquires a DB worktree lease and transitions registry to in_use in worktree mode", async () => {
+    const task = baseTask("os-lease");
+    await service.dispatchTask(projectId, repoPath, task, 0);
+
+    expect(mockAcquireLease).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeKey: task.id,
+        taskId: task.id,
+        projectId,
+      })
+    );
+    expect(mockTransition).toHaveBeenCalledWith(task.id, "in_use");
+  });
+
+  it("retries worktree lease acquire once after a failure", async () => {
+    mockAcquireLease
+      .mockRejectedValueOnce(new Error("db transient"))
+      .mockResolvedValueOnce(undefined);
+    const task = baseTask("os-retry");
+    await service.dispatchTask(projectId, repoPath, task, 0);
+
+    expect(mockAcquireLease).toHaveBeenCalledTimes(2);
+    expect(mockTransition).toHaveBeenCalledWith(task.id, "in_use");
   });
 
   it("sets slot.worktreePath to repoPath in branches mode", async () => {

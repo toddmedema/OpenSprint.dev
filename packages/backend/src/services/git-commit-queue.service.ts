@@ -489,6 +489,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         } finally {
           if (cleanupFallbackWorktree) {
             await this.branchManager.rebaseAbort(rebaseWorktreePath).catch(() => {});
+            await this.branchManager.prepareWorktreeForRemoval(job.taskId);
             await this.branchManager
               .removeTaskWorktree(repoPath, job.taskId, rebaseWorktreePath)
               .catch((cleanupErr) =>

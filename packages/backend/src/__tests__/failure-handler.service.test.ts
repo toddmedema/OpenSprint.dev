@@ -76,6 +76,7 @@ vi.mock("../services/notification.service.js", () => ({
 }));
 
 const mockRemoveTaskWorktree = vi.fn();
+const mockPrepareWorktreeForRemoval = vi.fn();
 
 const mockDeleteBranch = vi.fn();
 const mockRevertAndReturnToMain = vi.fn();
@@ -129,6 +130,7 @@ describe("FailureHandlerService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRemoveTaskWorktree.mockResolvedValue(undefined);
+    mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
     mockDeleteBranch.mockResolvedValue(undefined);
     mockRevertAndReturnToMain.mockResolvedValue(undefined);
     mockExecuteCodingPhase.mockResolvedValue(undefined);
@@ -154,6 +156,7 @@ describe("FailureHandlerService", () => {
       branchManager: {
         captureBranchDiff: vi.fn().mockResolvedValue(""),
         captureUncommittedDiff: vi.fn().mockResolvedValue(""),
+        prepareWorktreeForRemoval: mockPrepareWorktreeForRemoval,
         removeTaskWorktree: mockRemoveTaskWorktree,
         deleteBranch: mockDeleteBranch,
         revertAndReturnToMain: mockRevertAndReturnToMain,
@@ -303,6 +306,7 @@ describe("FailureHandlerService", () => {
         "agent_crash"
       );
 
+      expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith(taskId);
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
       expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
       expect(mockRevertAndReturnToMain).not.toHaveBeenCalled();
@@ -331,6 +335,7 @@ describe("FailureHandlerService", () => {
         "coding_failure"
       );
 
+      expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith(taskId);
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(repoPath, taskId, "/tmp/worktree");
       expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
       expect(mockRevertAndReturnToMain).not.toHaveBeenCalled();

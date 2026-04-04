@@ -56,6 +56,7 @@ const {
   mockEnsureDependenciesHealthy,
   mockSyncMainWithOrigin,
   mockRemoveTaskWorktree,
+  mockPrepareWorktreeForRemoval,
   mockDeleteBranch,
   mockGetCommitCountAhead,
   mockCaptureBranchDiff,
@@ -137,6 +138,7 @@ const {
   mockEnsureDependenciesHealthy: vi.fn(),
   mockSyncMainWithOrigin: vi.fn(),
   mockRemoveTaskWorktree: vi.fn(),
+  mockPrepareWorktreeForRemoval: vi.fn(),
   mockDeleteBranch: vi.fn(),
   mockGetCommitCountAhead: vi.fn(),
   mockCaptureBranchDiff: vi.fn(),
@@ -286,6 +288,7 @@ vi.mock("../services/branch-manager.js", () => {
       ensureDependenciesHealthy: mockEnsureDependenciesHealthy,
       syncMainWithOrigin: mockSyncMainWithOrigin,
       removeTaskWorktree: mockRemoveTaskWorktree,
+      prepareWorktreeForRemoval: mockPrepareWorktreeForRemoval,
       deleteBranch: mockDeleteBranch,
       getCommitCountAhead: mockGetCommitCountAhead,
       captureBranchDiff: mockCaptureBranchDiff,
@@ -735,6 +738,7 @@ describe("OrchestratorService (slot-based model)", () => {
     mockCaptureBranchDiff.mockResolvedValue("");
     mockCommitWip.mockResolvedValue(undefined);
     mockRemoveTaskWorktree.mockResolvedValue(undefined);
+    mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
     mockDeleteBranch.mockResolvedValue(undefined);
     mockTaskStoreComment.mockResolvedValue(undefined);
     mockTaskStoreUpdate.mockResolvedValue(undefined);
@@ -1064,7 +1068,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
       await orchestrator.ensureRunning(projectId);
       await vi.waitFor(() => {
-        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+        expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(1);
       });
 
       const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
@@ -1179,7 +1183,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
       await orchestrator.ensureRunning(projectId);
       await vi.waitFor(() => {
-        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+        expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(1);
       });
 
       const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");

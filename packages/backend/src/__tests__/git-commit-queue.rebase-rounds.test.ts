@@ -15,6 +15,7 @@ const mockStripRuntimePathsFromMergeResult = vi.fn();
 const mockSymlinkNodeModules = vi.fn();
 const mockCreateTaskWorktree = vi.fn();
 const mockRemoveTaskWorktree = vi.fn();
+const mockPrepareWorktreeForRemoval = vi.fn();
 const mockGetConflictedFiles = vi.fn();
 const mockWithRepoRootAutoStash = vi.fn();
 const mockCreateMergeCandidateWorkspace = vi.fn();
@@ -62,6 +63,7 @@ vi.mock("../services/branch-manager.js", () => {
         mockStripRuntimePathsFromMergeResult(...args),
       symlinkNodeModules: (...args: unknown[]) => mockSymlinkNodeModules(...args),
       createTaskWorktree: (...args: unknown[]) => mockCreateTaskWorktree(...args),
+      prepareWorktreeForRemoval: (...args: unknown[]) => mockPrepareWorktreeForRemoval(...args),
       removeTaskWorktree: (...args: unknown[]) => mockRemoveTaskWorktree(...args),
       getConflictedFiles: (...args: unknown[]) => mockGetConflictedFiles(...args),
       withRepoRootAutoStash: (...args: unknown[]) => mockWithRepoRootAutoStash(...args),
@@ -143,6 +145,7 @@ describe("GitCommitQueue rebase rounds", () => {
     mockStripRuntimePathsFromMergeResult.mockResolvedValue(undefined);
     mockSymlinkNodeModules.mockResolvedValue(undefined);
     mockCreateTaskWorktree.mockResolvedValue("/tmp/worktree-created");
+    mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
     mockRemoveTaskWorktree.mockResolvedValue(undefined);
     mockGetConflictedFiles.mockResolvedValue([]);
     mockWithRepoRootAutoStash.mockImplementation(async (_repoPath, _reason, fn) => fn());
@@ -208,6 +211,7 @@ describe("GitCommitQueue rebase rounds", () => {
       branchName: "opensprint/os-1234",
     });
     expect(mockRebaseOntoMain).toHaveBeenCalledWith("/tmp/worktree-created", "main");
+    expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith("os-1234");
     expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
       "/tmp/repo",
       "os-1234",

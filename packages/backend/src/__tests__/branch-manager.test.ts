@@ -9,6 +9,8 @@ import {
   RebaseConflictError,
   WorktreeBranchInUseError,
 } from "../services/branch-manager.js";
+import { worktreeLeaseService } from "../services/worktree-lease.service.js";
+import { worktreeRegistry } from "../services/worktree-registry.js";
 import { heartbeatService } from "../services/heartbeat.service.js";
 import { RepoPreflightError } from "../utils/git-repo-state.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
@@ -36,6 +38,13 @@ vi.mock("../services/task-store.service.js", () => ({
     closePool: vi.fn(),
   },
   TaskStoreService: vi.fn(),
+}));
+
+vi.mock("../services/worktree-lease.service.js", () => ({
+  worktreeLeaseService: {
+    canCleanup: vi.fn(() => Promise.resolve(true)),
+    forceRelease: vi.fn(() => Promise.resolve(undefined)),
+  },
 }));
 
 const execAsync = promisify(exec);
@@ -1176,6 +1185,59 @@ describe("BranchManager", () => {
       expect(listAfter.some((w) => w.taskId === worktreeKey)).toBe(true);
     });
 
+    it("pruneOrphanWorktrees skips epic-named worktree when a child task assignment references an open task", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const epicKey = `epic_prune_guard_${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, epicKey, "main", {
+        worktreeKey: epicKey,
+        branchName: `opensprint/${epicKey}`,
+      });
+      worktreePaths.push(wtPath);
+
+      const childTaskId = `child_${Date.now()}`;
+      const assignDir = path.join(wtPath, ".opensprint", "active", childTaskId);
+      await fs.mkdir(assignDir, { recursive: true });
+      await fs.writeFile(
+        path.join(assignDir, "assignment.json"),
+        JSON.stringify({
+          taskId: childTaskId,
+          createdAt: new Date(Date.now() - 120_000).toISOString(),
+          worktreePath: wtPath,
+          worktreeKey: epicKey,
+        }),
+        "utf-8"
+      );
+
+      const { taskStore } = await import("../services/task-store.service.js");
+      vi.mocked(taskStore.show).mockImplementation(async (_pid, tid) => {
+        if (tid === childTaskId) return { status: "open" } as never;
+        return null;
+      });
+
+      const taskStorePrune = {
+        listAll: vi.fn().mockResolvedValue([{ id: "unrelated-open", status: "open" }]),
+      };
+
+      const pruned = await branchManager.pruneOrphanWorktrees(
+        repoPath,
+        "test-project",
+        new Set(),
+        new Set(),
+        new Set(),
+        taskStorePrune
+      );
+
+      expect(pruned).not.toContain(epicKey);
+      const listAfter = await branchManager.listTaskWorktrees(repoPath);
+      expect(listAfter.some((w) => w.taskId === epicKey)).toBe(true);
+    });
+
     it("should replace a stale worktree when creating", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
@@ -1410,6 +1472,63 @@ describe("BranchManager", () => {
       await expect(fs.access(wtPath)).rejects.toThrow();
       const list = await branchManager.listTaskWorktrees(repoPath);
       expect(list.some((w) => w.taskId === epicKey)).toBe(false);
+    });
+
+    describe("removeTaskWorktree lease guards", () => {
+      beforeEach(() => {
+        vi.mocked(worktreeLeaseService.canCleanup).mockResolvedValue(true);
+      });
+
+      it("skips removal when an active DB lease blocks cleanup", async () => {
+        vi.mocked(worktreeLeaseService.canCleanup).mockResolvedValue(false);
+        await execAsync("git init", { cwd: repoPath });
+        await execAsync("git branch -M main", { cwd: repoPath });
+        await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+        await execAsync('git config user.name "Test"', { cwd: repoPath });
+        await fs.writeFile(path.join(repoPath, "README"), "initial");
+        await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+        const taskId = `wt-db-lease-${Date.now()}`;
+        const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+        worktreePaths.push(wtPath);
+
+        await branchManager.removeTaskWorktree(repoPath, taskId);
+        await fs.access(wtPath);
+      });
+
+      it("removes the worktree when DB lease allows cleanup", async () => {
+        vi.mocked(worktreeLeaseService.canCleanup).mockResolvedValue(true);
+        await execAsync("git init", { cwd: repoPath });
+        await execAsync("git branch -M main", { cwd: repoPath });
+        await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+        await execAsync('git config user.name "Test"', { cwd: repoPath });
+        await fs.writeFile(path.join(repoPath, "README"), "initial");
+        await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+        const taskId = `wt-db-ok-${Date.now()}`;
+        const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+        worktreePaths.push(wtPath);
+
+        await branchManager.removeTaskWorktree(repoPath, taskId);
+        await expect(fs.access(wtPath)).rejects.toThrow();
+      });
+
+      it("skips removal when in-memory registry state is in_use", async () => {
+        await execAsync("git init", { cwd: repoPath });
+        await execAsync("git branch -M main", { cwd: repoPath });
+        await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+        await execAsync('git config user.name "Test"', { cwd: repoPath });
+        await fs.writeFile(path.join(repoPath, "README"), "initial");
+        await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+        const taskId = `wt-mem-${Date.now()}`;
+        const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+        worktreePaths.push(wtPath);
+
+        worktreeRegistry.transition(taskId, "in_use");
+        await branchManager.removeTaskWorktree(repoPath, taskId);
+        await fs.access(wtPath);
+      });
     });
   });
 

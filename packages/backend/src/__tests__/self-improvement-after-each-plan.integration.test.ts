@@ -131,6 +131,7 @@ vi.mock("../services/branch-manager.js", () => {
     BranchManager: vi.fn().mockImplementation(() => ({
       waitForGitReady: vi.fn().mockResolvedValue(undefined),
       commitWip: vi.fn().mockResolvedValue(undefined),
+      prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
       removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
       deleteBranch: vi.fn().mockResolvedValue(undefined),
       getChangedFiles: vi.fn().mockResolvedValue([]),
@@ -268,6 +269,7 @@ describe("after-each-plan self-improvement integration", () => {
       branchManager: {
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
+        prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         deleteBranch: vi.fn().mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
