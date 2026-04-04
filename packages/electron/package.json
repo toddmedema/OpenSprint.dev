@@ -31,7 +31,6 @@
     "test:coverage": "npx vitest run --coverage"
   },
   "dependencies": {
-    "@opensprint/shared": "*",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
@@ -67,7 +66,8 @@
       "dist/window-options.js",
       "dist/runtime-branding.js",
       "dist/open-in-editor.js",
-      "dist/desktop-crash-log.js"
+      "dist/desktop-crash-log.js",
+      "dist/spa-content-security-policy.js"
     ],
     "extraResources": [
       {
@@ -89,7 +89,7 @@
         "dmg"
       ],
       "artifactName": "Open.Sprint-${arch}.${ext}",
-      "icon": "build/OpenSprint.icon"
+      "icon": "../frontend/public/logo-512x512.png"
     },
     "dmg": {
       "sign": false

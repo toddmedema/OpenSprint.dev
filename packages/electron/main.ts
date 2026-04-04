@@ -23,6 +23,7 @@ import { openInEditor, type EditorMode } from "./open-in-editor";
 import { execFile } from "child_process";
 import crypto from "crypto";
 import { appendDesktopCrashLog, setDesktopSessionId } from "./desktop-crash-log";
+import { buildSpaContentSecurityPolicyProduction } from "./spa-content-security-policy";
 
 import { autoUpdater } from "electron-updater";
 
@@ -867,8 +868,7 @@ function startBackend(pathOverride?: string): ChildProcess {
     if (!exitedActiveBackend) return;
     if (backendStartupInProgress) return;
 
-    const unexpectedExit =
-      (code != null && code !== 0) || (code === null && signal != null);
+    const unexpectedExit = (code != null && code !== 0) || (code === null && signal != null);
     if (unexpectedExit) {
       console.error(
         "Backend exited unexpectedly:",
@@ -951,13 +951,16 @@ function createWindow(): void {
   mainWindow.webContents.on("responsive", () => {
     appendDesktopCrashLog("webContents.responsive", {});
   });
-  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-    appendDesktopCrashLog("webContents.did_fail_load", {
-      errorCode,
-      errorDescription,
-      validatedURL,
-    });
-  });
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL) => {
+      appendDesktopCrashLog("webContents.did_fail_load", {
+        errorCode,
+        errorDescription,
+        validatedURL,
+      });
+    }
+  );
 
   loadBootScreen("Starting backend...");
   mainWindow.on("close", (e) => {

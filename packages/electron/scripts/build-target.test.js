@@ -74,9 +74,9 @@ describe("build-target", () => {
     expect(electronPackageJson.scripts["build:dir"]).toBe("node scripts/build-target.js --dir");
   });
 
-  it("packages the macOS app with an Icon Composer asset", () => {
+  it("packages the macOS app using the same PNG icon source as other desktop targets", () => {
     const electronPackageJsonPath = path.join(__dirname, "..", "package.json");
     const electronPackageJson = JSON.parse(fs.readFileSync(electronPackageJsonPath, "utf8"));
-    expect(electronPackageJson.build.mac.icon).toBe("build/OpenSprint.icon");
+    expect(electronPackageJson.build.mac.icon).toBe("../frontend/public/logo-512x512.png");
   });
 });

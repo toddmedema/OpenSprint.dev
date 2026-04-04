@@ -7,6 +7,7 @@ const { cleanStaleDesktopArtifacts } = require("./clean-desktop-artifacts.js");
 
 const scriptDir = __dirname;
 const packageDir = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(packageDir, "..", "..");
 const prepareScriptPath = path.join(scriptDir, "prepare-desktop-resources.js");
 const outputDir = path.join(packageDir, "dist");
 
@@ -96,7 +97,10 @@ function run({ argv = process.argv.slice(2) } = {}) {
 
   cleanStaleDesktopArtifacts(targetPlatform, targetArch, outputDir);
 
-  execSync(`electron-builder ${builderArgs.join(" ")}`, {
+  const electronBuilderCli = require.resolve("electron-builder/cli.js", {
+    paths: [packageDir, repoRoot],
+  });
+  execFileSync(process.execPath, [electronBuilderCli, ...builderArgs], {
     cwd: packageDir,
     env: process.env,
     stdio: "inherit",

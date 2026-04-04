@@ -17,6 +17,7 @@
     "window-options.ts",
     "runtime-branding.ts",
     "open-in-editor.ts",
-    "desktop-crash-log.ts"
+    "desktop-crash-log.ts",
+    "spa-content-security-policy.ts"
   ]
 }
