@@ -42,6 +42,7 @@ import {
   getLocalSessionToken,
   ensureLocalSessionToken,
 } from "./services/local-session-auth.service.js";
+import { buildSpaContentSecurityPolicyProduction } from "@opensprint/shared";
 
 export function createApp(services?: AppServices) {
   ensureLocalSessionToken();
@@ -146,16 +147,8 @@ export function createApp(services?: AppServices) {
     requireDatabase,
     createGitHubIntegrationRouter({ integrationStore, tokenEncryption, intakeIngestion })
   );
-  app.use(
-    `${API_PREFIX}/projects/:projectId/intake`,
-    requireDatabase,
-    createIntakeRouter()
-  );
-  app.use(
-    `${API_PREFIX}/projects/:projectId/commands`,
-    requireDatabase,
-    createCommandsRouter()
-  );
+  app.use(`${API_PREFIX}/projects/:projectId/intake`, requireDatabase, createIntakeRouter());
+  app.use(`${API_PREFIX}/projects/:projectId/commands`, requireDatabase, createCommandsRouter());
   app.use(
     `${API_PREFIX}/projects/:projectId/notifications`,
     requireDatabase,
@@ -175,9 +168,19 @@ export function createApp(services?: AppServices) {
         res.setHeader("Cache-Control", "no-store");
         res.send(`window.__OPENSPRINT_LOCAL_SESSION__=${JSON.stringify(token)};`);
       });
+      const spaCsp = buildSpaContentSecurityPolicyProduction();
       // Disable implicit index.html serving so every SPA document request flows
       // through the token-injection fallback below.
-      app.use(express.static(frontendDist, { index: false }));
+      app.use(
+        express.static(frontendDist, {
+          index: false,
+          setHeaders(res, filePath) {
+            if (path.basename(filePath) === "index.html") {
+              res.setHeader("Content-Security-Policy", spaCsp);
+            }
+          },
+        })
+      );
       app.get("*", async (req, res, next) => {
         if (req.path.startsWith("/api/") || req.path.startsWith("/ws")) {
           next();
@@ -190,6 +193,7 @@ export function createApp(services?: AppServices) {
           const body = html.includes("</head>")
             ? html.replace("</head>", `${inject}</head>`)
             : `${inject}${html}`;
+          res.setHeader("Content-Security-Policy", spaCsp);
           res.type("html").send(body);
         } catch (err) {
           next(err);

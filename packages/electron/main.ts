@@ -1352,14 +1352,7 @@ function setupSessionSecurity(): void {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        "Content-Security-Policy": [
-          "default-src 'self' " +
-            getBackendOrigin() +
-            "; script-src 'self'; connect-src 'self' ws://127.0.0.1:" +
-            backendPort +
-            "; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: " +
-            getBackendOrigin(),
-        ],
+        "Content-Security-Policy": [buildSpaContentSecurityPolicyProduction()],
       },
     });
   });

@@ -31,6 +31,7 @@
     "test:coverage": "npx vitest run --coverage"
   },
   "dependencies": {
+    "@opensprint/shared": "*",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {

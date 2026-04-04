@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createApp } from "../app.js";
-import { API_PREFIX } from "@opensprint/shared";
+import { API_PREFIX, buildSpaContentSecurityPolicyProduction } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
@@ -80,6 +80,7 @@ describe("App", () => {
       const app = createApp();
       const res = await request(app).get("/");
       expect(res.status).toBe(200);
+      expect(res.headers["content-security-policy"]).toBe(buildSpaContentSecurityPolicyProduction());
       expect(res.text).toContain('<script src="/__opensprint_local_session.js"></script>');
 
       const tokenScriptRes = await request(app).get("/__opensprint_local_session.js");

@@ -1268,13 +1268,27 @@ export class BranchManager {
     // `opensprint/<task>` would block `git worktree add` for that branch — ensureBaseBranchExists
     // moves the main repo to `baseBranch` when possible so the worktree can claim the task branch.
     await ensureRepoHasInitialCommit(repoPath, baseBranch);
-    const currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
+    let currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
 
+    // Primary clone must not stay on `branchName` — `git worktree add` needs that branch free.
+    // `ensureRepoHasInitialCommit` usually checks out `baseBranch`; if we are still on the task
+    // branch (e.g. tooling left HEAD there), try an explicit checkout before failing.
     if (currentBranch === branchName) {
-      throw new UnsafeCleanupPathError(
-        `Refusing to create worktree for ${branchName}: the main repo is still checked out to that branch after normalizing the base branch, so cleanup would be unsafe.`,
-        repoPath
-      );
+      try {
+        await this.gitExec(repoPath, ["checkout", baseBranch]);
+      } catch {
+        throw new UnsafeCleanupPathError(
+          `Refusing to create worktree for ${branchName}: the main repo is checked out to that branch and could not switch to ${baseBranch}.`,
+          repoPath
+        );
+      }
+      currentBranch = await this.getCurrentBranch(repoPath).catch(() => "");
+      if (currentBranch === branchName) {
+        throw new UnsafeCleanupPathError(
+          `Refusing to create worktree for ${branchName}: the main repo is still checked out to that branch after normalizing the base branch, so cleanup would be unsafe.`,
+          repoPath
+        );
+      }
     }
 
     const isEpic = options?.worktreeKey != null;
