@@ -827,6 +827,38 @@ describe("OrchestratorService (slot-based model)", () => {
     });
   });
 
+  describe("pending validation review rejection handling", () => {
+    it("detects pending-only orchestrator status rejection", () => {
+      const reviewService = (
+        orchestrator as unknown as {
+          reviewService: {
+            isPendingValidationOnlyRejection: (result: ReviewAgentResult) => boolean;
+          };
+        }
+      ).reviewService;
+      const isPendingOnly = reviewService.isPendingValidationOnlyRejection.bind(reviewService);
+
+      expect(
+        isPendingOnly({
+          status: "rejected",
+          summary:
+            "Review rejected: Orchestrator test status in .opensprint/active/os-1234/context/orchestrator-test-status.md is PENDING.",
+          notes: "",
+        })
+      ).toBe(true);
+
+      expect(
+        isPendingOnly({
+          status: "rejected",
+          summary:
+            "Review rejected: Orchestrator test status in .opensprint/active/os-1234/context/orchestrator-test-status.md is PENDING.",
+          issues: ["packages/backend/src/x.ts:12 regression in parsing"],
+          notes: "",
+        })
+      ).toBe(false);
+    });
+  });
+
   describe("review no_result diagnostics", () => {
     it("formats angle-aware no_result reasons for multi-angle failures", () => {
       const reason = buildReviewNoResultFailureReason({
