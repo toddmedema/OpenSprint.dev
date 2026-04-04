@@ -263,6 +263,7 @@ export class ExperimentReplayService {
       };
     } finally {
       try {
+        await this.branchManager.prepareWorktreeForRemoval(wtKey);
         await this.branchManager.removeTaskWorktree(repoPath, wtKey, wtPath);
         log.info("Replay worktree disposed", { variant, sessionId, wtKey });
       } catch (cleanupErr) {

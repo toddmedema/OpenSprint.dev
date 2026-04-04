@@ -13,7 +13,7 @@
 
 import fs from "fs/promises";
 import path from "path";
-import { AGENT_SUSPEND_GRACE_MS, HEARTBEAT_STALE_MS } from "@opensprint/shared";
+import { AGENT_SUSPEND_GRACE_MS, HEARTBEAT_STALE_MS, OPENSPRINT_PATHS } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { BranchManager } from "./branch-manager.js";
@@ -25,6 +25,12 @@ import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.
 import type { RetryContext } from "./orchestrator-phase-context.js";
 import { isProcessAlive, terminateProcessGroup } from "../utils/process-group.js";
 import { createLogger } from "../utils/logger.js";
+import {
+  evaluateWorktreeCleanupProtection,
+  getWorktreeCleanupAssignmentGuardMs,
+  listAssignmentSummariesInWorktree,
+  logWorktreeCleanupBlocked,
+} from "../utils/worktree-health.js";
 import { buildFailureBaselineSnapshot } from "./orchestrator-failure-metrics.service.js";
 import { worktreeLeaseService } from "./worktree-lease.service.js";
 
@@ -152,6 +158,14 @@ export class RecoveryService {
     ]);
     const excludeWorktreePaths = new Set(
       (host.getSlottedWorktreePaths?.(projectId) ?? []).map((p) => path.resolve(p))
+    );
+
+    await this.augmentExclusionsFromRecentAssignments(
+      projectId,
+      repoPath,
+      excludeIds,
+      excludeWorktreeKeys,
+      excludeWorktreePaths
     );
 
     // 1. GUPP crash recovery (startup only) — now receives exclude sets
@@ -340,6 +354,7 @@ export class RecoveryService {
         this.emitStaleAssignmentTelemetry(repoPath, projectId, taskId, assignmentAgeMs, "task_not_found", assignment);
         log.warn("Recovery: task not found, cleaning up assignment", { projectId, taskId });
         await this.removeWorktreeIfNeeded(
+          projectId,
           repoPath,
           taskId,
           assignment.worktreePath,
@@ -357,6 +372,7 @@ export class RecoveryService {
           status: task.status,
         });
         await this.removeWorktreeIfNeeded(
+          projectId,
           repoPath,
           taskId,
           assignment.worktreePath,
@@ -458,6 +474,7 @@ export class RecoveryService {
         log.warn("Recovery: failed to requeue task", { projectId, taskId, err });
       }
       await this.removeWorktreeIfNeeded(
+        projectId,
         repoPath,
         taskId,
         assignment.worktreePath,
@@ -1052,6 +1069,26 @@ export class RecoveryService {
         });
         continue;
       }
+      if (intent.worktreePath) {
+        const resolvedIntentPath = path.resolve(intent.worktreePath);
+        const protection = await evaluateWorktreeCleanupProtection(
+          projectId,
+          resolvedIntentPath,
+          (pid, tid) => this.taskStore.show(pid, tid),
+          getWorktreeCleanupAssignmentGuardMs()
+        );
+        if (protection.forbid) {
+          logWorktreeCleanupBlocked("replay_cleanup_intent", {
+            projectId,
+            worktreePath: resolvedIntentPath,
+            reason: protection.reason ?? "unknown",
+            referencingTaskIds: protection.referencingTaskIds,
+            cleanupTrigger: "recovery_replay",
+            intentTaskId: intent.taskId,
+          });
+          continue;
+        }
+      }
       try {
         if (intent.gitWorkingMode === "branches") {
           await this.branchManager.deleteBranch(repoPath, intent.branchName);
@@ -1098,6 +1135,107 @@ export class RecoveryService {
       }
     }
     return cleaned;
+  }
+
+  /**
+   * Extend slot exclusion sets from assignment.json files on disk so recovery does not tear down
+   * a worktree in the gap after assignment is written but before the orchestrator slot is visible.
+   */
+  private async augmentExclusionsFromRecentAssignments(
+    projectId: string,
+    repoPath: string,
+    excludeIds: Set<string>,
+    excludeWorktreeKeys: Set<string>,
+    excludeWorktreePaths: Set<string>
+  ): Promise<void> {
+    const guardMs = getWorktreeCleanupAssignmentGuardMs();
+    const now = Date.now();
+    const bases = [this.branchManager.getWorktreeBasePath(repoPath)];
+    const seenWt = new Set<string>();
+    /** Avoid scanning huge legacy temp roots (can contain thousands of stale dirs). */
+    const maxDirsPerBase = 96;
+
+    for (const base of bases) {
+      let entries;
+      try {
+        entries = await fs.readdir(base, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      let dirBudget = maxDirsPerBase;
+      for (const e of entries) {
+        if (dirBudget <= 0) {
+          log.debug("Recovery: assignment exclusion scan budget exhausted for base", { base, maxDirsPerBase });
+          break;
+        }
+        if (!e.isDirectory() || e.name.startsWith("_")) continue;
+        dirBudget -= 1;
+        const wtPath = path.join(base, e.name);
+        const resolvedWt = path.resolve(wtPath);
+        if (seenWt.has(resolvedWt)) continue;
+        seenWt.add(resolvedWt);
+
+        const summaries = await listAssignmentSummariesInWorktree(wtPath);
+        for (const s of summaries) {
+          const createdMs = Date.parse(s.createdAt);
+          const age = Number.isFinite(createdMs) ? now - createdMs : Number.POSITIVE_INFINITY;
+          if (age < 0 || age >= guardMs) continue;
+          excludeIds.add(s.taskId);
+          excludeWorktreeKeys.add(e.name);
+          excludeWorktreeKeys.add(s.taskId);
+          if (s.worktreeKey) excludeWorktreeKeys.add(s.worktreeKey);
+          if (s.worktreePath) excludeWorktreePaths.add(path.resolve(s.worktreePath));
+          excludeWorktreePaths.add(resolvedWt);
+        }
+      }
+    }
+
+    try {
+      const activeDir = path.join(repoPath, OPENSPRINT_PATHS.active);
+      const subs = await fs.readdir(activeDir, { withFileTypes: true });
+      for (const sub of subs) {
+        if (!sub.isDirectory() || sub.name.startsWith("_")) continue;
+        const ap = path.join(activeDir, sub.name, OPENSPRINT_PATHS.assignment);
+        let raw: string;
+        try {
+          raw = await fs.readFile(ap, "utf-8");
+        } catch {
+          continue;
+        }
+        let parsed: {
+          taskId?: string;
+          createdAt?: string;
+          worktreePath?: string;
+          worktreeKey?: string;
+        };
+        try {
+          parsed = JSON.parse(raw) as typeof parsed;
+        } catch {
+          continue;
+        }
+        const createdAt = typeof parsed.createdAt === "string" ? parsed.createdAt : "";
+        const createdMs = Date.parse(createdAt);
+        const age = Number.isFinite(createdMs) ? now - createdMs : Number.POSITIVE_INFINITY;
+        if (age < 0 || age >= guardMs) continue;
+        const tid = typeof parsed.taskId === "string" ? parsed.taskId : sub.name;
+        excludeIds.add(tid);
+        excludeWorktreeKeys.add(tid);
+        if (typeof parsed.worktreeKey === "string") excludeWorktreeKeys.add(parsed.worktreeKey);
+        if (typeof parsed.worktreePath === "string") {
+          const rp = path.resolve(parsed.worktreePath);
+          if (rp !== path.resolve(repoPath)) excludeWorktreePaths.add(rp);
+        }
+      }
+    } catch {
+      // No main-repo active dir
+    }
+
+    log.debug("Recovery: augmented exclusions from fresh on-disk assignments", {
+      projectId,
+      guardMs,
+      excludeIdSample: [...excludeIds].slice(0, 8),
+      excludePathCount: excludeWorktreePaths.size,
+    });
   }
 
   private async hasFreshRecoveryHeartbeatGuard(
@@ -1189,6 +1327,23 @@ export class RecoveryService {
         if (pid > 0 && isProcessAlive(pid)) {
           continue;
         }
+      }
+
+      const staleProtect = await evaluateWorktreeCleanupProtection(
+        projectId,
+        resolvedPath,
+        (pid, tid) => this.taskStore.show(pid, tid),
+        getWorktreeCleanupAssignmentGuardMs()
+      );
+      if (staleProtect.forbid) {
+        logWorktreeCleanupBlocked("cleanup_stale_inactive_worktrees", {
+          projectId,
+          worktreePath: resolvedPath,
+          reason: staleProtect.reason ?? "unknown",
+          referencingTaskIds: staleProtect.referencingTaskIds,
+          cleanupTrigger: "stale_inactive_ttl",
+        });
+        continue;
       }
 
       try {
@@ -1289,6 +1444,30 @@ export class RecoveryService {
       try {
         const worktrees = await this.branchManager.listTaskWorktrees(repoPath);
         const found = worktrees.find((w) => w.taskId === task.id);
+        const wtForTask = found?.worktreePath;
+        if (wtForTask) {
+          const protection = await evaluateWorktreeCleanupProtection(
+            projectId,
+            path.resolve(wtForTask),
+            (pid, tid) => this.taskStore.show(pid, tid),
+            getWorktreeCleanupAssignmentGuardMs(),
+            { ignoreLiveTaskStatusForTaskIds: new Set([task.id]) }
+          );
+          if (protection.forbid) {
+            logWorktreeCleanupBlocked("recover_task", {
+              projectId,
+              worktreePath: path.resolve(wtForTask),
+              reason: protection.reason ?? "unknown",
+              referencingTaskIds: protection.referencingTaskIds,
+              cleanupTrigger: "recover_task",
+            });
+            await this.taskStore.update(projectId, task.id, {
+              status: "open",
+              assignee: "",
+            });
+            return;
+          }
+        }
         await this.branchManager.removeTaskWorktree(repoPath, task.id, found?.worktreePath);
       } catch {
         // Worktree may not exist
@@ -1359,6 +1538,7 @@ export class RecoveryService {
   }
 
   private async removeWorktreeIfNeeded(
+    projectId: string,
     repoPath: string,
     taskId: string,
     worktreePath?: string,
@@ -1368,6 +1548,23 @@ export class RecoveryService {
     const repoResolved = path.resolve(repoPath);
     const wtResolved = path.resolve(worktreePath);
     if (repoResolved === wtResolved) return; // Branches mode: no worktree
+    const protection = await evaluateWorktreeCleanupProtection(
+      projectId,
+      wtResolved,
+      (pid, tid) => this.taskStore.show(pid, tid),
+      getWorktreeCleanupAssignmentGuardMs(),
+      { ignoreLiveTaskStatusForTaskIds: new Set([taskId]) }
+    );
+    if (protection.forbid) {
+      logWorktreeCleanupBlocked("recovery_remove_worktree_if_needed", {
+        projectId,
+        worktreePath: wtResolved,
+        reason: protection.reason ?? "unknown",
+        referencingTaskIds: protection.referencingTaskIds,
+        cleanupTrigger: "recovery_remove_worktree_if_needed",
+      });
+      return;
+    }
     const worktreeKey = this.resolveCleanupWorktreeKey(taskId, assignmentWorktreeKey, worktreePath);
     const canCleanup = await worktreeLeaseService.canCleanup(worktreeKey).catch(() => true);
     if (!canCleanup) {

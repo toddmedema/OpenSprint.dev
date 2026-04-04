@@ -1,6 +1,137 @@
 import fs from "fs/promises";
 import path from "path";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import { createLogger } from "./logger.js";
+
+const guardLog = createLogger("worktree-cleanup-guard");
+
+export function getWorktreeCleanupAssignmentGuardMs(): number {
+  const raw = process.env.OPENSPRINT_SLOT_RECOVERY_GRACE_MS;
+  if (raw == null || raw.trim() === "") return 30_000;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30_000;
+}
+
+export interface WorktreeAssignmentSummary {
+  taskId: string;
+  createdAt: string;
+  worktreePath?: string;
+  worktreeKey?: string;
+}
+
+export async function listAssignmentSummariesInWorktree(
+  worktreePath: string
+): Promise<WorktreeAssignmentSummary[]> {
+  const activeRoot = path.join(worktreePath, OPENSPRINT_PATHS.active);
+  const out: WorktreeAssignmentSummary[] = [];
+  try {
+    const entries = await fs.readdir(activeRoot, { withFileTypes: true });
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith("_")) continue;
+      const assignmentFile = path.join(activeRoot, e.name, OPENSPRINT_PATHS.assignment);
+      try {
+        const raw = await fs.readFile(assignmentFile, "utf-8");
+        const parsed = JSON.parse(raw) as {
+          taskId?: string;
+          createdAt?: string;
+          worktreePath?: string;
+          worktreeKey?: string;
+        };
+        const taskId = typeof parsed.taskId === "string" ? parsed.taskId : e.name;
+        const createdAt =
+          typeof parsed.createdAt === "string" ? parsed.createdAt : new Date(0).toISOString();
+        out.push({
+          taskId,
+          createdAt,
+          worktreePath: typeof parsed.worktreePath === "string" ? parsed.worktreePath : undefined,
+          worktreeKey: typeof parsed.worktreeKey === "string" ? parsed.worktreeKey : undefined,
+        });
+      } catch {
+        // skip
+      }
+    }
+  } catch {
+    // no active
+  }
+  return out;
+}
+
+export type WorktreeCleanupTaskStoreShow = (
+  projectId: string,
+  taskId: string
+) => Promise<{ status?: string } | null | undefined>;
+
+export interface WorktreeCleanupProtectionResult {
+  forbid: boolean;
+  reason?: string;
+  referencingTaskIds?: string[];
+}
+
+export async function evaluateWorktreeCleanupProtection(
+  projectId: string,
+  resolvedWorktreePath: string,
+  taskStoreShow: WorktreeCleanupTaskStoreShow,
+  guardMs: number,
+  opts?: { ignoreLiveTaskStatusForTaskIds?: Set<string> }
+): Promise<WorktreeCleanupProtectionResult> {
+  const summaries = await listAssignmentSummariesInWorktree(resolvedWorktreePath);
+  if (summaries.length === 0) return { forbid: false };
+
+  const now = Date.now();
+  const referencing: string[] = [];
+
+  for (const s of summaries) {
+    const createdMs = Date.parse(s.createdAt);
+    const age = Number.isFinite(createdMs) ? now - createdMs : Number.POSITIVE_INFINITY;
+    if (age >= 0 && age < guardMs) {
+      referencing.push(s.taskId);
+      return {
+        forbid: true,
+        reason: "fresh_assignment_on_disk",
+        referencingTaskIds: [...new Set(referencing)],
+      };
+    }
+  }
+
+  for (const s of summaries) {
+    if (opts?.ignoreLiveTaskStatusForTaskIds?.has(s.taskId)) continue;
+    try {
+      const task = await taskStoreShow(projectId, s.taskId);
+      const st = task && typeof task.status === "string" ? task.status : "";
+      if (st === "in_progress" || st === "open" || st === "blocked") {
+        referencing.push(s.taskId);
+        return {
+          forbid: true,
+          reason: `active_task_${st}`,
+          referencingTaskIds: [...new Set(referencing)],
+        };
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  return { forbid: false };
+}
+
+export function logWorktreeCleanupBlocked(
+  context: string,
+  meta: {
+    projectId: string;
+    worktreePath: string;
+    reason: string;
+    referencingTaskIds?: string[];
+    cleanupTrigger?: string;
+    intentTaskId?: string;
+  }
+): void {
+  guardLog.warn("worktree.cleanup_forbidden_referenced", {
+    context,
+    forbiddenDeletesAvoided: 1,
+    ...meta,
+  });
+}
+
 
 const EXCLUDED_ROOT_DIRS = new Set([
   ".git",

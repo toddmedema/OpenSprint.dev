@@ -337,6 +337,7 @@ describe("Cross-service quality-gate regression integration", () => {
       branchManager: {
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
+        prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         deleteBranch: vi.fn().mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
@@ -586,6 +587,7 @@ describe("Cross-service quality-gate regression integration", () => {
       branchManager: {
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
+        prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         deleteBranch: vi.fn().mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
@@ -868,6 +870,7 @@ describe("Cross-service quality-gate regression integration", () => {
       branchManager: {
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
+        prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         deleteBranch: vi.fn().mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
@@ -1055,6 +1058,7 @@ describe("Cross-service quality-gate regression integration", () => {
       branchManager: {
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
+        prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
         removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
         deleteBranch: vi.fn().mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
@@ -1238,7 +1242,8 @@ describe("Cross-service quality-gate regression integration", () => {
         branchManager: {
           waitForGitReady: vi.fn().mockResolvedValue(undefined),
           commitWip: vi.fn().mockResolvedValue(undefined),
-          removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
+          prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
+        removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
           deleteBranch: vi.fn().mockResolvedValue(undefined),
           getChangedFiles: vi.fn().mockResolvedValue([]),
           pushMain: vi.fn().mockResolvedValue(undefined),
@@ -1403,7 +1408,8 @@ describe("Cross-service quality-gate regression integration", () => {
         branchManager: {
           waitForGitReady: vi.fn().mockResolvedValue(undefined),
           commitWip: vi.fn().mockResolvedValue(undefined),
-          removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
+          prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
+        removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
           deleteBranch: vi.fn().mockResolvedValue(undefined),
           getChangedFiles: vi.fn().mockResolvedValue([]),
           pushMain: vi.fn().mockResolvedValue(undefined),

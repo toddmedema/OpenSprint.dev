@@ -16,8 +16,11 @@ import { resolveBaseBranch } from "../utils/git-repo-state.js";
 import { assertWorktreeIntegrity, rebuildWorktreeIfInvalid } from "../utils/worktree-health.js";
 import { createLogger } from "../utils/logger.js";
 import { worktreeLeaseService } from "./worktree-lease.service.js";
+import { worktreeRegistry } from "./worktree-registry.js";
 
 const log = createLogger("orchestrator-dispatch");
+
+const LEASE_ACQUIRE_RETRY_DELAY_MS = 250;
 
 const NEXT_RETRY_CONTEXT_KEY = "next_retry_context";
 const MERGE_RETRY_MODE_KEY = "merge_retry_mode";
@@ -514,23 +517,38 @@ export class OrchestratorDispatchService {
         }
       }
 
+      const leaseParams = {
+        worktreeKey,
+        taskId: task.id,
+        projectId,
+        worktreePath: slot.worktreePath,
+        branchName,
+        leaseOwner: `dispatch:${task.id}:${cumulativeAttempts + 1}`,
+      };
       try {
-        await worktreeLeaseService.acquire({
-          worktreeKey,
-          taskId: task.id,
-          projectId,
-          worktreePath: slot.worktreePath,
-          branchName,
-          leaseOwner: `dispatch:${task.id}:${cumulativeAttempts + 1}`,
-        });
-      } catch (err) {
-        log.error("Failed to acquire worktree lease — worktree will be unprotected from cleanup", {
+        await worktreeLeaseService.acquire(leaseParams);
+      } catch (firstErr) {
+        log.warn("First worktree lease acquire failed, retrying once", {
           taskId: task.id,
           worktreeKey,
-          worktreePath: slot.worktreePath,
-          err,
+          err: firstErr,
         });
+        await new Promise((r) => setTimeout(r, LEASE_ACQUIRE_RETRY_DELAY_MS));
+        try {
+          await worktreeLeaseService.acquire(leaseParams);
+        } catch (err) {
+          log.error(
+            "Failed to acquire worktree lease after retry — worktree will be unprotected from cleanup until DB lease is cleared",
+            {
+              taskId: task.id,
+              worktreeKey,
+              worktreePath: slot.worktreePath,
+              err,
+            }
+          );
+        }
       }
+      worktreeRegistry.transition(worktreeKey, "in_use");
     }
 
     if (mergeResumeState) {

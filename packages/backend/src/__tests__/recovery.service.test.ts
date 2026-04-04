@@ -159,10 +159,7 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       throw new Error("Unknown signal");
     });
 
-    vi.useFakeTimers();
-    const runPromise = service.runFullRecovery("proj-1", tmpDir, host);
-    await vi.advanceTimersByTimeAsync(2500); // advance past SIGTERM wait
-    await runPromise;
+    await service.runFullRecovery("proj-1", tmpDir, host);
 
     const sigtermCalls = mockKill.mock.calls.filter((c) => c[1] === "SIGTERM");
     expect(sigtermCalls).toContainEqual([-TEST_PID, "SIGTERM"]);
@@ -665,6 +662,53 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     expect(mockDeleteBranch).toHaveBeenCalledWith(tmpDir, "opensprint/task-merged");
     expect(mockRemoveCleanupIntent).toHaveBeenCalledWith(tmpDir, "proj-1", "task-merged");
     expect(result.cleaned).toContain("cleanup_intent:task-merged");
+  });
+
+  it("does not replay cleanup intent when worktree still holds an active task assignment (overlap guard)", async () => {
+    const wtHeld = path.join(tmpDir, "wt-held");
+    const childTaskId = "child-active-epic";
+    const assignDir = path.join(wtHeld, ".opensprint", "active", childTaskId);
+    await fs.mkdir(assignDir, { recursive: true });
+    await fs.writeFile(
+      path.join(assignDir, "assignment.json"),
+      JSON.stringify({
+        taskId: childTaskId,
+        createdAt: new Date(Date.now() - 600_000).toISOString(),
+        worktreePath: wtHeld,
+        worktreeKey: "epic_overlap",
+      }),
+      "utf-8"
+    );
+
+    mockListCleanupIntents.mockResolvedValue([
+      {
+        taskId: "task-merged-parent",
+        branchName: "opensprint/task-merged-parent",
+        worktreePath: wtHeld,
+        gitWorkingMode: "worktree",
+        worktreeKey: "epic_overlap",
+      },
+    ]);
+
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      { id: "task-merged-parent", status: "closed" } as never,
+    ]);
+    vi.mocked(taskStore.show).mockImplementation(async (_pid, tid) => {
+      if (tid === childTaskId) return { status: "open" } as never;
+      return { id: tid, status: "closed" } as never;
+    });
+
+    mockRemoveTaskWorktree.mockClear();
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+    expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+    expect(mockRemoveCleanupIntent).not.toHaveBeenCalledWith(
+      tmpDir,
+      "proj-1",
+      "task-merged-parent"
+    );
+    expect(result.cleaned).not.toContain("cleanup_intent:task-merged-parent");
   });
 
   it("does not replay cleanup intents for in-progress tasks", async () => {

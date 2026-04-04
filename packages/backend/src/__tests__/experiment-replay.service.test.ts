@@ -44,6 +44,7 @@ function makeBranchManagerMock() {
     createTaskWorktree: vi.fn().mockImplementation(async (_repo: string, _taskId: string) => {
       return "/tmp/opensprint-worktrees/fake-wt";
     }),
+    prepareWorktreeForRemoval: vi.fn().mockResolvedValue(undefined),
     removeTaskWorktree: vi.fn().mockResolvedValue(undefined),
   };
 }

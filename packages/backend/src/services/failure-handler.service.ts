@@ -141,6 +141,7 @@ export interface FailureHandlerHost {
   branchManager: {
     captureBranchDiff(repoPath: string, branchName: string, baseBranch?: string): Promise<string>;
     captureUncommittedDiff(wtPath: string): Promise<string>;
+    prepareWorktreeForRemoval(worktreeKey: string): Promise<void>;
     removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     revertAndReturnToMain(repoPath: string, branchName: string, baseBranch?: string): Promise<void>;
@@ -1553,6 +1554,7 @@ export class FailureHandlerService {
       return;
     }
     if (slot.worktreePath) {
+      await this.host.branchManager.prepareWorktreeForRemoval(worktreeKey);
       await this.host.branchManager.removeTaskWorktree(
         repoPath,
         worktreeKey,

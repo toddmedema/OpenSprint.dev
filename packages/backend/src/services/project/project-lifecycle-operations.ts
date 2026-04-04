@@ -23,6 +23,7 @@ export async function cleanupProjectWorktrees(repoPath: string): Promise<void> {
     const worktrees = await branchManager.listTaskWorktrees(repoPath);
     for (const { taskId, worktreePath } of worktrees) {
       try {
+        await branchManager.prepareWorktreeForRemoval(taskId);
         await branchManager.removeTaskWorktree(repoPath, taskId, worktreePath);
         removed += 1;
       } catch {

@@ -643,12 +643,10 @@ export class OrchestratorService {
     await heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
 
     if (slot.worktreePath && slot.worktreePath !== repoPath) {
+      const worktreeKey = slot.worktreeKey ?? taskId;
       try {
-        await this.branchManager.removeTaskWorktree(
-          repoPath,
-          slot.worktreeKey ?? taskId,
-          slot.worktreePath
-        );
+        await this.branchManager.prepareWorktreeForRemoval(worktreeKey);
+        await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, slot.worktreePath);
       } catch {
         // Best effort; worktree may already be gone
       }
