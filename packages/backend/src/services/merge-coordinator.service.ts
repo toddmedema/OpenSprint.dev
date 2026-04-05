@@ -53,6 +53,7 @@ import type { MergeQualityGateProfile } from "./merge-quality-gates.js";
 import type { RetryContext, RetryQualityGateDetail } from "./orchestrator-phase-context.js";
 import { validationWorkspaceService } from "./validation-workspace.service.js";
 import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.js";
+import { worktreeLeaseService } from "./worktree-lease.service.js";
 import { isTaskWorktreeMergeGateArtifactCurrent } from "./merge-verification.service.js";
 import {
   buildBaselineFailureFingerprint,
@@ -418,6 +419,16 @@ export class MergeCoordinatorService {
       }),
       "merge-coordinator:worktree-cleanup-intent-registered-event-log"
     );
+
+    // Durable lease stays held until deferred cleanup actually runs (push success or
+    // recovery replay). Releasing here raced merge finalization/watchdog pruning while the
+    // slot could still be alive or merge/post-merge work not finished.
+    if (target.gitWorkingMode === "worktree") {
+      log.info("Registered merge-success worktree cleanup intent; lease retained until teardown", {
+        taskId: target.taskId,
+        worktreeKey: target.worktreeKey ?? target.taskId,
+      });
+    }
   }
 
   private async hydratePendingCleanupFromDisk(projectId: string, repoPath: string): Promise<void> {
@@ -487,6 +498,25 @@ export class MergeCoordinatorService {
             }
           }
           await this.host.branchManager.prepareWorktreeForRemoval(key);
+          await worktreeLeaseService.forceRelease(key).catch((err) => {
+            log.warn("Failed to release worktree lease before deferred path cleanup", {
+              taskId: target.taskId,
+              worktreeKey: key,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+          eventLogService
+            .append(repoPath, {
+              timestamp: new Date().toISOString(),
+              projectId,
+              taskId: target.taskId,
+              event: "worktree.lease_released_for_cleanup",
+              data: {
+                trigger: "merge_success_push",
+                worktreeKey: key,
+              },
+            })
+            .catch(() => {});
           await this.host.branchManager.removeTaskWorktree(
             repoPath,
             key,
@@ -2440,10 +2470,8 @@ export class MergeCoordinatorService {
         }
       }
 
-      const previousFingerprint =
-        (freshIssue?.extra as Record<string, unknown> | undefined)?.lastFailureFingerprint as
-          | string
-          | undefined;
+      const previousFingerprint = (freshIssue?.extra as Record<string, unknown> | undefined)
+        ?.lastFailureFingerprint as string | undefined;
       const infraFingerprintRepeated =
         failureFingerprint.failureClass === "environment_setup" &&
         previousFingerprint === failureFingerprint.hash;

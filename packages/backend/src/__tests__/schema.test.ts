@@ -26,6 +26,9 @@ describe("schema", () => {
     expect(statements.some((s) => s.includes("current_version_number"))).toBe(true);
     expect(statements.some((s) => /CREATE TABLE IF NOT EXISTS schema_versions/i.test(s))).toBe(true);
     expect(statements.some((s) => /SELECT\s+version\s+FROM\s+schema_versions/i.test(s))).toBe(true);
+    expect(
+      statements.every((s) => /^(CREATE|ALTER|SELECT|INSERT)\b/i.test(s.trim()))
+    ).toBe(true);
   });
 
   it("runSchema succeeds for SQLite (mock client)", async () => {

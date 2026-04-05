@@ -40,11 +40,14 @@ vi.mock("../services/task-store.service.js", () => ({
   TaskStoreService: vi.fn(),
 }));
 
+const mockWorktreeLease = vi.hoisted(() => ({
+  canCleanup: vi.fn().mockResolvedValue(true),
+  get: vi.fn().mockResolvedValue(null),
+  forceRelease: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../services/worktree-lease.service.js", () => ({
-  worktreeLeaseService: {
-    canCleanup: vi.fn(() => Promise.resolve(true)),
-    forceRelease: vi.fn(() => Promise.resolve(undefined)),
-  },
+  worktreeLeaseService: mockWorktreeLease,
 }));
 
 const execAsync = promisify(exec);
@@ -63,6 +66,9 @@ describe("BranchManager", () => {
   let repoPath: string;
 
   beforeEach(async () => {
+    mockWorktreeLease.canCleanup.mockResolvedValue(true);
+    mockWorktreeLease.get.mockResolvedValue(null);
+    mockWorktreeLease.forceRelease.mockResolvedValue(undefined);
     branchManager = new BranchManager();
     repoPath = path.join(
       os.tmpdir(),
@@ -632,7 +638,9 @@ describe("BranchManager", () => {
       await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
       await execAsync("git push -u origin main", { cwd: repoPath });
 
-      await execAsync(`git clone ${remotePath} ${clonePath}`);
+      // Use a stable cwd: inheriting process.cwd() can fail with "getcwd: cannot access parent
+      // directories" when another suite or the OS invalidates the current directory.
+      await execAsync(`git clone "${remotePath}" "${clonePath}"`, { cwd: os.tmpdir() });
       await execAsync('git config user.email "test@test.com"', { cwd: clonePath });
       await execAsync('git config user.name "Test"', { cwd: clonePath });
       await execAsync("git checkout main", { cwd: clonePath });
@@ -868,6 +876,118 @@ describe("BranchManager", () => {
       }
     });
 
+    it("does not remove a registered worktree while durable lease cleanup is blocked", async () => {
+      mockWorktreeLease.canCleanup.mockResolvedValue(false);
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-lease-block-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+      await fs.access(wtPath);
+      expect(mockWorktreeLease.canCleanup).toHaveBeenCalledWith(taskId);
+    });
+
+    it("does not remove when durable lease path disagrees with removal target (TOCTOU guard)", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-lease-mismatch-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      const decoyPath = path.join(
+        os.tmpdir(),
+        `opensprint-lease-decoy-${process.pid}-${Date.now()}`
+      );
+      await fs.mkdir(decoyPath, { recursive: true });
+      mockWorktreeLease.get.mockResolvedValue({
+        worktreeKey: taskId,
+        taskId,
+        projectId: "proj-x",
+        worktreePath: decoyPath,
+        branchName: null,
+        leaseOwner: "dispatch:test",
+        generation: 1,
+        acquiredAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        releasedAt: null,
+      });
+
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+      await fs.access(wtPath);
+    });
+
+    it("removes worktree when lease row is released even if worktree_path disagrees (post forceRelease)", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-lease-released-path-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      const decoyPath = path.join(
+        os.tmpdir(),
+        `opensprint-lease-decoy-rel-${process.pid}-${Date.now()}`
+      );
+      await fs.mkdir(decoyPath, { recursive: true });
+      mockWorktreeLease.get.mockResolvedValue({
+        worktreeKey: taskId,
+        taskId,
+        projectId: "proj-x",
+        worktreePath: decoyPath,
+        branchName: null,
+        leaseOwner: "dispatch:test",
+        generation: 1,
+        acquiredAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        releasedAt: new Date().toISOString(),
+      });
+
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+      await expect(fs.access(wtPath)).rejects.toThrow();
+    });
+
+    it("removes worktree when lease is expired even if worktree_path disagrees", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "README"), "initial");
+      await execAsync('git add README && git commit -m "initial"', { cwd: repoPath });
+
+      const taskId = `wt-lease-expired-path-${Date.now()}`;
+      const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
+      const decoyPath = path.join(
+        os.tmpdir(),
+        `opensprint-lease-decoy-exp-${process.pid}-${Date.now()}`
+      );
+      await fs.mkdir(decoyPath, { recursive: true });
+      mockWorktreeLease.get.mockResolvedValue({
+        worktreeKey: taskId,
+        taskId,
+        projectId: "proj-x",
+        worktreePath: decoyPath,
+        branchName: null,
+        leaseOwner: "dispatch:test",
+        generation: 1,
+        acquiredAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+        releasedAt: null,
+      });
+
+      await branchManager.removeTaskWorktree(repoPath, taskId, wtPath);
+      await expect(fs.access(wtPath)).rejects.toThrow();
+    });
+
     it("falls back to full escalation path when git worktree remove fails", async () => {
       await execAsync("git init", { cwd: repoPath });
       await execAsync("git branch -M main", { cwd: repoPath });
@@ -986,15 +1106,15 @@ describe("BranchManager", () => {
       const wtNodeModules = path.join(wtPath, "node_modules");
       await fs.rm(wtNodeModules, { recursive: true, force: true });
 
-      const runCommandSpy = vi.spyOn(commandRunnerModule, "runCommand").mockImplementation(
-        async (spec: CommandSpec, opts: { cwd: string }) => {
+      const runCommandSpy = vi
+        .spyOn(commandRunnerModule, "runCommand")
+        .mockImplementation(async (spec: CommandSpec, opts: { cwd: string }) => {
           if (spec.command === "npm" && spec.args?.includes("ci")) {
             await fs.writeFile(path.join(srcNodeModules, ".package-lock.json"), "{}");
             return { ...mockRunSuccess, cwd: opts.cwd };
           }
           return { ...mockRunSuccess, cwd: opts.cwd };
-        }
-      );
+        });
 
       try {
         await branchManager.symlinkNodeModules(repoPath, wtPath);
@@ -1296,12 +1416,12 @@ describe("BranchManager", () => {
 
       // Simulate active agent in the other path: non-stale heartbeat
       const now = Date.now();
-      vi.spyOn(heartbeatService, "readHeartbeat").mockResolvedValue({
+      const readHbSpy = vi.spyOn(heartbeatService, "readHeartbeat").mockResolvedValue({
         processGroupLeaderPid: 12345,
         lastOutputTimestamp: now,
         heartbeatTimestamp: now,
       });
-      vi.spyOn(heartbeatService, "isStale").mockReturnValue(false);
+      const isStaleSpy = vi.spyOn(heartbeatService, "isStale").mockReturnValue(false);
 
       try {
         await branchManager.createTaskWorktree(repoPath, taskA);
@@ -1312,9 +1432,10 @@ describe("BranchManager", () => {
         expect(e.branchName).toBe(`opensprint/${taskA}`);
         expect(e.otherTaskId).toBe(taskB);
         expect(e.message).toContain("active agent");
+      } finally {
+        readHbSpy.mockRestore();
+        isStaleSpy.mockRestore();
       }
-
-      vi.restoreAllMocks();
     });
 
     it("should merge branch to main via mergeToMain", async () => {
@@ -1513,7 +1634,7 @@ describe("BranchManager", () => {
         await expect(fs.access(wtPath)).rejects.toThrow();
       });
 
-      it("skips removal when in-memory registry state is in_use", async () => {
+      it("removes worktree when DB allows cleanup even if registry shows in_use (stale entry retired)", async () => {
         await execAsync("git init", { cwd: repoPath });
         await execAsync("git branch -M main", { cwd: repoPath });
         await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
@@ -1527,7 +1648,7 @@ describe("BranchManager", () => {
 
         worktreeRegistry.transition(taskId, "in_use");
         await branchManager.removeTaskWorktree(repoPath, taskId);
-        await fs.access(wtPath);
+        await expect(fs.access(wtPath)).rejects.toThrow();
       });
     });
   });

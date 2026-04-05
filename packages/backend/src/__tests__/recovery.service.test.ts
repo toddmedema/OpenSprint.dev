@@ -96,6 +96,7 @@ vi.mock("../services/branch-manager.js", () => ({
 
 import { taskStore } from "../services/task-store.service.js";
 import { eventLogService } from "../services/event-log.service.js";
+import { worktreeLeaseService } from "../services/worktree-lease.service.js";
 
 describe("RecoveryService — stale heartbeat recovery", () => {
   let tmpDir: string;
@@ -653,11 +654,14 @@ describe("RecoveryService — stale heartbeat recovery", () => {
         worktreePath: "/tmp/wt-merged",
         gitWorkingMode: "worktree",
         worktreeKey: "epic_123",
+        createdAt: new Date(Date.now() - 120_000).toISOString(),
+        reason: "merge_success",
       },
     ]);
 
     const result = await service.runFullRecovery("proj-1", tmpDir, host);
 
+    expect(vi.mocked(worktreeLeaseService.forceRelease)).toHaveBeenCalledWith("epic_123");
     expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(tmpDir, "epic_123", "/tmp/wt-merged");
     expect(mockDeleteBranch).toHaveBeenCalledWith(tmpDir, "opensprint/task-merged");
     expect(mockRemoveCleanupIntent).toHaveBeenCalledWith(tmpDir, "proj-1", "task-merged");
@@ -709,6 +713,29 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       "task-merged-parent"
     );
     expect(result.cleaned).not.toContain("cleanup_intent:task-merged-parent");
+  });
+
+  it("does not replay cleanup intents within post-merge cooldown window", async () => {
+    vi.mocked(taskStore.listAll).mockResolvedValue([
+      { id: "task-merged", status: "closed" } as never,
+    ]);
+    mockListCleanupIntents.mockResolvedValue([
+      {
+        taskId: "task-merged",
+        branchName: "opensprint/task-merged",
+        worktreePath: "/tmp/wt-merged",
+        gitWorkingMode: "worktree",
+        worktreeKey: "task-merged",
+        createdAt: new Date().toISOString(),
+        reason: "merge_success",
+      },
+    ]);
+
+    const result = await service.runFullRecovery("proj-1", tmpDir, host);
+
+    expect(vi.mocked(worktreeLeaseService.forceRelease)).not.toHaveBeenCalled();
+    expect(mockRemoveTaskWorktree).not.toHaveBeenCalledWith(tmpDir, "task-merged", "/tmp/wt-merged");
+    expect(result.cleaned).not.toContain("cleanup_intent:task-merged");
   });
 
   it("does not replay cleanup intents for in-progress tasks", async () => {

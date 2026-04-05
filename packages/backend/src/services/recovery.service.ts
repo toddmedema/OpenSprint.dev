@@ -62,6 +62,13 @@ const RECOVERABLE_HEARTBEAT_GAP_MAX_MS = (() => {
   const parsed = Number(rawValue);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 15 * 60 * 1000;
 })();
+/** Min age before recovery may apply a persisted merge-success cleanup intent (avoids TOCTOU with slot finalization). */
+const CLEANUP_INTENT_REPLAY_MIN_AGE_MS = (() => {
+  const rawValue = process.env.OPENSPRINT_CLEANUP_INTENT_REPLAY_MIN_AGE_MS;
+  if (rawValue == null || rawValue.trim() === "") return 3_000;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 3_000;
+})();
 
 export interface RecoveryResult {
   reattached: string[];
@@ -1072,6 +1079,19 @@ export class RecoveryService {
         });
         continue;
       }
+      const createdMs = intent.createdAt ? Date.parse(intent.createdAt) : NaN;
+      if (
+        Number.isFinite(createdMs) &&
+        Date.now() - createdMs < CLEANUP_INTENT_REPLAY_MIN_AGE_MS
+      ) {
+        log.info("Skipping cleanup intent replay: within post-merge cooldown window", {
+          projectId,
+          taskId: intent.taskId,
+          worktreeKey,
+          minAgeMs: CLEANUP_INTENT_REPLAY_MIN_AGE_MS,
+        });
+        continue;
+      }
       if (intent.worktreePath) {
         const resolvedIntentPath = path.resolve(intent.worktreePath);
         const protection = await evaluateWorktreeCleanupProtection(
@@ -1096,6 +1116,31 @@ export class RecoveryService {
         if (intent.gitWorkingMode === "branches") {
           await this.branchManager.deleteBranch(repoPath, intent.branchName);
         } else {
+          log.info("Releasing durable worktree lease before replayed merge-success teardown", {
+            projectId,
+            taskId: intent.taskId,
+            worktreeKey,
+          });
+          await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
+            log.warn("Failed to force-release worktree lease before intent replay cleanup", {
+              projectId,
+              taskId: intent.taskId,
+              worktreeKey,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+          eventLogService
+            .append(repoPath, {
+              timestamp: new Date().toISOString(),
+              projectId,
+              taskId: intent.taskId,
+              event: "worktree.lease_released_for_cleanup",
+              data: {
+                trigger: "recovery_replay",
+                worktreeKey,
+              },
+            })
+            .catch(() => {});
           await this.branchManager.removeTaskWorktree(
             repoPath,
             worktreeKey,
@@ -1591,7 +1636,7 @@ export class RecoveryService {
     });
     try {
       await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
-      await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
+      await Promise.resolve(worktreeLeaseService.forceRelease(worktreeKey)).catch((err) => {
         log.warn("worktree lease force-release failed", { worktreeKey, err: err instanceof Error ? err.message : String(err) });
       });
     } catch {

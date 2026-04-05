@@ -98,6 +98,14 @@ vi.mock("../services/worktree-cleanup-intent.service.js", () => ({
   },
 }));
 
+const mockWorktreeLeaseForceRelease = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock("../services/worktree-lease.service.js", () => ({
+  worktreeLeaseService: {
+    forceRelease: (...args: unknown[]) => mockWorktreeLeaseForceRelease(...args),
+  },
+}));
+
 vi.mock("../services/agent-identity.service.js", () => ({
   buildAgentAttemptId: (
     agentConfig: { type: string; model?: string | null },
@@ -145,7 +153,9 @@ vi.mock("../services/final-review.service.js", () => ({
 }));
 
 vi.mock("../utils/worktree-health.js", () => ({
-  assertWorktreeIntegrity: vi.fn().mockResolvedValue({ valid: true, phase: "merge", worktreePath: "", taskId: "" }),
+  assertWorktreeIntegrity: vi
+    .fn()
+    .mockResolvedValue({ valid: true, phase: "merge", worktreePath: "", taskId: "" }),
   evaluateWorktreeCleanupProtection: vi.fn().mockResolvedValue({ forbid: false }),
   getWorktreeCleanupAssignmentGuardMs: vi.fn().mockReturnValue(30_000),
   logWorktreeCleanupBlocked: vi.fn(),
@@ -252,6 +262,7 @@ describe("MergeCoordinatorService", () => {
         preferredBaseBranch ?? "main"
     );
     mockRegisterCleanupIntent.mockResolvedValue(undefined);
+    mockWorktreeLeaseForceRelease.mockResolvedValue(undefined);
     mockListCleanupIntents.mockResolvedValue([]);
     mockRemoveCleanupIntent.mockResolvedValue(undefined);
     mockCleanupBaselineWorkspace.mockResolvedValue(undefined);
@@ -377,6 +388,7 @@ describe("MergeCoordinatorService", () => {
           gitWorkingMode: "worktree",
         })
       );
+      expect(mockWorktreeLeaseForceRelease).toHaveBeenCalledWith(taskId);
     });
   });
 
@@ -414,6 +426,7 @@ describe("MergeCoordinatorService", () => {
     await vi.waitFor(() => {
       expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
       expect(mockDeleteBranch).toHaveBeenCalledWith(repoPath, branchName);
+      expect(mockWorktreeLeaseForceRelease).not.toHaveBeenCalled();
     });
   });
 
@@ -474,6 +487,7 @@ describe("MergeCoordinatorService", () => {
     await coordinator.postCompletionAsync(projectId, repoPath, "os-abc.1");
 
     expect(mockPrepareWorktreeForRemoval).toHaveBeenCalledWith("epic_42");
+    expect(mockWorktreeLeaseForceRelease).toHaveBeenCalledWith("epic_42");
     expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
       repoPath,
       "epic_42",

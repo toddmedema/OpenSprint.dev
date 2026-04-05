@@ -25,6 +25,7 @@ import {
   getWorktreeCleanupAssignmentGuardMs,
   logWorktreeCleanupBlocked,
   validateWorktreeCheckout,
+  worktreePathsResolveEqually,
 } from "../utils/worktree-health.js";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
 import { ProjectService } from "./project.service.js";
@@ -1811,7 +1812,9 @@ export class BranchManager {
    */
   async prepareWorktreeForRemoval(worktreeKey: string): Promise<void> {
     worktreeRegistry.retire(worktreeKey);
-    await worktreeLeaseService.forceRelease(worktreeKey).catch((err: unknown) => { log.warn("worktree lease force-release failed", { err: err instanceof Error ? err.message : String(err) }); });
+    await Promise.resolve(worktreeLeaseService.forceRelease(worktreeKey)).catch((err: unknown) => {
+      log.warn("worktree lease force-release failed", { err: err instanceof Error ? err.message : String(err) });
+    });
   }
 
   /**
@@ -1840,12 +1843,14 @@ export class BranchManager {
 
     const registryEntry = worktreeRegistry.get(worktreeKey);
     if (registryEntry?.state === "in_use") {
-      log.warn("Skipping worktree removal: worktree is in use", {
+      // Durable DB lease is authoritative across processes; in-memory `in_use` can be stale
+      // if the owner exited without retiring the registry.
+      log.info("Retiring stale in_use registry entry; DB lease allows cleanup", {
         worktreeKey,
         worktreePath: wtPath,
         entry: registryEntry,
       });
-      return;
+      worktreeRegistry.retire(worktreeKey);
     }
     if (!worktreeRegistry.canCleanup(worktreeKey)) {
       log.info("Retiring registry entry before worktree removal", {
@@ -1853,6 +1858,28 @@ export class BranchManager {
         entry: registryEntry,
       });
       worktreeRegistry.retire(worktreeKey);
+    }
+
+    const leaseAllowsCleanup = await worktreeLeaseService.canCleanup(worktreeKey).catch((err) => {
+      log.warn("Worktree lease cleanup check failed; allowing removal (degraded)", {
+        worktreeKey,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return true;
+    });
+    if (!leaseAllowsCleanup) {
+      log.warn(
+        "Skipping worktree removal: durable lease still active (execute/merge trust boundary)",
+        {
+          worktreeKey,
+          wtPath,
+        }
+      );
+      return;
+    }
+
+    if (!(await this.removalTargetMatchesDurableLeasePath(worktreeKey, wtPath))) {
+      return;
     }
 
     const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
@@ -1904,6 +1931,10 @@ export class BranchManager {
     }
 
     try {
+      log.info("worktree.removal_after_lease_gate", {
+        worktreeKey,
+        path: safeRegisteredPath,
+      });
       await this.gitExec(repoPath, ["worktree", "remove", safeRegisteredPath, "--force"]);
       await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
     } catch (err) {
@@ -2027,6 +2058,34 @@ export class BranchManager {
     return pathGone();
   }
 
+  /**
+   * If a durable lease row records a worktree path, require the removal target to match it.
+   * Prevents half-deleted or re-keyed paths from being torn down under the wrong key.
+   *
+   * When {@link worktreeLeaseService.canCleanup} is true, the lease is released or expired; the
+   * row may still carry a historic `worktree_path` (e.g. after {@link prepareWorktreeForRemoval}).
+   * Path enforcement applies only while an active lease still logically holds the tree.
+   */
+  private async removalTargetMatchesDurableLeasePath(
+    worktreeKey: string,
+    candidatePath: string
+  ): Promise<boolean> {
+    const lease = await worktreeLeaseService.get(worktreeKey).catch(() => null);
+    if (!lease?.worktreePath?.trim()) return true;
+    if (lease.releasedAt) return true;
+    const expiresMs = Date.parse(lease.expiresAt);
+    if (Number.isFinite(expiresMs) && expiresMs <= Date.now()) return true;
+    const same = await worktreePathsResolveEqually(lease.worktreePath, candidatePath);
+    if (!same) {
+      log.warn("Skipping worktree removal: path does not match durable lease record", {
+        worktreeKey,
+        candidatePath,
+        leasedPath: lease.worktreePath,
+      });
+    }
+    return same;
+  }
+
   private async resolveRegisteredWorktreePath(
     repoPath: string,
     taskId: string,
@@ -2135,6 +2194,7 @@ export class BranchManager {
         }
         log.info("Pruning orphan worktree", { taskId, worktreePath, status: status ?? "no-task" });
         try {
+          await worktreeLeaseService.forceRelease(taskId).catch(() => {});
           await this.removeTaskWorktree(repoPath, taskId, worktreePath);
           pruned.push(taskId);
         } catch (err) {

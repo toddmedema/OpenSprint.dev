@@ -112,31 +112,43 @@ export async function getSettingsFromStore(
 }
 
 /**
- * Raw project settings object as stored on disk (no parseSettings), so agent-tier keys omitted in JSON
- * stay absent for {@link projectStoredDefinesSimpleAgent} / global merge. {@link loadStore} parses entries
- * with parseSettings, which materializes default agents and would falsely mark tiers as project-defined.
+ * Read the on-disk settings entry for a project without `parseSettings` normalization.
+ * Raw object as stored (no merge with global agents); agent-tier keys omitted in JSON stay absent
+ * for {@link projectStoredDefinesSimpleAgent} / global merge. `loadStore()` parses through
+ * `parseSettings`, which materializes default agents and would falsely mark tiers as project-defined
+ * in {@link projectSettingsFromRaw}.
  */
-export async function getRawSettingsRecord(projectId: string): Promise<Record<string, unknown>> {
+async function readRawSettingsRecordFromDisk(projectId: string): Promise<Record<string, unknown>> {
   const file = getSettingsStorePath();
   try {
-    const raw = JSON.parse(await fs.readFile(file, "utf-8")) as unknown;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    const raw = await fs.readFile(file, "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
-    const store = raw as Record<string, unknown>;
-    const val = store[projectId];
-    if (!val || typeof val !== "object" || Array.isArray(val)) {
+    const store = parsed as Record<string, unknown>;
+    const entry = store[projectId];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
       return {};
     }
-    const v = val as Record<string, unknown>;
-    const settingsObj =
-      "settings" in v && typeof v.settings === "object" && v.settings !== null && !Array.isArray(v.settings)
-        ? { ...(v.settings as Record<string, unknown>) }
-        : { ...v };
-    return stripApiKeys(settingsObj) as Record<string, unknown>;
+    const v = entry as Record<string, unknown>;
+    if (
+      "settings" in v &&
+      v.settings &&
+      typeof v.settings === "object" &&
+      !Array.isArray(v.settings)
+    ) {
+      return stripApiKeys({ ...(v.settings as Record<string, unknown>) });
+    }
+    return stripApiKeys({ ...v });
   } catch {
     return {};
   }
+}
+
+/** Empty object when missing. */
+export async function getRawSettingsRecord(projectId: string): Promise<Record<string, unknown>> {
+  return readRawSettingsRecordFromDisk(projectId);
 }
 
 /**

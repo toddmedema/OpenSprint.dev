@@ -660,7 +660,8 @@ describe("OrchestratorService (slot-based model)", () => {
    */
   function setupSingleTaskFlow(taskId = "task-1") {
     const task = makeTask(taskId);
-    const wtPath = `/tmp/opensprint-worktrees/${taskId}`;
+    // Align with BranchManager.getWorktreePath (os.tmpdir-based); /tmp alone diverges on macOS.
+    const wtPath = path.join(os.tmpdir(), "opensprint-worktrees", taskId);
 
     mockTaskStoreReady.mockResolvedValue([task]);
     mockTaskStoreAreAllBlockersClosed.mockResolvedValue(true);

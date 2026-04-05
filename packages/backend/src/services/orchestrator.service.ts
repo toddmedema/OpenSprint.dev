@@ -649,6 +649,12 @@ export class OrchestratorService {
 
     log.info("Finalizing slot", { projectId, taskId, reason, phase: slot.phase });
 
+    // Tear down agent processes before any destructive worktree ops so validators
+    // and merge gates never race a half-removed checkout.
+    slot.timers.clearAll();
+    this.killProcessIfActive(slot.agent);
+    this.cleanupReviewAgents(slot);
+
     const wtPath = slot.worktreePath ?? repoPath;
     await heartbeatService.deleteHeartbeat(wtPath, taskId).catch((err) => {
       log.warn("heartbeat delete failed", { taskId, wtPath, err: err instanceof Error ? err.message : String(err) });

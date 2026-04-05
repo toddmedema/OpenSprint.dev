@@ -71,7 +71,7 @@ import { PrdService } from "../services/prd.service.js";
 import { ChatService } from "../services/chat.service.js";
 import { FeedbackService } from "../services/feedback.service.js";
 
-function autoresolveDeps() {
+function makeDeps() {
   return {
     projectService: new ProjectService(),
     prdService: new PrdService(),
@@ -110,7 +110,7 @@ describe("open-question-autoresolve", () => {
 
   it("does nothing when notification kind is not open_question", async () => {
     const notification = openQuestionNotification({ kind: "api_blocked" });
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
     expect(mocks.mockGetSettings).not.toHaveBeenCalled();
     expect(mocks.mockInvokePlanningAgent).not.toHaveBeenCalled();
   });
@@ -118,7 +118,7 @@ describe("open-question-autoresolve", () => {
   it("does nothing when aiAutonomyLevel is not full", async () => {
     mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "confirm_all" });
     const notification = openQuestionNotification();
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
     expect(mocks.mockGetSettings).toHaveBeenCalledWith("proj-1");
     expect(mocks.mockInvokePlanningAgent).not.toHaveBeenCalled();
   });
@@ -128,7 +128,7 @@ describe("open-question-autoresolve", () => {
     const notification = openQuestionNotification({
       questions: [{ id: "q1", text: "", createdAt: new Date().toISOString() }],
     });
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
     expect(mocks.mockGetPrd).not.toHaveBeenCalled();
     expect(mocks.mockInvokePlanningAgent).not.toHaveBeenCalled();
   });
@@ -138,7 +138,7 @@ describe("open-question-autoresolve", () => {
     mocks.mockGetPrd.mockResolvedValue({ sections: {} });
     mocks.mockInvokePlanningAgent.mockResolvedValue({ content: "" });
     const notification = openQuestionNotification();
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
     expect(mocks.mockInvokePlanningAgent).toHaveBeenCalled();
     expect(mocks.mockSendMessage).not.toHaveBeenCalled();
     expect(mocks.mockResolve).not.toHaveBeenCalled();
@@ -158,7 +158,7 @@ describe("open-question-autoresolve", () => {
       source: "execute",
       sourceId: "task-1",
     });
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
 
     expect(mocks.mockInvokePlanningAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -201,7 +201,7 @@ describe("open-question-autoresolve", () => {
       source: "plan",
       sourceId: "draft:draft-uuid-1",
     });
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
 
     expect(mocks.mockSendMessage).toHaveBeenCalledWith("proj-1", {
       message: "Support both roles.",
@@ -222,7 +222,7 @@ describe("open-question-autoresolve", () => {
       source: "eval",
       sourceId: "fb-1",
     });
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
 
     expect(mocks.mockResolve).toHaveBeenCalledWith("proj-1", notification.id);
     expect(mocks.mockRecategorizeFeedback).toHaveBeenCalledWith("proj-1", "fb-1", {
@@ -242,7 +242,7 @@ describe("open-question-autoresolve", () => {
       source: "prd",
       sourceId: "executive_summary",
     });
-    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
+    await maybeAutoRespond("proj-1", notification, makeDeps());
 
     expect(mocks.mockSendMessage).toHaveBeenCalledWith("proj-1", {
       message: "Target mobile-first users.",

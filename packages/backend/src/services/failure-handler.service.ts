@@ -1584,19 +1584,17 @@ export class FailureHandlerService {
     if (gitWorkingMode === "branches") {
       await this.host.branchManager.revertAndReturnToMain(repoPath, branchName, baseBranch);
       slot.worktreePath = null;
-      await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
+      await Promise.resolve(worktreeLeaseService.forceRelease(worktreeKey)).catch((err) => {
         log.warn("Failed to release worktree lease after branch revert", { err: err instanceof Error ? err.message : String(err) });
       });
       return;
     }
+    await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
     if (slot.worktreePath) {
       await this.host.branchManager.prepareWorktreeForRemoval(worktreeKey);
       await this.host.branchManager.removeTaskWorktree(repoPath, worktreeKey, slot.worktreePath);
       slot.worktreePath = null;
     }
-    await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
-      log.warn("Failed to release worktree lease after worktree removal", { err: err instanceof Error ? err.message : String(err) });
-    });
     if (options?.deleteBranch) {
       await this.host.branchManager.deleteBranch(repoPath, branchName);
     }

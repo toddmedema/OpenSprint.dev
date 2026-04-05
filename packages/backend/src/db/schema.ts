@@ -1111,17 +1111,10 @@ export async function runSchema(
 
     await executeSqlStatements(client, sql, dialect);
 
-    const appliedAt = new Date().toISOString();
-    if (dialect === "sqlite") {
-      await client.query(`INSERT INTO schema_versions (version, applied_at) VALUES (?, ?)`, [
-        migration.version,
-        appliedAt,
-      ]);
-    } else {
-      await client.query(`INSERT INTO schema_versions (version, applied_at) VALUES ($1, $2)`, [
-        migration.version,
-        appliedAt,
-      ]);
-    }
+    const insertVersionSql =
+      dialect === "postgres"
+        ? `INSERT INTO schema_versions (version, applied_at) VALUES ($1, $2)`
+        : `INSERT INTO schema_versions (version, applied_at) VALUES (?, ?)`;
+    await client.query(insertVersionSql, [migration.version, new Date().toISOString()]);
   }
 }

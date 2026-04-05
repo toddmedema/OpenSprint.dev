@@ -241,13 +241,21 @@ export async function preflightWorktreeForDiff(
   try {
     await fs.access(worktreePath);
   } catch {
-    return { usable: false, failureReason: "directory_missing", detail: "worktree directory does not exist" };
+    return {
+      usable: false,
+      failureReason: "directory_missing",
+      detail: "worktree directory does not exist",
+    };
   }
 
   try {
     await fs.access(path.join(worktreePath, ".git"));
   } catch {
-    return { usable: false, failureReason: "git_entry_missing", detail: ".git entry is missing from worktree" };
+    return {
+      usable: false,
+      failureReason: "git_entry_missing",
+      detail: ".git entry is missing from worktree",
+    };
   }
 
   const repoHasPackageJson = await fs
@@ -290,6 +298,17 @@ export async function preflightWorktreeForDiff(
     failureReason: "source_directories_missing",
     detail: `none of the expected source directories are present (checked: ${repoCheckoutMarkers.join(", ")})`,
   };
+}
+
+/**
+ * True when both paths resolve to the same directory (realpath with path.resolve fallback).
+ * Used before destructive worktree cleanup to avoid removing the wrong directory if a lease
+ * row still points at a superseded path (TOCTOU vs. re-dispatch).
+ */
+export async function worktreePathsResolveEqually(a: string, b: string): Promise<boolean> {
+  const ar = await fs.realpath(a).catch(() => path.resolve(a));
+  const br = await fs.realpath(b).catch(() => path.resolve(b));
+  return ar === br;
 }
 
 export interface WorktreeIntegrityResult {

@@ -7,6 +7,7 @@ import {
   isWorktreeCheckoutUsable,
   preflightWorktreeForDiff,
   IncompleteWorktreeError,
+  worktreePathsResolveEqually,
 } from "../utils/worktree-health.js";
 
 describe("worktree-health", () => {
@@ -163,6 +164,23 @@ describe("worktree-health", () => {
       const result = await preflightWorktreeForDiff(repoDir, worktreeDir);
       expect(result.usable).toBe(false);
       expect(result.failureReason).toBe("source_directories_missing");
+    });
+  });
+
+  describe("worktreePathsResolveEqually", () => {
+    it("returns true for the same path via different spellings when realpath aligns", async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "wt-same-"));
+      const resolved = await fs.realpath(dir);
+      await expect(worktreePathsResolveEqually(dir, resolved)).resolves.toBe(true);
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    });
+
+    it("returns false for two distinct directories", async () => {
+      const a = await fs.mkdtemp(path.join(os.tmpdir(), "wt-a-"));
+      const b = await fs.mkdtemp(path.join(os.tmpdir(), "wt-b-"));
+      await expect(worktreePathsResolveEqually(a, b)).resolves.toBe(false);
+      await fs.rm(a, { recursive: true, force: true }).catch(() => {});
+      await fs.rm(b, { recursive: true, force: true }).catch(() => {});
     });
   });
 });
