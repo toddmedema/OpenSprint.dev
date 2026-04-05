@@ -84,6 +84,13 @@ describe("no-result-reason.service", () => {
       ]);
       expect(reason).toContain("Security command failed");
     });
+
+    it("extracts inner text from Cursor API reachability Agent error bracket line", () => {
+      const reason = extractNoResultReasonFromOutput([
+        "[Agent error: Failed to reach the Cursor API. fetch failed ECONNRESET]\n",
+      ]);
+      expect(reason).toBe("Failed to reach the Cursor API. fetch failed ECONNRESET");
+    });
     it("returns undefined for punctuation-only output", () => {
       expect(extractNoResultReasonFromOutput(["}\n", " \n"])).toBeUndefined();
     });
@@ -190,6 +197,22 @@ describe("no-result-reason.service", () => {
         })
       );
       expect(result?.notes).toContain("The user wants me to restore");
+    });
+
+    it("synthesizes failed result from Cursor API reachability Agent error line", () => {
+      const line = "[Agent error: Failed to reach the Cursor API. fetch failed ECONNRESET]\n";
+      const result = synthesizeCodingResultFromOutput([line]);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: "failed",
+          notes: "[Agent error: Failed to reach the Cursor API. fetch failed ECONNRESET]",
+          summary: expect.stringMatching(
+            /Agent exited without writing result\.json:.*Failed to reach the Cursor API/i
+          ),
+        })
+      );
+      expect(result?.open_questions).toBeUndefined();
     });
   });
 

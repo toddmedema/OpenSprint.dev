@@ -25,6 +25,7 @@ import { worktreeCleanupIntentService } from "./worktree-cleanup-intent.service.
 import type { RetryContext } from "./orchestrator-phase-context.js";
 import { isProcessAlive, terminateProcessGroup } from "../utils/process-group.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import {
   evaluateWorktreeCleanupProtection,
   getWorktreeCleanupAssignmentGuardMs,
@@ -265,7 +266,7 @@ export class RecoveryService {
     }
 
     // 10. Emit failure-type baseline snapshot for KPI tracking
-    this.emitFailureBaselineSnapshot(projectId, repoPath).catch(() => {});
+    fireAndForget(this.emitFailureBaselineSnapshot(projectId, repoPath), "recovery:failure-baseline-snapshot");
 
     return result;
   }
@@ -680,15 +681,16 @@ export class RecoveryService {
                 assignment
               );
               if (completed) {
-                void eventLogService
-                  .append(repoPath, {
+                fireAndForget(
+                  eventLogService.append(repoPath, {
                     timestamp: new Date().toISOString(),
                     projectId,
                     taskId: task.id,
                     event: "recovery.stale_success_consumed",
                     data: { source: "orphaned_task", status: terminalResult },
-                  })
-                  .catch(() => {});
+                  }),
+                  "recovery:orphaned-task-event-log"
+                );
                 recovered.push(task.id);
                 continue;
               }
@@ -773,15 +775,16 @@ export class RecoveryService {
                 assignment
               );
               if (completed) {
-                void eventLogService
-                  .append(repoPath, {
+                fireAndForget(
+                  eventLogService.append(repoPath, {
                     timestamp: new Date().toISOString(),
                     projectId,
                     taskId: task.id,
                     event: "recovery.stale_success_consumed",
                     data: { source: "assignee_less_task", status: terminalResult },
-                  })
-                  .catch(() => {});
+                  }),
+                  "recovery:assignee-less-task-event-log"
+                );
                 recovered.push(task.id);
                 continue;
               }
@@ -1102,8 +1105,8 @@ export class RecoveryService {
         }
         await worktreeCleanupIntentService.removeBestEffort(repoPath, projectId, intent.taskId);
         cleaned.push(intent.taskId);
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: intent.taskId,
@@ -1114,11 +1117,12 @@ export class RecoveryService {
               worktreePath: intent.worktreePath,
               worktreeKey,
             },
-          })
-          .catch(() => {});
+          }),
+          "recovery:worktree-cleanup-event-log"
+        );
       } catch (err) {
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: intent.taskId,
@@ -1130,8 +1134,9 @@ export class RecoveryService {
               worktreeKey,
               error: err instanceof Error ? err.message : String(err),
             },
-          })
-          .catch(() => {});
+          }),
+          "recovery:worktree-cleanup-complete-event-log"
+        );
       }
     }
     return cleaned;
@@ -1349,8 +1354,8 @@ export class RecoveryService {
       try {
         await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
         cleaned.push(worktreeKey);
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: task.id,
@@ -1362,11 +1367,12 @@ export class RecoveryService {
               taskStatus: status,
               staleForMs: now - updatedAt,
             },
-          })
-          .catch(() => {});
+          }),
+          "recovery:stale-heartbeat-event-log"
+        );
       } catch (err) {
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: task.id,
@@ -1379,8 +1385,9 @@ export class RecoveryService {
               staleForMs: now - updatedAt,
               error: err instanceof Error ? err.message : String(err),
             },
-          })
-          .catch(() => {});
+          }),
+          "recovery:stale-heartbeat-cleanup-event-log"
+        );
       }
     }
     return cleaned;
@@ -1584,7 +1591,9 @@ export class RecoveryService {
     });
     try {
       await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
-      await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
+      await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
+        log.warn("worktree lease force-release failed", { worktreeKey, err: err instanceof Error ? err.message : String(err) });
+      });
     } catch {
       // Best effort; worktree may already be gone
     }

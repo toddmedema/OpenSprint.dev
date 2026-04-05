@@ -54,6 +54,7 @@ import { FileScopeAnalyzer, type FileScope } from "./file-scope-analyzer.js";
 import { TaskScheduler } from "./task-scheduler.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import { filterAgentOutput } from "../utils/agent-output-filter.js";
 import { PhaseExecutorService, type PhaseExecutorHost } from "./phase-executor.service.js";
 import { agentIdentityService, buildAgentAttemptId } from "./agent-identity.service.js";
@@ -578,15 +579,16 @@ export class OrchestratorService {
 
     const repoPath = this.repoPathCache.get(projectId);
     if (repoPath) {
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: t.taskId,
           event: `transition.${t.to}`,
           data: { attempt: activeTask?.attempt },
-        })
-        .catch(() => {});
+        }),
+        "orchestrator:task-stop-event-log"
+      );
     }
   }
 
@@ -640,7 +642,9 @@ export class OrchestratorService {
     log.info("Finalizing slot", { projectId, taskId, reason, phase: slot.phase });
 
     const wtPath = slot.worktreePath ?? repoPath;
-    await heartbeatService.deleteHeartbeat(wtPath, taskId).catch(() => {});
+    await heartbeatService.deleteHeartbeat(wtPath, taskId).catch((err) => {
+      log.warn("heartbeat delete failed", { taskId, wtPath, err: err instanceof Error ? err.message : String(err) });
+    });
 
     if (slot.worktreePath && slot.worktreePath !== repoPath) {
       const worktreeKey = slot.worktreeKey ?? taskId;
@@ -1477,8 +1481,8 @@ export class OrchestratorService {
       changedFiles
     );
 
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: task.id,
@@ -1488,8 +1492,9 @@ export class OrchestratorService {
           mode: handle ? "reattach" : "respawn",
           reviewAngles,
         },
-      })
-      .catch(() => {});
+      }),
+      "orchestrator:post-merge-event-log"
+    );
 
     await this.clearRateLimitNotifications(projectId);
 
@@ -1603,7 +1608,7 @@ export class OrchestratorService {
       state.globalTimers.setInterval(
         "leaseRenew",
         () => {
-          void this.tryAcquireOrRenewLease(projectId).catch(() => {});
+          fireAndForget(this.tryAcquireOrRenewLease(projectId), "orchestrator:lease-renew");
         },
         ORCHESTRATOR_LEASE_RENEW_MS
       );
@@ -1691,16 +1696,18 @@ export class OrchestratorService {
 
     if (slotsFull) {
       // Analyst doesn't use a slot; allow loop to run when there's pending feedback
-      this.feedbackService
-        .getNextPendingFeedbackId(projectId)
-        .then((nextId) => {
-          const s = this.getState(projectId);
-          if (nextId && !s.loopActive && !s.globalTimers.has("loop")) {
-            log.info("Nudge (pending feedback), starting loop for project", { projectId });
-            this.startRunLoop(projectId, "nudge-pending-feedback");
-          }
-        })
-        .catch(() => {});
+      fireAndForget(
+        this.feedbackService
+          .getNextPendingFeedbackId(projectId)
+          .then((nextId) => {
+            const s = this.getState(projectId);
+            if (nextId && !s.loopActive && !s.globalTimers.has("loop")) {
+              log.info("Nudge (pending feedback), starting loop for project", { projectId });
+              this.startRunLoop(projectId, "nudge-pending-feedback");
+            }
+          }),
+        "orchestrator:phase-transition-event-log"
+      );
       return;
     }
 
@@ -2224,8 +2231,8 @@ export class OrchestratorService {
           failureReason: worktreePreflight.failureReason,
           detail: worktreePreflight.detail,
         });
-        void eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: task.id,
@@ -2238,8 +2245,9 @@ export class OrchestratorService {
               failureReason: worktreePreflight.failureReason,
               detail: worktreePreflight.detail,
             },
-          })
-          .catch(() => {});
+          }),
+          "orchestrator:coding-result-event-log"
+        );
         await this.failureHandler.handleTaskFailure(
           projectId,
           repoPath,
@@ -2289,8 +2297,8 @@ export class OrchestratorService {
             taskId: task.id,
             consecutiveEmptyDiffs,
           });
-          void eventLogService
-            .append(repoPath, {
+          fireAndForget(
+            eventLogService.append(repoPath, {
               timestamp: new Date().toISOString(),
               projectId,
               taskId: task.id,
@@ -2302,8 +2310,9 @@ export class OrchestratorService {
                 consecutiveEmptyDiffs,
                 threshold: MAX_CONSECUTIVE_EMPTY_DIFFS,
               },
-            })
-            .catch(() => {});
+            }),
+            "orchestrator:review-result-event-log"
+          );
           await this.failureHandler.handleTaskFailure(
             projectId,
             repoPath,
@@ -2589,9 +2598,7 @@ export class OrchestratorService {
       return scopedResult;
     } catch (err) {
       const durationMs = Date.now() - startedAt;
-      void this.projectService
-        .recordValidationDuration(projectId, preferredScope, durationMs)
-        .catch(() => {});
+      fireAndForget(this.projectService.recordValidationDuration(projectId, preferredScope, durationMs), "orchestrator:record-validation-duration");
       throw err;
     }
   }

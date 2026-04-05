@@ -15,6 +15,7 @@ import type { TimerRegistry } from "./timer-registry.js";
 import { notificationService } from "./notification.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import { getNextKey } from "./api-key-resolver.service.js";
 import { isExhausted, clearExhausted } from "./api-key-exhausted.service.js";
 import { getProviderOutageBackoff } from "./provider-outage-backoff.service.js";
@@ -474,8 +475,8 @@ export class OrchestratorLoopService {
               });
             }
             const reason = error.message.slice(0, 500);
-            eventLogService
-              .append(repoPath, {
+            fireAndForget(
+              eventLogService.append(repoPath, {
                 timestamp: new Date().toISOString(),
                 projectId,
                 taskId: deferredTask.id,
@@ -488,8 +489,9 @@ export class OrchestratorLoopService {
                   otherWorktreePath: error.otherPath ?? null,
                   reason,
                 },
-              })
-              .catch(() => {});
+              }),
+              "orchestrator-loop:dispatch-deferred-event-log"
+            );
             broadcastToProject(projectId, {
               type: "task.dispatch_deferred",
               taskId: deferredTask.id,

@@ -1260,6 +1260,94 @@ describe("OrchestratorService (slot-based model)", () => {
         })
       );
     });
+
+    it("synthesizes Cursor API agent error into coding_failure without open questions", async () => {
+      const { task, wtPath } = setupSingleTaskFlow("task-cursor-api-error-synthesis");
+      mockReadResult.mockResolvedValue(null);
+      mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      });
+
+      await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      });
+
+      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
+      const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+      await fs.writeFile(
+        assignmentPath,
+        JSON.stringify(
+          {
+            ...baseAssignment,
+            retryContext: {
+              structuredOutputRepairAttempted: true,
+              useExistingBranch: true,
+            },
+          },
+          null,
+          2
+        ),
+        "utf-8"
+      );
+
+      const notifyCallsBefore = mockNotificationCreate.mock.calls.length;
+      const failureSpy = vi
+        .spyOn(
+          (
+            orchestrator as unknown as {
+              failureHandler: { handleTaskFailure: (...args: unknown[]) => Promise<void> };
+            }
+          ).failureHandler,
+          "handleTaskFailure"
+        )
+        .mockResolvedValue(undefined);
+
+      const state = (
+        orchestrator as unknown as { getState: (id: string) => { slots: Map<string, unknown> } }
+      ).getState(projectId);
+      const slot = state.slots.get(task.id) as {
+        branchName?: string;
+        agent: { outputLog: string[]; killedDueToTimeout: boolean };
+      };
+      expect(slot).toBeTruthy();
+      slot.agent.killedDueToTimeout = false;
+      slot.agent.outputLog = [
+        "[Agent error: Failed to reach the Cursor API. fetch failed ECONNRESET]\n",
+      ];
+
+      const branchName = slot.branchName ?? `opensprint/${task.id}`;
+      const invokeHandleCodingDone = orchestrator as unknown as {
+        handleCodingDone(
+          projectId: string,
+          repoPath: string,
+          task: typeof task,
+          branchName: string,
+          exitCode: number | null
+        ): Promise<void>;
+      };
+
+      await invokeHandleCodingDone.handleCodingDone(projectId, repoPath, task, branchName, 0);
+
+      expect(mockNotificationCreate.mock.calls.length).toBe(notifyCallsBefore);
+      expect(failureSpy).toHaveBeenCalledWith(
+        projectId,
+        repoPath,
+        task,
+        branchName,
+        expect.stringMatching(
+          /Agent exited without writing result\.json:.*Failed to reach the Cursor API/i
+        ),
+        null,
+        "coding_failure",
+        undefined,
+        expect.objectContaining({ exitCode: 0 })
+      );
+    });
   });
 
   describe("review structured output recovery", () => {
