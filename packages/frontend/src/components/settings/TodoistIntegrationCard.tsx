@@ -303,7 +303,7 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
               ? "Waiting for authorization…"
               : startOAuthMutation.isPending
                 ? "Starting…"
-                : "Connect"}
+                : "Connect Todoist"}
           </button>
         }
       >

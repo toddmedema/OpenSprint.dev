@@ -1,10 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TodoistIntegrationCard } from "./TodoistIntegrationCard";
+import { TodoistIntegrationCard } from "../TodoistIntegrationCard";
 
 const mockGetStatus = vi.fn();
 const mockStartOAuth = vi.fn();
@@ -13,7 +13,7 @@ const mockListProjects = vi.fn();
 const mockSelectProject = vi.fn();
 const mockSyncNow = vi.fn();
 
-vi.mock("../../api/client", () => {
+vi.mock("../../../api/client", () => {
   class ApiErrorImpl extends Error {
     code: string;
     constructor(message: string, code: string) {
@@ -94,7 +94,9 @@ describe("TodoistIntegrationCard", () => {
       screen.getByText("Import feedback from Todoist tasks into Evaluate")
     ).toBeInTheDocument();
     expect(screen.getByTestId("todoist-connect-btn")).toBeInTheDocument();
-    expect(screen.getByTestId("todoist-connect-btn")).toHaveTextContent("Connect");
+    expect(screen.getByTestId("todoist-connect-btn")).toHaveTextContent("Connect Todoist");
+    expect(screen.queryByTestId("todoist-project-picker")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("todoist-open-picker-btn")).not.toBeInTheDocument();
   });
 
   it("starts OAuth flow when Connect button is clicked", async () => {
@@ -186,6 +188,8 @@ describe("TodoistIntegrationCard", () => {
     expect(screen.getByTestId("todoist-status-badge")).toHaveTextContent("Connected");
     expect(screen.getByTestId("todoist-project-picker")).toBeInTheDocument();
     expect(screen.getByTestId("todoist-disconnect-btn")).toBeInTheDocument();
+    expect(screen.queryByTestId("todoist-sync-section")).not.toBeInTheDocument();
+    expect(statusLine).not.toHaveTextContent("Last sync:");
   });
 
   it("shows user id when email is not available", async () => {
@@ -224,6 +228,8 @@ describe("TodoistIntegrationCard", () => {
     expect(statusLine).toHaveTextContent("Project: My Todoist Project");
     expect(statusLine).toHaveTextContent("Last sync: 2m ago");
     expect(screen.queryByTestId("todoist-project-picker")).not.toBeInTheDocument();
+    expect(screen.getByTestId("todoist-sync-now-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("todoist-disconnect-btn")).toBeInTheDocument();
   });
 
   // ---------- Error banner ----------
@@ -506,7 +512,9 @@ describe("TodoistIntegrationCard", () => {
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
     // Advance past react-query retry delay (retry: 1 with exponential backoff)
-    await vi.advanceTimersByTimeAsync(3000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
 
     expect(await screen.findByTestId("todoist-projects-error")).toBeInTheDocument();
     expect(screen.getByText("Failed to load Todoist projects.")).toBeInTheDocument();
@@ -527,7 +535,9 @@ describe("TodoistIntegrationCard", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
-    await vi.advanceTimersByTimeAsync(3000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
 
     await screen.findByTestId("todoist-projects-error");
 
@@ -775,7 +785,7 @@ describe("TodoistIntegrationCard", () => {
 
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
-    await screen.findByTestId("todoist-integration-card");
+    await screen.findByTestId("todoist-project-picker");
     expect(screen.queryByTestId("todoist-sync-now-btn")).not.toBeInTheDocument();
   });
 
