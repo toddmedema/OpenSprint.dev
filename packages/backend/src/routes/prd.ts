@@ -12,6 +12,7 @@ import {
 import { prdFromCodebaseService } from "../services/prd-from-codebase.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { notificationService } from "../services/notification.service.js";
+import { prdProposalStore, hashSpecContent } from "../services/prd-proposal-store.js";
 import { applyDiffPagination, computeLineDiff, isDiffContentPayloadTooLarge } from "../utils/diff.js";
 import { prdToSpecMarkdown } from "@opensprint/shared";
 import type { PrdService } from "../services/prd.service.js";
@@ -190,39 +191,63 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
       const lineLimit = query.lineLimit;
 
       const notification = await notificationService.getById(projectId, requestId);
-      if (
-        !notification ||
-        notification.kind !== "hil_approval" ||
-        !notification.scopeChangeMetadata
-      ) {
+      if (!notification || notification.kind !== "hil_approval") {
         res.status(404).json({
           error: {
             code: "NOT_FOUND",
-            message: "HIL approval request not found or has no proposed scope changes",
+            message: "HIL approval request not found or is not a PRD approval request",
+          },
+        });
+        return;
+      }
+
+      const pendingProposal = prdProposalStore.get(requestId);
+      const scopeMeta = notification.scopeChangeMetadata as
+        | import("@opensprint/shared").ScopeChangeMetadata
+        | undefined;
+      const proposedUpdates = scopeMeta?.scopeChangeProposedUpdates as
+        | ScopeChangeProposedUpdate[]
+        | undefined;
+      const hasLegacyProposed =
+        Array.isArray(proposedUpdates) && proposedUpdates.length > 0;
+
+      if (!pendingProposal && !hasLegacyProposed) {
+        res.status(404).json({
+          error: {
+            code: "NOT_FOUND",
+            message: "HIL approval request not found or is not a PRD approval request",
           },
         });
         return;
       }
 
       const currentPrd = await prdService.getPrd(projectId);
-      const proposedPrd = JSON.parse(JSON.stringify(currentPrd)) as Prd;
-      const now = new Date().toISOString();
-      const scopeMetadata =
-        notification.scopeChangeMetadata as import("@opensprint/shared").ScopeChangeMetadata;
+      const currentSpec = prdToSpecMarkdown(currentPrd);
 
-      const proposedUpdates = (scopeMetadata.scopeChangeProposedUpdates ??
-        []) as ScopeChangeProposedUpdate[];
-      for (const u of proposedUpdates) {
-        const existing = proposedPrd.sections[u.section];
-        proposedPrd.sections[u.section] = {
-          content: u.content,
-          version: existing ? existing.version + 1 : 1,
-          updatedAt: now,
-        };
+      let proposedSpec: string;
+      let staleBase: boolean | undefined;
+      if (pendingProposal) {
+        proposedSpec = pendingProposal.proposedContent;
+        if (pendingProposal.baseContentHash) {
+          const currentHash = hashSpecContent(currentSpec);
+          if (currentHash !== pendingProposal.baseContentHash) {
+            staleBase = true;
+          }
+        }
+      } else {
+        const proposedPrd = JSON.parse(JSON.stringify(currentPrd)) as Prd;
+        const now = new Date().toISOString();
+        for (const u of proposedUpdates!) {
+          const existing = proposedPrd.sections[u.section];
+          proposedPrd.sections[u.section] = {
+            content: u.content,
+            version: existing ? existing.version + 1 : 1,
+            updatedAt: now,
+          };
+        }
+        proposedSpec = prdToSpecMarkdown(proposedPrd);
       }
 
-      const currentSpec = prdToSpecMarkdown(currentPrd);
-      const proposedSpec = prdToSpecMarkdown(proposedPrd);
       const fullDiff = computeLineDiff(currentSpec, proposedSpec);
       const diff = applyDiffPagination(fullDiff, lineOffset, lineLimit);
 
@@ -230,6 +255,9 @@ export function createPrdRouter({ prdService, chatService }: PrdRouterDeps): Rou
         requestId,
         diff,
       };
+      if (staleBase) {
+        data.staleBase = true;
+      }
       if (includeContent) {
         if (isDiffContentPayloadTooLarge(currentSpec, proposedSpec)) {
           data.contentOmittedDueToSize = true;

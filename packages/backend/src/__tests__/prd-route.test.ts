@@ -11,6 +11,7 @@ import {
   resetOpenSprintPathsForTesting,
 } from "./opensprint-path-test-helper.js";
 import { authedSupertest } from "./local-auth-test-helpers.js";
+import { prdProposalStore } from "../services/prd-proposal-store.js";
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => args,
@@ -611,6 +612,202 @@ describe.skipIf(!prdPostgresOk)("PRD REST API", () => {
       expect(res.status).toBe(200);
       expect(typeof res.body.data.fromContent).toBe("string");
       expect(typeof res.body.data.toContent).toBe("string");
+    });
+
+    it("uses pending prdProposalStore content when registered (over section metadata)", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "On disk summary" });
+
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-store",
+        description: "Approve scope change?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "Meta",
+          scopeChangeProposedUpdates: [
+            {
+              section: "executive_summary",
+              changeLogEntry: "x",
+              content: "From metadata only",
+            },
+          ],
+        },
+      });
+
+      const prd = (await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`)).body
+        .data;
+      const fromStoreMarkdown = prdToSpecMarkdown(prd).replace("On disk summary", "STORE WINS LINE");
+
+      prdProposalStore.register(notif.id, fromStoreMarkdown, prdToSpecMarkdown(prd));
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.toContent).toContain("STORE WINS LINE");
+      expect(res.body.data.toContent).not.toContain("From metadata only");
+      prdProposalStore.remove(notif.id);
+    });
+
+    it("includes staleBase when current SPEC no longer matches registered base hash", async () => {
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Original base" });
+
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-stale",
+        description: "Approve?",
+        category: "scopeChanges",
+        scopeChangeMetadata: {
+          scopeChangeSummary: "s",
+          scopeChangeProposedUpdates: [
+            { section: "executive_summary", content: "Proposed", changeLogEntry: "c" },
+          ],
+        },
+      });
+
+      const prdRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+      const baseMarkdown = prdToSpecMarkdown(prdRes.body.data);
+      prdProposalStore.register(notif.id, `${baseMarkdown}\n<!-- proposed -->\n`, baseMarkdown);
+
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Edited after proposal" });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.staleBase).toBe(true);
+      expect(res.body.data.fromContent).toContain("Edited after proposal");
+      prdProposalStore.remove(notif.id);
+    });
+
+    it("returns 404 for hil_approval without pending proposal and without section updates", async () => {
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "eval",
+        sourceId: "fb-empty",
+        description: "Architecture only?",
+        category: "architectureDecisions",
+      });
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body.error?.code).toBe("NOT_FOUND");
+    });
+
+    it("returns 200 when only prdProposalStore has proposal (no scopeChangeMetadata)", async () => {
+      const { notificationService } = await import("../services/notification.service.js");
+      const notif = await notificationService.createHilApproval({
+        projectId,
+        source: "prd",
+        sourceId: "harmonizer-1",
+        description: "SPEC approval",
+        category: "scopeChanges",
+      });
+
+      await authedSupertest(app)
+        .put(`${API_PREFIX}/projects/${projectId}/prd/executive_summary`)
+        .send({ content: "Current SPEC" });
+
+      const prdRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/prd`);
+      const currentMd = prdToSpecMarkdown(prdRes.body.data);
+      const proposedMd = currentMd.replace("Current SPEC", "Proposed SPEC");
+      prdProposalStore.register(notif.id, proposedMd, currentMd);
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.fromContent).toContain("Current SPEC");
+      expect(res.body.data.toContent).toContain("Proposed SPEC");
+      prdProposalStore.remove(notif.id);
+    });
+
+    it("respects project scoping (notification for other project returns 404)", async () => {
+      const other = await projectService.createProject({
+        name: "Other",
+        repoPath: path.join(tempDir, "other-project"),
+        simpleComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        complexComplexityAgent: { type: "claude", model: "claude-sonnet-4", cliCommand: null },
+        deployment: { mode: "custom" },
+        hilConfig: DEFAULT_HIL_CONFIG,
+      });
+
+      try {
+        const { notificationService } = await import("../services/notification.service.js");
+        const notif = await notificationService.createHilApproval({
+          projectId: other.id,
+          source: "eval",
+          sourceId: "x",
+          description: "d",
+          category: "scopeChanges",
+          scopeChangeMetadata: {
+            scopeChangeSummary: "s",
+            scopeChangeProposedUpdates: [
+              { section: "executive_summary", content: "p", changeLogEntry: "c" },
+            ],
+          },
+        });
+
+        const res = await authedSupertest(app).get(
+          `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+        );
+
+        expect(res.status).toBe(404);
+        expect(res.body.error?.code).toBe("NOT_FOUND");
+      } finally {
+        await cleanupTestProject({ projectService, projectId: other.id });
+      }
+    });
+
+    it("uses mocked prdProposalStore.get for proposed body when notification is valid", async () => {
+      const getSpy = vi.spyOn(prdProposalStore, "get").mockReturnValue({
+        proposedContent: "# Mock proposed\n",
+        createdAt: new Date().toISOString(),
+      });
+
+      try {
+        const { notificationService } = await import("../services/notification.service.js");
+        const notif = await notificationService.createHilApproval({
+          projectId,
+          source: "eval",
+          sourceId: "mock-store",
+          description: "d",
+          category: "scopeChanges",
+          scopeChangeMetadata: {
+            scopeChangeSummary: "s",
+            scopeChangeProposedUpdates: [
+              { section: "executive_summary", content: "ignored", changeLogEntry: "c" },
+            ],
+          },
+        });
+
+        const res = await authedSupertest(app).get(
+          `${API_PREFIX}/projects/${projectId}/prd/proposed-diff?requestId=${notif.id}`
+        );
+
+        expect(res.status).toBe(200);
+        expect(res.body.data.toContent).toBe("# Mock proposed\n");
+        expect(getSpy).toHaveBeenCalledWith(notif.id);
+      } finally {
+        getSpy.mockRestore();
+      }
     });
   });
 

@@ -90,6 +90,11 @@ export interface PrdProposedDiffResponse {
    * (diff lines and summary are still returned).
    */
   contentOmittedDueToSize?: boolean;
+  /**
+   * When the Harmonizer registered a base SPEC hash and the current SPEC.md no longer matches
+   * (user edited the PRD after the proposal was created).
+   */
+  staleBase?: boolean;
   diff: PrdDiffResult;
 }
 

@@ -49,7 +49,7 @@ export class PrdProposalStore {
    */
   register(requestId: string, proposedContent: string, baseContent?: string): PrdProposal {
     const createdAt = new Date().toISOString();
-    const baseContentHash = baseContent ? hashContent(baseContent) : undefined;
+    const baseContentHash = baseContent ? hashSpecContent(baseContent) : undefined;
     const entry: PrdProposalEntry = {
       proposedContent,
       createdAt,
@@ -127,7 +127,8 @@ export class PrdProposalStore {
   }
 }
 
-function hashContent(content: string): string {
+/** SHA-256 hex of UTF-8 SPEC body; shared with PRD proposed-diff staleness checks. */
+export function hashSpecContent(content: string): string {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");
 }
 
