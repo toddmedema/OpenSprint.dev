@@ -112,15 +112,31 @@ export async function getSettingsFromStore(
 }
 
 /**
- * Raw project settings object as stored (no merge with global agents). Empty object when missing.
+ * Raw project settings object as stored on disk (no parseSettings), so agent-tier keys omitted in JSON
+ * stay absent for {@link projectStoredDefinesSimpleAgent} / global merge. {@link loadStore} parses entries
+ * with parseSettings, which materializes default agents and would falsely mark tiers as project-defined.
  */
 export async function getRawSettingsRecord(projectId: string): Promise<Record<string, unknown>> {
-  const store = await loadStore();
-  const entry = store[projectId];
-  if (!entry?.settings) {
+  const file = getSettingsStorePath();
+  try {
+    const raw = JSON.parse(await fs.readFile(file, "utf-8")) as unknown;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return {};
+    }
+    const store = raw as Record<string, unknown>;
+    const val = store[projectId];
+    if (!val || typeof val !== "object" || Array.isArray(val)) {
+      return {};
+    }
+    const v = val as Record<string, unknown>;
+    const settingsObj =
+      "settings" in v && typeof v.settings === "object" && v.settings !== null && !Array.isArray(v.settings)
+        ? { ...(v.settings as Record<string, unknown>) }
+        : { ...v };
+    return stripApiKeys(settingsObj) as Record<string, unknown>;
+  } catch {
     return {};
   }
-  return stripApiKeys({ ...(entry.settings as unknown as Record<string, unknown>) });
 }
 
 /**

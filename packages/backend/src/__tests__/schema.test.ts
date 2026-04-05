@@ -9,8 +9,14 @@ describe("schema", () => {
     const statements: string[] = [];
     await runSchema(
       {
-        query: async (sql: string) => {
+        query: async (sql: string, params: unknown[] = []) => {
           statements.push(sql);
+          if (/SELECT\s+version\s+FROM\s+schema_versions/i.test(sql)) {
+            return [];
+          }
+          if (params.length > 0 && /\$(1|2)\b/.test(sql)) {
+            return [];
+          }
           return [];
         },
       },
@@ -18,7 +24,8 @@ describe("schema", () => {
     );
     expect(statements.some((s) => s.includes("plan_versions"))).toBe(true);
     expect(statements.some((s) => s.includes("current_version_number"))).toBe(true);
-    expect(statements.every((s) => /^(CREATE|ALTER)\b/i.test(s.trim()))).toBe(true);
+    expect(statements.some((s) => /CREATE TABLE IF NOT EXISTS schema_versions/i.test(s))).toBe(true);
+    expect(statements.some((s) => /SELECT\s+version\s+FROM\s+schema_versions/i.test(s))).toBe(true);
   });
 
   it("runSchema succeeds for SQLite (mock client)", async () => {
@@ -200,35 +207,29 @@ describe("schema", () => {
       const statements: string[] = [];
       await runSchema(
         {
-          query: async (sql: string) => {
+          query: async (sql: string, params: unknown[] = []) => {
             statements.push(sql);
             if (sql.startsWith("PRAGMA table_info("))
               return [{ name: "project_id" }, { name: "plan_id" }];
+            if (/SELECT\s+version\s+FROM\s+schema_versions/i.test(sql)) {
+              return [];
+            }
+            if (params.length > 0 && (/\?/.test(sql) || /\$(1|2)\b/.test(sql))) {
+              return [];
+            }
             return [];
           },
         },
         dialect
       );
       expect(statements.some((s) => s.includes("idx_plans_parent"))).toBe(true);
-      const parentIndexIdx = statements.findIndex((s) => s.includes("idx_plans_parent"));
-      expect(parentIndexIdx).toBeGreaterThanOrEqual(0);
-      if (dialect === "postgres") {
-        const parentAlterIdx = statements.findIndex((s) =>
-          s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id")
-        );
-        expect(statements.some((s) => s.includes("ADD COLUMN IF NOT EXISTS parent_plan_id"))).toBe(
-          true
-        );
-        expect(parentAlterIdx).toBeLessThan(parentIndexIdx);
-      } else {
-        const parentAlterIdx = statements.findIndex((s) =>
-          s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id")
-        );
-        expect(
-          statements.some((s) => s.includes("ALTER TABLE plans ADD COLUMN parent_plan_id"))
-        ).toBe(true);
-        expect(parentAlterIdx).toBeLessThan(parentIndexIdx);
-      }
+      const haystack = statements.join("\n");
+      const alterNeedle =
+        dialect === "postgres"
+          ? "ALTER TABLE plans ADD COLUMN IF NOT EXISTS parent_plan_id"
+          : "ALTER TABLE plans ADD COLUMN parent_plan_id";
+      expect(haystack).toContain(alterNeedle);
+      expect(haystack.indexOf(alterNeedle)).toBeLessThan(haystack.indexOf("idx_plans_parent"));
     }
   });
 

@@ -66,6 +66,25 @@ vi.mock("../websocket/index.js", () => ({
 }));
 
 import { maybeAutoRespond } from "../services/open-question-autoresolve.service.js";
+import { ProjectService } from "../services/project.service.js";
+import { PrdService } from "../services/prd.service.js";
+import { ChatService } from "../services/chat.service.js";
+import { FeedbackService } from "../services/feedback.service.js";
+
+function autoresolveDeps() {
+  return {
+    projectService: new ProjectService(),
+    prdService: new PrdService(),
+    chatService: new ChatService(),
+    feedbackService: new FeedbackService(),
+  };
+}
+
+const dreamerReadySettings = {
+  aiAutonomyLevel: "full" as const,
+  simpleComplexityAgent: { type: "claude" as const, model: null, cliCommand: null },
+  complexComplexityAgent: { type: "claude" as const, model: null, cliCommand: null },
+};
 
 function openQuestionNotification(overrides: Partial<Notification> = {}): Notification {
   return {
@@ -91,7 +110,7 @@ describe("open-question-autoresolve", () => {
 
   it("does nothing when notification kind is not open_question", async () => {
     const notification = openQuestionNotification({ kind: "api_blocked" });
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
     expect(mocks.mockGetSettings).not.toHaveBeenCalled();
     expect(mocks.mockInvokePlanningAgent).not.toHaveBeenCalled();
   });
@@ -99,34 +118,34 @@ describe("open-question-autoresolve", () => {
   it("does nothing when aiAutonomyLevel is not full", async () => {
     mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "confirm_all" });
     const notification = openQuestionNotification();
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
     expect(mocks.mockGetSettings).toHaveBeenCalledWith("proj-1");
     expect(mocks.mockInvokePlanningAgent).not.toHaveBeenCalled();
   });
 
   it("does nothing when notification has no question text", async () => {
-    mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "full" });
+    mocks.mockGetSettings.mockResolvedValue(dreamerReadySettings);
     const notification = openQuestionNotification({
       questions: [{ id: "q1", text: "", createdAt: new Date().toISOString() }],
     });
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
     expect(mocks.mockGetPrd).not.toHaveBeenCalled();
     expect(mocks.mockInvokePlanningAgent).not.toHaveBeenCalled();
   });
 
   it("does not apply answer when Dreamer returns empty content", async () => {
-    mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "full" });
+    mocks.mockGetSettings.mockResolvedValue(dreamerReadySettings);
     mocks.mockGetPrd.mockResolvedValue({ sections: {} });
     mocks.mockInvokePlanningAgent.mockResolvedValue({ content: "" });
     const notification = openQuestionNotification();
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
     expect(mocks.mockInvokePlanningAgent).toHaveBeenCalled();
     expect(mocks.mockSendMessage).not.toHaveBeenCalled();
     expect(mocks.mockResolve).not.toHaveBeenCalled();
   });
 
   it("invokes Dreamer and applies answer for execute source when full autonomy", async () => {
-    mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "full" });
+    mocks.mockGetSettings.mockResolvedValue(dreamerReadySettings);
     mocks.mockGetPrd.mockResolvedValue({
       sections: { executive_summary: { content: "Build a volunteer app." } },
     });
@@ -139,7 +158,7 @@ describe("open-question-autoresolve", () => {
       source: "execute",
       sourceId: "task-1",
     });
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
 
     expect(mocks.mockInvokePlanningAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -172,7 +191,7 @@ describe("open-question-autoresolve", () => {
   });
 
   it("invokes Dreamer and applies answer for plan source when full autonomy", async () => {
-    mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "full" });
+    mocks.mockGetSettings.mockResolvedValue(dreamerReadySettings);
     mocks.mockGetPrd.mockResolvedValue({ sections: {} });
     mocks.mockInvokePlanningAgent.mockResolvedValue({ content: "Support both roles." });
     mocks.mockSendMessage.mockResolvedValue({ message: "OK" });
@@ -182,7 +201,7 @@ describe("open-question-autoresolve", () => {
       source: "plan",
       sourceId: "draft:draft-uuid-1",
     });
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
 
     expect(mocks.mockSendMessage).toHaveBeenCalledWith("proj-1", {
       message: "Support both roles.",
@@ -193,7 +212,7 @@ describe("open-question-autoresolve", () => {
   });
 
   it("invokes Dreamer and applies answer for eval source when full autonomy", async () => {
-    mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "full" });
+    mocks.mockGetSettings.mockResolvedValue(dreamerReadySettings);
     mocks.mockGetPrd.mockResolvedValue({ sections: {} });
     mocks.mockInvokePlanningAgent.mockResolvedValue({ content: "Treat as a bug in the form." });
     mocks.mockResolve.mockResolvedValue({ status: "resolved" });
@@ -203,7 +222,7 @@ describe("open-question-autoresolve", () => {
       source: "eval",
       sourceId: "fb-1",
     });
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
 
     expect(mocks.mockResolve).toHaveBeenCalledWith("proj-1", notification.id);
     expect(mocks.mockRecategorizeFeedback).toHaveBeenCalledWith("proj-1", "fb-1", {
@@ -213,7 +232,7 @@ describe("open-question-autoresolve", () => {
   });
 
   it("invokes Dreamer and applies answer for prd source when full autonomy", async () => {
-    mocks.mockGetSettings.mockResolvedValue({ aiAutonomyLevel: "full" });
+    mocks.mockGetSettings.mockResolvedValue(dreamerReadySettings);
     mocks.mockGetPrd.mockResolvedValue({ sections: {} });
     mocks.mockInvokePlanningAgent.mockResolvedValue({ content: "Target mobile-first users." });
     mocks.mockSendMessage.mockResolvedValue({ message: "OK" });
@@ -223,7 +242,7 @@ describe("open-question-autoresolve", () => {
       source: "prd",
       sourceId: "executive_summary",
     });
-    await maybeAutoRespond("proj-1", notification);
+    await maybeAutoRespond("proj-1", notification, autoresolveDeps());
 
     expect(mocks.mockSendMessage).toHaveBeenCalledWith("proj-1", {
       message: "Target mobile-first users.",

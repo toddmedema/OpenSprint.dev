@@ -1838,13 +1838,19 @@ export class BranchManager {
       return;
     }
 
-    if (!worktreeRegistry.canCleanup(worktreeKey)) {
-      // DB lease is authoritative — if it says cleanup is allowed but the
-      // in-memory registry still shows in_use, the in-memory state is stale
-      // (e.g. process restart lost state). Retire the entry so cleanup proceeds.
-      log.info("DB lease allows cleanup but in-memory state is stale; retiring registry entry", {
+    const registryEntry = worktreeRegistry.get(worktreeKey);
+    if (registryEntry?.state === "in_use") {
+      log.warn("Skipping worktree removal: worktree is in use", {
         worktreeKey,
-        entry: worktreeRegistry.get(worktreeKey),
+        worktreePath: wtPath,
+        entry: registryEntry,
+      });
+      return;
+    }
+    if (!worktreeRegistry.canCleanup(worktreeKey)) {
+      log.info("Retiring registry entry before worktree removal", {
+        worktreeKey,
+        entry: registryEntry,
       });
       worktreeRegistry.retire(worktreeKey);
     }
