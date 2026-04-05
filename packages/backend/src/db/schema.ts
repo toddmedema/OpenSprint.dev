@@ -1,4 +1,7 @@
 import type { DatabaseDialect } from "@opensprint/shared";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 
 /**
  * Postgres-compatible schema for Open Sprint.
@@ -980,31 +983,137 @@ function sqliteTableHasColumn(rows: unknown[], column: string): boolean {
   });
 }
 
-/** Run schema SQL against a client. Splits by semicolon and executes each statement. */
+// ---------------------------------------------------------------------------
+// Migration runner
+// ---------------------------------------------------------------------------
+
+interface MigrationFile {
+  version: number;
+  filename: string;
+}
+
+/**
+ * Resolve the migrations directory. Checks both the directory adjacent to this
+ * module (works when running from source) and a fallback for compiled output
+ * where the dist layout differs from src.
+ */
+let _cachedMigrationsDir: string | undefined;
+async function resolveMigrationsDir(): Promise<string> {
+  if (_cachedMigrationsDir) return _cachedMigrationsDir;
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const localDir = path.join(thisDir, "migrations");
+  try {
+    await fs.access(localDir);
+    _cachedMigrationsDir = localDir;
+    return localDir;
+  } catch {
+    const srcFallback = path.resolve(thisDir, "../../src/db/migrations");
+    try {
+      await fs.access(srcFallback);
+      _cachedMigrationsDir = srcFallback;
+      return srcFallback;
+    } catch {
+      _cachedMigrationsDir = localDir;
+      return localDir;
+    }
+  }
+}
+
+function parseMigrationVersion(filename: string): number {
+  const match = filename.match(/^(\d+)-/);
+  return match ? parseInt(match[1], 10) : -1;
+}
+
+async function discoverMigrationFiles(dialect: DatabaseDialect): Promise<MigrationFile[]> {
+  const dir = await resolveMigrationsDir();
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    return [];
+  }
+
+  return entries
+    .filter((f) => {
+      if (dialect === "sqlite") return f.endsWith(".sqlite.sql");
+      return f.endsWith(".sql") && !f.endsWith(".sqlite.sql");
+    })
+    .map((f) => ({ version: parseMigrationVersion(f), filename: f }))
+    .filter((m) => m.version >= 0)
+    .sort((a, b) => a.version - b.version);
+}
+
+async function executeSqlStatements(
+  client: { query(sql: string, params?: unknown[]): Promise<unknown[]> },
+  sql: string,
+  dialect: DatabaseDialect
+): Promise<void> {
+  if (dialect === "postgres") {
+    await client.query(sql);
+    return;
+  }
+
+  const statements = sql
+    .split(";")
+    .map((s) => stripLeadingCommentLines(s.trim()))
+    .filter((s) => s.length > 0);
+
+  for (const stmt of statements) {
+    const sqliteAddColumn = parseSqliteAddColumnIfNotExists(stmt);
+    if (sqliteAddColumn) {
+      const columns = await client.query(`PRAGMA table_info(${sqliteAddColumn.table})`);
+      if (!sqliteTableHasColumn(columns, sqliteAddColumn.column)) {
+        await client.query(
+          `ALTER TABLE ${sqliteAddColumn.table} ADD COLUMN ${sqliteAddColumn.column} ${sqliteAddColumn.definition}`
+        );
+      }
+      continue;
+    }
+    await client.query(stmt);
+  }
+}
+
+/**
+ * Run schema migrations against a client. Reads SQL migration files from the
+ * `migrations/` directory, tracks applied versions in a `schema_versions`
+ * table, and applies any pending migrations in order.
+ *
+ * For existing databases that predate the migration system, the initial
+ * migration (001) is fully idempotent (CREATE TABLE IF NOT EXISTS / ALTER
+ * TABLE ADD COLUMN IF NOT EXISTS) so it safely runs on an already-populated
+ * database.
+ */
 export async function runSchema(
   client: {
     query(sql: string, params?: unknown[]): Promise<unknown[]>;
   },
   dialect: DatabaseDialect = "postgres"
 ): Promise<void> {
-  const schemaSql = getSchemaSql(dialect);
-  const statements = schemaSql
-    .split(";")
-    .map((s) => stripLeadingCommentLines(s.trim()))
-    .filter((s) => s.length > 0);
-  for (const stmt of statements) {
-    if (dialect === "sqlite") {
-      const sqliteAddColumn = parseSqliteAddColumnIfNotExists(stmt);
-      if (sqliteAddColumn) {
-        const columns = await client.query(`PRAGMA table_info(${sqliteAddColumn.table})`);
-        if (!sqliteTableHasColumn(columns, sqliteAddColumn.column)) {
-          await client.query(
-            `ALTER TABLE ${sqliteAddColumn.table} ADD COLUMN ${sqliteAddColumn.column} ${sqliteAddColumn.definition}`
-          );
-        }
-        continue;
-      }
-    }
-    await client.query(stmt);
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS schema_versions (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`
+  );
+
+  const appliedRows = await client.query(
+    `SELECT version FROM schema_versions ORDER BY version`
+  );
+  const appliedVersions = new Set(
+    appliedRows.map((r) => Number((r as Record<string, unknown>).version))
+  );
+
+  const migrations = await discoverMigrationFiles(dialect);
+  const migrationsDir = await resolveMigrationsDir();
+
+  for (const migration of migrations) {
+    if (appliedVersions.has(migration.version)) continue;
+
+    const filePath = path.join(migrationsDir, migration.filename);
+    const sql = await fs.readFile(filePath, "utf-8");
+
+    await executeSqlStatements(client, sql, dialect);
+
+    await client.query(
+      `INSERT INTO schema_versions (version, applied_at) VALUES ($1, $2)`,
+      [migration.version, new Date().toISOString()]
+    );
   }
 }

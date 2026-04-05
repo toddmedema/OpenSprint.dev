@@ -1,5 +1,8 @@
 import type { GitRuntimeStatus } from "@opensprint/shared";
 import { inspectGitRepoState, type GitRemoteMode } from "../utils/git-repo-state.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("project-git-runtime-cache");
 
 const DEFAULT_TTL_MS = 30_000;
 const DEFAULT_SWEEP_MS = 30_000;
@@ -131,8 +134,8 @@ export class ProjectGitRuntimeCache {
           expiresAt: now + this.ttlMs,
         });
       })
-      .catch(() => {
-        // Best effort background refresh: preserve previous cache entry on failure.
+      .catch((err: unknown) => {
+        log.warn("background refresh failed (preserving previous cache entry)", { projectId, err: err instanceof Error ? err.message : String(err) });
       })
       .finally(() => {
         const current = this.inFlight.get(projectId);

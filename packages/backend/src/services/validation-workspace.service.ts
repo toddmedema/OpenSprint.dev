@@ -94,7 +94,9 @@ export class ValidationWorkspaceService {
         err: err instanceof Error ? err.message : String(err),
       });
     }
-    await fs.rm(path.dirname(worktreePath), { recursive: true, force: true }).catch(() => {});
+    await fs.rm(path.dirname(worktreePath), { recursive: true, force: true }).catch((err: unknown) => {
+      log.warn("validation workspace cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+    });
     if (branchName) {
       await this.runCommand(
         {
@@ -105,7 +107,9 @@ export class ValidationWorkspaceService {
           cwd: repoPath,
           timeout: 30_000,
         }
-      ).catch(() => {});
+      ).catch((err: unknown) => {
+        log.warn("validation branch cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+      });
     }
   }
 

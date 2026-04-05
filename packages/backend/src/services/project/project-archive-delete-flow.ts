@@ -13,6 +13,9 @@ import {
   cleanupProjectWorktrees,
   stopOrchestratorForProject,
 } from "./project-lifecycle-operations.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("project-archive-delete-flow");
 
 export type ArchiveProjectFlowDeps = {
   getProject: (id: string) => Promise<Project>;
@@ -29,7 +32,9 @@ export async function runArchiveProjectFlow(
   const repoPath = project.repoPath;
   await stopOrchestratorForProject(id);
   await cleanupProjectWorktrees(repoPath);
-  await worktreeCleanupIntentService.clearProject(repoPath, id).catch(() => {});
+  await worktreeCleanupIntentService.clearProject(repoPath, id).catch((err: unknown) => {
+    log.warn("worktree cleanup intent clear failed", { err: err instanceof Error ? err.message : String(err) });
+  });
   await deps.taskStore.deleteOpenQuestionsByProjectId(id);
   await projectIndex.removeProject(id);
   deps.invalidateListCache();
@@ -48,7 +53,9 @@ export async function runDeleteProjectFlow(deps: DeleteProjectFlowDeps, id: stri
   await stopOrchestratorForProject(id);
 
   await cleanupProjectWorktrees(repoPath);
-  await worktreeCleanupIntentService.clearProject(repoPath, id).catch(() => {});
+  await worktreeCleanupIntentService.clearProject(repoPath, id).catch((err: unknown) => {
+    log.warn("worktree cleanup intent clear failed", { err: err instanceof Error ? err.message : String(err) });
+  });
 
   await deps.taskStore.deleteByProjectId(id);
   await deleteSettingsFromStore(id);

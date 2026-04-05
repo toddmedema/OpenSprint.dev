@@ -40,6 +40,8 @@ import { TestRunner, type ScopedTestResult } from "./test-runner.js";
 import { activeAgentsService } from "./active-agents.service.js";
 import { recoveryService, type RecoveryHost, type GuppAssignment } from "./recovery.service.js";
 import { FeedbackService } from "./feedback.service.js";
+import { PrdService } from "./prd.service.js";
+import { ChatService } from "./chat.service.js";
 import { notificationService } from "./notification.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
 import { broadcastToProject } from "../websocket/index.js";
@@ -97,7 +99,7 @@ import {
   type StateForStatus,
   type OrchestratorCounters,
 } from "./orchestrator-status.service.js";
-import { OrchestratorLoopService } from "./orchestrator-loop.service.js";
+import { OrchestratorLoopService, type OrchestratorLoopHost } from "./orchestrator-loop.service.js";
 import {
   buildOrchestratorRecoveryHost,
   type OrchestratorRecoveryHost,
@@ -253,12 +255,12 @@ type TransitionTarget =
  */
 export class OrchestratorService {
   private state = new Map<string, OrchestratorState>();
-  private taskStore = taskStoreSingleton;
+  /** @internal */ taskStore = taskStoreSingleton;
   private _projectService: ProjectService | null = null;
-  private branchManager = new BranchManager();
+  /** @internal */ branchManager = new BranchManager();
   private _contextAssembler: ContextAssembler | null = null;
   private _sessionManager: SessionManager | null = null;
-  private get sessionManager(): SessionManager {
+  /** @internal */ get sessionManager(): SessionManager {
     const sm = this._sessionManager;
     if (!sm) throw new Error("OrchestratorService: sessionManager not injected");
     return sm;
@@ -267,47 +269,53 @@ export class OrchestratorService {
   setSessionManager(sm: SessionManager): void {
     this._sessionManager = sm;
   }
-  private testRunner = new TestRunner();
+  /** @internal */ testRunner = new TestRunner();
   private _feedbackService: FeedbackService | null = null;
-  private lifecycleManager = new AgentLifecycleManager();
-  private fileScopeAnalyzer = new FileScopeAnalyzer();
+  private _prdService: PrdService | null = null;
+  private _chatService: ChatService | null = null;
+  /** @internal */ lifecycleManager = new AgentLifecycleManager();
+  /** @internal */ fileScopeAnalyzer = new FileScopeAnalyzer();
   private taskScheduler = new TaskScheduler(this.taskStore);
   /** Cached repoPath per project (avoids async lookup in synchronous transition()) */
   private repoPathCache = new Map<string, string>();
   /** Cached effective maxSlots per project (branches mode forces 1; avoids async lookup in nudge()) */
   private maxSlotsCache = new Map<string, number>();
-  private failureHandler = new FailureHandlerService(this as unknown as FailureHandlerHost);
-  private mergeCoordinator = new MergeCoordinatorService(this as unknown as MergeCoordinatorHost);
-  private reviewService = new OrchestratorReviewService(this as unknown as OrchestratorReviewHost);
+  /** @internal */ failureHandler = new FailureHandlerService(this);
+  /** @internal */ mergeCoordinator = new MergeCoordinatorService(this);
+  private reviewService = new OrchestratorReviewService(this);
   private _statusService: OrchestratorStatusService | null = null;
   private get statusService(): OrchestratorStatusService {
     if (!this._statusService)
       this._statusService = new OrchestratorStatusService(this.taskStore, this.projectService);
     return this._statusService;
   }
-  private loopService = new OrchestratorLoopService(
-    this as unknown as import("./orchestrator-loop.service.js").OrchestratorLoopHost
-  );
-  private dispatchService = new OrchestratorDispatchService(
-    this as unknown as OrchestratorDispatchHost
-  );
+  private loopService = new OrchestratorLoopService(this);
+  private dispatchService = new OrchestratorDispatchService(this);
   private readonly leaseInstanceId = `${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
   private leaderByProject = new Map<string, boolean>();
 
-  private get projectService(): ProjectService {
+  /** @internal */ get projectService(): ProjectService {
     if (!this._projectService) this._projectService = new ProjectService();
     return this._projectService;
   }
-  private get contextAssembler(): ContextAssembler {
+  /** @internal */ get contextAssembler(): ContextAssembler {
     if (!this._contextAssembler) this._contextAssembler = new ContextAssembler();
     return this._contextAssembler;
   }
-  private get feedbackService(): FeedbackService {
+  /** @internal */ get feedbackService(): FeedbackService {
     if (!this._feedbackService) this._feedbackService = new FeedbackService();
     return this._feedbackService;
   }
+  private get prdService(): PrdService {
+    if (!this._prdService) this._prdService = new PrdService();
+    return this._prdService;
+  }
+  private get chatService(): ChatService {
+    if (!this._chatService) this._chatService = new ChatService();
+    return this._chatService;
+  }
 
-  private phaseExecutor = new PhaseExecutorService(this as unknown as PhaseExecutorHost, {
+  /** @internal */ phaseExecutor = new PhaseExecutorService(this, {
     handleCodingDone: (a, b, c, d, e) => this.handleCodingDone(a, b, c, d, e),
     handleReviewDone: (a, b, c, d, e, f) => this.handleReviewDone(a, b, c, d, e, f),
     handleTaskFailure: (a, b, c, d, e, f, g, h) =>
@@ -316,7 +324,7 @@ export class OrchestratorService {
       this.handleApiKeysExhausted(a, b, c, d, provider),
   });
 
-  private getState(projectId: string): OrchestratorState {
+  /** @internal */ getState(projectId: string): OrchestratorState {
     if (!this.state.has(projectId)) {
       this.state.set(projectId, {
         status: this.defaultStatus(),
@@ -433,7 +441,7 @@ export class OrchestratorService {
   }
 
   /** Create a new AgentSlot for a task (optionally with assignee for recovery). */
-  private createSlot(
+  /** @internal */ createSlot(
     taskId: string,
     taskTitle: string | null,
     branchName: string,
@@ -485,7 +493,7 @@ export class OrchestratorService {
   }
 
   /** Build activeTasks array from current slots for status/broadcast */
-  private buildActiveTasks(state: OrchestratorState): OrchestratorStatus["activeTasks"] {
+  /** @internal */ buildActiveTasks(state: OrchestratorState): OrchestratorStatus["activeTasks"] {
     return this.statusService.buildActiveTasks(state as unknown as StateForStatus);
   }
 
@@ -523,7 +531,7 @@ export class OrchestratorService {
    * Validates the transition before mutating any state — invalid transitions
    * are logged and skipped to prevent counter/slot drift.
    */
-  private transition(projectId: string, t: TransitionTarget): void {
+  /** @internal */ transition(projectId: string, t: TransitionTarget): void {
     const state = this.getState(projectId);
     const existingSlot = state.slots.get(t.taskId);
     const currentPhase = existingSlot?.phase ?? "idle";
@@ -612,7 +620,7 @@ export class OrchestratorService {
   }
 
   /** Remove a slot and clean up its per-slot timers and summarizer cache. Kills active agent process if any. */
-  private removeSlot(state: OrchestratorState, taskId: string): void {
+  /** @internal */ removeSlot(state: OrchestratorState, taskId: string): void {
     const slot = state.slots.get(taskId);
     if (slot) {
       slot.timers.clearAll();
@@ -665,7 +673,7 @@ export class OrchestratorService {
   }
 
   /** Delete assignment.json for a task (from main repo or from given base path e.g. worktree) */
-  private async deleteAssignment(repoPath: string, taskId: string): Promise<void> {
+  /** @internal */ async deleteAssignment(repoPath: string, taskId: string): Promise<void> {
     await this.deleteAssignmentAt(repoPath, taskId, undefined);
   }
 
@@ -695,7 +703,7 @@ export class OrchestratorService {
 
   // ─── Counters Persistence (SQL-only) ───
 
-  private async persistCounters(projectId: string, repoPath: string): Promise<void> {
+  /** @internal */ async persistCounters(projectId: string, repoPath: string): Promise<void> {
     const state = this.getState(projectId);
     await this.statusService.persistCounters(
       projectId,
@@ -798,7 +806,7 @@ export class OrchestratorService {
    * If the project no longer exists (e.g. removed from index), clean up slot and return false.
    * Used when onDone runs after a project was deleted so we don't throw PROJECT_NOT_FOUND.
    */
-  private async cleanupSlotIfProjectGone(
+  /** @internal */ async cleanupSlotIfProjectGone(
     projectId: string,
     repoPath: string,
     taskId: string,
@@ -1002,7 +1010,7 @@ export class OrchestratorService {
     broadcastToProject(projectId, this.buildExecuteStatusPayload(projectId, state));
   }
 
-  private onAgentStateChange(projectId: string): () => void {
+  /** @internal */ onAgentStateChange(projectId: string): () => void {
     return () => {
       this.emitExecuteStatus(projectId);
     };
@@ -1256,7 +1264,7 @@ export class OrchestratorService {
     return true;
   }
 
-  private async reattachRecoveredCodingTask(
+  /** @internal */ async reattachRecoveredCodingTask(
     projectId: string,
     repoPath: string,
     task: StoredTask,
@@ -1360,7 +1368,7 @@ export class OrchestratorService {
     return true;
   }
 
-  private async resumeRecoveredReviewPhase(
+  /** @internal */ async resumeRecoveredReviewPhase(
     projectId: string,
     repoPath: string,
     task: StoredTask,
@@ -1569,7 +1577,7 @@ export class OrchestratorService {
 
   /** Build a RecoveryHost for the unified RecoveryService */
   private buildRecoveryHost(): RecoveryHost {
-    return buildOrchestratorRecoveryHost(this as unknown as OrchestratorRecoveryHost);
+    return buildOrchestratorRecoveryHost(this);
   }
 
   getRecoveryHost(): RecoveryHost {
@@ -1948,7 +1956,7 @@ export class OrchestratorService {
 
   // ─── Main Orchestrator Loop ───
 
-  private async dispatchTask(
+  /** @internal */ async dispatchTask(
     projectId: string,
     repoPath: string,
     task: StoredTask,
@@ -1971,11 +1979,11 @@ export class OrchestratorService {
     });
   }
 
-  private async runLoop(projectId: string): Promise<void> {
+  /** @internal */ async runLoop(projectId: string): Promise<void> {
     await this.loopService.runLoop(projectId);
   }
 
-  private async executeCodingPhase(
+  /** @internal */ async executeCodingPhase(
     projectId: string,
     repoPath: string,
     task: StoredTask,
@@ -1985,7 +1993,7 @@ export class OrchestratorService {
     return this.phaseExecutor.executeCodingPhase(projectId, repoPath, task, slot, retryContext);
   }
 
-  private async performMergeRetry(
+  /** @internal */ async performMergeRetry(
     projectId: string,
     repoPath: string,
     task: StoredTask,
@@ -2017,7 +2025,7 @@ export class OrchestratorService {
    * for every exhausted provider so the UI shows the reason (e.g. user wasn't connected to
    * this project's WebSocket when exhaustion was first detected).
    */
-  private async ensureApiBlockedNotificationsForExhaustedProviders(
+  /** @internal */ async ensureApiBlockedNotificationsForExhaustedProviders(
     projectId: string
   ): Promise<void> {
     const providers: import("@opensprint/shared").ApiKeyProvider[] = [
@@ -2525,7 +2533,12 @@ export class OrchestratorService {
             kind: "open_question",
           },
         });
-        void maybeAutoRespond(projectId, notification);
+        void maybeAutoRespond(projectId, notification, {
+          projectService: this.projectService,
+          prdService: this.prdService,
+          chatService: this.chatService,
+          feedbackService: this.feedbackService,
+        });
         const assignment = await this.readAssignmentForRun(wtPath, task.id);
         const settings = await this.projectService.getSettings(projectId);
         const agentConfig =
@@ -2576,7 +2589,7 @@ export class OrchestratorService {
     }
   }
 
-  private async runAdaptiveValidation(
+  /** @internal */ async runAdaptiveValidation(
     projectId: string,
     wtPath: string,
     changedFiles: string[],
@@ -2603,7 +2616,7 @@ export class OrchestratorService {
     }
   }
 
-  private clearQualityGateDetail(phaseResult: PhaseResult): void {
+  /** @internal */ clearQualityGateDetail(phaseResult: PhaseResult): void {
     clearQualityGateDetailOnPhase(phaseResult);
   }
 
@@ -2627,7 +2640,7 @@ export class OrchestratorService {
     );
   }
 
-  private async runTaskWorktreeMergeGatesMaybeDeduped(
+  /** @internal */ async runTaskWorktreeMergeGatesMaybeDeduped(
     projectId: string,
     repoPath: string,
     task: StoredTask,
@@ -2655,7 +2668,7 @@ export class OrchestratorService {
     );
   }
 
-  private applyQualityGateFailure(
+  /** @internal */ applyQualityGateFailure(
     phaseResult: PhaseResult,
     failure: MergeQualityGateFailure,
     fallbackWorktreePath: string
@@ -2663,7 +2676,7 @@ export class OrchestratorService {
     return applyQualityGateFailureToPhaseResult(phaseResult, failure, fallbackWorktreePath);
   }
 
-  private formatQualityGateFailureReason(
+  /** @internal */ formatQualityGateFailureReason(
     detail: RetryQualityGateDetail | null | undefined,
     failureType: FailureType
   ): string {
@@ -2768,14 +2781,24 @@ export class OrchestratorService {
       : path.join(wtPath, OPENSPRINT_PATHS.active, taskId, OPENSPRINT_PATHS.assignment);
   }
 
-  private async readAssignmentForRun(
+  /** @internal */ async readAssignmentForRun(
     wtPath: string,
     taskId: string,
     angle?: ReviewAngle
   ): Promise<TaskAssignmentLike | null> {
     try {
-      const raw = await fs.readFile(this.getAssignmentPath(wtPath, taskId, angle), "utf-8");
-      return JSON.parse(raw) as TaskAssignmentLike;
+      const filePath = this.getAssignmentPath(wtPath, taskId, angle);
+      const raw = await fs.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        typeof parsed.taskId !== "string" ||
+        typeof parsed.worktreePath !== "string" ||
+        typeof parsed.createdAt !== "string"
+      ) {
+        log.warn("Invalid assignment JSON: missing required string fields", { filePath });
+        return null;
+      }
+      return parsed as unknown as TaskAssignmentLike;
     } catch {
       return null;
     }
@@ -2962,7 +2985,7 @@ export class OrchestratorService {
     return this.reviewService.handleReviewRejection(projectId, repoPath, task, branchName, result);
   }
 
-  private async buildReviewHistory(repoPath: string, taskId: string): Promise<string> {
+  /** @internal */ async buildReviewHistory(repoPath: string, taskId: string): Promise<string> {
     return this.reviewService.buildReviewHistory(repoPath, taskId);
   }
 
@@ -2976,7 +2999,7 @@ export class OrchestratorService {
     this.getState(projectId).summarizerCache.set(taskId, context);
   }
 
-  private async runSummarizer(
+  /** @internal */ async runSummarizer(
     projectId: string,
     settings: import("@opensprint/shared").ProjectSettings,
     taskId: string,
@@ -3034,7 +3057,7 @@ export class OrchestratorService {
     return context;
   }
 
-  private async preflightCheck(
+  /** @internal */ async preflightCheck(
     repoPath: string,
     wtPath: string,
     taskId: string,
@@ -3108,6 +3131,20 @@ export class OrchestratorService {
     });
   }
 }
+
+/**
+ * Compile-time verification that OrchestratorService satisfies all host
+ * interfaces it passes `this` into.  These type-level assertions catch
+ * contract drift — adding / removing / renaming a host-expected method
+ * will cause a build error here rather than a silent runtime failure.
+ */
+type _AssertFailureHandlerHost = OrchestratorService extends FailureHandlerHost ? true : { __err: "OrchestratorService does not satisfy FailureHandlerHost" };
+type _AssertMergeCoordinatorHost = OrchestratorService extends MergeCoordinatorHost ? true : { __err: "OrchestratorService does not satisfy MergeCoordinatorHost" };
+type _AssertReviewHost = OrchestratorService extends OrchestratorReviewHost ? true : { __err: "OrchestratorService does not satisfy OrchestratorReviewHost" };
+type _AssertLoopHost = OrchestratorService extends OrchestratorLoopHost ? true : { __err: "OrchestratorService does not satisfy OrchestratorLoopHost" };
+type _AssertDispatchHost = OrchestratorService extends OrchestratorDispatchHost ? true : { __err: "OrchestratorService does not satisfy OrchestratorDispatchHost" };
+type _AssertPhaseHost = OrchestratorService extends PhaseExecutorHost ? true : { __err: "OrchestratorService does not satisfy PhaseExecutorHost" };
+type _AssertRecoveryHost = OrchestratorService extends OrchestratorRecoveryHost ? true : { __err: "OrchestratorService does not satisfy OrchestratorRecoveryHost" };
 
 /** Shared orchestrator instance for build routes and task list (kanban phase override) */
 export const orchestratorService = new OrchestratorService();

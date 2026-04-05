@@ -5,7 +5,13 @@ import { OPENSPRINT_DIR, OPENSPRINT_PATHS } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 import { waitForGitReady as waitForGitReadyUtil } from "../utils/git-lock.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
-import { runCommand, CommandRunError } from "../utils/command-runner.js";
+import { runCommand } from "../utils/command-runner.js";
+import {
+  getErrorText,
+  isBranchNotFoundError,
+  isNoRebaseInProgressError,
+  shouldAttemptRebaseSkip,
+} from "../utils/git-error-classifier.js";
 import { runGit, gitNoHooksConfigPrefix } from "../utils/git-command.js";
 import {
   ensureRepoHasInitialCommit,
@@ -26,6 +32,7 @@ import { heartbeatService } from "./heartbeat.service.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
 import { worktreeRegistry } from "./worktree-registry.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import { worktreeLeaseService } from "./worktree-lease.service.js";
 
 /** Paths we must not commit from worktrees (runtime-only; would block merge in main). Agent stats, event log, and orchestrator counters are now DB-only. */
@@ -127,61 +134,6 @@ export interface DependencyHealthResult {
   repairSucceeded: boolean;
   repairCommands: string[];
   repairOutput: string;
-}
-
-function getErrorText(err: unknown): string {
-  if (typeof err === "string") return err;
-  if (err instanceof CommandRunError) {
-    return [err.message, err.stdout, err.stderr].filter(Boolean).join("\n");
-  }
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === "object") {
-    const obj = err as Record<string, unknown>;
-    const parts: string[] = [];
-    if (typeof obj.message === "string") parts.push(obj.message);
-    if (typeof obj.stdout === "string") parts.push(obj.stdout);
-    if (typeof obj.stderr === "string") parts.push(obj.stderr);
-    if (typeof obj.output === "string") parts.push(obj.output);
-    return parts.join("\n");
-  }
-  return String(err);
-}
-
-function isNoRebaseInProgressError(err: unknown): boolean {
-  return /no rebase in progress/i.test(getErrorText(err));
-}
-
-/** True when git branch -D failed because the branch does not exist (e.g. unblock before prepare). */
-function isBranchNotFoundError(err: unknown): boolean {
-  const text = getErrorText(err);
-  if (
-    /branch\s+.*not\s+found|not\s+found.*branch/i.test(text) ||
-    (text.includes("branch") && text.includes("not found"))
-  ) {
-    return true;
-  }
-  // Fallback: exec rejection may not include stderr on the error in some environments
-  if (err && typeof err === "object") {
-    const obj = err as Record<string, unknown>;
-    const code = obj.code ?? obj.exitCode;
-    const cmd = typeof obj.cmd === "string" ? obj.cmd : String(obj.cmd ?? "");
-    if (code === 1 && /branch\s+-D\s+/.test(cmd)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function shouldAttemptRebaseSkip(err: unknown): boolean {
-  const text = getErrorText(err).toLowerCase();
-  if (!text) return false;
-  return (
-    text.includes("could not apply") ||
-    text.includes("you can instead skip this commit") ||
-    text.includes("previous cherry-pick is now empty") ||
-    text.includes("nothing to commit") ||
-    text.includes("no changes - did you forget to use 'git add'")
-  );
 }
 
 export class UnsafeCleanupPathError extends Error {
@@ -374,11 +326,11 @@ export class BranchManager {
             repoPath,
             ["update-index", "--no-assume-unchanged", "--no-skip-worktree", "--", file],
             { timeout: 10_000 }
-          ).catch(() => {});
+          ).catch((err: unknown) => { log.warn("git update-index failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
         await this.gitExec(repoPath, ["checkout", "-f", "HEAD", "--", ".opensprint/"], {
           timeout: 10_000,
-        }).catch(() => {});
+        }).catch((err: unknown) => { log.warn("git checkout .opensprint failed", { err: err instanceof Error ? err.message : String(err) }); });
       }
     } catch {
       // Best-effort cleanup; merge may still succeed without it
@@ -424,7 +376,7 @@ export class BranchManager {
         await new Promise((resolve) => setTimeout(resolve, WORKTREE_RM_RETRY_DELAY_MS * attempt));
       }
     }
-    await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+    await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
     try {
       await fs.access(safePath);
       return false;
@@ -906,7 +858,7 @@ export class BranchManager {
    * Abort an in-progress rebase, restoring the repo to its pre-rebase state.
    */
   async rebaseAbort(repoPath: string): Promise<void> {
-    await this.gitExec(repoPath, ["rebase", "--abort"]).catch(() => {});
+    await this.gitExec(repoPath, ["rebase", "--abort"]).catch((err: unknown) => { log.warn("git rebase --abort failed", { err: err instanceof Error ? err.message : String(err) }); });
   }
 
   /**
@@ -936,7 +888,7 @@ export class BranchManager {
    * Abort an in-progress merge.
    */
   async mergeAbort(repoPath: string): Promise<void> {
-    await this.gitExec(repoPath, ["merge", "--abort"]).catch(() => {});
+    await this.gitExec(repoPath, ["merge", "--abort"]).catch((err: unknown) => { log.warn("git merge --abort failed", { err: err instanceof Error ? err.message : String(err) }); });
   }
 
   /**
@@ -1142,7 +1094,7 @@ export class BranchManager {
         });
         return stdout;
       } finally {
-        await this.gitExec(gitPath, ["reset", "HEAD"]).catch(() => {});
+        await this.gitExec(gitPath, ["reset", "HEAD"]).catch((err: unknown) => { log.warn("git reset HEAD failed", { err: err instanceof Error ? err.message : String(err) }); });
       }
     } catch {
       return "";
@@ -1151,9 +1103,9 @@ export class BranchManager {
 
   /** Unstage paths that must never be included in automated WIP commits or diff snapshots. */
   private async resetExcludedWipPaths(repoPath: string): Promise<void> {
-    await this.gitExec(repoPath, ["reset", "HEAD", "--", ...WIP_EXCLUDE_PATHS]).catch(() => {
-      /* paths may not be staged */
-    });
+    await this.gitExec(repoPath, ["reset", "HEAD", "--", ...WIP_EXCLUDE_PATHS]).catch(
+      (err: unknown) => log.warn("resetExcludedWipPaths failed (paths may not be staged)", { err: err instanceof Error ? err.message : String(err) })
+    );
   }
 
   // ─── Git Worktree Operations ───
@@ -1860,7 +1812,7 @@ export class BranchManager {
    */
   async prepareWorktreeForRemoval(worktreeKey: string): Promise<void> {
     worktreeRegistry.retire(worktreeKey);
-    await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
+    await worktreeLeaseService.forceRelease(worktreeKey).catch((err: unknown) => { log.warn("worktree lease force-release failed", { err: err instanceof Error ? err.message : String(err) }); });
   }
 
   /**
@@ -1878,14 +1830,6 @@ export class BranchManager {
   ): Promise<void> {
     const wtPath = actualPath ?? this.getWorktreePath(worktreeKey, repoPath);
 
-    if (!worktreeRegistry.canCleanup(worktreeKey)) {
-      log.warn("Skipping worktree removal: active lease prevents cleanup", {
-        worktreeKey,
-        entry: worktreeRegistry.get(worktreeKey),
-      });
-      return;
-    }
-
     const dbCanCleanup = await worktreeLeaseService.canCleanup(worktreeKey).catch(() => true);
     if (!dbCanCleanup) {
       log.warn("Skipping worktree removal: active DB lease prevents cleanup", {
@@ -1895,10 +1839,21 @@ export class BranchManager {
       return;
     }
 
+    if (!worktreeRegistry.canCleanup(worktreeKey)) {
+      // DB lease is authoritative — if it says cleanup is allowed but the
+      // in-memory registry still shows in_use, the in-memory state is stale
+      // (e.g. process restart lost state). Retire the entry so cleanup proceeds.
+      log.info("DB lease allows cleanup but in-memory state is stale; retiring registry entry", {
+        worktreeKey,
+        entry: worktreeRegistry.get(worktreeKey),
+      });
+      worktreeRegistry.retire(worktreeKey);
+    }
+
     const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
     if (!registeredPath) {
       // Drop stale git metadata entries that can survive abrupt process exits.
-      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
       // Use same resolution as validateDisposableWorktreePath (realpath) so we
       // consistently detect repo root and return early on all platforms (e.g. macOS
       // /var vs /private/var); avoid calling removeWorktreeDirectorySafely which
@@ -1945,14 +1900,14 @@ export class BranchManager {
 
     try {
       await this.gitExec(repoPath, ["worktree", "remove", safeRegisteredPath, "--force"]);
-      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
     } catch (err) {
       log.warn("worktree remove failed, attempting manual cleanup", {
         worktreeKey,
         wtPath: safeRegisteredPath,
         err: err instanceof Error ? err.message : String(err),
       });
-      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch((err2: unknown) => { log.warn("git worktree prune failed", { err: err2 instanceof Error ? err2.message : String(err2) }); });
       const removed = await this.removeWorktreePathWithEscalation(
         repoPath,
         worktreeKey,
@@ -1966,7 +1921,7 @@ export class BranchManager {
           wtPath: safeRegisteredPath,
         });
       }
-      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
     }
 
     worktreeRegistry.retire(worktreeKey);
@@ -2037,7 +1992,7 @@ export class BranchManager {
         err: rmErr instanceof Error ? rmErr.message : String(rmErr),
       });
     }
-    await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+    await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
     if (await pathGone()) return true;
 
     const stalePath = `${safePath}-stale-${Date.now()}`;
@@ -2048,14 +2003,14 @@ export class BranchManager {
     });
     try {
       await fs.rename(safePath, stalePath);
-      await this.gitExec(repoPath, ["worktree", "prune"]).catch(() => {});
+      await this.gitExec(repoPath, ["worktree", "prune"]).catch((err: unknown) => { log.warn("git worktree prune failed", { err: err instanceof Error ? err.message : String(err) }); });
       (process.platform !== "win32"
         ? runCommand(
             { command: "rm", args: ["-rf", stalePath] },
             { cwd: repoPath, timeout: 30_000 }
           )
         : Promise.resolve()
-      ).catch(() => fs.rm(stalePath, { recursive: true, force: true }).catch(() => {}));
+      ).catch(() => fs.rm(stalePath, { recursive: true, force: true }).catch((err: unknown) => { log.warn("stale worktree rm failed", { stalePath, err: err instanceof Error ? err.message : String(err) }); }));
     } catch (renameErr) {
       log.error("Failed to rename stale worktree path aside", {
         worktreeKey,
@@ -2263,7 +2218,7 @@ export class BranchManager {
         try {
           await this.gitExec(repoPath, ["rm", "-f", file], { timeout: 5000 });
         } catch {
-          await this.gitExec(repoPath, ["add", file], { timeout: 5000 }).catch(() => {});
+          await this.gitExec(repoPath, ["add", file], { timeout: 5000 }).catch((err: unknown) => { log.warn("git add fallback failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
       }
       autoResolvedFiles = infraFiles;
@@ -2323,7 +2278,7 @@ export class BranchManager {
         ".opensprint/runtime",
       ],
       { timeout: 10_000 }
-    ).catch(() => {});
+    ).catch((err: unknown) => { log.warn("git rm cached runtime paths failed", { err: err instanceof Error ? err.message : String(err) }); });
     const runtimePaths = [
       path.join(repoPath, ".opensprint", "pending-commits.json"),
       path.join(repoPath, ".opensprint", "sessions"),

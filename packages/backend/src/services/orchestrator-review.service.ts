@@ -68,6 +68,7 @@ import { assertWorktreeIntegrity } from "../utils/worktree-health.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 
 const log = createLogger("orchestrator-review");
 
@@ -934,7 +935,7 @@ export class OrchestratorReviewService {
     });
     await this.host.sessionManager.archiveSession(repoPath, task.id, slot.attempt, session, wtPath);
     await persistTaskLastExecutionSummary(this.host.taskStore, projectId, task.id, rejectionSummary);
-    eventLogService
+    fireAndForget(eventLogService
       .append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
@@ -949,8 +950,7 @@ export class OrchestratorReviewService {
           reason,
           nextAction: "Retry coding with review feedback",
         },
-      })
-      .catch(() => {});
+      }), "orchestrator-review:review.rejected");
 
     await this.host.failureHandler.handleTaskFailure(
       projectId,

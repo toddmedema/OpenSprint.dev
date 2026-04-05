@@ -7,37 +7,13 @@ import {
 import { computeMergeGateCommandsFingerprint } from "../services/merge-verification.service.js";
 import type { StoredTask } from "../services/task-store.service.js";
 
-// Full mock to avoid loading task-store (which pulls in drizzle). resolveEpicId implemented inline.
-function resolveEpicId(
-  taskId: string | undefined | null,
-  idToIssue?: Map<string, StoredTask> | StoredTask[]
-): string | null {
-  if (taskId == null || typeof taskId !== "string") return null;
-  const map =
-    idToIssue instanceof Map
-      ? idToIssue
-      : Array.isArray(idToIssue)
-        ? new Map(idToIssue.map((t) => [t.id, t]))
-        : undefined;
-  if (!map) return null;
-  let current: string | null = taskId;
-  while (current) {
-    const lastDot = current.lastIndexOf(".");
-    if (lastDot <= 0) return null;
-    const parentId = current.slice(0, lastDot);
-    const parent = map.get(parentId);
-    if (parent && (parent.issue_type ?? (parent as { type?: string }).type) === "epic") {
-      return parentId;
-    }
-    current = parentId;
-  }
-  return null;
-}
-
-vi.mock("../services/task-store.service.js", () => ({
-  taskStore: {},
-  resolveEpicId,
-}));
+vi.mock("../services/task-store.service.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/task-store.service.js")>("../services/task-store.service.js");
+  return {
+    taskStore: {},
+    resolveEpicId: actual.resolveEpicId,
+  };
+});
 
 vi.mock("../services/branch-manager.js", () => {
   class RebaseConflictError extends Error {
@@ -88,39 +64,20 @@ const mockRegisterCleanupIntent = vi.fn();
 const mockListCleanupIntents = vi.fn();
 const mockRemoveCleanupIntent = vi.fn();
 
-vi.mock("../services/git-commit-queue.service.js", () => ({
-  MergeJobError: class MergeJobError extends Error {
-    constructor(
-      message: string,
-      public readonly stage: "rebase_before_merge" | "merge_to_main" | "quality_gate",
-      public readonly conflictedFiles: string[],
-      public readonly resolvedBy: "requeued" | "blocked" = "requeued",
-      public readonly qualityGateFailure?: {
-        command: string;
-        reason: string;
-        outputSnippet: string;
-        worktreePath?: string;
-        firstErrorLine: string;
-        category?: "environment_setup" | "quality_gate";
-        autoRepairAttempted?: boolean;
-        autoRepairSucceeded?: boolean;
-        autoRepairCommands?: string[];
-        autoRepairOutput?: string;
-      }
-    ) {
-      super(message);
-      this.name = "MergeJobError";
-    }
-  },
-  gitCommitQueue: {
-    drain: () => mockGitQueueDrain(),
-    enqueueAndWait: (opts: unknown) => mockGitQueueEnqueueAndWait(opts),
-    getMergeQueueSnapshotForRepo: vi.fn().mockReturnValue({
-      activeTaskId: null,
-      pendingTaskIds: [],
-    }),
-  },
-}));
+vi.mock("../services/git-commit-queue.service.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/git-commit-queue.service.js")>("../services/git-commit-queue.service.js");
+  return {
+    MergeJobError: actual.MergeJobError,
+    gitCommitQueue: {
+      drain: () => mockGitQueueDrain(),
+      enqueueAndWait: (opts: unknown) => mockGitQueueEnqueueAndWait(opts),
+      getMergeQueueSnapshotForRepo: vi.fn().mockReturnValue({
+        activeTaskId: null,
+        pendingTaskIds: [],
+      }),
+    },
+  };
+});
 
 vi.mock("../utils/git-repo-state.js", () => ({
   resolveBaseBranch: (...args: unknown[]) => mockResolveBaseBranch(...args),

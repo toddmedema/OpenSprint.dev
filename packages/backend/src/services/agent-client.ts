@@ -30,6 +30,7 @@ import {
   getExecErrorShape,
   isLimitError,
 } from "../utils/error-utils.js";
+import { isLocalOpenAIProviderConnectionError } from "../utils/connection-error-classifier.js";
 import {
   buildLostInternetMessage,
   checkInternetConnectivity,
@@ -80,6 +81,7 @@ import {
   CustomCliCommandParseError,
   parseCustomCliCommandLine,
 } from "../utils/custom-cli-command.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 const log = createLogger("agent-client");
 
 const OUTPUT_POLL_MS = 150;
@@ -460,22 +462,6 @@ function getLMStudioBaseUrl(configBaseUrl?: string | null): string {
 /** Normalize Ollama base URL to include /v1 for OpenAI-compatible client. */
 function getOllamaBaseUrl(configBaseUrl?: string | null): string {
   return getLocalOpenAIProviderBaseUrl(configBaseUrl, "http://localhost:11434");
-}
-
-/** True when the error indicates a local OpenAI-compatible server is unreachable. */
-function isLocalOpenAIProviderConnectionError(error: unknown, msg: string): boolean {
-  if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
-    return true;
-  }
-  const lower = msg.toLowerCase();
-  return (
-    lower.includes("econnrefused") ||
-    lower.includes("fetch failed") ||
-    lower.includes("enotfound") ||
-    lower.includes("connection error") ||
-    lower.includes("socket hang up") ||
-    lower.includes("network")
-  );
 }
 
 /** True when the error indicates LM Studio server is unreachable (refused, network, etc.). */
@@ -1449,7 +1435,7 @@ export class AgentClient {
 
     trySpawn().catch((err) => {
       log.error("spawnCursorWithTaskFileAsync failed", { err });
-      Promise.resolve(exitOnce(1)).catch(() => {});
+      fireAndForget(Promise.resolve(exitOnce(1)), "agent-client:spawn-error-exit");
     });
 
     return handle;
@@ -1656,7 +1642,7 @@ export class AgentClient {
 
     run().catch((err) => {
       log.error("spawnOpenAIWithTaskFile failed", { err });
-      Promise.resolve(onExit(1)).catch(() => {});
+      fireAndForget(Promise.resolve(onExit(1)), "agent-client:spawn-error-exit");
     });
 
     return handle;
@@ -1816,7 +1802,7 @@ export class AgentClient {
 
     run().catch((err) => {
       log.error("spawnClaudeWithTaskFile failed", { err });
-      Promise.resolve(onExit(1)).catch(() => {});
+      fireAndForget(Promise.resolve(onExit(1)), "agent-client:spawn-error-exit");
     });
 
     return handle;
@@ -1966,7 +1952,7 @@ export class AgentClient {
 
     run().catch((err) => {
       log.error("spawnGoogleWithTaskFile failed", { err });
-      Promise.resolve(onExit(1)).catch(() => {});
+      fireAndForget(Promise.resolve(onExit(1)), "agent-client:spawn-error-exit");
     });
 
     return handle;
@@ -2100,7 +2086,7 @@ export class AgentClient {
         provider: provider.providerKey,
         err,
       });
-      Promise.resolve(onExit(1)).catch(() => {});
+      fireAndForget(Promise.resolve(onExit(1)), "agent-client:spawn-error-exit");
     });
 
     return handle;
@@ -2160,7 +2146,7 @@ export class AgentClient {
     if (!model) {
       const emitMissingModel = () => {
         onOutput("[Agent error: Select an Ollama model in Settings before running agents.]\n");
-        Promise.resolve(onExit(1)).catch(() => {});
+        fireAndForget(Promise.resolve(onExit(1)), "agent-client:spawn-error-exit");
       };
       queueMicrotask(emitMissingModel);
       return {
@@ -2455,13 +2441,12 @@ export class AgentClient {
     if (outputLogPath) {
       // Poll the output file to stream content to the caller
       pollTimer = setInterval(() => {
-        drainOutputFile().catch(() => {});
+        fireAndForget(drainOutputFile(), "agent-client:drain-output");
       }, OUTPUT_POLL_MS);
-      // First drain immediately so first chunk is not delayed by a full interval
-      setImmediate(() => drainOutputFile().catch(() => {}));
+      setImmediate(() => fireAndForget(drainOutputFile(), "agent-client:drain-output"));
       // When agent writes result.json but does not exit (e.g. Cursor), poll and SIGTERM so onExit runs
       resultPollTimer = setInterval(() => {
-        checkResultAndMaybeExit().catch(() => {});
+        fireAndForget(checkResultAndMaybeExit(), "agent-client:check-result-poll");
       }, RESULT_POLL_MS);
     } else {
       // Pipe-based streaming (original behavior)
@@ -2482,7 +2467,9 @@ export class AgentClient {
       }
       stopPoll();
       drainOutputFile()
-        .catch(() => {})
+        .catch((err: unknown) => {
+          log.warn("final drain failed", { err: err instanceof Error ? err.message : String(err) });
+        })
         .finally(() => {
           cleanup();
           if (exitNotified) return;

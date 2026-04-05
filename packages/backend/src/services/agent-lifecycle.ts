@@ -24,6 +24,7 @@ import { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
 import { createAgentOutputFilter } from "../utils/agent-output-filter.js";
 import type { AgentOutputFilter } from "../utils/agent-output-filter.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 
 const log = createLogger("agent-lifecycle");
 
@@ -242,8 +243,8 @@ export class AgentLifecycleManager {
           const durationMs = Number.isFinite(startedAtMs)
             ? Math.max(0, Date.now() - startedAtMs)
             : null;
-          eventLogService
-            .append(params.repoPath, {
+          fireAndForget(
+            eventLogService.append(params.repoPath, {
               timestamp: new Date().toISOString(),
               projectId: params.projectId,
               taskId: params.taskId,
@@ -254,8 +255,9 @@ export class AgentLifecycleManager {
                 exitCode: code,
                 durationMs,
               },
-            })
-            .catch(() => {});
+            }),
+            "agent-lifecycle:process-exited"
+          );
           await heartbeatService.deleteHeartbeat(wtPath, taskId, params.heartbeatSubpath);
           try {
             await wrappedOnDone(code);
@@ -395,8 +397,8 @@ export class AgentLifecycleManager {
     runState.suspendDeadlineMs = now + AGENT_SUSPEND_GRACE_MS;
     const summary = describeSuspendReason(reason);
 
-    eventLogService
-      .append(params.repoPath, {
+    fireAndForget(
+      eventLogService.append(params.repoPath, {
         timestamp: suspendedAtIso,
         projectId: params.projectId,
         taskId: params.taskId,
@@ -407,8 +409,9 @@ export class AgentLifecycleManager {
           reason,
           summary,
         },
-      })
-      .catch(() => {});
+      }),
+      "agent-lifecycle:agent-suspended"
+    );
 
     broadcastToProject(params.projectId, {
       type: "agent.activity",
@@ -458,8 +461,8 @@ export class AgentLifecycleManager {
             const durationMs = Number.isFinite(startedAtMs)
               ? Math.max(0, Date.now() - startedAtMs)
               : null;
-            eventLogService
-              .append(params.repoPath, {
+            fireAndForget(
+              eventLogService.append(params.repoPath, {
                 timestamp: new Date().toISOString(),
                 projectId: params.projectId,
                 taskId: params.taskId,
@@ -471,8 +474,9 @@ export class AgentLifecycleManager {
                   durationMs,
                   resultPath,
                 },
-              })
-              .catch(() => {});
+              }),
+              "agent-lifecycle:result-detected"
+            );
             try {
               activeProcess?.kill();
             } catch {
@@ -480,7 +484,7 @@ export class AgentLifecycleManager {
             }
             await heartbeatService
               .deleteHeartbeat(wtPath, taskId, heartbeatSubpath)
-              .catch(() => {});
+              .catch((err: unknown) => { log.warn("heartbeat delete failed", { err: err instanceof Error ? err.message : String(err) }); });
             await onDone(exitCode);
           })
           .catch(() => {
@@ -547,15 +551,15 @@ export class AgentLifecycleManager {
     timers.setInterval(
       TAIL_TIMER_NAME,
       () => {
-        drain().catch(() => {});
+        fireAndForget(drain(), "agent-lifecycle:output-drain");
       },
       OUTPUT_POLL_MS
     );
-    setImmediate(() => drain().catch(() => {}));
+    setImmediate(() => fireAndForget(drain(), "agent-lifecycle:output-drain"));
 
     return () => {
       timers.clear(TAIL_TIMER_NAME);
-      drain().catch(() => {});
+      fireAndForget(drain(), "agent-lifecycle:output-drain");
     };
   }
 
@@ -568,8 +572,8 @@ export class AgentLifecycleManager {
   ): void {
     const writeHeartbeat = () => {
       if (!runState.activeProcess) return;
-      heartbeatService
-        .writeHeartbeat(
+      fireAndForget(
+        heartbeatService.writeHeartbeat(
           wtPath,
           taskId,
           {
@@ -579,8 +583,9 @@ export class AgentLifecycleManager {
             heartbeatTimestamp: Date.now(),
           },
           heartbeatSubpath
-        )
-        .catch(() => {});
+        ),
+        "agent-lifecycle:heartbeat-write"
+      );
     };
 
     // Emit a heartbeat immediately so recovery does not treat freshly spawned
@@ -617,8 +622,8 @@ export class AgentLifecycleManager {
           runState.exitHandled = true;
           log.warn("Agent process dead, recovering immediately", { projectId: params?.projectId, taskId, phase: params?.phase, attempt: params?.attempt, pid: proc.pid });
           if (params) {
-            eventLogService
-              .append(params.repoPath, {
+            fireAndForget(
+              eventLogService.append(params.repoPath, {
                 timestamp: new Date().toISOString(),
                 projectId: params.projectId,
                 taskId,
@@ -628,12 +633,13 @@ export class AgentLifecycleManager {
                   phase: params.phase,
                   pid: proc.pid,
                 },
-              })
-              .catch(() => {});
+              }),
+              "agent-lifecycle:process-dead"
+            );
           }
           runState.activeProcess = null;
           this.cleanupTimers(timers);
-          heartbeatService.deleteHeartbeat(wtPath, taskId, heartbeatSubpath).catch(() => {});
+          fireAndForget(heartbeatService.deleteHeartbeat(wtPath, taskId, heartbeatSubpath), "agent-lifecycle:heartbeat-delete");
           this.branchManager
             .commitWip(wtPath, taskId)
             .then(() => onDone(null))
@@ -658,8 +664,8 @@ export class AgentLifecycleManager {
               const summary = "Agent is waiting on an active tool call";
 
               if (params) {
-                eventLogService
-                  .append(params.repoPath, {
+                fireAndForget(
+                  eventLogService.append(params.repoPath, {
                     timestamp: new Date().toISOString(),
                     projectId: params.projectId,
                     taskId,
@@ -670,8 +676,9 @@ export class AgentLifecycleManager {
                       reason: previousReason ?? "output_gap",
                       summary,
                     },
-                  })
-                  .catch(() => {});
+                  }),
+                  "agent-lifecycle:agent-resumed"
+                );
                 broadcastToProject(params.projectId, {
                   type: "agent.activity",
                   taskId: params.taskId,
@@ -762,8 +769,8 @@ export class AgentLifecycleManager {
       const startupDurationMs = Number.isFinite(startedAtMs)
         ? Math.max(0, atMs - startedAtMs)
         : null;
-      eventLogService
-        .append(params.repoPath, {
+      fireAndForget(
+        eventLogService.append(params.repoPath, {
           timestamp: runState.firstOutputAtIso,
           projectId: params.projectId,
           taskId: params.taskId,
@@ -773,8 +780,9 @@ export class AgentLifecycleManager {
             phase: params.phase,
             startupDurationMs,
           },
-        })
-        .catch(() => {});
+        }),
+        "agent-lifecycle:first-output"
+      );
     }
     const previousReason = runState.suspendReason;
     const wasSuspended = runState.lifecycleState === "suspended";
@@ -782,8 +790,8 @@ export class AgentLifecycleManager {
     if (!wasSuspended) return;
     const summary = describeResumeReason(previousReason);
 
-    eventLogService
-      .append(params.repoPath, {
+    fireAndForget(
+      eventLogService.append(params.repoPath, {
         timestamp: new Date(atMs).toISOString(),
         projectId: params.projectId,
         taskId: params.taskId,
@@ -794,8 +802,9 @@ export class AgentLifecycleManager {
           reason: previousReason ?? "output_gap",
           summary,
         },
-      })
-      .catch(() => {});
+      }),
+      "agent-lifecycle:agent-resumed"
+    );
 
     broadcastToProject(params.projectId, {
       type: "agent.activity",
@@ -841,8 +850,8 @@ export class AgentLifecycleManager {
     for (const event of toolEvents) {
       const summary = formatToolSummary(event.summary);
       const logEvent = event.kind === "started" ? "agent.waiting_on_tool" : "agent.tool_completed";
-      eventLogService
-        .append(params.repoPath, {
+      fireAndForget(
+        eventLogService.append(params.repoPath, {
           timestamp: new Date().toISOString(),
           projectId: params.projectId,
           taskId: params.taskId,
@@ -855,8 +864,9 @@ export class AgentLifecycleManager {
             toolStatus: event.toolStatus,
             durationMs: event.durationMs,
           },
-        })
-        .catch(() => {});
+        }),
+        "agent-lifecycle:tool-activity"
+      );
 
       broadcastToProject(params.projectId, {
         type: "agent.activity",

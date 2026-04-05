@@ -28,6 +28,7 @@ export class FeedbackService {
         this.enqueueForCategorization(projectId, feedbackId),
       saveFeedback: (projectId, item) => this.saveFeedback(projectId, item),
       deduplicateProposedTasks,
+      feedbackService: this,
     };
     this.categorizationService = new FeedbackCategorizationService(deps);
     this.taskCreationService = new FeedbackTaskCreationService();

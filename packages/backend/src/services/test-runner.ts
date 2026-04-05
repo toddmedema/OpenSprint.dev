@@ -6,6 +6,9 @@ import path from "path";
 import type { TestResults, TestResultDetail } from "@opensprint/shared";
 import { registerAgentProcess, unregisterAgentProcess } from "./agent-process-registry.js";
 import { signalProcessGroup } from "../utils/process-group.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("test-runner");
 
 const TEST_TIMEOUT_MS = 300_000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
@@ -578,7 +581,9 @@ export class TestRunner {
     } catch {
       return null;
     } finally {
-      await fs.rm(reportPath, { force: true }).catch(() => {});
+      await fs.rm(reportPath, { force: true }).catch((err: unknown) => {
+        log.warn("vitest report cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+      });
     }
   }
 

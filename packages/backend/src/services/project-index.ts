@@ -9,6 +9,7 @@ import path from "path";
 import type { ProjectIndex, ProjectIndexEntry } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 
 const log = createLogger("project-index");
 
@@ -79,7 +80,7 @@ async function loadIndex(): Promise<ProjectIndex> {
         log.warn("Pruned test artifacts from project index", {
           pruned: valid.length - clean.length,
         });
-        saveIndex({ projects: clean }).catch(() => {});
+        fireAndForget(saveIndex({ projects: clean }), "project-index:save-pruned-index");
       }
       return { projects: clean };
     }

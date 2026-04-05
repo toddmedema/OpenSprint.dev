@@ -1,6 +1,9 @@
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("agent-image-attachments");
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/png": ".png",
@@ -61,7 +64,9 @@ export async function writeImagesForCli(
   const promptSuffix =
     "\n\nAttached images (read these file paths for context):\n" + pathsForPrompt.join("\n");
   const cleanup = async () => {
-    await fs.rm(imageDir, { recursive: true }).catch(() => {});
+    await fs.rm(imageDir, { recursive: true }).catch((err: unknown) => {
+      log.warn("agent image cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+    });
   };
   return { promptSuffix, cleanup };
 }

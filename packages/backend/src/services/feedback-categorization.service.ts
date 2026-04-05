@@ -21,6 +21,7 @@ import { JSON_OUTPUT_PREAMBLE } from "../utils/agent-prompts.js";
 import { buildAutonomyDescription } from "./autonomy-description.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
+import type { FeedbackService } from "./feedback.service.js";
 import { createLogger } from "../utils/logger.js";
 import { ProjectService } from "./project.service.js";
 import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
@@ -116,6 +117,7 @@ export interface FeedbackCategorizationDeps {
   enqueueForCategorization: (projectId: string, feedbackId: string) => Promise<void>;
   saveFeedback: (projectId: string, item: FeedbackItem) => Promise<void>;
   deduplicateProposedTasks: (tasks: ProposedTask[]) => ProposedTask[];
+  feedbackService: FeedbackService;
 }
 
 export class FeedbackCategorizationService {
@@ -365,7 +367,12 @@ Use the same fields and types described in the original instructions. Do not inc
               resolvedAt: notification.resolvedAt,
             },
           });
-          void maybeAutoRespond(projectId, notification);
+          void maybeAutoRespond(projectId, notification, {
+            projectService: this.projectService,
+            prdService: this.prdService,
+            chatService: this.chatService,
+            feedbackService: this.deps.feedbackService,
+          });
           await this.deps.enqueueForCategorization(projectId, item.id);
           return { done: true, reason: "open_questions" };
         }

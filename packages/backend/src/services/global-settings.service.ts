@@ -27,6 +27,9 @@ import {
 } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
 import { agentConfigSchema } from "../schemas/agent-config.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("global-settings");
 
 let globalSettingsPathForTesting: string | null = null;
 
@@ -259,14 +262,24 @@ export async function updateGlobalSettings(
     if (updates.simpleComplexityAgent === null) {
       delete merged.simpleComplexityAgent;
     } else if (updates.simpleComplexityAgent !== undefined) {
-      merged.simpleComplexityAgent = updates.simpleComplexityAgent;
+      const p = agentConfigSchema.safeParse(updates.simpleComplexityAgent);
+      if (p.success) {
+        merged.simpleComplexityAgent = p.data as AgentConfig;
+      } else {
+        log.warn("Invalid simpleComplexityAgent in updateGlobalSettings, skipping", { error: p.error.message });
+      }
     }
   }
   if (Object.prototype.hasOwnProperty.call(updates, "complexComplexityAgent")) {
     if (updates.complexComplexityAgent === null) {
       delete merged.complexComplexityAgent;
     } else if (updates.complexComplexityAgent !== undefined) {
-      merged.complexComplexityAgent = updates.complexComplexityAgent;
+      const p = agentConfigSchema.safeParse(updates.complexComplexityAgent);
+      if (p.success) {
+        merged.complexComplexityAgent = p.data as AgentConfig;
+      } else {
+        log.warn("Invalid complexComplexityAgent in updateGlobalSettings, skipping", { error: p.error.message });
+      }
     }
   }
 

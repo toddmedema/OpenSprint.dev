@@ -90,7 +90,7 @@ export interface OrchestratorLoopHost {
     readyWithStatusMap(
       projectId: string
     ): Promise<{ tasks: StoredTask[]; allIssues: StoredTask[] }>;
-    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<void>;
+    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<unknown>;
     getCumulativeAttemptsFromIssue(task: StoredTask): number;
   };
   getTaskScheduler(): {

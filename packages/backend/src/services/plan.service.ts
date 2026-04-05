@@ -19,6 +19,7 @@ import {
 import { ChatService } from "./chat.service.js";
 import { notificationService } from "./notification.service.js";
 import { PrdService } from "./prd.service.js";
+import { FeedbackService } from "./feedback.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
 import { PlanCrudService } from "./plan-crud.service.js";
 import { PlanDecomposeGenerateService } from "./plan-decompose-generate.service.js";
@@ -37,6 +38,11 @@ export class PlanService {
 
   private chatService = new ChatService();
   private prdService = new PrdService();
+  private _feedbackService: FeedbackService | null = null;
+  private get feedbackService(): FeedbackService {
+    if (!this._feedbackService) this._feedbackService = new FeedbackService();
+    return this._feedbackService;
+  }
 
   private _planComplexityEvaluationService: PlanComplexityEvaluationService | null = null;
   private get planComplexityEvaluationService(): PlanComplexityEvaluationService {
@@ -93,7 +99,15 @@ export class PlanService {
         {
           chatService: this.chatService,
           notificationService,
-          maybeAutoRespond: maybeAutoRespond ? (p, n) => maybeAutoRespond(p, n) : undefined,
+          maybeAutoRespond: maybeAutoRespond
+            ? (p, n) =>
+                maybeAutoRespond(p, n, {
+                  projectService: this.projectService,
+                  prdService: this.prdService,
+                  chatService: this.chatService,
+                  feedbackService: this.feedbackService,
+                })
+            : undefined,
         }
       );
     }

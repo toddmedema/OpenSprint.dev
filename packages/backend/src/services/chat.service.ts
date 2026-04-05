@@ -36,6 +36,7 @@ import {
 import { buildAutonomyDescription } from "./autonomy-description.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
+import { FeedbackService } from "./feedback.service.js";
 import { activeAgentsService } from "./active-agents.service.js";
 import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 import { getEpicTitleFromPlanContent } from "./plan/planner-normalize.js";
@@ -248,6 +249,11 @@ export class ChatService {
 
   private projectService = new ProjectService();
   private prdService = new PrdService();
+  private _feedbackService: FeedbackService | null = null;
+  private get feedbackService(): FeedbackService {
+    if (!this._feedbackService) this._feedbackService = new FeedbackService();
+    return this._feedbackService;
+  }
   private readonly openAIResponseChains = new Map<string, OpenAIResponseChainState>();
 
   private parseMessages(raw: unknown): ConversationMessage[] {
@@ -807,7 +813,12 @@ export class ChatService {
             kind: "open_question",
           },
         });
-        void maybeAutoRespond(projectId, notification);
+        void maybeAutoRespond(projectId, notification, {
+          projectService: this.projectService,
+          prdService: this.prdService,
+          chatService: this,
+          feedbackService: this.feedbackService,
+        });
         displayContent = "I need a bit more detail before generating the plan.";
       } else {
         const plan = await this.createPlanFromDraftSpec(projectId, parsed);

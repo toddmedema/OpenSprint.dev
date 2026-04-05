@@ -298,7 +298,6 @@ export interface DispatchSlotLike {
   attempt: number;
   assignee?: string;
   fileScope?: unknown;
-  [key: string]: unknown;
 }
 
 /** State shape required by dispatch (must have nextCoderIndex and status). */
@@ -320,19 +319,11 @@ export interface OrchestratorDispatchHost {
   ): DispatchSlotLike;
   transition(
     projectId: string,
-    t: {
-      to: "start_task";
-      taskId: string;
-      taskTitle: string | null;
-      branchName: string;
-      attempt: number;
-      queueDepth: number;
-      slot: DispatchSlotLike;
-    }
+    t: unknown
   ): void;
   persistCounters(projectId: string, repoPath: string): Promise<void>;
   getTaskStore(): {
-    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<void>;
+    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<unknown>;
     getCumulativeAttemptsFromIssue(task: StoredTask): number;
     listAll(projectId: string): Promise<StoredTask[]>;
   };

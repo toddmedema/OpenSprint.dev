@@ -63,6 +63,9 @@ let chatService: AgentChatService = defaultAgentChatService;
 
 let wss: WebSocketServer;
 let clientHasConnected = false;
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const wsAlive = new WeakMap<WebSocket, boolean>();
 
 /** Whether any WebSocket client has connected since this server booted. */
 export function hasClientConnected(): boolean {
@@ -89,6 +92,7 @@ export function setupWebSocket(server: Server, options?: WebSocketOptions): void
     const projectId = match?.[1];
 
     clientHasConnected = true;
+    wsAlive.set(ws, true);
 
     if (!projectId) {
       log.info("Client connected (no project scope)");
@@ -104,10 +108,22 @@ export function setupWebSocket(server: Server, options?: WebSocketOptions): void
     agentSubscriptions.set(ws, new Set());
     planAgentSubscriptions.set(ws, new Set());
 
+    ws.on("pong", () => {
+      wsAlive.set(ws, true);
+    });
+
     ws.on("message", (data) => {
       try {
-        const event = JSON.parse(data.toString()) as ClientEvent;
-        handleClientEvent(ws, event);
+        const parsed: unknown = JSON.parse(data.toString());
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          typeof (parsed as Record<string, unknown>).type === "string"
+        ) {
+          handleClientEvent(ws, parsed as ClientEvent);
+        } else {
+          log.warn("Ignoring non-object or type-less WebSocket message");
+        }
       } catch (err) {
         log.error("Invalid message", { err });
       }
@@ -128,6 +144,21 @@ export function setupWebSocket(server: Server, options?: WebSocketOptions): void
       log.info("Client disconnected");
     });
   });
+
+  heartbeatInterval = setInterval(() => {
+    for (const ws of agentSubscriptions.keys()) {
+      if (wsAlive.get(ws) === false) {
+        ws.terminate();
+        continue;
+      }
+      wsAlive.set(ws, false);
+      try {
+        ws.ping();
+      } catch {
+        ws.terminate();
+      }
+    }
+  }, HEARTBEAT_INTERVAL_MS);
 }
 
 function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
@@ -156,7 +187,11 @@ function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
                     taskId,
                     output,
                   };
-                  ws.send(JSON.stringify(backfill));
+                  try {
+                    ws.send(JSON.stringify(backfill));
+                  } catch (sendErr) {
+                    log.debug("backfill send failed", { taskId, err: sendErr instanceof Error ? sendErr.message : String(sendErr) });
+                  }
                 }
                 agentSubscriptions.get(ws)?.add(taskId);
               }
@@ -192,7 +227,11 @@ function handleClientEvent(ws: WebSocket, event: ClientEvent): void {
               planId,
               output,
             };
-            ws.send(JSON.stringify(backfill));
+            try {
+              ws.send(JSON.stringify(backfill));
+            } catch (sendErr) {
+              log.debug("plan backfill send failed", { planId, err: sendErr instanceof Error ? sendErr.message : String(sendErr) });
+            }
           }
         }
       }
@@ -259,6 +298,10 @@ export function broadcastToProject(projectId: string, event: ServerEvent): void 
 
 /** Close all WebSocket connections and the server (for graceful shutdown) */
 export function closeWebSocket(): void {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
   if (!wss) return;
   for (const ws of agentSubscriptions.keys()) {
     if (ws.readyState === WebSocket.OPEN) ws.close();

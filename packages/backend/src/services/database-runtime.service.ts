@@ -76,7 +76,9 @@ async function probeDatabase(databaseUrl: string): Promise<void> {
   try {
     await pool.query("SELECT 1");
   } finally {
-    await pool.end().catch(() => {});
+    await pool.end().catch((err: unknown) => {
+      log.warn("pg pool cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+    });
   }
 }
 

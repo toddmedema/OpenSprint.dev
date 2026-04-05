@@ -543,7 +543,7 @@ export class AgentService {
           return { exitedCleanly, raw, parsed, verified };
         } finally {
           releaseMergerSlot();
-          await fs.unlink(promptPath).catch(() => {});
+          await fs.unlink(promptPath).catch((err: unknown) => { log.warn("prompt unlink failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
       };
 
@@ -583,7 +583,7 @@ export class AgentService {
       });
       return verified;
     } finally {
-      await clearMergerResultFile(options.cwd).catch(() => {});
+      await clearMergerResultFile(options.cwd).catch((err: unknown) => { log.warn("clear merger result failed", { err: err instanceof Error ? err.message : String(err) }); });
     }
   }
 

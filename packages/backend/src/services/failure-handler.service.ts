@@ -51,6 +51,7 @@ import {
   redactRetryQualityGateDetail,
   redactSecretsForUserDisplay,
 } from "../utils/secret-redaction.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 
 const log = createLogger("failure-handler");
 
@@ -138,9 +139,9 @@ export interface FailureHandlerHost {
   };
   taskStore: {
     comment(projectId: string, taskId: string, text: string): Promise<void>;
-    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<void>;
+    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<unknown>;
     removeLabel?(projectId: string, taskId: string, label: string): Promise<void>;
-    sync(repoPath: string): Promise<void>;
+    sync?(repoPath: string): Promise<void>;
     setCumulativeAttempts(
       projectId: string,
       taskId: string,
@@ -157,12 +158,12 @@ export interface FailureHandlerHost {
     revertAndReturnToMain(repoPath: string, branchName: string, baseBranch?: string): Promise<void>;
   };
   sessionManager: {
-    createSession(repoPath: string, data: Record<string, unknown>): Promise<{ id: string }>;
+    createSession(repoPath: string, data: Record<string, unknown>): Promise<unknown>;
     archiveSession(
       repoPath: string,
       taskId: string,
       attempt: number,
-      session: { id: string },
+      session: unknown,
       wtPath?: string
     ): Promise<void>;
   };
@@ -908,8 +909,8 @@ export class FailureHandlerService {
         : null;
 
     // Log all failures (including review rejections) to event log for Execution Diagnostics
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: task.id,
@@ -930,8 +931,9 @@ export class FailureHandlerService {
           ...commonFailureContext,
           ...this.failureDiagnosticFields(redactedDiagnostic),
         },
-      })
-      .catch(() => {});
+      }),
+      "failure-handler:task.failed"
+    );
 
     const gitWorkingMode = failSettings.gitWorkingMode ?? "worktree";
     const agentRole = slot.phase === "review" ? "reviewer" : "coder";
@@ -1143,24 +1145,25 @@ export class FailureHandlerService {
       } catch (err) {
         log.warn("Failed to reopen task after API-blocked no_result failure", { err });
       }
-      eventLogService
-        .append(repoPath, {
-          timestamp: new Date().toISOString(),
-          projectId,
-          taskId: task.id,
-          event: "task.requeued",
-          data: {
-            attempt: cumulativeAttempts,
-            phase: slot.phase,
-            failureType,
-            model: agentConfig.model ?? null,
-            summary: retrySummary.summary,
-            nextAction,
-            policyDecision: "reopen" as FailurePolicyDecision,
-            ...commonFailureContext,
-          },
-        })
-        .catch(() => {});
+    fireAndForget(
+      eventLogService.append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "task.requeued",
+        data: {
+          attempt: cumulativeAttempts,
+          phase: slot.phase,
+          failureType,
+          model: agentConfig.model ?? null,
+          summary: retrySummary.summary,
+          nextAction,
+          policyDecision: "reopen" as FailurePolicyDecision,
+          ...commonFailureContext,
+        },
+      }),
+      "failure-handler:task.requeued"
+    );
       this.host.transition(projectId, { to: "fail", taskId: task.id });
       await this.host.persistCounters(projectId, repoPath);
       broadcastToProject(projectId, {
@@ -1273,21 +1276,22 @@ export class FailureHandlerService {
           diagnostics: commonFailureContext,
         }
       );
-      eventLogService
-        .append(repoPath, {
-          timestamp: new Date().toISOString(),
-          projectId,
-          taskId: task.id,
-          event: "task.runaway_detected",
-          data: {
-            attempt: cumulativeAttempts,
-            phase: slot.phase,
-            failureType,
-            reason: runawayPolicy.nextActionOverride ?? "runaway_retry_pattern",
-            signature: failureSignature,
-          },
-        })
-        .catch(() => {});
+    fireAndForget(
+      eventLogService.append(repoPath, {
+        timestamp: new Date().toISOString(),
+        projectId,
+        taskId: task.id,
+        event: "task.runaway_detected",
+        data: {
+          attempt: cumulativeAttempts,
+          phase: slot.phase,
+          failureType,
+          reason: runawayPolicy.nextActionOverride ?? "runaway_retry_pattern",
+          signature: failureSignature,
+        },
+      }),
+      "failure-handler:task.runaway_detected"
+    );
       return;
     }
 
@@ -1306,8 +1310,8 @@ export class FailureHandlerService {
           ...this.failureDiagnosticFields(redactedDiagnostic),
         },
       });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: task.id,
@@ -1325,8 +1329,9 @@ export class FailureHandlerService {
             repeatedFailureSignatureCount,
             ...this.failureDiagnosticFields(redactedDiagnostic),
           },
-        })
-        .catch(() => {});
+        }),
+        "failure-handler:task.requeued"
+      );
       this.broadcastTaskRequeuedWs(projectId, task.id, {
         cumulativeAttempts,
         phase: slot.phase,
@@ -1390,8 +1395,8 @@ export class FailureHandlerService {
           ...this.failureDiagnosticFields(redactedDiagnostic),
         },
       });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: task.id,
@@ -1409,8 +1414,9 @@ export class FailureHandlerService {
             repeatedFailureSignatureCount,
             ...this.failureDiagnosticFields(redactedDiagnostic),
           },
-        })
-        .catch(() => {});
+        }),
+        "failure-handler:task.requeued"
+      );
       this.broadcastTaskRequeuedWs(projectId, task.id, {
         cumulativeAttempts,
         phase: slot.phase,
@@ -1510,8 +1516,8 @@ export class FailureHandlerService {
         } catch {
           // Task may already be in the right state
         }
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: task.id,
@@ -1527,8 +1533,9 @@ export class FailureHandlerService {
               ...commonFailureContext,
               ...this.failureDiagnosticFields(redactedDiagnostic),
             },
-          })
-          .catch(() => {});
+          }),
+          "failure-handler:task.demoted"
+        );
 
         this.host.transition(projectId, { to: "fail", taskId: task.id });
         await this.host.persistCounters(projectId, repoPath);
@@ -1577,7 +1584,9 @@ export class FailureHandlerService {
     if (gitWorkingMode === "branches") {
       await this.host.branchManager.revertAndReturnToMain(repoPath, branchName, baseBranch);
       slot.worktreePath = null;
-      await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
+      await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
+        log.warn("Failed to release worktree lease after branch revert", { err: err instanceof Error ? err.message : String(err) });
+      });
       return;
     }
     if (slot.worktreePath) {
@@ -1585,7 +1594,9 @@ export class FailureHandlerService {
       await this.host.branchManager.removeTaskWorktree(repoPath, worktreeKey, slot.worktreePath);
       slot.worktreePath = null;
     }
-    await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
+    await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
+      log.warn("Failed to release worktree lease after worktree removal", { err: err instanceof Error ? err.message : String(err) });
+    });
     if (options?.deleteBranch) {
       await this.host.branchManager.deleteBranch(repoPath, branchName);
     }
@@ -1650,8 +1661,8 @@ export class FailureHandlerService {
     } catch (err) {
       log.warn("Failed to block task", { err });
     }
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: task.id,
@@ -1674,8 +1685,9 @@ export class FailureHandlerService {
           provider: options?.diagnostics?.provider ?? null,
           ...this.failureDiagnosticFields(safeDiagnostic),
         },
-      })
-      .catch(() => {});
+      }),
+      "failure-handler:task.blocked"
+    );
 
     this.host.transition(projectId, { to: "fail", taskId: task.id });
     await this.host.persistCounters(projectId, repoPath);

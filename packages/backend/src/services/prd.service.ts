@@ -194,7 +194,9 @@ export class PrdService {
         if (projectId) {
           await this.saveMetadataToDb(projectId, parsed);
         }
-        await fs.unlink(prdJsonPath).catch(() => {});
+        await fs.unlink(prdJsonPath).catch((err: unknown) => {
+          log.warn("legacy prd.json cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+        });
         log.info("Migrated prd.json to SPEC.md", { repoPath });
         return parsed;
       }
@@ -213,7 +215,9 @@ export class PrdService {
         if (projectId) {
           await this.saveMetadataToDb(projectId, prd);
         }
-        await fs.unlink(prdMdPath).catch(() => {});
+        await fs.unlink(prdMdPath).catch((err: unknown) => {
+          log.warn("legacy PRD.md cleanup failed", { err: err instanceof Error ? err.message : String(err) });
+        });
         log.info("Migrated PRD.md to SPEC.md", { repoPath });
         return prd;
       }

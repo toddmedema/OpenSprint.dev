@@ -18,6 +18,7 @@ import { RebaseConflictError, type BranchManager } from "./branch-manager.js";
 import type { StoredTask } from "./task-store.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import type {
   FailureType,
   PhaseResult,
@@ -229,7 +230,9 @@ export async function ensureTaskWorktreeRebasedForMergeGates(
       round += 1;
       const conflictedFiles = rebaseConflict.conflictedFiles;
       if (round > MAX_PRE_VALIDATION_REBASE_MERGER_ROUNDS) {
-        await host.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+          log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+        });
         await host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
         await host.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
         await host.failureHandler.handleTaskFailure(
@@ -268,7 +271,9 @@ export async function ensureTaskWorktreeRebasedForMergeGates(
         baseBranch,
       });
       if (!resolved) {
-        await host.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+          log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+        });
         await host.failureHandler.handleTaskFailure(
           projectId,
           repoPath,
@@ -281,7 +286,7 @@ export async function ensureTaskWorktreeRebasedForMergeGates(
         return false;
       }
 
-      void eventLogService
+      fireAndForget(eventLogService
         .append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
@@ -295,8 +300,7 @@ export async function ensureTaskWorktreeRebasedForMergeGates(
             round,
             context: "pre_validation",
           },
-        })
-        .catch(() => {});
+        }), "quality-gates:merge.resolved");
 
       try {
         await host.branchManager.rebaseContinue(wtPath);
@@ -309,7 +313,9 @@ export async function ensureTaskWorktreeRebasedForMergeGates(
           if (cf.length > 0) {
             rebaseConflict = new RebaseConflictError(cf);
           } else {
-            await host.branchManager.rebaseAbort(wtPath).catch(() => {});
+            await host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+              log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+            });
             throw continueErr;
           }
         }

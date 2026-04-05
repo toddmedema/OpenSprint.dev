@@ -214,10 +214,10 @@ export async function startDatabaseFeatures(
       );
     } catch (err) {
       if (nextAppDb) {
-        await nextAppDb.close().catch(() => {});
+        await nextAppDb.close().catch((e: unknown) => logOrchestrator.warn("appDb close failed during startup rollback", { err: e instanceof Error ? e.message : String(e) }));
       }
       appDb = null;
-      await taskStore.closePool().catch(() => {});
+      await taskStore.closePool().catch((e: unknown) => logOrchestrator.warn("taskStore pool close failed during startup rollback", { err: e instanceof Error ? e.message : String(e) }));
       databaseFeaturesStarted = false;
       databaseRuntime.handleOperationalFailure(err);
       throw err;

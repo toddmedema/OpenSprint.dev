@@ -21,6 +21,7 @@ import { createLogger } from "../utils/logger.js";
 import { getGitNoHooksPath } from "../utils/git-no-hooks.js";
 import { waitForGitReady } from "../utils/git-lock.js";
 import { shellExec } from "../utils/shell-exec.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 const log = createLogger("git-commit-queue");
 const _MAX_REBASE_RESOLUTION_ROUNDS = 12;
 
@@ -453,8 +454,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
                   conflictedFiles
                 );
               }
-              eventLogService
-                .append(repoPath, {
+              fireAndForget(
+                eventLogService.append(repoPath, {
                   timestamp: new Date().toISOString(),
                   projectId,
                   taskId: job.taskId,
@@ -466,8 +467,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
                     resolvedBy: "merger",
                     round,
                   },
-                })
-                .catch(() => {});
+                }),
+                "git-commit-queue:rebase-round-event-log"
+              );
               try {
                 await this.branchManager.rebaseContinue(rebaseWorktreePath);
                 rebaseConflict = null;
@@ -488,7 +490,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
           }
         } finally {
           if (cleanupFallbackWorktree) {
-            await this.branchManager.rebaseAbort(rebaseWorktreePath).catch(() => {});
+            await this.branchManager.rebaseAbort(rebaseWorktreePath).catch((err) => {
+              log.warn("Failed to abort rebase during cleanup", { err: err instanceof Error ? err.message : String(err) });
+            });
             await this.branchManager.prepareWorktreeForRemoval(job.taskId);
             await this.branchManager
               .removeTaskWorktree(repoPath, job.taskId, rebaseWorktreePath)
@@ -518,8 +522,8 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             if (mergeResult.autoResolvedFiles.length > 0) {
               const project = await this.projectService.getProjectByRepoPath(repoPath);
               if (project) {
-                eventLogService
-                  .append(repoPath, {
+                fireAndForget(
+                  eventLogService.append(repoPath, {
                     timestamp: new Date().toISOString(),
                     projectId: project.id,
                     taskId: job.taskId,
@@ -530,8 +534,9 @@ class GitCommitQueueImpl implements GitCommitQueueService {
                       conflictedFiles: mergeResult.autoResolvedFiles,
                       resolvedBy: "auto",
                     },
-                  })
-                  .catch(() => {});
+                  }),
+                  "git-commit-queue:rebase-conflict-event-log"
+                );
               }
             }
           } catch (mergeErr) {
@@ -564,20 +569,21 @@ class GitCommitQueueImpl implements GitCommitQueueService {
                   log.info("Merger resolved conflicts, merge candidate staged", {
                     branchName: job.branchName,
                   });
-                  eventLogService
-                    .append(repoPath, {
-                      timestamp: new Date().toISOString(),
-                      projectId,
-                      taskId: job.taskId,
-                      event: "merge.resolved",
-                      data: {
-                        stage: "merge_to_main",
-                        branchName: job.branchName,
-                        conflictedFiles: mergeErr.conflictedFiles,
-                        resolvedBy: "merger",
-                      },
-                    })
-                    .catch(() => {});
+                  fireAndForget(
+                  eventLogService.append(repoPath, {
+                    timestamp: new Date().toISOString(),
+                    projectId,
+                    taskId: job.taskId,
+                    event: "merge.resolved",
+                    data: {
+                      stage: "merge_to_main",
+                      branchName: job.branchName,
+                      conflictedFiles: mergeErr.conflictedFiles,
+                      resolvedBy: "merger",
+                    },
+                  }),
+                  "git-commit-queue:merge-completed-event-log"
+                );
                 } catch (continueErr) {
                   log.warn("merge commit failed after merger", {
                     branchName: job.branchName,

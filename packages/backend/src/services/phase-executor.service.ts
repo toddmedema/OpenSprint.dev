@@ -40,6 +40,7 @@ import type {
 import type { AgentRunState } from "./agent-lifecycle.js";
 import { TimerRegistry } from "./timer-registry.js";
 import { createLogger } from "../utils/logger.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import { RepoPreflightError, resolveBaseBranch } from "../utils/git-repo-state.js";
 import { resolveExecuteReplayMetadata } from "./execute-replay-metadata.service.js";
 import { getMergeQualityGateCommands } from "./merge-quality-gates.js";
@@ -220,7 +221,9 @@ export class PhaseExecutorService {
       round += 1;
       const conflictedFiles = rebaseConflict.conflictedFiles;
       if (round > MAX_RETRY_PATH_REBASE_MERGER_ROUNDS) {
-        await this.host.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await this.host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+          log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+        });
         await this.host.taskStore.setConflictFiles(projectId, task.id, conflictedFiles);
         await this.host.taskStore.setMergeStage(projectId, task.id, "rebase_before_merge");
         await this.callbacks.handleTaskFailure(
@@ -259,7 +262,9 @@ export class PhaseExecutorService {
         baseBranch,
       });
       if (!resolved) {
-        await this.host.branchManager.rebaseAbort(wtPath).catch(() => {});
+        await this.host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+          log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+        });
         await this.callbacks.handleTaskFailure(
           projectId,
           repoPath,
@@ -272,7 +277,7 @@ export class PhaseExecutorService {
         return false;
       }
 
-      void eventLogService
+      fireAndForget(eventLogService
         .append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
@@ -286,8 +291,7 @@ export class PhaseExecutorService {
             round,
             context: "coding_retry",
           },
-        })
-        .catch(() => {});
+        }), "phase-executor:merge.resolved");
 
       try {
         await this.host.branchManager.rebaseContinue(wtPath);
@@ -300,7 +304,9 @@ export class PhaseExecutorService {
           if (cf.length > 0) {
             rebaseConflict = new RebaseConflictError(cf);
           } else {
-            await this.host.branchManager.rebaseAbort(wtPath).catch(() => {});
+            await this.host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+              log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+            });
             throw continueErr;
           }
         }
@@ -675,7 +681,7 @@ export class PhaseExecutorService {
         slot.timers
       );
 
-      eventLogService
+      fireAndForget(eventLogService
         .append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
@@ -691,8 +697,7 @@ export class PhaseExecutorService {
               ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
               : null,
           },
-        })
-        .catch(() => {});
+        }), "phase-executor:agent.spawned");
 
       await this.host.persistCounters(projectId, repoPath);
     } catch (error) {
@@ -906,7 +911,7 @@ export class PhaseExecutorService {
           slot.agent,
           slot.timers
         );
-        eventLogService
+        fireAndForget(eventLogService
           .append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
@@ -922,8 +927,7 @@ export class PhaseExecutorService {
                 ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
                 : null,
             },
-          })
-          .catch(() => {});
+          }), "phase-executor:agent.spawned");
       };
 
       if (includeGeneralReview || runOnlyGeneralReview) {
@@ -1052,7 +1056,7 @@ export class PhaseExecutorService {
           );
 
           const angleStartedAt = angleAgent.startedAt ?? slot.agent.startedAt ?? null;
-          eventLogService
+          fireAndForget(eventLogService
             .append(repoPath, {
               timestamp: new Date().toISOString(),
               projectId,
@@ -1069,8 +1073,7 @@ export class PhaseExecutorService {
                   ? Math.max(0, Date.now() - Date.parse(angleStartedAt))
                   : null,
               },
-            })
-            .catch(() => {});
+            }), "phase-executor:agent.spawned");
         };
 
         if (runAnglesSequentiallyForStability) {
@@ -1124,7 +1127,7 @@ export class PhaseExecutorService {
           slot.timers
         );
 
-        eventLogService
+        fireAndForget(eventLogService
           .append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
@@ -1140,8 +1143,7 @@ export class PhaseExecutorService {
                 ? Math.max(0, Date.now() - Date.parse(slot.agent.startedAt ?? ""))
                 : null,
             },
-          })
-          .catch(() => {});
+          }), "phase-executor:agent.spawned");
       }
 
       await this.host.persistCounters(projectId, repoPath);

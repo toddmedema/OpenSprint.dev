@@ -28,6 +28,7 @@ import { RebaseConflictError } from "./branch-manager.js";
 import { gitCommitQueue, MergeJobError } from "./git-commit-queue.service.js";
 import { agentIdentityService, buildAgentAttemptId } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
+import { fireAndForget } from "../utils/fire-and-forget.js";
 import { triggerDeployForEvent } from "./deploy-trigger.service.js";
 import { finalReviewService } from "./final-review.service.js";
 import { notificationService } from "./notification.service.js";
@@ -181,10 +182,10 @@ export interface MergeCoordinatorHost {
     globalTimers: TimerRegistry;
   };
   taskStore: {
-    close(projectId: string, taskId: string, reason: string): Promise<void>;
-    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<void>;
+    close(projectId: string, taskId: string, reason: string): Promise<unknown>;
+    update(projectId: string, taskId: string, fields: Record<string, unknown>): Promise<unknown>;
     comment(projectId: string, taskId: string, text: string): Promise<void>;
-    sync(repoPath: string): Promise<void>;
+    sync?(repoPath: string): Promise<void>;
     syncForPush(projectId: string): Promise<void>;
     listAll(projectId: string): Promise<StoredTask[]>;
     show(projectId: string, id: string): Promise<StoredTask>;
@@ -210,7 +211,7 @@ export interface MergeCoordinatorHost {
   };
   branchManager: {
     waitForGitReady(wtPath: string): Promise<void>;
-    commitWip(wtPath: string, taskId: string): Promise<void>;
+    commitWip(wtPath: string, taskId: string): Promise<unknown>;
     removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
     prepareWorktreeForRemoval(worktreeKey: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
@@ -266,12 +267,12 @@ export interface MergeCoordinatorHost {
     }
   ): Promise<void>;
   sessionManager: {
-    createSession(repoPath: string, data: Record<string, unknown>): Promise<{ id: string }>;
+    createSession(repoPath: string, data: Record<string, unknown>): Promise<unknown>;
     archiveSession(
       repoPath: string,
       taskId: string,
       attempt: number,
-      session: { id: string },
+      session: unknown,
       wtPath?: string
     ): Promise<void>;
   };
@@ -401,8 +402,8 @@ export class MergeCoordinatorService {
     await worktreeCleanupIntentService.registerBestEffort(repoPath, projectId, {
       ...target,
     });
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: target.taskId,
@@ -414,8 +415,9 @@ export class MergeCoordinatorService {
           worktreeKey: target.worktreeKey ?? target.taskId,
           gitWorkingMode: target.gitWorkingMode,
         },
-      })
-      .catch(() => {});
+      }),
+      "merge-coordinator:worktree-cleanup-intent-registered-event-log"
+    );
   }
 
   private async hydratePendingCleanupFromDisk(projectId: string, repoPath: string): Promise<void> {
@@ -494,8 +496,8 @@ export class MergeCoordinatorService {
         }
         perProject.delete(target.taskId);
         await worktreeCleanupIntentService.removeBestEffort(repoPath, projectId, target.taskId);
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: target.taskId,
@@ -506,16 +508,17 @@ export class MergeCoordinatorService {
               worktreePath: target.worktreePath,
               worktreeKey: target.worktreeKey ?? target.taskId,
             },
-          })
-          .catch(() => {});
+          }),
+          "merge-coordinator:worktree-cleanup-succeeded-event-log"
+        );
       } catch (err) {
         log.warn("Deferred cleanup failed", {
           taskId: target.taskId,
           branchName: target.branchName,
           err: err instanceof Error ? err.message : String(err),
         });
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: target.taskId,
@@ -527,8 +530,9 @@ export class MergeCoordinatorService {
               worktreeKey: target.worktreeKey ?? target.taskId,
               error: err instanceof Error ? err.message : String(err),
             },
-          })
-          .catch(() => {});
+          }),
+          "merge-coordinator:worktree-cleanup-failed-event-log"
+        );
       }
     }
 
@@ -679,8 +683,8 @@ export class MergeCoordinatorService {
     failure?: MergeQualityGateFailure | null;
   }): Promise<void> {
     const { projectId, repoPath, baseBranch, source, outcome, failure } = params;
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: "",
@@ -696,8 +700,9 @@ export class MergeCoordinatorService {
           classificationConfidence: failure?.classificationConfidence ?? null,
           classificationReason: failure?.classificationReason ?? null,
         },
-      })
-      .catch(() => {});
+      }),
+      "merge-coordinator:baseline-check-event-log"
+    );
   }
 
   private invalidateBaselineCacheAfterMerge(projectId: string, baseBranch: string): void {
@@ -1432,8 +1437,8 @@ export class MergeCoordinatorService {
       `Merge paused because baseline quality gates on ${baseBranch} are failing. ${QUALITY_GATE_FAILURE_MESSAGE} Details: ${detail}.${remediationAction ? ` Remediation: ${remediationAction}` : ""}`
     );
     await this.createBaselineQualityGateNotification(projectId, baseBranch, detail);
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: task.id,
@@ -1471,10 +1476,11 @@ export class MergeCoordinatorService {
           qualityGateClassificationReason: failure.classificationReason ?? null,
           qualityGateDetail,
         },
-      })
-      .catch(() => {});
-    eventLogService
-      .append(repoPath, {
+      }),
+      "merge-coordinator:merge-failed-baseline-quality-gate-event-log"
+    );
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: task.id,
@@ -1504,8 +1510,9 @@ export class MergeCoordinatorService {
           qualityGateClassificationReason: failure.classificationReason ?? null,
           qualityGateDetail,
         },
-      })
-      .catch(() => {});
+      }),
+      "merge-coordinator:task-requeued-baseline-quality-gate-event-log"
+    );
     this.broadcastMergeFailureWs(projectId, task.id, {
       cumulativeAttempts: attempt,
       resolvedBy: "requeued",
@@ -1627,8 +1634,8 @@ export class MergeCoordinatorService {
           classificationReason: failure.classificationReason ?? null,
         }
       );
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: "",
@@ -1642,15 +1649,16 @@ export class MergeCoordinatorService {
             classificationConfidence: failure.classificationConfidence ?? null,
             classificationReason: failure.classificationReason ?? null,
           },
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:baseline-remediation-skipped-event-log"
+      );
       return { action: "skipped_low_confidence", createdTask: false, fingerprint };
     }
     if (await this.shouldSuppressRedundantBaselineRemediation(projectId, baseBranch, fingerprint)) {
       const cacheKey = this.baselineCacheKey(projectId, baseBranch);
       this.baselineRemediationSuppression.set(cacheKey, { fingerprint, observedAtMs: Date.now() });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: "",
@@ -1662,8 +1670,9 @@ export class MergeCoordinatorService {
             command: failure.command,
             category: failure.category ?? null,
           },
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:baseline-remediation-suppressed-event-log"
+      );
       return { action: "suppressed_redundant", createdTask: false, fingerprint };
     }
     const failedGateReason = failure.reason.trim().slice(0, 1200) || "Unknown quality gate failure";
@@ -1681,8 +1690,8 @@ export class MergeCoordinatorService {
     });
     const cacheKey = this.baselineCacheKey(projectId, baseBranch);
     this.baselineRemediationSuppression.set(cacheKey, { fingerprint, observedAtMs: Date.now() });
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: result.taskId,
@@ -1696,8 +1705,9 @@ export class MergeCoordinatorService {
           category: failure.category ?? null,
           validationWorkspace: failure.validationWorkspace ?? null,
         },
-      })
-      .catch(() => {});
+      }),
+      "merge-coordinator:baseline-remediation-task-event-log"
+    );
     return { action: result.action, createdTask: result.created, fingerprint };
   }
 
@@ -1807,15 +1817,16 @@ export class MergeCoordinatorService {
       // best-effort
     }
 
-    eventLogService
-      .append(repoPath, {
+    fireAndForget(
+      eventLogService.append(repoPath, {
         timestamp: new Date().toISOString(),
         projectId,
         taskId: task.id,
         event: "task.completed",
         data: { attempt: slot.attempt },
-      })
-      .catch(() => {});
+      }),
+      "merge-coordinator:task-completed-event-log"
+    );
 
     broadcastToProject(projectId, {
       type: "agent.completed",
@@ -2535,8 +2546,8 @@ export class MergeCoordinatorService {
           failureFingerprint: failureFingerprint.hash,
           circuitBreakerTripped: infraFingerprintRepeated,
         } as ServerEvent);
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: task.id,
@@ -2581,8 +2592,9 @@ export class MergeCoordinatorService {
               failureFingerprint: failureFingerprint.hash,
               circuitBreakerTripped: infraFingerprintRepeated,
             },
-          })
-          .catch(() => {});
+          }),
+          "merge-coordinator:merge-failed-blocked-event-log"
+        );
         this.broadcastMergeFailureWs(projectId, task.id, {
           cumulativeAttempts,
           resolvedBy: "blocked",
@@ -2597,8 +2609,8 @@ export class MergeCoordinatorService {
           failureFingerprint: failureFingerprint.hash,
           circuitBreakerTripped: infraFingerprintRepeated,
         });
-        eventLogService
-          .append(repoPath, {
+        fireAndForget(
+          eventLogService.append(repoPath, {
             timestamp: new Date().toISOString(),
             projectId,
             taskId: task.id,
@@ -2634,8 +2646,9 @@ export class MergeCoordinatorService {
                 qualityGateStructuredDetails.qualityGateClassificationReason,
               qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
             },
-          })
-          .catch(() => {});
+          }),
+          "merge-coordinator:task-blocked-event-log"
+        );
         return;
       }
 
@@ -2685,8 +2698,8 @@ export class MergeCoordinatorService {
           ? `Pre-merge quality gates failed. Task requeued — next run will retry after fixes. ${humanFailureMessage}${qualityGateCommentDetail}`
           : `Merge conflict with current main. Task requeued — next run will rebase and retry. ${humanFailureMessage}`
       );
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: task.id,
@@ -2724,8 +2737,9 @@ export class MergeCoordinatorService {
             qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
             nextAction: "Requeued for retry",
           },
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:merge-failed-requeued-event-log"
+      );
       this.broadcastMergeFailureWs(projectId, task.id, {
         cumulativeAttempts,
         resolvedBy: "requeued",
@@ -2737,8 +2751,8 @@ export class MergeCoordinatorService {
         failedGateOutputSnippet: qualityGateStructuredDetails.failedGateOutputSnippet,
         worktreePath: qualityGateStructuredDetails.worktreePath,
       });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: task.id,
@@ -2773,8 +2787,9 @@ export class MergeCoordinatorService {
             failureClass: failureFingerprint.failureClass,
             failureFingerprint: failureFingerprint.hash,
           },
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:task-requeued-event-log"
+      );
       this.broadcastTaskRequeuedWs(projectId, task.id, {
         cumulativeAttempts,
         phase: "merge",
@@ -3072,14 +3087,15 @@ export class MergeCoordinatorService {
       );
       await this.host.branchManager.pushMainToOrigin(repoPath, baseBranch);
       log.info("Merger resolved push rebase conflicts, push succeeded", { projectId });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: "",
           event: "push.succeeded",
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:push-succeeded-after-rebase-event-log"
+      );
       return { ok: true };
     } catch (pushErr) {
       log.warn("push to origin failed after resolving push rebase conflicts", {
@@ -3111,8 +3127,8 @@ export class MergeCoordinatorService {
         projectId,
         baseBranch,
       });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: "",
@@ -3120,8 +3136,9 @@ export class MergeCoordinatorService {
           data: {
             reason: "local_only",
           },
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:push-skipped-event-log"
+      );
       return "local_only";
     }
 
@@ -3130,14 +3147,15 @@ export class MergeCoordinatorService {
       await this.ensurePreparedMainQualityGates(projectId, repoPath, baseBranch, "push_precheck");
       await this.host.branchManager.pushMainToOrigin(repoPath, baseBranch);
       log.info("Push to origin succeeded", { projectId });
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: "",
           event: "push.succeeded",
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:push-succeeded-event-log"
+      );
       return "published";
     } catch (err) {
       let terminalError: Error = err instanceof Error ? err : new Error(String(err));
@@ -3162,8 +3180,8 @@ export class MergeCoordinatorService {
         pushStage = "quality_gate";
       }
       const reason = terminalError.message.slice(0, 500);
-      eventLogService
-        .append(repoPath, {
+      fireAndForget(
+        eventLogService.append(repoPath, {
           timestamp: new Date().toISOString(),
           projectId,
           taskId: "",
@@ -3174,8 +3192,9 @@ export class MergeCoordinatorService {
               terminalError instanceof RebaseConflictError ? terminalError.conflictedFiles : [],
             stage: pushStage,
           },
-        })
-        .catch(() => {});
+        }),
+        "merge-coordinator:push-failed-event-log"
+      );
       await notificationService
         .create({
           projectId,

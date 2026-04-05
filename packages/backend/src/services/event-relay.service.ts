@@ -1,5 +1,8 @@
 import type { WebSocket } from "ws";
 import type { ServerEvent } from "@opensprint/shared";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("event-relay");
 
 /** Map of projectId → Set of connected clients */
 type ProjectClientsMap = Map<string, Set<WebSocket>>;
@@ -33,6 +36,20 @@ class EventRelayService {
     this.planAgentSubscriptions = planAgentSubscriptions;
   }
 
+  private safeSend(client: WebSocket, data: string): boolean {
+    try {
+      if (client.readyState === 1 /* WebSocket.OPEN */) {
+        client.send(data);
+        return true;
+      }
+    } catch (err) {
+      log.debug("ws send failed, removing dead client", {
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return false;
+  }
+
   /**
    * Broadcast an event to all clients connected to a project.
    */
@@ -41,11 +58,13 @@ class EventRelayService {
     if (!clients) return;
 
     const data = JSON.stringify(event);
+    const dead: WebSocket[] = [];
     for (const client of clients) {
-      if (client.readyState === 1 /* WebSocket.OPEN */) {
-        client.send(data);
+      if (!this.safeSend(client, data)) {
+        dead.push(client);
       }
     }
+    for (const ws of dead) clients.delete(ws);
   }
 
   /**
@@ -58,8 +77,8 @@ class EventRelayService {
     if (!this.agentSubscriptions) return;
 
     for (const [ws, subscriptions] of this.agentSubscriptions) {
-      if (subscriptions.has(taskId) && ws.readyState === 1 /* WebSocket.OPEN */) {
-        ws.send(data);
+      if (subscriptions.has(taskId)) {
+        this.safeSend(ws, data);
       }
     }
   }
@@ -74,14 +93,15 @@ class EventRelayService {
     const event: ServerEvent = { type: "agent.output", taskId, chunk };
     const data = JSON.stringify(event);
 
+    const dead: WebSocket[] = [];
     for (const ws of clients) {
-      if (
-        this.agentSubscriptions?.get(ws)?.has(taskId) &&
-        ws.readyState === 1 /* WebSocket.OPEN */
-      ) {
-        ws.send(data);
+      if (this.agentSubscriptions?.get(ws)?.has(taskId)) {
+        if (!this.safeSend(ws, data)) {
+          dead.push(ws);
+        }
       }
     }
+    for (const ws of dead) clients.delete(ws);
   }
 
   /**
@@ -94,14 +114,15 @@ class EventRelayService {
     const event: ServerEvent = { type: "plan.agent.output", planId, chunk };
     const data = JSON.stringify(event);
 
+    const dead: WebSocket[] = [];
     for (const ws of clients) {
-      if (
-        this.planAgentSubscriptions?.get(ws)?.has(planId) &&
-        ws.readyState === 1 /* WebSocket.OPEN */
-      ) {
-        ws.send(data);
+      if (this.planAgentSubscriptions?.get(ws)?.has(planId)) {
+        if (!this.safeSend(ws, data)) {
+          dead.push(ws);
+        }
       }
     }
+    for (const ws of dead) clients.delete(ws);
   }
 }
 

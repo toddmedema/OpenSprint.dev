@@ -8,7 +8,11 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import type { ProjectSettings } from "@opensprint/shared";
+import { parseSettings } from "@opensprint/shared";
 import { writeJsonAtomic } from "../utils/file-utils.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("settings-store");
 
 let settingsStorePathForTesting: string | null = null;
 
@@ -48,15 +52,27 @@ async function loadStore(): Promise<SettingsStore> {
         if (val && typeof val === "object") {
           const v = val as Record<string, unknown>;
           if ("settings" in v && typeof v.settings === "object") {
+            let settings: ProjectSettings;
+            try {
+              settings = parseSettings(stripApiKeys(v.settings as Record<string, unknown>));
+            } catch (err) {
+              log.warn("parseSettings failed for project %s, using raw cast", { id, err: err instanceof Error ? err.message : String(err) });
+              settings = stripApiKeys(v.settings as Record<string, unknown>) as unknown as ProjectSettings;
+            }
             normalized[id] = {
-              settings: stripApiKeys(
-                v.settings as Record<string, unknown>
-              ) as unknown as ProjectSettings,
+              settings,
               updatedAt: (v.updatedAt as string) ?? new Date().toISOString(),
             };
           } else {
+            let settings: ProjectSettings;
+            try {
+              settings = parseSettings(stripApiKeys(val as Record<string, unknown>));
+            } catch (err) {
+              log.warn("parseSettings failed for legacy project %s, using raw cast", { id, err: err instanceof Error ? err.message : String(err) });
+              settings = stripApiKeys(val as Record<string, unknown>) as unknown as ProjectSettings;
+            }
             normalized[id] = {
-              settings: stripApiKeys(val as Record<string, unknown>) as unknown as ProjectSettings,
+              settings,
               updatedAt: new Date().toISOString(),
             };
           }
