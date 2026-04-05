@@ -2690,6 +2690,8 @@ describe("AgentClient", () => {
 
         mockGetNextKey.mockResolvedValue({ key: "cursor-key-1", keyId: "k1", source: "global" });
 
+        // Delay close so output.log is populated after spawn truncates it (openSync "w").
+        const closeDelayMs = 150;
         const makeChild = (exitCode: number, pid: number) => ({
           killed: false,
           kill: vi.fn(),
@@ -2697,7 +2699,7 @@ describe("AgentClient", () => {
           stdout: { on: vi.fn(), removeAllListeners: vi.fn() },
           stderr: { on: vi.fn(), removeAllListeners: vi.fn() },
           on: vi.fn((ev: string, fn: (code?: number) => void) => {
-            if (ev === "close") setTimeout(() => fn(exitCode), 20);
+            if (ev === "close") setTimeout(() => fn(exitCode), closeDelayMs);
             return { on: vi.fn(), removeAllListeners: vi.fn() };
           }),
           removeAllListeners: vi.fn(),
