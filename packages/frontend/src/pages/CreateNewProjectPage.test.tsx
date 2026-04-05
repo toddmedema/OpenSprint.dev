@@ -99,7 +99,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: true,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     mockGetRuntime.mockResolvedValue({
@@ -124,7 +127,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: true,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     const user = userEvent.setup();
@@ -273,19 +279,14 @@ describe("CreateNewProjectPage", () => {
 
   it("defaults provider to first with API key (Claude when anthropic has keys)", async () => {
     const user = userEvent.setup();
-    mockGlobalSettingsGet.mockResolvedValue({
-      databaseUrl: "",
-      apiKeys: {
-        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
-        CURSOR_API_KEY: [],
-        OPENAI_API_KEY: [],
-      },
-    });
     mockGetKeys.mockResolvedValue({
       anthropic: true,
       cursor: false,
       openai: false,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
 
@@ -298,6 +299,30 @@ describe("CreateNewProjectPage", () => {
     const providerSelects = screen.getAllByRole("combobox");
     expect(providerSelects[0]).toHaveValue("claude");
     expect(providerSelects[2]).toHaveValue("claude");
+  });
+
+  it("defaults provider to Google when only google has keys", async () => {
+    const user = userEvent.setup();
+    mockGetKeys.mockResolvedValue({
+      anthropic: false,
+      cursor: false,
+      openai: false,
+      google: true,
+      claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
+      useCustomCli: false,
+    });
+
+    renderCreateNewProjectPage();
+    await user.type(screen.getByLabelText(/project name/i), "My App");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/parent");
+    await user.click(screen.getByTestId("next-button"));
+
+    await screen.findByTestId("simplified-agents-step");
+    const providerSelects = screen.getAllByRole("combobox");
+    expect(providerSelects[0]).toHaveValue("google");
+    expect(providerSelects[2]).toHaveValue("google");
   });
 
   it("shows no-API-keys warning when 0 providers have keys and Custom is not selected", async () => {
@@ -314,7 +339,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: false,
       cursor: false,
       openai: false,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
 
@@ -341,7 +369,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: false,
       cursor: false,
       openai: false,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
 
@@ -616,25 +647,20 @@ describe("CreateNewProjectPage", () => {
     await user.click(screen.getByTestId("next-button"));
 
     expect(screen.getByTestId("simplified-agents-step")).toBeInTheDocument();
-    expect(mockGlobalSettingsGet).toHaveBeenCalled();
     expect(mockGetKeys).toHaveBeenCalled();
   });
 
   it("disables Next on agents step when env keys are loading", async () => {
-    let resolveGlobalSettings: (value: { databaseUrl: string; apiKeys?: unknown }) => void;
     let resolveGetKeys: (value: {
       anthropic: boolean;
       cursor: boolean;
       openai: boolean;
+      google: boolean;
       claudeCli: boolean;
+      cursorCli: boolean;
+      ollamaCli: boolean;
       useCustomCli: boolean;
     }) => void;
-    mockGlobalSettingsGet.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveGlobalSettings = resolve;
-        })
-    );
     mockGetKeys.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -651,18 +677,14 @@ describe("CreateNewProjectPage", () => {
     const nextButton = screen.getByTestId("next-button");
     expect(nextButton).toBeDisabled();
 
-    resolveGlobalSettings!({
-      databaseUrl: "",
-      apiKeys: {
-        ANTHROPIC_API_KEY: [{ id: "a", masked: "••••••••" }],
-        CURSOR_API_KEY: [{ id: "b", masked: "••••••••" }],
-      },
-    });
     resolveGetKeys!({
       anthropic: true,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     await screen.findByTestId("next-button");
@@ -680,7 +702,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: true,
       cursor: false,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     const user = userEvent.setup();
@@ -707,7 +732,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: false,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     const user = userEvent.setup();
@@ -727,7 +755,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: true,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: false,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     const user = userEvent.setup();
@@ -747,7 +778,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: true,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     const user = userEvent.setup();
@@ -767,7 +801,10 @@ describe("CreateNewProjectPage", () => {
       anthropic: true,
       cursor: true,
       openai: true,
+      google: false,
       claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
       useCustomCli: false,
     });
     const user = userEvent.setup();
@@ -781,6 +818,30 @@ describe("CreateNewProjectPage", () => {
     await user.selectOptions(providerSelects[0], "custom");
     await user.type(screen.getByPlaceholderText(/e\.g\. my-agent/), "my-agent");
     expect(screen.getByTestId("next-button")).toBeEnabled();
+  });
+
+  it("disables Next on agents step when google selected but API key is missing", async () => {
+    mockGetKeys.mockResolvedValue({
+      anthropic: true,
+      cursor: true,
+      openai: true,
+      google: false,
+      claudeCli: true,
+      cursorCli: true,
+      ollamaCli: true,
+      useCustomCli: false,
+    });
+    const user = userEvent.setup();
+    renderCreateNewProjectPage();
+    await user.type(screen.getByLabelText(/project name/i), "My App");
+    await user.type(screen.getByPlaceholderText("/Users/you/projects/my-app"), "/path/to/parent");
+    await user.click(screen.getByTestId("next-button"));
+
+    await screen.findByTestId("simplified-agents-step");
+    const providerSelects = screen.getAllByRole("combobox");
+    await user.selectOptions(providerSelects[0], "google");
+    expect(screen.getByTestId("next-button")).toBeDisabled();
+    expect(screen.getByPlaceholderText("AIza...")).toBeInTheDocument();
   });
 
   it("passes agent config to scaffold API", async () => {

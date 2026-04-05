@@ -3,6 +3,10 @@ import { CloseButton } from "./CloseButton";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { api, isConnectionError } from "../api/client";
 import { AGENT_PROVIDER_OPTIONS, type AgentProviderValue } from "../lib/agentProviders";
+import {
+  getApiKeyRequirementForProvider,
+  isApiKeyBackedProvider,
+} from "../utils/agentConfigDefaults";
 
 const BODY_COPY =
   "At least one agent API key is required to use Open Sprint. Or, select 'Custom/CLI' if you'll be using your own agent or a CLI integration rather than an API.";
@@ -88,29 +92,22 @@ export function ApiKeySetupModal({
           setSaving(false);
           return;
         }
-        const apiProvider: "claude" | "cursor" | "openai" | "google" =
-          provider === "claude"
-            ? "claude"
-            : provider === "cursor"
-              ? "cursor"
-              : provider === "openai"
-                ? "openai"
-                : "google";
-        const { valid, error: validateError } = await api.env.validateKey(apiProvider, value);
+        if (!isApiKeyBackedProvider(provider)) {
+          setError("Unsupported provider");
+          setSaving(false);
+          return;
+        }
+        const requirement = getApiKeyRequirementForProvider(provider);
+        const { valid, error: validateError } = await api.env.validateKey(
+          requirement.agentType,
+          value
+        );
         if (!valid) {
           setError(validateError ?? "Invalid API key");
           setSaving(false);
           return;
         }
-        const envKey =
-          provider === "claude"
-            ? "ANTHROPIC_API_KEY"
-            : provider === "cursor"
-              ? "CURSOR_API_KEY"
-              : provider === "openai"
-                ? "OPENAI_API_KEY"
-                : "GOOGLE_API_KEY";
-        await api.env.saveKey(envKey, value);
+        await api.env.saveKey(requirement.envKey, value);
       }
       onComplete();
     } catch (err) {
@@ -212,13 +209,9 @@ export function ApiKeySetupModal({
                   type={showKey ? "text" : "password"}
                   className="input font-mono text-sm w-full pr-10"
                   placeholder={
-                    provider === "claude"
-                      ? "sk-ant-..."
-                      : provider === "cursor"
-                        ? "key_..."
-                        : provider === "openai"
-                          ? "sk-..."
-                          : "AIza..."
+                    isApiKeyBackedProvider(provider)
+                      ? getApiKeyRequirementForProvider(provider).placeholder
+                      : ""
                   }
                   value={keyValue}
                   onChange={(e) => {

@@ -13,7 +13,7 @@ import {
 } from "@opensprint/shared";
 import type { AgentRole } from "@opensprint/shared";
 import { ASSET_BASE } from "../../lib/constants";
-import { hasNoApiKeys } from "../../utils/agentConfigDefaults";
+import { getMissingApiKeyRequirements, hasNoApiKeys } from "../../utils/agentConfigDefaults";
 import { api } from "../../api/client";
 import { DEFAULT_LMSTUDIO_BASE_URL, DEFAULT_OLLAMA_BASE_URL } from "../../lib/localModelProviders";
 
@@ -28,9 +28,11 @@ export interface EnvKeys {
   anthropic: boolean;
   cursor: boolean;
   openai: boolean;
+  google?: boolean;
   claudeCli: boolean;
   cursorCli: boolean;
   ollamaCli: boolean;
+  useCustomCli?: boolean;
 }
 
 export interface AgentsStepProps {
@@ -72,18 +74,10 @@ export function AgentsStep({
 }: AgentsStepProps) {
   const [agentReferenceOpen, setAgentReferenceOpen] = useState(false);
 
-  const needsAnthropic =
-    envKeys &&
-    !envKeys.anthropic &&
-    (simpleComplexityAgent.type === "claude" || complexComplexityAgent.type === "claude");
-  const needsCursor =
-    envKeys &&
-    !envKeys.cursor &&
-    (simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor");
-  const needsOpenai =
-    envKeys &&
-    !envKeys.openai &&
-    (simpleComplexityAgent.type === "openai" || complexComplexityAgent.type === "openai");
+  const missingApiKeyRequirements = getMissingApiKeyRequirements(envKeys, [
+    simpleComplexityAgent.type,
+    complexComplexityAgent.type,
+  ]);
   const usesClaudeCli =
     simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
   const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
@@ -127,7 +121,7 @@ export function AgentsStep({
 
       {agentReferenceOpen && <AgentReferenceModal onClose={() => setAgentReferenceOpen(false)} />}
 
-      {(needsAnthropic || needsCursor || needsOpenai) && (
+      {missingApiKeyRequirements.length > 0 && (
         <div
           className={
             hasNoApiKeys(envKeys)

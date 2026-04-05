@@ -45,6 +45,7 @@ const defaultEnvKeys = {
   anthropic: true,
   cursor: true,
   openai: true,
+  google: true,
   claudeCli: true,
   cursorCli: true,
   ollamaCli: true,
@@ -61,7 +62,7 @@ function renderSimplifiedAgentsStep(
         onSimpleComplexityAgentChange={() => {}}
         onComplexComplexityAgentChange={() => {}}
         envKeys={null}
-        keyInput={{ anthropic: "", cursor: "", openai: "" }}
+        keyInput={{ anthropic: "", cursor: "", openai: "", google: "" }}
         onKeyInputChange={() => {}}
         savingKey={null}
         onSaveKey={() => {}}
@@ -141,9 +142,19 @@ describe("SimplifiedAgentsStep", () => {
     expect(screen.queryByPlaceholderText("key_...")).not.toBeInTheDocument();
   });
 
+  it("shows google key input when an agent uses Google and key is missing", () => {
+    renderSimplifiedAgentsStep({
+      simpleComplexityAgent: { type: "google", model: "", cliCommand: "" },
+      envKeys: { ...defaultEnvKeys, google: false },
+    });
+
+    expect(screen.getByText(/API key required/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("AIza...")).toBeInTheDocument();
+  });
+
   it("shows error banner with 'You must add at least one' when no API keys configured", () => {
     renderSimplifiedAgentsStep({
-      envKeys: { ...defaultEnvKeys, anthropic: false, cursor: false, openai: false },
+      envKeys: { ...defaultEnvKeys, anthropic: false, cursor: false, openai: false, google: false },
     });
 
     expect(screen.getByTestId("no-api-keys-warning")).toBeInTheDocument();
@@ -213,7 +224,7 @@ describe("SimplifiedAgentsStep", () => {
     renderSimplifiedAgentsStep({
       simpleComplexityAgent: { type: "claude", model: "", cliCommand: "" },
       envKeys: { ...defaultEnvKeys, anthropic: false },
-      keyInput: { anthropic: "sk-ant-test", cursor: "", openai: "" },
+      keyInput: { anthropic: "sk-ant-test", cursor: "", openai: "", google: "" },
       onSaveKey,
     });
 

@@ -6,6 +6,10 @@ import { PREREQ_ITEMS, getPrereqInstallUrl } from "../lib/prerequisites";
 import { AGENT_PROVIDER_OPTIONS, type AgentProviderValue } from "../lib/agentProviders";
 import { getOnboardingAgentCliRequirement, isCliInstalledForKind } from "../lib/agentProviderCli";
 import { AgentProviderCliBanner } from "../components/AgentProviderCliBanner";
+import {
+  getApiKeyRequirementForProvider,
+  isApiKeyBackedProvider,
+} from "../utils/agentConfigDefaults";
 
 type PrerequisitesState = { missing: string[]; platform: string } | null;
 
@@ -177,29 +181,22 @@ export function OnboardingPage() {
         setSaving(false);
         return;
       }
-      const apiProvider: "claude" | "cursor" | "openai" | "google" =
-        provider === "claude"
-          ? "claude"
-          : provider === "cursor"
-            ? "cursor"
-            : provider === "openai"
-              ? "openai"
-              : "google";
-      const { valid, error: validateError } = await api.env.validateKey(apiProvider, value);
+      if (!isApiKeyBackedProvider(provider)) {
+        setError("Unsupported provider");
+        setSaving(false);
+        return;
+      }
+      const requirement = getApiKeyRequirementForProvider(provider);
+      const { valid, error: validateError } = await api.env.validateKey(
+        requirement.agentType,
+        value
+      );
       if (!valid) {
         setError(validateError ?? "Invalid API key");
         setSaving(false);
         return;
       }
-      const envKey =
-        provider === "claude"
-          ? "ANTHROPIC_API_KEY"
-          : provider === "cursor"
-            ? "CURSOR_API_KEY"
-            : provider === "openai"
-              ? "OPENAI_API_KEY"
-              : "GOOGLE_API_KEY";
-      await api.env.saveKey(envKey, value);
+      await api.env.saveKey(requirement.envKey, value);
       navigate(intended);
     } catch (err) {
       const message = isConnectionError(err)
@@ -350,13 +347,9 @@ export function OnboardingPage() {
                         aria-describedby={error ? "onboarding-key-error" : undefined}
                         aria-invalid={!!error}
                         placeholder={
-                          provider === "claude"
-                            ? "sk-ant-..."
-                            : provider === "cursor"
-                              ? "key_..."
-                              : provider === "openai"
-                                ? "sk-..."
-                                : "AIza..."
+                          isApiKeyBackedProvider(provider)
+                            ? getApiKeyRequirementForProvider(provider).placeholder
+                            : ""
                         }
                         value={keyValue}
                         onChange={(e) => {

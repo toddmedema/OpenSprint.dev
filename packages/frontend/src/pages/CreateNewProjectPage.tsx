@@ -21,7 +21,12 @@ import type {
 } from "@opensprint/shared";
 import { isWindowsMountedWslPath, UNSUPPORTED_WSL_REPO_PATH_MESSAGE } from "@opensprint/shared";
 import { api, ApiError } from "../api/client";
-import { getDefaultProviderFromEnvKeys } from "../utils/agentConfigDefaults";
+import {
+  getApiKeyRequirementForEnvKey,
+  getDefaultProviderFromEnvKeys,
+  getMissingApiKeyRequirements,
+  type ApiKeyInputKey,
+} from "../utils/agentConfigDefaults";
 import { getRunInstructions } from "../utils/runInstructions";
 import {
   DEFAULT_LMSTUDIO_BASE_URL,
@@ -36,6 +41,7 @@ type ActionableError = {
   code?: string;
   missing?: string[];
 };
+type EnvKeysState = Awaited<ReturnType<typeof api.env.getKeys>>;
 
 const STEPS: { key: Step; label: string }[] = [
   { key: "basics", label: "Basics" },
@@ -68,21 +74,15 @@ export function CreateNewProjectPage() {
     cliCommand: "",
     baseUrl: DEFAULT_LMSTUDIO_BASE_URL,
   });
-  const [envKeys, setEnvKeys] = useState<{
-    anthropic: boolean;
-    cursor: boolean;
-    openai: boolean;
-    claudeCli: boolean;
-    cursorCli: boolean;
-    ollamaCli: boolean;
-  } | null>(null);
-  const [keyInput, setKeyInput] = useState<{ anthropic: string; cursor: string; openai: string }>({
+  const [envKeys, setEnvKeys] = useState<EnvKeysState | null>(null);
+  const [keyInput, setKeyInput] = useState<Record<ApiKeyInputKey, string>>({
     anthropic: "",
     cursor: "",
     openai: "",
+    google: "",
   });
   const [savingKey, setSavingKey] = useState<
-    "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY" | null
+    "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY" | "GOOGLE_API_KEY" | null
   >(null);
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
   const hasSetAgentDefaultRef = useRef(false);
@@ -112,20 +112,9 @@ export function CreateNewProjectPage() {
 
   useEffect(() => {
     if (step !== "agents") return;
-    Promise.all([api.globalSettings.get(), api.env.getKeys()])
-      .then(([global, env]) => {
-        const apiKeys = global.apiKeys;
-        const anthropic = (apiKeys?.ANTHROPIC_API_KEY?.length ?? 0) > 0;
-        const cursor = (apiKeys?.CURSOR_API_KEY?.length ?? 0) > 0;
-        const openai = (apiKeys?.OPENAI_API_KEY?.length ?? 0) > 0;
-        const keys = {
-          anthropic,
-          cursor,
-          openai,
-          claudeCli: env.claudeCli,
-          cursorCli: env.cursorCli,
-          ollamaCli: env.ollamaCli,
-        };
+    api.env
+      .getKeys()
+      .then((keys) => {
         setEnvKeys(keys);
         if (!hasSetAgentDefaultRef.current) {
           hasSetAgentDefaultRef.current = true;
@@ -150,14 +139,9 @@ export function CreateNewProjectPage() {
   }, [step]);
 
   const handleSaveKey = async (
-    envKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY"
+    envKey: "ANTHROPIC_API_KEY" | "CURSOR_API_KEY" | "OPENAI_API_KEY" | "GOOGLE_API_KEY"
   ) => {
-    const keyToInput =
-      envKey === "ANTHROPIC_API_KEY"
-        ? "anthropic"
-        : envKey === "CURSOR_API_KEY"
-          ? "cursor"
-          : "openai";
+    const keyToInput = getApiKeyRequirementForEnvKey(envKey).availabilityKey;
     const value = keyInput[keyToInput];
     if (!value.trim()) return;
     setSavingKey(envKey);
@@ -404,18 +388,10 @@ export function CreateNewProjectPage() {
 
   const canProceedFromBasics = parentPath.trim().length > 0 && !repoPathValidationMessage;
 
-  const needsAnthropic =
-    envKeys &&
-    !envKeys.anthropic &&
-    (simpleComplexityAgent.type === "claude" || complexComplexityAgent.type === "claude");
-  const needsCursor =
-    envKeys &&
-    !envKeys.cursor &&
-    (simpleComplexityAgent.type === "cursor" || complexComplexityAgent.type === "cursor");
-  const needsOpenai =
-    envKeys &&
-    !envKeys.openai &&
-    (simpleComplexityAgent.type === "openai" || complexComplexityAgent.type === "openai");
+  const missingApiKeyRequirements = getMissingApiKeyRequirements(envKeys, [
+    simpleComplexityAgent.type,
+    complexComplexityAgent.type,
+  ]);
   const usesClaudeCli =
     simpleComplexityAgent.type === "claude-cli" || complexComplexityAgent.type === "claude-cli";
   const claudeCliMissing = envKeys && !envKeys.claudeCli && usesClaudeCli;
@@ -423,9 +399,7 @@ export function CreateNewProjectPage() {
   const canProceedFromAgents =
     envKeys !== null &&
     !repoPathValidationMessage &&
-    !needsAnthropic &&
-    !needsCursor &&
-    !needsOpenai &&
+    missingApiKeyRequirements.length === 0 &&
     !claudeCliMissing &&
     hasConfiguredLocalModel(simpleComplexityAgent) &&
     hasConfiguredLocalModel(complexComplexityAgent) &&

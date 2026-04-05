@@ -44,6 +44,18 @@ To fix formatting: `npm run format`.
 - Avoid relying on a root-only test runner dependency for workspace scripts; this keeps `npm run test -w packages/<workspace>` self-contained.
 - If upgrading shared toolchain packages (for example, `vitest`, `vite`, `typescript`), align versions across workspaces in one change and regenerate lockfiles from repo root.
 
+## Provider rollout checklist
+
+When you add or expand an agent provider or capability, update the full rollout surface in one change instead of patching each layer separately later.
+
+- Backend validation: request schemas, provider enums, route validation, and any env-key save/validate paths.
+- Shared contracts: `AgentType`, API-key provider constants, provider-to-env-key mapping, and any shared labels/helpers used across packages.
+- Frontend flows: onboarding, API key setup modal, create-project flow, project settings, and any provider dropdowns or default-provider logic.
+- Provider UX: missing-key warnings, placeholders, help links, and local-provider behavior when no API key should be requested.
+- Tests: add or update targeted coverage for one happy path and one missing-key/error path so provider drift is caught quickly.
+
+Prefer extending existing shared provider helpers over introducing a new hand-written provider map in a feature file.
+
 ## Submitting changes
 
 - **Pull requests:** Open a PR against `main`. Describe what changed and how you tested it.

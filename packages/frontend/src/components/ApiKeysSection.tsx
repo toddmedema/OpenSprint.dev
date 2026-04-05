@@ -8,6 +8,7 @@ import type {
   MaskedApiKeyEntry,
   MaskedApiKeys,
 } from "@opensprint/shared";
+import { getProviderForAgentType } from "@opensprint/shared";
 
 const MASKED_PLACEHOLDER = "••••••••";
 
@@ -20,15 +21,13 @@ export interface ApiKeysSectionSettings {
 
 /** Providers that use API keys in the UI (claude API, cursor, openai, google; excludes claude-cli) */
 function getApiKeyProvidersForSection(settings: ApiKeysSectionSettings): ApiKeyProvider[] {
-  const providers: ApiKeyProvider[] = [];
+  const providers = new Set<ApiKeyProvider>();
   const agents = [settings.simpleComplexityAgent, settings.complexComplexityAgent];
   for (const a of agents) {
-    if (a.type === "claude") providers.push("ANTHROPIC_API_KEY");
-    if (a.type === "cursor") providers.push("CURSOR_API_KEY");
-    if (a.type === "openai") providers.push("OPENAI_API_KEY");
-    if (a.type === "google") providers.push("GOOGLE_API_KEY");
+    const provider = getProviderForAgentType(a.type);
+    if (provider) providers.add(provider);
   }
-  return [...new Set(providers)];
+  return Array.from(providers);
 }
 
 function formatLimitHitAt(limitHitAt: string): string {

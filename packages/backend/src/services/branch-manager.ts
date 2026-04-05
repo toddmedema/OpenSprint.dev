@@ -32,7 +32,6 @@ import { heartbeatService } from "./heartbeat.service.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
 import { worktreeRegistry } from "./worktree-registry.js";
-import { fireAndForget } from "../utils/fire-and-forget.js";
 import { worktreeLeaseService } from "./worktree-lease.service.js";
 
 /** Paths we must not commit from worktrees (runtime-only; would block merge in main). Agent stats, event log, and orchestrator counters are now DB-only. */

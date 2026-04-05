@@ -36,6 +36,7 @@ const defaultEnvKeys = {
   anthropic: true,
   cursor: true,
   openai: true,
+  google: true,
   claudeCli: true,
   cursorCli: true,
   ollamaCli: true,
@@ -143,6 +144,16 @@ describe("AgentsStep", () => {
     expect(screen.getByTestId("no-api-keys-settings-link")).toHaveAttribute("href", "/settings");
   });
 
+  it("shows configure-in-settings message when google is selected and key is missing", () => {
+    renderAgentsStep({
+      simpleComplexityAgent: { type: "google", model: "", cliCommand: "" },
+      envKeys: { ...defaultEnvKeys, google: false },
+    });
+
+    expect(screen.getByText(/API key required/)).toBeInTheDocument();
+    expect(screen.getByTestId("no-api-keys-settings-link")).toHaveAttribute("href", "/settings");
+  });
+
   it("OpenAI appears as provider option in Simple and Complex dropdowns", () => {
     renderAgentsStep();
 
@@ -222,7 +233,7 @@ describe("AgentsStep", () => {
 
   it("shows error banner with 'You must add at least one' when no API keys configured", () => {
     renderAgentsStep({
-      envKeys: { ...defaultEnvKeys, anthropic: false, cursor: false, openai: false },
+      envKeys: { ...defaultEnvKeys, anthropic: false, cursor: false, openai: false, google: false },
     });
 
     expect(screen.getByTestId("no-api-keys-warning")).toBeInTheDocument();

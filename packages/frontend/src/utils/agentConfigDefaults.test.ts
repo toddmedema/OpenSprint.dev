@@ -18,8 +18,20 @@ describe("getDefaultProviderFromEnvKeys", () => {
         anthropic: false,
         cursor: false,
         openai: true,
+        google: false,
       })
     ).toBe("openai");
+  });
+
+  it("returns google when only google has keys", () => {
+    expect(
+      getDefaultProviderFromEnvKeys({
+        anthropic: false,
+        cursor: false,
+        openai: false,
+        google: true,
+      })
+    ).toBe("google");
   });
 
   it("returns cursor when only cursor has keys", () => {
@@ -28,6 +40,7 @@ describe("getDefaultProviderFromEnvKeys", () => {
         anthropic: false,
         cursor: true,
         openai: false,
+        google: false,
       })
     ).toBe("cursor");
   });
@@ -38,8 +51,20 @@ describe("getDefaultProviderFromEnvKeys", () => {
         anthropic: true,
         cursor: true,
         openai: true,
+        google: true,
       })
     ).toBe("claude");
+  });
+
+  it("returns google before cursor when both have keys", () => {
+    expect(
+      getDefaultProviderFromEnvKeys({
+        anthropic: false,
+        cursor: true,
+        openai: false,
+        google: true,
+      })
+    ).toBe("google");
   });
 
   it("returns openai before cursor when both have keys", () => {
@@ -48,6 +73,7 @@ describe("getDefaultProviderFromEnvKeys", () => {
         anthropic: false,
         cursor: true,
         openai: true,
+        google: false,
       })
     ).toBe("openai");
   });
@@ -58,6 +84,7 @@ describe("getDefaultProviderFromEnvKeys", () => {
         anthropic: false,
         cursor: false,
         openai: false,
+        google: false,
       })
     ).toBe("claude");
   });
@@ -74,6 +101,7 @@ describe("hasNoApiKeys", () => {
         anthropic: false,
         cursor: false,
         openai: false,
+        google: false,
       })
     ).toBe(true);
   });
@@ -84,6 +112,7 @@ describe("hasNoApiKeys", () => {
         anthropic: true,
         cursor: false,
         openai: false,
+        google: false,
       })
     ).toBe(false);
   });
@@ -94,6 +123,7 @@ describe("hasNoApiKeys", () => {
         anthropic: false,
         cursor: true,
         openai: false,
+        google: false,
       })
     ).toBe(false);
   });
@@ -104,6 +134,18 @@ describe("hasNoApiKeys", () => {
         anthropic: false,
         cursor: false,
         openai: true,
+        google: false,
+      })
+    ).toBe(false);
+  });
+
+  it("returns false when google has keys", () => {
+    expect(
+      hasNoApiKeys({
+        anthropic: false,
+        cursor: false,
+        openai: false,
+        google: true,
       })
     ).toBe(false);
   });

@@ -30,6 +30,12 @@ const mockSettingsOpenAI: ApiKeysSectionSettings = {
   complexComplexityAgent: { type: "openai", model: "gpt-4o", cliCommand: null },
 };
 
+const mockSettingsGoogle: ApiKeysSectionSettings = {
+  ...mockSettingsClaude,
+  simpleComplexityAgent: { type: "google", model: "gemini-2.5-pro", cliCommand: null },
+  complexComplexityAgent: { type: "google", model: "gemini-2.5-pro", cliCommand: null },
+};
+
 const mockSettingsWithKeys: ApiKeysSectionSettings = {
   ...mockSettingsClaude,
   apiKeys: {
@@ -77,6 +83,12 @@ describe("ApiKeysSection", () => {
     render(<ApiKeysSection settings={mockSettingsOpenAI} onApiKeysChange={onApiKeysChange} />);
     expect(screen.getByText("OPENAI_API_KEY (OpenAI API)")).toBeInTheDocument();
     expect(screen.getByTestId("api-key-add-OPENAI_API_KEY")).toBeInTheDocument();
+  });
+
+  it("renders GOOGLE_API_KEY when google is selected", () => {
+    render(<ApiKeysSection settings={mockSettingsGoogle} onApiKeysChange={onApiKeysChange} />);
+    expect(screen.getByText("GOOGLE_API_KEY (Google/Gemini API)")).toBeInTheDocument();
+    expect(screen.getByTestId("api-key-add-GOOGLE_API_KEY")).toBeInTheDocument();
   });
 
   it("shows existing keys with masked placeholder and limitHitAt sub-label", () => {
