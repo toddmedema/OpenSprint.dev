@@ -1,6 +1,8 @@
 import { defineProject } from "vitest/config";
 import {
   backendCommonTestConfig,
+  backendGlobalSetupFile,
+  backendGlobalTeardownFile,
   backendIntegrationInclude,
   backendResolveConfig,
   backendSsrConfig,
@@ -26,7 +28,7 @@ export default defineProject({
         singleFork: true,
       },
     },
-    globalSetup: ["./src/__tests__/global-setup.ts"],
-    globalTeardown: ["./src/__tests__/global-teardown.ts"],
+    globalSetup: [backendGlobalSetupFile],
+    globalTeardown: [backendGlobalTeardownFile],
   },
 });

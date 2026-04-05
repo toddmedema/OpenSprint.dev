@@ -4,6 +4,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/** Absolute paths: relative setup paths can fail Vite's file loader in some CI/workspace layouts. */
+export const backendSetupFile = path.resolve(__dirname, "src/__tests__/setup.ts");
+export const backendGlobalSetupFile = path.resolve(__dirname, "src/__tests__/global-setup.ts");
+export const backendGlobalTeardownFile = path.resolve(__dirname, "src/__tests__/global-teardown.ts");
+
 export const backendTestInclude = [
   "src/__tests__/**/*.test.ts",
   "src/utils/__tests__/**/*.test.ts",
@@ -58,6 +63,9 @@ export const integrationWorkers =
     ? Math.floor(envIntegrationWorkers)
     : Math.min(3, Math.max(1, Math.floor(parallelism / 3) || 1));
 
+/** Single source file for ESM imports that use the `.js` emit specifier (Node16). */
+const drizzleSchemaPgSource = path.resolve(__dirname, "src/db/drizzle-schema-pg.ts");
+
 export const backendUnitExclude = [
   ...backendIntegrationInclude,
   "**/git-working-mode-branches.integration.test.ts",
@@ -66,14 +74,24 @@ export const backendUnitExclude = [
 ];
 
 export const backendResolveConfig = {
-  alias: {
-    "@opensprint/shared": path.resolve(__dirname, "../shared/src/index.ts"),
-    "@opensprint/shared/types": path.resolve(__dirname, "../shared/src/types/index.ts"),
-    "@opensprint/shared/constants": path.resolve(__dirname, "../shared/src/constants/index.ts"),
-    "@opensprint/shared/runtime": path.resolve(__dirname, "../shared/src/runtime/index.ts"),
-    pg: path.resolve(__dirname, "../../node_modules/pg/lib/index.js"),
-    "@google/genai": path.resolve(__dirname, "src/__tests__/mocks/google-genai.mock.ts"),
-  },
+  alias: [
+    // Pin Postgres schema module: Vite/Vitest can otherwise resolve `.js` specifiers to missing paths
+    // under coverage or certain graph orders; on-disk source is only `drizzle-schema-pg.ts`.
+    {
+      // Match the full specifier so replacement replaces the entire id (partial matches break relative paths).
+      find: /^.*[/\\]drizzle-schema-pg\.js$/,
+      replacement: drizzleSchemaPgSource,
+    },
+    { find: "@opensprint/shared/types", replacement: path.resolve(__dirname, "../shared/src/types/index.ts") },
+    {
+      find: "@opensprint/shared/constants",
+      replacement: path.resolve(__dirname, "../shared/src/constants/index.ts"),
+    },
+    { find: "@opensprint/shared/runtime", replacement: path.resolve(__dirname, "../shared/src/runtime/index.ts") },
+    { find: "@opensprint/shared", replacement: path.resolve(__dirname, "../shared/src/index.ts") },
+    { find: "pg", replacement: path.resolve(__dirname, "../../node_modules/pg/lib/index.js") },
+    { find: "@google/genai", replacement: path.resolve(__dirname, "src/__tests__/mocks/google-genai.mock.ts") },
+  ],
 };
 
 export const backendSsrConfig = {
@@ -90,7 +108,7 @@ export const backendSsrConfig = {
 export const backendCommonTestConfig = {
   globals: true,
   environment: "node" as const,
-  setupFiles: ["./src/__tests__/setup.ts"],
+  setupFiles: [backendSetupFile],
   testTimeout: 30_000,
   teardownTimeout: 25_000,
   hookTimeout: 60_000,
