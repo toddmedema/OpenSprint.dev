@@ -346,7 +346,7 @@ export class TodoistSyncService {
     const claimed = await this.deps.integrationStore.claimImportSlot(projectId, "todoist", task.id);
     if (!claimed) return false;
 
-    let finalized = false;
+    let createdFeedbackId: string | undefined;
     try {
       // 6b. Build submit payload
       const body: FeedbackSubmitRequest = {
@@ -356,6 +356,16 @@ export class TodoistSyncService {
 
       // 6c. Create feedback item
       const feedbackItem = await this.deps.submitFeedback(projectId, body);
+      createdFeedbackId = feedbackItem.id;
+
+      // 6d. Link feedback to ledger before provenance/Todoist delete so crashes never
+      // abandon the slot after persistence (avoids duplicate feedback on retry).
+      await this.deps.integrationStore.attachFeedbackToImportSlot(
+        projectId,
+        "todoist",
+        task.id,
+        feedbackItem.id
+      );
 
       // Store provenance in extra column
       const provenance = {
@@ -381,21 +391,26 @@ export class TodoistSyncService {
         ]);
       });
 
-      // 6d. Finalize ledger row to pending_delete with real feedback_id
-      await this.deps.integrationStore.finalizeImportSlot(
+      await this.deps.integrationStore.promoteImportSlotToPendingDelete(
         projectId,
         "todoist",
         task.id,
         feedbackItem.id
       );
-      finalized = true;
 
       // 6e. Delete task from Todoist
       await this.deleteAndUpdateLedger(projectId, task.id, todoistClient);
 
       return true;
     } catch (err) {
-      if (!finalized) {
+      if (createdFeedbackId) {
+        await this.deps.integrationStore.reconcileImportAfterFeedback(
+          projectId,
+          "todoist",
+          task.id,
+          createdFeedbackId
+        );
+      } else {
         await this.deps.integrationStore.abandonImportSlot(projectId, "todoist", task.id);
       }
       throw err;

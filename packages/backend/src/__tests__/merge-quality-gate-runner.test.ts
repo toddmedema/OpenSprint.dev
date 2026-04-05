@@ -210,6 +210,54 @@ Received: 200
     expect(getExecutedCommands(runCommand)).toEqual(["npm run test"]);
   });
 
+  it("ignores bare structured logger lines (split from vitest stdout prefix) when extracting the first error", async () => {
+    const worktreePath = await makeTempWorktree({ test: "vitest run" });
+    const stdoutBlock =
+      "stdout | src/__tests__/merge-quality-gate-regression.integration.test.ts > Cross-service quality-gate regression integration > requeues non-environment quality-gate failures without repair and persists structured details\n" +
+      '2026-04-05T17:53:03.975Z INFO  [merge-coordinator] Merge failure fingerprint {"taskId":"os-regression-1","fingerprintHash":"8b209c601f34b6c0","failureClass":"code_quality","normalizedMessage":"Quality gate failed (npm run lint): Command failed: npm run lint | src/foo.ts: error TS2304: Cannot find name \'x\'","phase":"quality_gate"}\n' +
+      "FAIL  src/real.test.ts > Example > breaks\nAssertionError: expected true to be false\n";
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run test") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed with exit code 1",
+            stdout: stdoutBlock,
+            stderr: "",
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-bare-log-noise",
+        branchName: "opensprint/os-bare-log-noise",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run test"],
+        runCommand,
+      }
+    );
+
+    expect(failure).toEqual(
+      expect.objectContaining({
+        command: "npm run test",
+        firstErrorLine: "AssertionError: expected true to be false",
+      })
+    );
+    expect(failure?.outputSnippet).not.toContain("Merge failure fingerprint");
+    expect(getExecutedCommands(runCommand)).toEqual(["npm run test"]);
+  });
+
   it("prefers compiler and lint diagnostics over generic command wrappers", async () => {
     const worktreePath = await makeTempWorktree({ build: "tsc -b" });
     const runCommand = vi.fn(

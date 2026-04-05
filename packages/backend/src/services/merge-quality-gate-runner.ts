@@ -232,6 +232,8 @@ const QUALITY_GATE_NOISE_PATTERNS: RegExp[] = [
   /^\s*npm (error|err!)/i,
   /^\s*lifecycle script .* failed/i,
   /^\s*exit code \d+/i,
+  // Vitest prints app logs after "stdout | …"; bare lines may embed error text inside JSON context.
+  /^\d{4}-\d{2}-\d{2}T\S+\s+(?:INFO|WARN|ERROR|DEBUG)\s+\[/i,
   /^\s*stdout \|/i,
   /^\s*stderr \|/i,
   /^\s*RUN\s+v?\d/i,

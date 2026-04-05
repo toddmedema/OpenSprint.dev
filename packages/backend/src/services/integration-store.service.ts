@@ -355,13 +355,30 @@ export class IntegrationStoreService {
     let claimed = false;
 
     await taskStore.runWrite(async (client) => {
-      // Recover from crashed workers that left an import slot in-progress.
-      await client.execute(
-        `DELETE FROM integration_import_ledger
+      // Recover stale `importing` rows: if feedback was persisted but promotion
+      // never ran, `feedback_id` is real — promote to pending_delete instead of
+      // deleting (avoids duplicate feedback on re-claim). If still `__pending__`,
+      // no feedback was linked yet — delete so a new worker can claim.
+      const staleRow = await client.queryOne(
+        `SELECT id, feedback_id FROM integration_import_ledger
          WHERE project_id = $1 AND provider = $2 AND external_item_id = $3
            AND import_status = $4 AND updated_at < $5`,
         [projectId, provider, externalItemId, "importing", staleCutoff]
       );
+      if (staleRow) {
+        const row = staleRow as { id: unknown; feedback_id: string };
+        const fid = String(row.feedback_id);
+        const ledgerId = row.id;
+        if (fid === PENDING_FEEDBACK_ID) {
+          await client.execute("DELETE FROM integration_import_ledger WHERE id = $1", [ledgerId]);
+        } else {
+          await client.execute(
+            `UPDATE integration_import_ledger
+             SET import_status = $1, last_error = $2, updated_at = $3 WHERE id = $4`,
+            ["pending_delete", null, now, ledgerId]
+          );
+        }
+      }
 
       const inserted = await client.execute(
         `INSERT INTO integration_import_ledger (
@@ -378,9 +395,11 @@ export class IntegrationStoreService {
   }
 
   /**
-   * Finalize an already-claimed import slot after feedback creation succeeds.
+   * After {@link submitFeedback} succeeds, persist the feedback id on the importing
+   * ledger row (still `importing`) so crashes before promotion remain reconcilable
+   * and stale-slot recovery can promote instead of dropping the row.
    */
-  async finalizeImportSlot(
+  async attachFeedbackToImportSlot(
     projectId: string,
     provider: IntegrationProvider,
     externalItemId: string,
@@ -391,18 +410,104 @@ export class IntegrationStoreService {
     await taskStore.runWrite(async (client) => {
       updated = await client.execute(
         `UPDATE integration_import_ledger
-         SET feedback_id = $1, import_status = $2, last_error = $3, updated_at = $4
-         WHERE project_id = $5 AND provider = $6 AND external_item_id = $7 AND import_status = $8`,
-        [feedbackId, "pending_delete", null, now, projectId, provider, externalItemId, "importing"]
+         SET feedback_id = $1, updated_at = $2
+         WHERE project_id = $3 AND provider = $4 AND external_item_id = $5
+           AND import_status = $6 AND feedback_id = $7`,
+        [feedbackId, now, projectId, provider, externalItemId, "importing", PENDING_FEEDBACK_ID]
       );
     });
     if (updated === 0) {
-      throw new Error(`Failed to finalize import slot for ${provider}:${externalItemId}`);
+      throw new Error(`Failed to attach feedback to import slot for ${provider}:${externalItemId}`);
     }
   }
 
   /**
-   * Release a claimed import slot when import side effects fail before finalize.
+   * Promote an importing row (with real `feedback_id`) to `pending_delete` after
+   * provenance and other local side effects succeed. Idempotent when already finalized.
+   */
+  async promoteImportSlotToPendingDelete(
+    projectId: string,
+    provider: IntegrationProvider,
+    externalItemId: string,
+    feedbackId: string
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      const n = await client.execute(
+        `UPDATE integration_import_ledger
+         SET import_status = $1, last_error = $2, updated_at = $3
+         WHERE project_id = $4 AND provider = $5 AND external_item_id = $6
+           AND import_status = $7 AND feedback_id = $8`,
+        ["pending_delete", null, now, projectId, provider, externalItemId, "importing", feedbackId]
+      );
+      if (n > 0) return;
+      const row = await client.queryOne(
+        `SELECT import_status, feedback_id FROM integration_import_ledger
+         WHERE project_id = $1 AND provider = $2 AND external_item_id = $3`,
+        [projectId, provider, externalItemId]
+      );
+      if (
+        row &&
+        String((row as { import_status: string }).import_status) === "pending_delete" &&
+        String((row as { feedback_id: string }).feedback_id) === feedbackId
+      ) {
+        return;
+      }
+      throw new Error(`Failed to promote import slot for ${provider}:${externalItemId}`);
+    });
+  }
+
+  /**
+   * Idempotently move an `importing` row to `pending_delete` with the given feedback id.
+   * Used when a later step throws after feedback was created so we never abandon the slot.
+   */
+  async reconcileImportAfterFeedback(
+    projectId: string,
+    provider: IntegrationProvider,
+    externalItemId: string,
+    feedbackId: string
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      const n = await client.execute(
+        `UPDATE integration_import_ledger
+         SET feedback_id = $1, import_status = $2, last_error = $3, updated_at = $4
+         WHERE project_id = $5 AND provider = $6 AND external_item_id = $7 AND import_status = $8`,
+        [feedbackId, "pending_delete", null, now, projectId, provider, externalItemId, "importing"]
+      );
+      if (n > 0) return;
+      const row = await client.queryOne(
+        `SELECT import_status, feedback_id FROM integration_import_ledger
+         WHERE project_id = $1 AND provider = $2 AND external_item_id = $3`,
+        [projectId, provider, externalItemId]
+      );
+      if (
+        row &&
+        String((row as { import_status: string }).import_status) === "pending_delete" &&
+        String((row as { feedback_id: string }).feedback_id) === feedbackId
+      ) {
+        return;
+      }
+    });
+  }
+
+  /**
+   * Finalize an already-claimed import slot after feedback creation succeeds.
+   * Equivalent to {@link attachFeedbackToImportSlot} then {@link promoteImportSlotToPendingDelete}.
+   */
+  async finalizeImportSlot(
+    projectId: string,
+    provider: IntegrationProvider,
+    externalItemId: string,
+    feedbackId: string
+  ): Promise<void> {
+    await this.attachFeedbackToImportSlot(projectId, provider, externalItemId, feedbackId);
+    await this.promoteImportSlotToPendingDelete(projectId, provider, externalItemId, feedbackId);
+  }
+
+  /**
+   * Release a claimed import slot when import side effects fail before feedback exists.
+   * Rows that already have a real `feedback_id` must use {@link reconcileImportAfterFeedback}.
    */
   async abandonImportSlot(
     projectId: string,
@@ -412,8 +517,9 @@ export class IntegrationStoreService {
     await taskStore.runWrite(async (client) => {
       await client.execute(
         `DELETE FROM integration_import_ledger
-         WHERE project_id = $1 AND provider = $2 AND external_item_id = $3 AND import_status = $4`,
-        [projectId, provider, externalItemId, "importing"]
+         WHERE project_id = $1 AND provider = $2 AND external_item_id = $3 AND import_status = $4
+           AND feedback_id = $5`,
+        [projectId, provider, externalItemId, "importing", PENDING_FEEDBACK_ID]
       );
     });
   }

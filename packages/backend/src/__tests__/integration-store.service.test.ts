@@ -274,34 +274,111 @@ describe("IntegrationStoreService — connections", () => {
 describe("IntegrationStoreService — ledger", () => {
   describe("claimImportSlot", () => {
     it("claims slot when insert succeeds", async () => {
-      executeFn
-        .mockResolvedValueOnce(1) // stale importing cleanup delete
-        .mockResolvedValueOnce(1); // insert
+      queryOneFn.mockResolvedValueOnce(undefined); // no stale importing row
+      executeFn.mockResolvedValueOnce(1); // insert
       const result = await store.claimImportSlot("proj-1", "todoist", "ext-1");
       expect(result).toBe(true);
-      expect(executeFn).toHaveBeenNthCalledWith(
-        2,
+      expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("ON CONFLICT (project_id, provider, external_item_id) DO NOTHING"),
         expect.arrayContaining(["proj-1", "todoist", "ext-1", "__pending__", "importing"])
       );
     });
 
     it("returns false when slot already exists", async () => {
-      executeFn
-        .mockResolvedValueOnce(0) // stale cleanup
-        .mockResolvedValueOnce(0); // insert no-op due to conflict
+      queryOneFn.mockResolvedValueOnce(undefined);
+      executeFn.mockResolvedValueOnce(0); // insert no-op due to conflict
       const result = await store.claimImportSlot("proj-1", "todoist", "ext-1");
       expect(result).toBe(false);
     });
+
+    it("deletes stale importing row when feedback was never attached", async () => {
+      queryOneFn.mockResolvedValueOnce({ id: 42, feedback_id: "__pending__" });
+      executeFn.mockResolvedValueOnce(1).mockResolvedValueOnce(1); // DELETE stale, insert
+      await store.claimImportSlot("proj-1", "todoist", "ext-1");
+      expect(executeFn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining("DELETE FROM integration_import_ledger WHERE id = $1"),
+        [42]
+      );
+    });
+
+    it("promotes stale importing row when feedback id was already linked", async () => {
+      queryOneFn.mockResolvedValueOnce({ id: 7, feedback_id: "fb-orphan" });
+      executeFn.mockResolvedValueOnce(1).mockResolvedValueOnce(1); // UPDATE stale, insert
+      await store.claimImportSlot("proj-1", "todoist", "ext-1");
+      expect(executeFn).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining("SET import_status = $1"),
+        ["pending_delete", null, expect.any(String), 7]
+      );
+    });
   });
 
-  describe("finalizeImportSlot", () => {
-    it("promotes importing row to pending_delete with feedback id", async () => {
+  describe("attachFeedbackToImportSlot", () => {
+    it("sets feedback_id on importing row with placeholder id", async () => {
       executeFn.mockResolvedValueOnce(1);
-      await store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1");
+      await store.attachFeedbackToImportSlot("proj-1", "todoist", "ext-1", "fb-1");
       expect(executeFn).toHaveBeenCalledWith(
-        expect.stringContaining("SET feedback_id = $1, import_status = $2"),
-        [
+        expect.stringContaining("SET feedback_id = $1, updated_at = $2"),
+        expect.arrayContaining([
+          "fb-1",
+          expect.any(String),
+          "proj-1",
+          "todoist",
+          "ext-1",
+          "importing",
+          "__pending__",
+        ])
+      );
+    });
+
+    it("throws when no matching importing row", async () => {
+      executeFn.mockResolvedValueOnce(0);
+      await expect(
+        store.attachFeedbackToImportSlot("proj-1", "todoist", "ext-1", "fb-1")
+      ).rejects.toThrow("Failed to attach feedback");
+    });
+  });
+
+  describe("promoteImportSlotToPendingDelete", () => {
+    it("sets import_status pending_delete when row is importing with feedback id", async () => {
+      executeFn.mockResolvedValueOnce(1);
+      await store.promoteImportSlotToPendingDelete("proj-1", "todoist", "ext-1", "fb-1");
+      expect(executeFn).toHaveBeenCalledWith(
+        expect.stringContaining("SET import_status = $1, last_error = $2"),
+        expect.arrayContaining([
+          "pending_delete",
+          null,
+          expect.any(String),
+          "proj-1",
+          "todoist",
+          "ext-1",
+          "importing",
+          "fb-1",
+        ])
+      );
+    });
+
+    it("is idempotent when already pending_delete with same feedback", async () => {
+      executeFn.mockResolvedValueOnce(0);
+      queryOneFn.mockResolvedValueOnce(
+        makeLedgerRow({ import_status: "pending_delete", feedback_id: "fb-1" })
+      );
+      await expect(
+        store.promoteImportSlotToPendingDelete("proj-1", "todoist", "ext-1", "fb-1")
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("reconcileImportAfterFeedback", () => {
+    it("promotes importing row in one update (idempotent if already pending_delete)", async () => {
+      executeFn.mockResolvedValueOnce(1);
+      await store.reconcileImportAfterFeedback("proj-1", "todoist", "ext-1", "fb-1");
+      expect(executeFn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "SET feedback_id = $1, import_status = $2, last_error = $3, updated_at = $4"
+        ),
+        expect.arrayContaining([
           "fb-1",
           "pending_delete",
           null,
@@ -310,24 +387,44 @@ describe("IntegrationStoreService — ledger", () => {
           "todoist",
           "ext-1",
           "importing",
-        ]
+        ])
       );
     });
 
-    it("throws when no importing row exists", async () => {
+    it("no-ops when already reconciled to pending_delete", async () => {
+      executeFn.mockResolvedValueOnce(0);
+      queryOneFn.mockResolvedValueOnce(
+        makeLedgerRow({ import_status: "pending_delete", feedback_id: "fb-1" })
+      );
+      await expect(
+        store.reconcileImportAfterFeedback("proj-1", "todoist", "ext-1", "fb-1")
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("finalizeImportSlot", () => {
+    it("runs attach then promote", async () => {
+      executeFn.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      await store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1");
+      expect(executeFn).toHaveBeenCalledTimes(2);
+      expect(executeFn.mock.calls[0][0]).toContain("SET feedback_id = $1, updated_at = $2");
+      expect(executeFn.mock.calls[1][0]).toContain("SET import_status = $1, last_error = $2");
+    });
+
+    it("throws when attach finds no row", async () => {
       executeFn.mockResolvedValueOnce(0);
       await expect(store.finalizeImportSlot("proj-1", "todoist", "ext-1", "fb-1")).rejects.toThrow(
-        "Failed to finalize import slot"
+        "Failed to attach feedback"
       );
     });
   });
 
   describe("abandonImportSlot", () => {
-    it("deletes importing row", async () => {
+    it("deletes importing row only when feedback_id is still pending placeholder", async () => {
       await store.abandonImportSlot("proj-1", "todoist", "ext-1");
       expect(executeFn).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM integration_import_ledger"),
-        ["proj-1", "todoist", "ext-1", "importing"]
+        ["proj-1", "todoist", "ext-1", "importing", "__pending__"]
       );
     });
   });

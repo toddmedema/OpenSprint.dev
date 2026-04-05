@@ -9,7 +9,7 @@ export const PHASE_QUEUE_LIST_SECTION_BODY_CLASSNAME =
 
 /** Inner flex strip: primary label + trailing actions (matches Plan + Timeline row chrome). */
 export const PHASE_QUEUE_ROW_INNER_CLASSNAME =
-  "flex items-center gap-2 px-4 py-2.5 group overflow-x-auto md:overflow-x-visible min-w-0";
+  "flex w-full items-center gap-2 px-4 py-2.5 group overflow-x-auto md:overflow-x-visible min-w-0";
 
 const PHASE_QUEUE_ROW_PRIMARY_LAYOUT =
   "flex-1 flex items-center gap-3 text-left text-sm min-w-0 focus:outline-none focus-visible:outline-none";

@@ -142,6 +142,9 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     deleteConnection: vi.fn().mockResolvedValue(undefined),
     recordImport: vi.fn().mockResolvedValue(true),
     claimImportSlot: vi.fn().mockResolvedValue(true),
+    attachFeedbackToImportSlot: vi.fn().mockResolvedValue(undefined),
+    promoteImportSlotToPendingDelete: vi.fn().mockResolvedValue(undefined),
+    reconcileImportAfterFeedback: vi.fn().mockResolvedValue(undefined),
     finalizeImportSlot: vi.fn().mockResolvedValue(undefined),
     abandonImportSlot: vi.fn().mockResolvedValue(undefined),
     getPendingDeletes: vi.fn().mockResolvedValue([]),
@@ -216,7 +219,8 @@ describe("TodoistSyncService", () => {
     expect(result).toEqual({ imported: 3, errors: 0 });
     expect(deps.submitFeedback).toHaveBeenCalledTimes(3);
     expect(store.claimImportSlot).toHaveBeenCalledTimes(3);
-    expect(store.finalizeImportSlot).toHaveBeenCalledTimes(3);
+    expect(store.attachFeedbackToImportSlot).toHaveBeenCalledTimes(3);
+    expect(store.promoteImportSlotToPendingDelete).toHaveBeenCalledTimes(3);
     expect(mockDeleteTask).toHaveBeenCalledTimes(3);
     expect(store.markCompleted).toHaveBeenCalledTimes(3);
     expect(store.markCompleted).toHaveBeenCalledWith("led-1");
@@ -235,7 +239,7 @@ describe("TodoistSyncService", () => {
     expect(result.imported).toBe(0);
     expect(deps.submitFeedback).not.toHaveBeenCalled();
     expect(mockDeleteTask).not.toHaveBeenCalled();
-    expect(deps.integrationStore.finalizeImportSlot).not.toHaveBeenCalled();
+    expect(deps.integrationStore.attachFeedbackToImportSlot).not.toHaveBeenCalled();
     expect(deps.integrationStore.claimImportSlot).not.toHaveBeenCalled();
   });
 
@@ -253,7 +257,8 @@ describe("TodoistSyncService", () => {
 
     expect(result.imported).toBe(1);
     expect(deps.submitFeedback).toHaveBeenCalled();
-    expect(store.finalizeImportSlot).toHaveBeenCalled();
+    expect(store.attachFeedbackToImportSlot).toHaveBeenCalled();
+    expect(store.promoteImportSlotToPendingDelete).toHaveBeenCalled();
     expect(store.markFailedDelete).toHaveBeenCalledWith("led-df", "Network error");
     expect(store.markCompleted).not.toHaveBeenCalled();
   });

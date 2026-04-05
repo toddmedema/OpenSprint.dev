@@ -118,6 +118,9 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     deleteConnection: vi.fn().mockResolvedValue(undefined),
     recordImport: vi.fn().mockResolvedValue(true),
     claimImportSlot: vi.fn().mockResolvedValue(true),
+    attachFeedbackToImportSlot: vi.fn().mockResolvedValue(undefined),
+    promoteImportSlotToPendingDelete: vi.fn().mockResolvedValue(undefined),
+    reconcileImportAfterFeedback: vi.fn().mockResolvedValue(undefined),
     finalizeImportSlot: vi.fn().mockResolvedValue(undefined),
     abandonImportSlot: vi.fn().mockResolvedValue(undefined),
     getPendingDeletes: vi.fn().mockResolvedValue([]),
@@ -252,7 +255,13 @@ describe("TodoistSyncService", () => {
         text: "Fix the login page",
         priority: 3,
       });
-      expect(deps.integrationStore.finalizeImportSlot).toHaveBeenCalledWith(
+      expect(deps.integrationStore.attachFeedbackToImportSlot).toHaveBeenCalledWith(
+        "proj-1",
+        "todoist",
+        "task-1",
+        "fb-1"
+      );
+      expect(deps.integrationStore.promoteImportSlotToPendingDelete).toHaveBeenCalledWith(
         "proj-1",
         "todoist",
         "task-1",
@@ -333,6 +342,69 @@ describe("TodoistSyncService", () => {
         "todoist",
         "task-1"
       );
+      expect(deps.integrationStore.reconcileImportAfterFeedback).not.toHaveBeenCalled();
+    });
+
+    it("reconciles ledger when promoteImportSlot fails after feedback is created (regression)", async () => {
+      const task = makeTask();
+      mockGetTasks.mockResolvedValue([task]);
+      const promote = deps.integrationStore.promoteImportSlotToPendingDelete as ReturnType<
+        typeof vi.fn
+      >;
+      promote.mockRejectedValueOnce(new Error("promote failed"));
+
+      const result = await service.runSync("conn-1");
+
+      expect(result.imported).toBe(0);
+      expect(result.errors).toBe(1);
+      expect(deps.integrationStore.reconcileImportAfterFeedback).toHaveBeenCalledWith(
+        "proj-1",
+        "todoist",
+        "task-1",
+        "fb-1"
+      );
+      expect(deps.integrationStore.abandonImportSlot).not.toHaveBeenCalled();
+    });
+
+    it("does not submit duplicate feedback on next sync after promote failure (regression)", async () => {
+      const task = makeTask();
+      mockGetTasks.mockResolvedValue([task]);
+      const promote = deps.integrationStore.promoteImportSlotToPendingDelete as ReturnType<
+        typeof vi.fn
+      >;
+      promote.mockReset();
+      promote
+        .mockRejectedValueOnce(new Error("promote failed"))
+        .mockResolvedValue(undefined);
+      const listImported = deps.integrationStore.listImportedExternalIds as ReturnType<
+        typeof vi.fn
+      >;
+      listImported.mockResolvedValueOnce(new Set()).mockResolvedValue(new Set(["task-1"]));
+      const ledgerEntry = {
+        id: "led-1",
+        project_id: "proj-1",
+        provider: "todoist" as const,
+        external_item_id: "task-1",
+        feedback_id: "fb-1",
+        import_status: "pending_delete" as const,
+        last_error: null,
+        retry_count: 0,
+        created_at: "2025-01-01T00:00:00.000Z",
+        updated_at: "2025-01-01T00:00:00.000Z",
+      };
+      (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([ledgerEntry]);
+
+      const first = await service.runSync("conn-1");
+      expect(first.errors).toBe(1);
+      expect(deps.submitFeedback).toHaveBeenCalledTimes(1);
+
+      const second = await service.runSync("conn-1");
+      expect(second.imported).toBe(0);
+      expect(deps.submitFeedback).toHaveBeenCalledTimes(1);
+      expect(mockDeleteTask).toHaveBeenCalledWith("task-1");
+      expect(deps.integrationStore.markCompleted).toHaveBeenCalledWith("led-1");
     });
 
     it("caps processing at 50 tasks", async () => {
@@ -406,7 +478,8 @@ describe("TodoistSyncService", () => {
 
       expect(first.imported + second.imported).toBe(1);
       expect(deps.submitFeedback).toHaveBeenCalledTimes(1);
-      expect(deps.integrationStore.finalizeImportSlot).toHaveBeenCalledTimes(1);
+      expect(deps.integrationStore.attachFeedbackToImportSlot).toHaveBeenCalledTimes(1);
+      expect(deps.integrationStore.promoteImportSlotToPendingDelete).toHaveBeenCalledTimes(1);
     });
 
     it("skips pre-cutoff tasks in new-only mode (regression)", async () => {
