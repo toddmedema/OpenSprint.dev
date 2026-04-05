@@ -765,9 +765,7 @@ describe("FailureHandlerService", () => {
           qualityGateDetail: expect.objectContaining({
             command: "node ./node_modules/vitest/vitest.mjs run src/foo.test.ts",
             reason: "Tests failed: 1 failed, 0 passed",
-            outputSnippet: expect.stringContaining(
-              "AssertionError: expected 401 to be 403"
-            ),
+            outputSnippet: expect.stringContaining("AssertionError: expected 401 to be 403"),
             firstErrorLine: "AssertionError: expected 401 to be 403 // Object.is equality",
           }),
         }),
@@ -1444,6 +1442,44 @@ describe("FailureHandlerService", () => {
           }),
         })
       );
+    });
+
+    it("redacts secrets in comments, agent-failed notifications, and task.failed event payload", async () => {
+      const leakSk = "sk-ant-api03-failurehandler9876543210987654";
+      const leakEnv = "CURSOR_API_KEY=fh-secret-value";
+      const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhIjoiYiJ9.sigsigsigsig";
+      const reason = `stderr: ${leakSk} ${leakEnv} Bearer ${jwt}`;
+
+      await handler.handleTaskFailure(
+        projectId,
+        repoPath,
+        makeTask(),
+        branchName,
+        reason,
+        null,
+        "coding_failure"
+      );
+
+      const commentCall = vi.mocked(mockHost.taskStore.comment).mock.calls[0];
+      expect(commentCall?.[2] as string).toBeDefined();
+      const commentText = commentCall![2] as string;
+      expect(commentText).not.toContain(leakSk);
+      expect(commentText).not.toContain("fh-secret-value");
+      expect(commentText).not.toContain(jwt);
+
+      expect(notificationService.createAgentFailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.not.stringContaining(leakSk),
+        })
+      );
+
+      const failedAppend = vi
+        .mocked(eventLogService.append)
+        .mock.calls.find((c) => (c[1] as { event?: string }).event === "task.failed");
+      expect(failedAppend).toBeDefined();
+      const data = (failedAppend![1] as { data?: { reason?: string } }).data;
+      expect(String(data?.reason)).not.toContain(leakSk);
+      expect(String(data?.reason)).not.toContain("fh-secret-value");
     });
   });
 });

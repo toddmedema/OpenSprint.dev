@@ -327,6 +327,41 @@ describe.skipIf(!notifPostgresOk)("NotificationService", () => {
       const list = await service.listByProject("proj-dedupe");
       expect(list).toHaveLength(1);
     });
+
+    it("persists redacted message without raw credentials", async () => {
+      const raw =
+        "Auth error sk-ant-api03-notif9876543210 CURSOR_API_KEY=secret-notif Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhIjoiYiJ9.sigsigsigsig";
+      const result = await service.createApiBlocked({
+        projectId: "proj-redact-ab",
+        source: "execute",
+        sourceId: "task-ab1",
+        message: raw,
+        errorCode: "auth",
+      });
+      expect(result.questions[0]!.text).not.toMatch(/sk-ant-api03-notif/);
+      expect(result.questions[0]!.text).not.toMatch(/secret-notif/);
+      expect(result.questions[0]!.text).not.toMatch(/eyJhbGciOiJIUzI1NiI/);
+      const list = await service.listByProject("proj-redact-ab");
+      expect(JSON.stringify(list)).not.toMatch(/sk-ant-api03-notif/);
+    });
+  });
+
+  describe("createAgentFailed", () => {
+    it("persists redacted message without raw API key material", async () => {
+      const raw =
+        "Fail sk-ant-api03-persist9876543210 CURSOR_API_KEY=hide-me Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhIjoiYiJ9.sigsigsigsig";
+      const result = await service.createAgentFailed({
+        projectId: "proj-redact-af",
+        source: "execute",
+        sourceId: "task-r1",
+        message: raw,
+      });
+      expect(result.questions[0]!.text).not.toMatch(/sk-ant-api03-persist/);
+      expect(result.questions[0]!.text).not.toMatch(/hide-me/);
+      expect(result.questions[0]!.text).not.toMatch(/eyJhbGciOiJIUzI1NiI/);
+      const list = await service.listByProject("proj-redact-af");
+      expect(JSON.stringify(list)).not.toMatch(/sk-ant-api03-persist/);
+    });
   });
 
   describe("listByProject", () => {

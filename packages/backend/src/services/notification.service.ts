@@ -9,6 +9,7 @@ import { taskStore } from "./task-store.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { createLogger } from "../utils/logger.js";
+import { redactSecretsForUserDisplay } from "../utils/secret-redaction.js";
 import type {
   ApiBlockedErrorCode,
   Notification,
@@ -144,10 +145,11 @@ export class NotificationService {
   async createApiBlocked(input: CreateApiBlockedInput): Promise<Notification> {
     const id = "ab-" + crypto.randomBytes(4).toString("hex");
     const createdAt = new Date().toISOString();
+    const safeMessage = redactSecretsForUserDisplay(input.message).slice(0, 500);
     const questions: OpenQuestionItem[] = [
       {
         id: `q-${id}`,
-        text: input.message,
+        text: safeMessage,
         createdAt,
       },
     ];
@@ -218,10 +220,11 @@ export class NotificationService {
   async createAgentFailed(input: CreateAgentFailedInput): Promise<Notification> {
     const id = "af-" + crypto.randomBytes(4).toString("hex");
     const createdAt = new Date().toISOString();
+    const safeMessage = redactSecretsForUserDisplay(input.message).slice(0, 2000);
     const questions: OpenQuestionItem[] = [
       {
         id: `q-${id}`,
-        text: input.message.slice(0, 2000),
+        text: safeMessage,
         createdAt,
       },
     ];

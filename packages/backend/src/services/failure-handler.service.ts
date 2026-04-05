@@ -46,6 +46,11 @@ import {
 } from "./no-result-reason.service.js";
 import { suggestPolicyFromArtifact, summarizeDebugArtifact } from "./agentic-repair.service.js";
 import { worktreeLeaseService } from "./worktree-lease.service.js";
+import {
+  redactFailureDiagnosticDetail,
+  redactRetryQualityGateDetail,
+  redactSecretsForUserDisplay,
+} from "../utils/secret-redaction.js";
 
 const log = createLogger("failure-handler");
 
@@ -54,7 +59,12 @@ function extractPreflightSubCode(reason: string): string | null {
   return match?.[1] ?? null;
 }
 
-const INFRA_FAILURE_TYPES: FailureType[] = ["agent_crash", "timeout", "merge_conflict", "workspace_invalid"];
+const INFRA_FAILURE_TYPES: FailureType[] = [
+  "agent_crash",
+  "timeout",
+  "merge_conflict",
+  "workspace_invalid",
+];
 const MAX_INFRA_RETRIES = 2;
 const NO_RESULT_TAIL_LINES = 8;
 const NO_RESULT_REASON_LIMIT = 1200;
@@ -427,10 +437,12 @@ export class FailureHandlerService {
     };
     existingFailureHistory?: RetryFailureHistoryEntry[];
   }): RetryContext {
+    const r = redactSecretsForUserDisplay;
     const context: RetryContext = {
-      previousFailure:
+      previousFailure: r(
         this.truncateRetryContextText(params.previousFailure, RETRY_CONTEXT_FAILURE_LIMIT) ??
-        params.previousFailure.slice(0, RETRY_CONTEXT_FAILURE_LIMIT),
+          params.previousFailure.slice(0, RETRY_CONTEXT_FAILURE_LIMIT)
+      ),
       failureType: params.failureType,
     };
     const reviewFeedback = this.truncateRetryContextText(
@@ -438,45 +450,45 @@ export class FailureHandlerService {
       RETRY_CONTEXT_REVIEW_LIMIT
     );
     if (reviewFeedback) {
-      context.reviewFeedback = reviewFeedback;
+      context.reviewFeedback = r(reviewFeedback);
     }
     const previousTestOutput = this.truncateRetryContextText(
       params.previousTestOutput,
       RETRY_CONTEXT_TEST_OUTPUT_LIMIT
     );
     if (previousTestOutput) {
-      context.previousTestOutput = previousTestOutput;
+      context.previousTestOutput = r(previousTestOutput);
     }
     const previousTestFailures = this.truncateRetryContextText(
       params.previousTestFailures,
       RETRY_CONTEXT_TEST_FAILURES_LIMIT
     );
     if (previousTestFailures) {
-      context.previousTestFailures = previousTestFailures;
+      context.previousTestFailures = r(previousTestFailures);
     }
     const previousDiff = this.truncateRetryContextText(
       params.previousDiff,
       RETRY_CONTEXT_DIFF_LIMIT
     );
     if (previousDiff) {
-      context.previousDiff = previousDiff;
+      context.previousDiff = r(previousDiff);
     }
     if (params.qualityGateDetail) {
-      context.qualityGateDetail = {
+      context.qualityGateDetail = redactRetryQualityGateDetail(params.qualityGateDetail) ?? {
         ...params.qualityGateDetail,
       };
     }
     if (params.failureHistoryAppend) {
       const prev = params.existingFailureHistory ?? [];
       const summary = compactExecutionText(
-        params.failureHistoryAppend.summary,
+        r(params.failureHistoryAppend.summary),
         FAILURE_HISTORY_SUMMARY_LIMIT
       );
       const nextEntry: RetryFailureHistoryEntry = {
         attempt: params.failureHistoryAppend.attempt,
         failureType: params.failureHistoryAppend.failureType,
         summary:
-          summary || params.failureHistoryAppend.summary.slice(0, FAILURE_HISTORY_SUMMARY_LIMIT),
+          summary || r(params.failureHistoryAppend.summary).slice(0, FAILURE_HISTORY_SUMMARY_LIMIT),
         occurredAt: params.failureHistoryAppend.occurredAt,
         signature: params.failureHistoryAppend.signature,
       };
@@ -565,8 +577,8 @@ export class FailureHandlerService {
       structuredQualityGateDetail
     ) {
       const rawReason =
-          structuredQualityGateDetail.reason?.trim() ||
-          (params.reason.trim() ? params.reason.trim() : null);
+        structuredQualityGateDetail.reason?.trim() ||
+        (params.reason.trim() ? params.reason.trim() : null);
       const clippedReason = rawReason ? rawReason.slice(0, 500) : null;
       return {
         command:
@@ -729,16 +741,20 @@ export class FailureHandlerService {
     if (remediationAction) {
       nextAction = remediationAction;
     }
-    const failureSummary = compactExecutionText(
-      `${slot.phase === "review" ? "Review" : "Coding"} failed: ${effectiveReason}`,
-      500
-    );
     const failureDiagnosticDetail = this.buildFailureDiagnosticDetail({
       failureType,
       reason: effectiveReason,
       slot,
       testResults,
     });
+    const redactedReason = redactSecretsForUserDisplay(effectiveReason);
+    const redactedDiagnostic = redactFailureDiagnosticDetail(failureDiagnosticDetail);
+    const failureSummary = redactSecretsForUserDisplay(
+      compactExecutionText(
+        `${slot.phase === "review" ? "Review" : "Coding"} failed: ${effectiveReason}`,
+        500
+      )
+    );
     const startedAtMs = Date.parse(slot.agent.startedAt ?? "");
     const attemptDurationMs = Number.isFinite(startedAtMs)
       ? Math.max(0, Date.now() - startedAtMs)
@@ -820,7 +836,7 @@ export class FailureHandlerService {
             projectId,
             source: "execute",
             sourceId: task.id,
-            message: effectiveReason.slice(0, 500),
+            message: redactedReason.slice(0, 500),
             errorCode: apiErrorKind,
           });
           broadcastToProject(projectId, {
@@ -851,7 +867,7 @@ export class FailureHandlerService {
             projectId,
             source: "execute",
             sourceId: task.id,
-            message: effectiveReason.slice(0, 2000),
+            message: redactedReason.slice(0, 2000),
           });
           broadcastToProject(projectId, {
             type: "notification.added",
@@ -878,19 +894,18 @@ export class FailureHandlerService {
     }
 
     const preflightSubCode =
-      failureType === "repo_preflight"
-        ? extractPreflightSubCode(effectiveReason)
-        : null;
+      failureType === "repo_preflight" ? extractPreflightSubCode(effectiveReason) : null;
 
-    const earlyFailureFingerprint = failureType === "merge_quality_gate"
-      ? this.buildFailureSignature({
-          failureType,
-          reason: effectiveReason,
-          diagnostic: failureDiagnosticDetail,
-          noResultReasonCode: options?.noResultReasonCode,
-          qualityGateDetail: slot.phaseResult.qualityGateDetail,
-        }).slice(0, 300)
-      : null;
+    const earlyFailureFingerprint =
+      failureType === "merge_quality_gate"
+        ? this.buildFailureSignature({
+            failureType,
+            reason: redactedReason,
+            diagnostic: redactedDiagnostic,
+            noResultReasonCode: options?.noResultReasonCode,
+            qualityGateDetail: slot.phaseResult.qualityGateDetail,
+          }).slice(0, 300)
+        : null;
 
     // Log all failures (including review rejections) to event log for Execution Diagnostics
     eventLogService
@@ -904,7 +919,7 @@ export class FailureHandlerService {
           phase: slot.phase,
           failureType,
           model: agentConfig.model ?? null,
-          reason: effectiveReason.slice(0, 500),
+          reason: redactedReason.slice(0, 500),
           summary: failureSummary,
           nextAction,
           policyDecision: artifactPolicyDecision,
@@ -913,7 +928,7 @@ export class FailureHandlerService {
           ...(preflightSubCode ? { preflightSubCode } : {}),
           ...(earlyFailureFingerprint ? { failureFingerprint: earlyFailureFingerprint } : {}),
           ...commonFailureContext,
-          ...this.failureDiagnosticFields(failureDiagnosticDetail),
+          ...this.failureDiagnosticFields(redactedDiagnostic),
         },
       })
       .catch(() => {});
@@ -976,11 +991,21 @@ export class FailureHandlerService {
     const failureOccurredAt = new Date().toISOString();
     const failureSignature = this.buildFailureSignature({
       failureType,
-      reason: effectiveReason,
-      diagnostic: failureDiagnosticDetail,
+      reason: redactedReason,
+      diagnostic: redactedDiagnostic,
       noResultReasonCode: options?.noResultReasonCode,
       qualityGateDetail: slot.phaseResult.qualityGateDetail,
     });
+    const redactedQualityGateForRetry = redactRetryQualityGateDetail(
+      redactedDiagnostic ??
+        failureDiagnosticDetail ??
+        slot.phaseResult.qualityGateDetail ??
+        undefined
+    );
+    const redactedReviewFeedback =
+      reviewFeedback != null && reviewFeedback !== ""
+        ? redactSecretsForUserDisplay(reviewFeedback)
+        : reviewFeedback;
     const persistedRetryContext = this.buildPersistedRetryContext({
       failureType,
       previousFailure: effectiveReason,
@@ -1020,7 +1045,7 @@ export class FailureHandlerService {
         gitBranch: branchName,
         status: "failed",
         outputLog: slot.agent.outputLog.join(""),
-        failureReason: effectiveReason,
+        failureReason: redactedReason,
         testResults: testResults ?? undefined,
         gitDiff: gitDiff || undefined,
         startedAt: slot.agent.startedAt,
@@ -1042,10 +1067,10 @@ export class FailureHandlerService {
       failureType === "timeout"
         ? `Attempt ${cumulativeAttempts} failed [timeout]: Agent stopped responding (${inactivityMinutes} min inactivity); task requeued.`
         : remediationAction
-          ? `Attempt ${cumulativeAttempts} failed [${failureType}]: ${effectiveReason.slice(0, 500)} Remediation: ${remediationAction}`
+          ? `Attempt ${cumulativeAttempts} failed [${failureType}]: ${redactedReason.slice(0, 500)} Remediation: ${remediationAction}`
           : failureType === "review_rejection" && reviewFeedback
-            ? `Review rejected (attempt ${cumulativeAttempts}):\n\n${reviewFeedback.slice(0, 2000)}`
-            : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${effectiveReason.slice(0, 500)}`;
+            ? `Review rejected (attempt ${cumulativeAttempts}):\n\n${redactSecretsForUserDisplay(reviewFeedback).slice(0, 2000)}`
+            : `Attempt ${cumulativeAttempts} failed [${failureType}]: ${redactedReason.slice(0, 500)}`;
     await this.host.taskStore
       .comment(projectId, task.id, commentText)
       .catch((err) => log.warn("Failed to add failure comment", { err }));
@@ -1065,12 +1090,12 @@ export class FailureHandlerService {
         task,
         cumulativeAttempts,
         artifactSummary
-          ? `${effectiveReason} | Agent diagnosis: ${artifactSummary}`
-          : effectiveReason,
+          ? `${redactedReason} | Agent diagnosis: ${artifactSummary}`
+          : redactedReason,
         failureType,
         slot.phase,
         agentConfig.model ?? null,
-        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+        slot.phase === "review" ? { effectiveReason: redactedReason, apiErrorKind } : undefined,
         persistedRetryContext,
         undefined,
         {
@@ -1143,7 +1168,7 @@ export class FailureHandlerService {
         taskId: task.id,
         status: "failed",
         testResults: null,
-        reason: effectiveReason.slice(0, 500),
+        reason: redactedReason.slice(0, 500),
       });
       if (shouldNudgeAfterReopen) {
         this.host.nudge(projectId);
@@ -1168,11 +1193,11 @@ export class FailureHandlerService {
         repoPath,
         task,
         cumulativeAttempts,
-        effectiveReason,
+        redactedReason,
         failureType,
         slot.phase,
         agentConfig.model ?? null,
-        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+        slot.phase === "review" ? { effectiveReason: redactedReason, apiErrorKind } : undefined,
         persistedRetryContext,
         undefined,
         { diagnostics: commonFailureContext }
@@ -1180,7 +1205,11 @@ export class FailureHandlerService {
       return;
     }
 
-    if (failureType === "repo_preflight" || failureType === "environment_setup" || failureType === "workspace_invalid") {
+    if (
+      failureType === "repo_preflight" ||
+      failureType === "environment_setup" ||
+      failureType === "workspace_invalid"
+    ) {
       log.warn("Deterministic environment/setup failure; blocking task until remediated", {
         taskId: task.id,
         failureType,
@@ -1198,13 +1227,13 @@ export class FailureHandlerService {
         repoPath,
         task,
         cumulativeAttempts,
-        effectiveReason,
+        redactedReason,
         failureType,
         slot.phase,
         agentConfig.model ?? null,
-        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+        slot.phase === "review" ? { effectiveReason: redactedReason, apiErrorKind } : undefined,
         persistedRetryContext,
-        failureDiagnosticDetail,
+        redactedDiagnostic,
         remediationAction
           ? { nextAction: remediationAction, diagnostics: commonFailureContext }
           : { diagnostics: commonFailureContext }
@@ -1231,13 +1260,13 @@ export class FailureHandlerService {
         repoPath,
         task,
         cumulativeAttempts,
-        effectiveReason,
+        redactedReason,
         failureType,
         slot.phase,
         agentConfig.model ?? null,
-        slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+        slot.phase === "review" ? { effectiveReason: redactedReason, apiErrorKind } : undefined,
         persistedRetryContext,
-        failureDiagnosticDetail,
+        redactedDiagnostic,
         {
           blockReason: runawayPolicy.blockReason,
           nextAction: runawayPolicy.nextActionOverride ?? "Blocked pending investigation",
@@ -1274,7 +1303,7 @@ export class FailureHandlerService {
         extra: {
           last_execution_summary: retrySummary,
           [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
-          ...this.failureDiagnosticFields(failureDiagnosticDetail),
+          ...this.failureDiagnosticFields(redactedDiagnostic),
         },
       });
       eventLogService
@@ -1294,7 +1323,7 @@ export class FailureHandlerService {
             ...commonFailureContext,
             requeueCountForFailureType,
             repeatedFailureSignatureCount,
-            ...this.failureDiagnosticFields(failureDiagnosticDetail),
+            ...this.failureDiagnosticFields(redactedDiagnostic),
           },
         })
         .catch(() => {});
@@ -1304,7 +1333,7 @@ export class FailureHandlerService {
         failureType,
         summary: retrySummary.summary,
         nextAction,
-        failureDiagnosticDetail,
+        failureDiagnosticDetail: redactedDiagnostic,
         requeueCountForFailureType,
         repeatedFailureSignatureCount,
       });
@@ -1323,14 +1352,13 @@ export class FailureHandlerService {
 
       await this.host.persistCounters(projectId, repoPath);
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
-        previousFailure: effectiveReason,
-        reviewFeedback,
+        previousFailure: redactedReason,
+        reviewFeedback: redactedReviewFeedback,
         useExistingBranch: preserveBranch,
         previousDiff,
         previousTestOutput,
         previousTestFailures,
-        qualityGateDetail:
-          failureDiagnosticDetail ?? slot.phaseResult.qualityGateDetail ?? undefined,
+        qualityGateDetail: redactedQualityGateForRetry,
         failureType,
         failureHistory: persistedRetryContext.failureHistory,
       });
@@ -1359,7 +1387,7 @@ export class FailureHandlerService {
         extra: {
           last_execution_summary: retrySummary,
           [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
-          ...this.failureDiagnosticFields(failureDiagnosticDetail),
+          ...this.failureDiagnosticFields(redactedDiagnostic),
         },
       });
       eventLogService
@@ -1379,7 +1407,7 @@ export class FailureHandlerService {
             ...commonFailureContext,
             requeueCountForFailureType,
             repeatedFailureSignatureCount,
-            ...this.failureDiagnosticFields(failureDiagnosticDetail),
+            ...this.failureDiagnosticFields(redactedDiagnostic),
           },
         })
         .catch(() => {});
@@ -1389,7 +1417,7 @@ export class FailureHandlerService {
         failureType,
         summary: retrySummary.summary,
         nextAction,
-        failureDiagnosticDetail,
+        failureDiagnosticDetail: redactedDiagnostic,
         requeueCountForFailureType,
         repeatedFailureSignatureCount,
       });
@@ -1414,14 +1442,13 @@ export class FailureHandlerService {
 
       await this.host.persistCounters(projectId, repoPath);
       await this.host.executeCodingPhase(projectId, repoPath, task, slot, {
-        previousFailure: effectiveReason,
-        reviewFeedback,
+        previousFailure: redactedReason,
+        reviewFeedback: redactedReviewFeedback,
         useExistingBranch: preserveBranch,
         previousDiff,
         previousTestOutput,
         previousTestFailures,
-        qualityGateDetail:
-          failureDiagnosticDetail ?? slot.phaseResult.qualityGateDetail ?? undefined,
+        qualityGateDetail: redactedQualityGateForRetry,
         failureType,
         failureHistory: persistedRetryContext.failureHistory,
       });
@@ -1438,13 +1465,13 @@ export class FailureHandlerService {
           repoPath,
           task,
           cumulativeAttempts,
-          effectiveReason,
+          redactedReason,
           failureType,
           slot.phase,
           agentConfig.model ?? null,
-          slot.phase === "review" ? { effectiveReason, apiErrorKind } : undefined,
+          slot.phase === "review" ? { effectiveReason: redactedReason, apiErrorKind } : undefined,
           persistedRetryContext,
-          failureDiagnosticDetail,
+          redactedDiagnostic,
           { diagnostics: commonFailureContext }
         );
       } else {
@@ -1476,7 +1503,7 @@ export class FailureHandlerService {
             extra: {
               last_execution_summary: demoteSummary,
               [NEXT_RETRY_CONTEXT_KEY]: persistedRetryContext,
-              ...this.failureDiagnosticFields(failureDiagnosticDetail),
+              ...this.failureDiagnosticFields(redactedDiagnostic),
             },
           });
           await this.clearMergeQueueLabels(projectId, task);
@@ -1498,7 +1525,7 @@ export class FailureHandlerService {
               nextAction,
               policyDecision: "demote" as FailurePolicyDecision,
               ...commonFailureContext,
-              ...this.failureDiagnosticFields(failureDiagnosticDetail),
+              ...this.failureDiagnosticFields(redactedDiagnostic),
             },
           })
           .catch(() => {});
@@ -1511,7 +1538,7 @@ export class FailureHandlerService {
           taskId: task.id,
           status: "failed",
           testResults: null,
-          reason: effectiveReason.slice(0, 500),
+          reason: redactedReason.slice(0, 500),
         });
 
         this.host.nudge(projectId);
@@ -1555,11 +1582,7 @@ export class FailureHandlerService {
     }
     if (slot.worktreePath) {
       await this.host.branchManager.prepareWorktreeForRemoval(worktreeKey);
-      await this.host.branchManager.removeTaskWorktree(
-        repoPath,
-        worktreeKey,
-        slot.worktreePath
-      );
+      await this.host.branchManager.removeTaskWorktree(repoPath, worktreeKey, slot.worktreePath);
       slot.worktreePath = null;
     }
     await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
@@ -1596,6 +1619,8 @@ export class FailureHandlerService {
   ): Promise<void> {
     const blockReason = options?.blockReason ?? "Coding Failure";
     const nextAction = options?.nextAction ?? "Blocked pending investigation";
+    const safeReason = redactSecretsForUserDisplay(reason);
+    const safeDiagnostic = redactFailureDiagnosticDetail(failureDiagnosticDetail ?? null);
     log.info(`Blocking ${task.id} after ${cumulativeAttempts} cumulative failures at max priority`);
     const blockSummary = buildTaskLastExecutionSummary({
       attempt: cumulativeAttempts,
@@ -1603,9 +1628,11 @@ export class FailureHandlerService {
       phase,
       failureType,
       blockReason,
-      summary: compactExecutionText(
-        `${phase === "review" ? "Review" : "Coding"} blocked after ${cumulativeAttempts} failed attempts: ${reason}${nextAction === "Blocked pending investigation" ? "" : ` | ${nextAction}`}`,
-        500
+      summary: redactSecretsForUserDisplay(
+        compactExecutionText(
+          `${phase === "review" ? "Review" : "Coding"} blocked after ${cumulativeAttempts} failed attempts: ${safeReason}${nextAction === "Blocked pending investigation" ? "" : ` | ${nextAction}`}`,
+          500
+        )
       ),
     });
 
@@ -1617,7 +1644,7 @@ export class FailureHandlerService {
         extra: {
           last_execution_summary: blockSummary,
           [NEXT_RETRY_CONTEXT_KEY]: retryContext ?? null,
-          ...this.failureDiagnosticFields(failureDiagnosticDetail ?? null),
+          ...this.failureDiagnosticFields(safeDiagnostic),
         },
       });
     } catch (err) {
@@ -1645,7 +1672,7 @@ export class FailureHandlerService {
           providerOutageUntil: options?.diagnostics?.providerOutageUntil ?? null,
           providerOutageAttempts: options?.diagnostics?.providerOutageAttempts ?? null,
           provider: options?.diagnostics?.provider ?? null,
-          ...this.failureDiagnosticFields(failureDiagnosticDetail ?? null),
+          ...this.failureDiagnosticFields(safeDiagnostic),
         },
       })
       .catch(() => {});
@@ -1656,20 +1683,20 @@ export class FailureHandlerService {
     broadcastToProject(projectId, {
       type: "task.blocked",
       taskId: task.id,
-      reason: `Blocked after ${cumulativeAttempts} failed attempts: ${reason.slice(0, 300)}`,
+      reason: `Blocked after ${cumulativeAttempts} failed attempts: ${safeReason.slice(0, 300)}`,
       cumulativeAttempts,
-      qualityGateDetail: failureDiagnosticDetail ?? null,
-      failedGateCommand: failureDiagnosticDetail?.command ?? null,
-      failedGateReason: failureDiagnosticDetail?.reason ?? null,
-      failedGateOutputSnippet: failureDiagnosticDetail?.outputSnippet ?? null,
-      worktreePath: failureDiagnosticDetail?.worktreePath ?? null,
+      qualityGateDetail: safeDiagnostic ?? null,
+      failedGateCommand: safeDiagnostic?.command ?? null,
+      failedGateReason: safeDiagnostic?.reason ?? null,
+      failedGateOutputSnippet: safeDiagnostic?.outputSnippet ?? null,
+      worktreePath: safeDiagnostic?.worktreePath ?? null,
     } as ServerEvent);
     broadcastToProject(projectId, {
       type: "agent.completed",
       taskId: task.id,
       status: "failed",
       testResults: null,
-      reason: reason.slice(0, 300),
+      reason: safeReason.slice(0, 300),
     });
 
     // For review-phase failures that exceeded retry limit, surface notification so user is alerted
