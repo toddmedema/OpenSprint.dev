@@ -107,7 +107,20 @@ describe("HilApprovalBlock", () => {
     });
   });
 
-  it("shows PRD diff when scopeChangeMetadata is present", async () => {
+  it("shows DiffView when scopeChangeMetadata is present and proposed-diff succeeds", async () => {
+    vi.mocked(api.prd.getProposedDiff).mockResolvedValue({
+      requestId: "hil-abc123",
+      fromContent: "# SPEC\n",
+      toContent: "# SPEC\n\n## New section\n",
+      diff: {
+        lines: [
+          { type: "context" as const, text: "# SPEC", oldLineNumber: 1, newLineNumber: 1 },
+          { type: "add" as const, text: "## New section", newLineNumber: 2 },
+        ],
+        summary: { additions: 1, deletions: 0 },
+        pagination: { totalLines: 2, offset: 0, limit: 2, hasMore: false },
+      },
+    } as never);
     const notificationWithDiff = {
       ...mockNotification,
       scopeChangeMetadata: {
@@ -132,11 +145,12 @@ describe("HilApprovalBlock", () => {
     await waitFor(() => {
       expect(screen.getByText("Proposed PRD changes")).toBeInTheDocument();
     });
-    expect(screen.getByText("Feature List")).toBeInTheDocument();
-    expect(screen.getByTestId("prd-diff-section-feature_list")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("diff-view")).toBeInTheDocument();
+    });
   });
 
-  it("shows ServerDiffView when proposed-diff API returns data", async () => {
+  it("shows DiffView in raw mode when proposed-diff returns lines without full document content", async () => {
     vi.mocked(api.prd.getProposedDiff).mockResolvedValue({
       requestId: "hil-abc123",
       diff: {
@@ -170,17 +184,51 @@ describe("HilApprovalBlock", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("server-diff-view")).toBeInTheDocument();
+      expect(screen.getByTestId("diff-view")).toBeInTheDocument();
     });
     expect(screen.getByText("Proposed PRD changes")).toBeInTheDocument();
-    expect(screen.getByText(/## New section/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Diff lines" })).toHaveTextContent(/## New section/);
     expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
     expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();
+  });
+
+  it("shows loading state while proposed-diff is in flight", async () => {
+    vi.mocked(api.prd.getProposedDiff).mockImplementation(
+      () => new Promise(() => {
+        /* never resolves */
+      })
+    );
+    const notificationWithDiff = {
+      ...mockNotification,
+      scopeChangeMetadata: {
+        scopeChangeSummary: "• feature_list: Add mobile app",
+        scopeChangeProposedUpdates: [
+          {
+            section: "feature_list",
+            changeLogEntry: "Add mobile app",
+            content: "1. Web dashboard\n2. Mobile app",
+          },
+        ],
+      },
+    };
+    renderWithProviders(
+      <HilApprovalBlock
+        notification={notificationWithDiff}
+        projectId="proj-1"
+        onResolved={vi.fn()}
+      />
+    );
+    expect(await screen.findByTestId("hil-diff-loading")).toHaveTextContent(
+      "Loading proposed changes…"
+    );
+    expect(screen.queryByTestId("diff-view")).not.toBeInTheDocument();
   });
 
   it("shows No changes and Approve/Reject when proposed-diff returns empty diff", async () => {
     vi.mocked(api.prd.getProposedDiff).mockResolvedValue({
       requestId: "hil-abc123",
+      fromContent: "# Same",
+      toContent: "# Same",
       diff: {
         lines: [],
         summary: { additions: 0, deletions: 0 },
@@ -209,9 +257,11 @@ describe("HilApprovalBlock", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("server-diff-view")).toBeInTheDocument();
+      expect(screen.getByTestId("diff-view")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("server-diff-no-changes")).toHaveTextContent("No changes");
+    await waitFor(() => {
+      expect(screen.getByTestId("diff-view-no-changes")).toHaveTextContent("No changes");
+    });
     expect(screen.getByTestId("hil-approve-btn")).toBeInTheDocument();
     expect(screen.getByTestId("hil-reject-btn")).toBeInTheDocument();
   });

@@ -22,6 +22,8 @@ export interface DiffViewProps {
   fromContent?: string;
   toContent?: string;
   defaultMode?: DiffViewMode;
+  /** Use flex growth so parent controls height (e.g. HIL approval scroll column). */
+  embedFullHeight?: boolean;
 }
 
 export const INITIAL_LINE_CAP = 500;
@@ -39,6 +41,7 @@ export function DiffView({
   fromContent,
   toContent,
   defaultMode = "rendered",
+  embedFullHeight = false,
 }: DiffViewProps) {
   const [mode, setMode] = useState<DiffViewMode>(defaultMode);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -100,12 +103,16 @@ export function DiffView({
 
   return (
     <div
-      className="rounded-lg border border-theme-border bg-theme-surface-muted overflow-hidden"
+      className={`rounded-lg border border-theme-border bg-theme-surface-muted overflow-hidden ${
+        embedFullHeight ? "flex flex-col flex-1 min-h-0" : ""
+      }`}
       data-testid="diff-view"
     >
       {/* Toggle bar */}
       <div
-        className="flex items-center gap-2 px-3 py-2 bg-theme-border-subtle/50 border-b border-theme-border"
+        className={`flex items-center gap-2 px-3 py-2 bg-theme-border-subtle/50 border-b border-theme-border ${
+          embedFullHeight ? "shrink-0" : ""
+        }`}
         data-testid="diff-view-toggle-bar"
       >
         {/* eslint-disable-next-line jsx-a11y/interactive-supports-focus -- focus is managed via roving tabindex on child radio buttons */}
@@ -156,7 +163,9 @@ export function DiffView({
       {/* Content area */}
       {effectiveMode === "raw" ? (
         <div
-          className="font-mono text-xs overflow-x-auto max-h-[24rem] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring focus-visible:ring-inset"
+          className={`font-mono text-xs overflow-x-auto overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-ring focus-visible:ring-inset ${
+            embedFullHeight ? "min-h-0 flex-1 max-h-full" : "max-h-[24rem]"
+          }`}
           role="textbox"
           tabIndex={0}
           aria-label="Diff lines"
@@ -240,11 +249,16 @@ export function DiffView({
           )}
         </div>
       ) : fromContent != null && toContent != null ? (
-        <RenderedDiffView
-          fromContent={fromContent}
-          toContent={toContent}
-          onParseError={() => setParseErrorFallback(true)}
-        />
+        <div
+          className={embedFullHeight ? "flex flex-1 min-h-0 flex-col overflow-hidden" : undefined}
+        >
+          <RenderedDiffView
+            fromContent={fromContent}
+            toContent={toContent}
+            onParseError={() => setParseErrorFallback(true)}
+            fillContainer={embedFullHeight}
+          />
+        </div>
       ) : (
         <div className="p-4 text-sm text-theme-muted" data-testid="diff-view-rendered-placeholder">
           Rendered diff requires fromContent and toContent.

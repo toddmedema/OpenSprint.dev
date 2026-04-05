@@ -8,6 +8,8 @@ export interface RenderedDiffViewProps {
   fromContent: string;
   toContent: string;
   onParseError?: () => void;
+  /** Grow within a parent flex column instead of fixed max height */
+  fillContainer?: boolean;
 }
 
 export const INITIAL_BLOCK_CAP = 80;
@@ -157,7 +159,12 @@ function RenderBlock({ block, index }: { block: DiffBlock; index: number }) {
   );
 }
 
-export function RenderedDiffView({ fromContent, toContent, onParseError }: RenderedDiffViewProps) {
+export function RenderedDiffView({
+  fromContent,
+  toContent,
+  onParseError,
+  fillContainer = false,
+}: RenderedDiffViewProps) {
   const [expanded, setExpanded] = useState(false);
   const { result, loading } = useMarkdownBlockDiffWorker(fromContent, toContent);
 
@@ -204,7 +211,9 @@ export function RenderedDiffView({ fromContent, toContent, onParseError }: Rende
 
   return (
     <div
-      className="prose prose-sm dark:prose-invert prose-execute-task max-w-none p-4 overflow-y-auto max-h-[24rem]"
+      className={`prose prose-sm dark:prose-invert prose-execute-task max-w-none p-4 overflow-y-auto ${
+        fillContainer ? "min-h-0 flex-1 max-h-full" : "max-h-[24rem]"
+      }`}
       data-testid="diff-view-rendered"
     >
       {visibleBlocks.map((block, i) => (

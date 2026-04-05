@@ -3,8 +3,8 @@ import type { Notification, ScopeChangeMetadata } from "@opensprint/shared";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
+import { DiffView } from "./diff/DiffView";
 import { PrdDiffView } from "./prd/PrdDiffView";
-import { ServerDiffView } from "./prd/ServerDiffView";
 
 export interface HilApprovalBlockProps {
   /** HIL approval notification (kind: hil_approval) */
@@ -38,11 +38,8 @@ export function HilApprovalBlock({
       : undefined;
   const hasPrdApprovalScope = !!scopeMeta?.scopeChangeProposedUpdates?.length;
 
-  const { data: currentPrd } = useQuery({
-    queryKey: queryKeys.prd.detail(projectId),
-    queryFn: () => api.prd.get(projectId),
-    enabled: !hideDiffInBlock && hasPrdApprovalScope,
-  });
+  const proposedUpdates = scopeMeta?.scopeChangeProposedUpdates ?? [];
+  const hasPrdDiff = !hideDiffInBlock && proposedUpdates.length > 0;
 
   const {
     data: proposedDiffPages,
@@ -51,6 +48,7 @@ export function HilApprovalBlock({
     isFetchingNextPage,
     isSuccess: proposedDiffSuccess,
     isError: proposedDiffError,
+    isPending: proposedDiffPending,
     error: proposedDiffErr,
   } = useInfiniteQuery({
     queryKey: queryKeys.prd.proposedDiff(projectId, notification.id),
@@ -68,12 +66,31 @@ export function HilApprovalBlock({
   const proposedDiffData = useMemo(() => {
     if (!proposedDiffPages?.pages.length) return undefined;
     const lines = proposedDiffPages.pages.flatMap((p) => p.diff.lines);
-    const summary = proposedDiffPages.pages[0]?.diff.summary;
+    const first = proposedDiffPages.pages[0]!;
     return {
-      requestId: proposedDiffPages.pages[0]!.requestId,
-      diff: { lines, summary },
+      requestId: first.requestId,
+      fromContent: first.fromContent,
+      toContent: first.toContent,
+      diff: { lines, summary: first.diff.summary },
     };
   }, [proposedDiffPages]);
+
+  const showPrdFallback = diffErrorDismissed && proposedDiffError;
+  const useApiDiff = hasPrdDiff && proposedDiffSuccess && proposedDiffData?.diff;
+  const showDiffError = hasPrdDiff && proposedDiffError && !diffErrorDismissed;
+  const diffErrorMessage =
+    proposedDiffErr instanceof Error ? proposedDiffErr.message : "Could not load proposed diff";
+
+  const { data: currentPrd } = useQuery({
+    queryKey: queryKeys.prd.detail(projectId),
+    queryFn: () => api.prd.get(projectId),
+    enabled: !hideDiffInBlock && hasPrdApprovalScope && showPrdFallback,
+  });
+
+  const defaultDiffMode =
+    proposedDiffData?.fromContent != null && proposedDiffData?.toContent != null
+      ? ("rendered" as const)
+      : ("raw" as const);
 
   const handleApprove = useCallback(async () => {
     setLoading(true);
@@ -100,12 +117,29 @@ export function HilApprovalBlock({
   }, [projectId, notification.id, onResolved]);
 
   const description = notification.questions?.[0]?.text ?? "Approval required";
-  const proposedUpdates = scopeMeta?.scopeChangeProposedUpdates ?? [];
-  const hasPrdDiff = !hideDiffInBlock && proposedUpdates.length > 0;
-  const useServerDiff = hasPrdDiff && proposedDiffSuccess && proposedDiffData?.diff;
-  const showDiffError = hasPrdDiff && proposedDiffError && !diffErrorDismissed;
-  const diffErrorMessage =
-    proposedDiffErr instanceof Error ? proposedDiffErr.message : "Could not load proposed diff";
+
+  const actionButtons = (
+    <>
+      <button
+        type="button"
+        onClick={handleApprove}
+        disabled={loading}
+        className="btn-primary text-sm px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="hil-approve-btn"
+      >
+        {loading ? "Submitting…" : "Approve"}
+      </button>
+      <button
+        type="button"
+        onClick={handleReject}
+        disabled={loading}
+        className="text-sm px-3 py-2 rounded-lg border border-theme-border bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="hil-reject-btn"
+      >
+        Reject
+      </button>
+    </>
+  );
 
   return (
     <div
@@ -118,61 +152,72 @@ export function HilApprovalBlock({
       </h4>
       <p className="text-sm text-theme-text mb-3">{description}</p>
       {hasPrdDiff && scopeMeta && (
-        <div className="mb-4 rounded-lg border border-theme-border bg-theme-surface p-3 min-h-0 flex flex-col">
-          <h5 className="text-xs font-medium text-theme-muted uppercase tracking-wide mb-2 shrink-0">
+        <div className="mb-4 rounded-lg border border-theme-border bg-theme-surface flex flex-col max-h-[min(70vh,42rem)] min-h-[12rem] overflow-hidden">
+          <h5 className="text-xs font-medium text-theme-muted uppercase tracking-wide px-3 pt-3 pb-0 shrink-0">
             Proposed PRD changes
           </h5>
-          <div className="min-h-0 max-h-[24rem] overflow-y-auto">
-            {useServerDiff ? (
-              <ServerDiffView
-                diff={proposedDiffData.diff}
-                fromVersion="current"
-                toVersion="proposed"
-                fetchMoreAvailable={hasNextPage}
-                onFetchMoreDiff={hasNextPage ? () => fetchNextPage() : undefined}
-                isFetchingMoreDiff={isFetchingNextPage}
-              />
-            ) : showDiffError ? (
+          <div className="flex-1 min-h-0 flex flex-col px-3 pt-2">
+            {proposedDiffPending ? (
               <div
-                className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3"
-                data-testid="hil-diff-error"
+                className="text-sm text-theme-muted py-4 px-1"
+                data-testid="hil-diff-loading"
               >
-                <p className="text-sm text-theme-error mb-2">{diffErrorMessage}</p>
-                <button
-                  type="button"
-                  onClick={() => setDiffErrorDismissed(true)}
-                  className="text-sm px-3 py-1.5 rounded border border-theme-border bg-theme-surface text-theme-text hover:bg-theme-border-subtle"
-                  data-testid="hil-diff-error-dismiss"
-                >
-                  Dismiss
-                </button>
+                Loading proposed changes…
               </div>
-            ) : (
-              <PrdDiffView currentPrd={currentPrd ?? null} scopeChangeMetadata={scopeMeta} />
-            )}
+            ) : showDiffError ? (
+              <div className="min-h-0 overflow-y-auto">
+                <div
+                  className="rounded border border-theme-error-border bg-theme-error-bg/50 p-3"
+                  data-testid="hil-diff-error"
+                >
+                  <p className="text-sm text-theme-error mb-2">{diffErrorMessage}</p>
+                  <button
+                    type="button"
+                    onClick={() => setDiffErrorDismissed(true)}
+                    className="text-sm px-3 py-1.5 rounded border border-theme-border bg-theme-surface text-theme-text hover:bg-theme-border-subtle"
+                    data-testid="hil-diff-error-dismiss"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : showPrdFallback ? (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <PrdDiffView currentPrd={currentPrd ?? null} scopeChangeMetadata={scopeMeta} />
+              </div>
+            ) : useApiDiff ? (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden gap-2">
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <DiffView
+                    embedFullHeight
+                    diff={proposedDiffData.diff}
+                    fromContent={proposedDiffData.fromContent}
+                    toContent={proposedDiffData.toContent}
+                    defaultMode={defaultDiffMode}
+                  />
+                </div>
+                {hasNextPage ? (
+                  <div className="shrink-0 pt-1 border-t border-theme-border">
+                    <button
+                      type="button"
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="text-sm text-accent-primary hover:underline disabled:opacity-50"
+                      data-testid="hil-proposed-diff-load-more"
+                    >
+                      {isFetchingNextPage ? "Loading…" : "Load more diff"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <div className="shrink-0 border-t border-theme-border bg-theme-surface/95 backdrop-blur-sm px-3 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] flex flex-wrap gap-2 z-10">
+            {actionButtons}
           </div>
         </div>
       )}
-      <div className="flex gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={handleApprove}
-          disabled={loading}
-          className="btn-primary text-sm px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          data-testid="hil-approve-btn"
-        >
-          {loading ? "Submitting…" : "Approve"}
-        </button>
-        <button
-          type="button"
-          onClick={handleReject}
-          disabled={loading}
-          className="text-sm px-3 py-2 rounded-lg border border-theme-border bg-theme-surface-muted text-theme-text hover:bg-theme-border-subtle disabled:opacity-50 disabled:cursor-not-allowed"
-          data-testid="hil-reject-btn"
-        >
-          Reject
-        </button>
-      </div>
+      {!hasPrdDiff && <div className="flex gap-2 shrink-0">{actionButtons}</div>}
     </div>
   );
 }
