@@ -3,11 +3,12 @@
  * creates feedback items, and deletes the originals from Todoist.
  */
 
-import type {
-  FeedbackItem,
-  FeedbackSubmitRequest,
-  ServerEvent,
-  TodoistSyncResult,
+import {
+  TODOIST_CONNECTION_CONFIG,
+  type FeedbackItem,
+  type FeedbackSubmitRequest,
+  type ServerEvent,
+  type TodoistSyncResult,
 } from "@opensprint/shared";
 import type { Task } from "@doist/todoist-api-typescript";
 import {
@@ -48,6 +49,38 @@ function buildFeedbackText(task: Task): string {
     text += "\n" + task.description.trim();
   }
   return text;
+}
+
+function readPendingBackfill(config: Record<string, unknown> | null | undefined): boolean {
+  const v = config?.[TODOIST_CONNECTION_CONFIG.pendingBackfill];
+  return v === true;
+}
+
+function resolveImportCutoffIso(
+  config: Record<string, unknown> | null | undefined,
+  connectionCreatedAt: string
+): string {
+  const raw = config?.[TODOIST_CONNECTION_CONFIG.importCutoffIso];
+  if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
+  return connectionCreatedAt;
+}
+
+/** New-only mode: import tasks strictly added after the connection cutoff. */
+function isTaskAfterCutoff(task: Task, cutoffIso: string): boolean {
+  if (!task.addedAt) return true;
+  const added = Date.parse(task.addedAt);
+  const cutoff = Date.parse(cutoffIso);
+  if (Number.isNaN(added) || Number.isNaN(cutoff)) return true;
+  return added > cutoff;
+}
+
+/** Tasks at or before cutoff (or missing addedAt) count as backfill backlog while pending backfill is on. */
+function isTaskBackfillBacklog(task: Task, cutoffIso: string): boolean {
+  if (!task.addedAt) return true;
+  const added = Date.parse(task.addedAt);
+  const cutoff = Date.parse(cutoffIso);
+  if (Number.isNaN(added) || Number.isNaN(cutoff)) return true;
+  return added <= cutoff;
 }
 
 export interface TodoistSyncDeps {
@@ -128,19 +161,49 @@ export class TodoistSyncService {
       return result;
     }
 
+    const configObj = connection.config ?? null;
+    const hadPendingBackfill = readPendingBackfill(configObj);
+    const cutoffIso = resolveImportCutoffIso(configObj, connection.created_at);
+
     try {
       // 3. Fetch tasks
       const allTasks = await todoistClient.getTasks(providerResourceId);
 
+      const importedIds = await this.deps.integrationStore.listImportedExternalIds(
+        projectId,
+        "todoist"
+      );
+
+      let eligible = allTasks.filter((t) => !importedIds.has(t.id));
+      if (!hadPendingBackfill) {
+        eligible = eligible.filter((t) => isTaskAfterCutoff(t, cutoffIso));
+      }
+
+      const alreadyLedger = allTasks.filter((t) => importedIds.has(t.id)).length;
+      const skippedNewOnlyGate = hadPendingBackfill
+        ? 0
+        : allTasks.filter((t) => !importedIds.has(t.id) && !isTaskAfterCutoff(t, cutoffIso)).length;
+
+      log.info("Todoist sync gating", {
+        connectionId,
+        projectId,
+        fetched: allTasks.length,
+        alreadyInLedger: alreadyLedger,
+        skippedNewOnlyGate,
+        pendingBackfill: hadPendingBackfill,
+        importCutoffIso: cutoffIso,
+        eligibleBeforeCap: eligible.length,
+      });
+
       // 4. Sort by addedAt ascending
-      allTasks.sort((a, b) => {
+      eligible.sort((a, b) => {
         const aDate = a.addedAt ?? "";
         const bDate = b.addedAt ?? "";
         return aDate.localeCompare(bDate);
       });
 
       // 5. Cap at MAX_TASKS_PER_CYCLE
-      const tasksToProcess = allTasks.slice(0, MAX_TASKS_PER_CYCLE);
+      const tasksToProcess = eligible.slice(0, MAX_TASKS_PER_CYCLE);
 
       // 6. Process each task
       for (const task of tasksToProcess) {
@@ -167,6 +230,25 @@ export class TodoistSyncService {
 
       // 7. Retry pending deletes
       await this.retryPendingDeletes(projectId, todoistClient);
+
+      if (hadPendingBackfill) {
+        const freshImported = await this.deps.integrationStore.listImportedExternalIds(
+          projectId,
+          "todoist"
+        );
+        const backlogRemaining = allTasks.some(
+          (t) => !freshImported.has(t.id) && isTaskBackfillBacklog(t, cutoffIso)
+        );
+        if (!backlogRemaining) {
+          await this.deps.integrationStore.mergeConnectionConfig(connectionId, {
+            [TODOIST_CONNECTION_CONFIG.pendingBackfill]: false,
+          });
+          log.info("Todoist one-time backfill finished; new-only gating restored", {
+            connectionId,
+            projectId,
+          });
+        }
+      }
 
       // 8. Update last_sync_at, clear error
       await this.deps.integrationStore.updateLastSync(connectionId, new Date().toISOString(), null);

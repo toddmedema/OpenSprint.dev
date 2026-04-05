@@ -337,6 +337,16 @@ describe("TaskDetailDiagnostics", () => {
       .getAttribute("aria-describedby");
     expect(describedBy).toContain("execution-diagnostics-detail-human-preface");
     expect(describedBy).toContain("execution-diagnostics-human-headline");
+
+    const detailsRoot = screen.getByTestId("execution-diagnostics-details");
+    const detailNodes = Array.from(detailsRoot.children);
+    const prefaceIdx = detailNodes.findIndex((el) => el.id === "execution-diagnostics-detail-human-preface");
+    const worktreeIdx = detailNodes.findIndex(
+      (el) => el.getAttribute("data-testid") === "execution-diagnostics-details-worktree"
+    );
+    expect(prefaceIdx).toBeGreaterThanOrEqual(0);
+    expect(worktreeIdx).toBeGreaterThanOrEqual(0);
+    expect(prefaceIdx).toBeLessThan(worktreeIdx);
   });
 
   it("keeps legacy summary rendering when structured detail payload is missing", () => {

@@ -140,8 +140,11 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
   });
 
   const selectProjectMutation = useMutation({
-    mutationFn: (todoistProjectId: string) =>
-      api.integrations.todoist.selectProject(projectId, { todoistProjectId }),
+    mutationFn: (args: { todoistProjectId: string; importExistingOpenTasks: boolean }) =>
+      api.integrations.todoist.selectProject(projectId, {
+        todoistProjectId: args.todoistProjectId,
+        ...(args.importExistingOpenTasks ? { importExistingOpenTasks: true } : {}),
+      }),
     onSuccess: () => {
       setSaveSuccess(true);
       setPickerOpen(false);
@@ -184,6 +187,12 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
       setSelectedPickerProjectId(statusQuery.data.selectedProject.id);
     }
   }, [pickerOpen, selectedPickerProjectId, statusQuery.data?.selectedProject?.id]);
+
+  useEffect(() => {
+    if (shouldShowPicker && statusQuery.data?.pendingOneTimeImport) {
+      setImportExistingTasks(true);
+    }
+  }, [shouldShowPicker, statusQuery.data?.pendingOneTimeImport]);
 
   // Periodically re-render to keep relative time fresh
   useEffect(() => {
@@ -550,7 +559,7 @@ interface ProjectPickerProps {
   selectProjectMutation: {
     isPending: boolean;
     isError: boolean;
-    mutate: (projectId: string) => void;
+    mutate: (args: { todoistProjectId: string; importExistingOpenTasks: boolean }) => void;
   };
   selectedProject: { id: string; name: string } | null;
   onOpen: () => void;
@@ -678,7 +687,12 @@ function ProjectPicker({
               type="button"
               className={primaryButtonClass}
               disabled={!selectedPickerProjectId || selectProjectMutation.isPending}
-              onClick={() => selectProjectMutation.mutate(selectedPickerProjectId)}
+              onClick={() =>
+                selectProjectMutation.mutate({
+                  todoistProjectId: selectedPickerProjectId,
+                  importExistingOpenTasks: importExistingTasks,
+                })
+              }
               data-testid="todoist-save-project-btn"
             >
               {selectProjectMutation.isPending ? "Saving…" : "Save"}

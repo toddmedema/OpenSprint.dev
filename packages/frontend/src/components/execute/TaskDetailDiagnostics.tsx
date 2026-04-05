@@ -277,7 +277,10 @@ export function TaskDetailDiagnostics({
                 {detailsExpanded && (
                   <div className="mt-2 space-y-2" data-testid="execution-diagnostics-details">
                     {(failurePresentation.userTitle || failurePresentation.userSummary) && (
-                      <p className="sr-only" id="execution-diagnostics-detail-human-preface">
+                      <p
+                        className="text-xs leading-snug text-theme-text"
+                        id="execution-diagnostics-detail-human-preface"
+                      >
                         {[failurePresentation.userTitle, failurePresentation.userSummary]
                           .filter(Boolean)
                           .join(". ")}

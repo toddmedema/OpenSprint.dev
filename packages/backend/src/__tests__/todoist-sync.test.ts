@@ -94,7 +94,7 @@ function makeConnection(overrides: Partial<IntegrationConnection> = {}): Integra
     last_sync_at: null,
     last_error: null,
     config: null,
-    created_at: "2025-01-01T00:00:00.000Z",
+    created_at: "2024-06-01T00:00:00.000Z",
     updated_at: "2025-01-01T00:00:00.000Z",
     ...overrides,
   };
@@ -148,6 +148,8 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     markCompleted: vi.fn().mockResolvedValue(undefined),
     markFailedDelete: vi.fn().mockResolvedValue(undefined),
     hasBeenImported: vi.fn().mockResolvedValue(false),
+    listImportedExternalIds: vi.fn().mockResolvedValue(new Set<string>()),
+    mergeConnectionConfig: vi.fn().mockResolvedValue(undefined),
   } as unknown as IntegrationStoreService;
 
   const submitFeedback = vi
@@ -224,7 +226,9 @@ describe("TodoistSyncService", () => {
 
   it("duplicate skip: task already in ledger is not re-imported or re-deleted", async () => {
     mockGetTasks.mockResolvedValue([makeTask({ id: "dup-1" })]);
-    (deps.integrationStore.claimImportSlot as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    (deps.integrationStore.listImportedExternalIds as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Set(["dup-1"])
+    );
 
     const result = await service.runSync("conn-1");
 
@@ -232,6 +236,7 @@ describe("TodoistSyncService", () => {
     expect(deps.submitFeedback).not.toHaveBeenCalled();
     expect(mockDeleteTask).not.toHaveBeenCalled();
     expect(deps.integrationStore.finalizeImportSlot).not.toHaveBeenCalled();
+    expect(deps.integrationStore.claimImportSlot).not.toHaveBeenCalled();
   });
 
   it("delete failure: feedback created but deleteTask throws → markFailedDelete called", async () => {

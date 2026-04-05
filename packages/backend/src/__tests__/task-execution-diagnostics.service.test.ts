@@ -260,6 +260,64 @@ describe("TaskExecutionDiagnosticsService", () => {
     );
   });
 
+  it("humanizes merged_candidate node_modules environment_setup from merge.failed event fields", async () => {
+    const validationPath =
+      "/var/folders/ab/cdef/opensprint-validation/merged_candidate-xyz/task-wt";
+    const nodeReason = `Validation workspace node_modules is missing or empty at ${validationPath}/node_modules`;
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "blocked",
+      labels: ["attempts:2", "merge_stage:quality_gate"],
+      block_reason: "Quality Gate Failure",
+      last_execution_summary: null,
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(2);
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-04-05T12:00:00.000Z",
+        projectId,
+        taskId,
+        event: "merge.failed",
+        data: {
+          attempt: 2,
+          stage: "quality_gate",
+          resolvedBy: "blocked",
+          qualityGateCategory: "environment_setup",
+          qualityGateValidationWorkspace: "merged_candidate",
+          failedGateCommand: "npm run test",
+          failedGateReason: nodeReason,
+          worktreePath: validationPath,
+          qualityGateFirstErrorLine: nodeReason,
+          nextAction: "Blocked pending investigation",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+    const detail = (diagnostics as { latestQualityGateDetail?: { userTitle?: string } })
+      .latestQualityGateDetail;
+
+    expect(detail).toEqual(
+      expect.objectContaining({
+        category: "environment_setup",
+        validationWorkspace: "merged_candidate",
+        reason: nodeReason,
+        worktreePath: validationPath,
+        userTitle: "Dependencies missing in merge check",
+        userSummary: expect.stringMatching(/temporary merge preview/i),
+      })
+    );
+    expect(diagnostics.latestSummary).toContain("Dependencies missing in merge check");
+    expect(diagnostics.latestSummary).not.toContain(validationPath);
+  });
+
   it("falls back to command + reason when quality-gate output snippet and firstErrorLine are missing", async () => {
     taskStore.show.mockResolvedValue({
       id: taskId,

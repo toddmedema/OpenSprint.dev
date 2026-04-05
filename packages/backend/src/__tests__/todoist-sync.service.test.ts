@@ -88,7 +88,7 @@ function makeConnection(overrides: Partial<IntegrationConnection> = {}): Integra
     last_sync_at: null,
     last_error: null,
     config: null,
-    created_at: "2025-01-01T00:00:00.000Z",
+    created_at: "2024-06-01T00:00:00.000Z",
     updated_at: "2025-01-01T00:00:00.000Z",
     ...overrides,
   };
@@ -124,6 +124,8 @@ function createMockDeps(overrides: Partial<TodoistSyncDeps> = {}): TodoistSyncDe
     markCompleted: vi.fn().mockResolvedValue(undefined),
     markFailedDelete: vi.fn().mockResolvedValue(undefined),
     hasBeenImported: vi.fn().mockResolvedValue(false),
+    listImportedExternalIds: vi.fn().mockResolvedValue(new Set<string>()),
+    mergeConnectionConfig: vi.fn().mockResolvedValue(undefined),
   } as unknown as IntegrationStoreService;
 
   const submitFeedback = vi
@@ -405,6 +407,123 @@ describe("TodoistSyncService", () => {
       expect(first.imported + second.imported).toBe(1);
       expect(deps.submitFeedback).toHaveBeenCalledTimes(1);
       expect(deps.integrationStore.finalizeImportSlot).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips pre-cutoff tasks in new-only mode (regression)", async () => {
+      const oldTask = makeTask({
+        id: "old-1",
+        addedAt: "2024-01-01T00:00:00Z",
+        content: "Legacy",
+      });
+      mockGetTasks.mockResolvedValue([oldTask]);
+      (deps.integrationStore.getConnectionById as ReturnType<typeof vi.fn>).mockResolvedValue(
+        makeConnection({
+          config: { todoistImportCutoffIso: "2024-06-01T00:00:00.000Z" },
+        })
+      );
+
+      const result = await service.runSync("conn-1");
+
+      expect(result.imported).toBe(0);
+      expect(deps.submitFeedback).not.toHaveBeenCalled();
+    });
+
+    it("imports pre-cutoff tasks when one-time backfill is pending", async () => {
+      const oldTask = makeTask({
+        id: "old-1",
+        addedAt: "2024-01-01T00:00:00Z",
+        content: "Legacy",
+      });
+      mockGetTasks.mockResolvedValue([oldTask]);
+      (deps.integrationStore.getConnectionById as ReturnType<typeof vi.fn>).mockResolvedValue(
+        makeConnection({
+          config: {
+            todoistImportCutoffIso: "2024-06-01T00:00:00.000Z",
+            todoistPendingBackfill: true,
+          },
+        })
+      );
+      (deps.integrationStore.listImportedExternalIds as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(new Set())
+        .mockResolvedValue(new Set(["old-1"]));
+      (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: "led-1",
+          external_item_id: "old-1",
+          import_status: "pending_delete",
+        },
+      ]);
+
+      const result = await service.runSync("conn-1");
+
+      expect(result.imported).toBe(1);
+      expect(deps.submitFeedback).toHaveBeenCalled();
+      expect(deps.integrationStore.mergeConnectionConfig).toHaveBeenCalledWith("conn-1", {
+        todoistPendingBackfill: false,
+      });
+    });
+
+    it("does not clear pending backfill when only in-progress ledger exists for pre-cutoff task", async () => {
+      const oldTask = makeTask({
+        id: "old-1",
+        addedAt: "2024-01-01T00:00:00Z",
+        content: "Legacy",
+      });
+      mockGetTasks.mockResolvedValue([oldTask]);
+      (deps.integrationStore.getConnectionById as ReturnType<typeof vi.fn>).mockResolvedValue(
+        makeConnection({
+          config: {
+            todoistImportCutoffIso: "2024-06-01T00:00:00.000Z",
+            todoistPendingBackfill: true,
+          },
+        })
+      );
+      // Mimics store behavior: `importing` rows are omitted — same as a crash after claim, before finalize.
+      (deps.integrationStore.listImportedExternalIds as ReturnType<typeof vi.fn>).mockResolvedValue(
+        new Set()
+      );
+      (deps.integrationStore.claimImportSlot as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+      await service.runSync("conn-1");
+
+      expect(deps.submitFeedback).not.toHaveBeenCalled();
+      expect(deps.integrationStore.mergeConnectionConfig).not.toHaveBeenCalled();
+    });
+
+    it("does not clear backfill flag while pre-cutoff tasks remain unimported", async () => {
+      const backlog = [
+        makeTask({ id: "old-1", addedAt: "2024-01-01T00:00:00Z", content: "A" }),
+        makeTask({ id: "old-2", addedAt: "2024-01-02T00:00:00Z", content: "B" }),
+      ];
+      mockGetTasks.mockResolvedValue(backlog);
+      (deps.integrationStore.getConnectionById as ReturnType<typeof vi.fn>).mockResolvedValue(
+        makeConnection({
+          config: {
+            todoistImportCutoffIso: "2024-06-01T00:00:00.000Z",
+            todoistPendingBackfill: true,
+          },
+        })
+      );
+      (deps.integrationStore.getPendingDeletes as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "led-1", external_item_id: "old-1", import_status: "pending_delete" },
+      ]);
+      let fb = 0;
+      (deps.submitFeedback as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        fb += 1;
+        if (fb === 2) throw new Error("Simulated failure");
+        return makeFeedbackItem(`fb-${fb}`);
+      });
+
+      const listImported = deps.integrationStore.listImportedExternalIds as ReturnType<
+        typeof vi.fn
+      >;
+      listImported.mockResolvedValueOnce(new Set()).mockResolvedValue(new Set(["old-1"]));
+
+      const result = await service.runSync("conn-1");
+
+      expect(result.imported).toBe(1);
+      expect(result.errors).toBe(1);
+      expect(deps.integrationStore.mergeConnectionConfig).not.toHaveBeenCalled();
     });
   });
 

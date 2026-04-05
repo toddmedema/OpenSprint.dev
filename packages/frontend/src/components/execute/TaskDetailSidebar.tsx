@@ -24,6 +24,7 @@ import { TaskDetailDiagnostics } from "./TaskDetailDiagnostics";
 import { TaskDetailAgentOutput } from "./TaskDetailAgentOutput";
 import { ExecuteAgentChatPanel } from "./ExecuteAgentChatPanel";
 import type { ExecuteChatMessage } from "./ExecuteAgentChatPanel";
+import { ExecuteOutputTabs } from "./ExecuteOutputTabs";
 import { SidebarSectionNav } from "../layout/SidebarSectionNav";
 
 /** Prefer the latest valid ISO timestamp (browser receive time vs orchestrator status). */
@@ -67,8 +68,6 @@ export interface TaskDetailSections {
   setDescriptionSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   artifactsSectionExpanded: boolean;
   setArtifactsSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  chatSectionExpanded: boolean;
-  setChatSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   diagnosticsSectionExpanded: boolean;
   setDiagnosticsSectionExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   sourceFeedbackExpanded: Record<string, boolean>;
@@ -185,8 +184,6 @@ function areTaskDetailSidebarPropsEqual(
     sec(prev).setDescriptionSectionExpanded !== sec(next).setDescriptionSectionExpanded ||
     sec(prev).artifactsSectionExpanded !== sec(next).artifactsSectionExpanded ||
     sec(prev).setArtifactsSectionExpanded !== sec(next).setArtifactsSectionExpanded ||
-    sec(prev).chatSectionExpanded !== sec(next).chatSectionExpanded ||
-    sec(prev).setChatSectionExpanded !== sec(next).setChatSectionExpanded ||
     sec(prev).diagnosticsSectionExpanded !== sec(next).diagnosticsSectionExpanded ||
     sec(prev).setDiagnosticsSectionExpanded !== sec(next).setDiagnosticsSectionExpanded ||
     cb(prev).onNavigateToPlan !== cb(next).onNavigateToPlan ||
@@ -261,8 +258,6 @@ function TaskDetailSidebarInner({
     setDescriptionSectionExpanded,
     artifactsSectionExpanded,
     setArtifactsSectionExpanded,
-    chatSectionExpanded,
-    setChatSectionExpanded,
     diagnosticsSectionExpanded,
     setDiagnosticsSectionExpanded,
   } = sections;
@@ -279,6 +274,7 @@ function TaskDetailSidebarInner({
   const dispatch = useAppDispatch();
   const roleLabel = activeRoleLabel(selectedTask, activeTasks);
   const [showLoadingPlaceholder, setShowLoadingPlaceholder] = useState(false);
+  const [chatTabScrollTrigger, setChatTabScrollTrigger] = useState(0);
 
   const agentOutputText = useMemo(() => agentOutput.join(""), [agentOutput]);
   const activeTaskState = useMemo(
@@ -352,7 +348,6 @@ function TaskDetailSidebarInner({
     setDescriptionSectionExpanded(false);
     setDiagnosticsSectionExpanded(false);
     setArtifactsSectionExpanded(false);
-    setChatSectionExpanded(false);
     if (feedbackIds.length > 0) {
       const next: Record<string, boolean> = {};
       for (const id of feedbackIds) next[id] = false;
@@ -361,7 +356,6 @@ function TaskDetailSidebarInner({
   }, [
     feedbackIds,
     setArtifactsSectionExpanded,
-    setChatSectionExpanded,
     setDescriptionSectionExpanded,
     setDiagnosticsSectionExpanded,
     setSourceFeedbackExpanded,
@@ -371,7 +365,6 @@ function TaskDetailSidebarInner({
     setDescriptionSectionExpanded(true);
     setDiagnosticsSectionExpanded(true);
     setArtifactsSectionExpanded(true);
-    setChatSectionExpanded(true);
     if (feedbackIds.length > 0) {
       const next: Record<string, boolean> = {};
       for (const id of feedbackIds) next[id] = true;
@@ -380,7 +373,6 @@ function TaskDetailSidebarInner({
   }, [
     feedbackIds,
     setArtifactsSectionExpanded,
-    setChatSectionExpanded,
     setDescriptionSectionExpanded,
     setDiagnosticsSectionExpanded,
     setSourceFeedbackExpanded,
@@ -542,56 +534,54 @@ function TaskDetailSidebarInner({
           headerId="artifacts-header"
           sectionNavId="execute-artifacts-section"
           sectionNavTitle={isDoneTask ? "Done Work Artifacts" : "Live agent output"}
+          contentClassName="p-0"
         >
-          <div
-            className="min-h-[200px] max-h-[500px] overflow-y-auto"
-            data-testid="live-output-scroll-container"
-          >
-            <TaskDetailAgentOutput
-              projectId={projectId}
-              taskDetailLoading={taskDetailLoading}
-              isDoneTask={isDoneTask}
-              archivedLoading={archivedLoading}
-              archivedSessions={archivedSessions}
-              liveOutputContent={liveOutputContent}
-              completionState={completionState}
-              wsConnected={wsConnected}
-              containerRef={liveOutputRef}
-              onScroll={handleLiveOutputScroll}
-              showJumpToBottom={showJumpToBottom}
-              jumpToBottom={jumpToBottom}
-              scrollResetKey={selectedTask}
-              lastOutputReceivedAtIso={!isDoneTask && wsConnected ? lastOutputReceivedAtIso : null}
-            />
-          </div>
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          title="Chat with agent"
-          expanded={chatSectionExpanded}
-          onToggle={() => setChatSectionExpanded(!chatSectionExpanded)}
-          expandAriaLabel="Expand Chat with agent"
-          collapseAriaLabel="Collapse Chat with agent"
-          contentId="chat-section-content"
-          headerId="chat-section-header"
-          sectionNavId="execute-chat-section"
-          sectionNavTitle="Chat with agent"
-        >
-          <div
-            className="min-h-[200px] max-h-[500px] overflow-hidden"
-            data-testid="chat-section-scroll-container"
-          >
-            <ExecuteAgentChatPanel
-              messages={chatMessages}
-              sending={chatSending}
-              onSend={onChatSend ?? (() => {})}
-              draftStorageKey={chatDraftStorageKey}
-              agentRunning={activeTaskState?.state === "running"}
-              chatSupported={chatSupported}
-              chatUnsupportedReason={chatUnsupportedReason}
-              scrollResetKey={selectedTask}
-            />
-          </div>
+          <ExecuteOutputTabs
+            key={selectedTask}
+            outputContent={
+              <div className="h-full min-h-0 overflow-y-auto" data-testid="live-output-scroll-container">
+                <TaskDetailAgentOutput
+                  projectId={projectId}
+                  taskDetailLoading={taskDetailLoading}
+                  isDoneTask={isDoneTask}
+                  archivedLoading={archivedLoading}
+                  archivedSessions={archivedSessions}
+                  liveOutputContent={liveOutputContent}
+                  completionState={completionState}
+                  wsConnected={wsConnected}
+                  containerRef={liveOutputRef}
+                  onScroll={handleLiveOutputScroll}
+                  showJumpToBottom={showJumpToBottom}
+                  jumpToBottom={jumpToBottom}
+                  scrollResetKey={selectedTask}
+                  lastOutputReceivedAtIso={!isDoneTask && wsConnected ? lastOutputReceivedAtIso : null}
+                />
+              </div>
+            }
+            chatContent={
+              <div
+                className="h-full min-h-0 overflow-hidden flex flex-col"
+                data-testid="chat-section-scroll-container"
+              >
+                <ExecuteAgentChatPanel
+                  messages={chatMessages}
+                  sending={chatSending}
+                  onSend={onChatSend ?? (() => {})}
+                  draftStorageKey={chatDraftStorageKey}
+                  agentRunning={activeTaskState?.state === "running"}
+                  chatSupported={chatSupported}
+                  chatUnsupportedReason={chatUnsupportedReason}
+                  scrollResetKey={selectedTask}
+                  scrollTriggerKey={chatTabScrollTrigger}
+                />
+              </div>
+            }
+            onTabChange={(tab) => {
+              if (tab === "chat") {
+                setChatTabScrollTrigger((n) => n + 1);
+              }
+            }}
+          />
         </CollapsibleSection>
       </div>
     </>

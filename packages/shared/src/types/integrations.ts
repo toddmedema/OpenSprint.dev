@@ -43,6 +43,17 @@ export interface IntegrationImportLedgerEntry {
 // Todoist-specific API contract types
 // ---------------------------------------------------------------------------
 
+/**
+ * Keys stored in `integration_connections.config` for Todoist.
+ * `todoistImportCutoffIso` marks connection time: in default (new-only) mode,
+ * tasks with `addedAt` after this ISO timestamp are eligible.
+ * `todoistPendingBackfill` schedules a one-time import of pre-cutoff open tasks; cleared when drained.
+ */
+export const TODOIST_CONNECTION_CONFIG = {
+  importCutoffIso: "todoistImportCutoffIso",
+  pendingBackfill: "todoistPendingBackfill",
+} as const;
+
 /** GET /integrations/todoist/status response */
 export interface TodoistIntegrationStatus {
   connected: boolean;
@@ -53,6 +64,10 @@ export interface TodoistIntegrationStatus {
   status: IntegrationConnectionStatus;
   /** True when no Todoist OAuth credentials are configured (env or settings). */
   notConfigured?: boolean;
+  /** ISO time after which new Todoist tasks sync by default (connection time if unset in config). */
+  importNewAfterIso?: string;
+  /** When true, the next sync passes include pre-cutoff tasks until the backlog is cleared. */
+  pendingOneTimeImport?: boolean;
 }
 
 /** Todoist project info returned by the project picker endpoint. */
@@ -76,6 +91,8 @@ export interface TodoistSyncResult {
 /** POST /integrations/todoist/project request body */
 export interface TodoistProjectSelectionRequest {
   todoistProjectId: string;
+  /** When true, enable one-time import of tasks that existed before the connection cutoff, then return to new-only. */
+  importExistingOpenTasks?: boolean;
 }
 
 // ---------------------------------------------------------------------------

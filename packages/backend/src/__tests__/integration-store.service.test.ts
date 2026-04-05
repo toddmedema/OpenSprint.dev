@@ -159,7 +159,10 @@ describe("IntegrationStoreService — connections", () => {
     it("updates existing connection when one exists", async () => {
       const row = makeConnectionRow();
       queryOneFn
-        .mockResolvedValueOnce({ id: "conn-1" }) // check existing
+        .mockResolvedValueOnce({
+          id: "conn-1",
+          config: '{"pollIntervalSeconds":60}',
+        }) // check existing
         .mockResolvedValueOnce(row); // fetch saved
 
       const result = await store.upsertConnection({
@@ -185,6 +188,31 @@ describe("IntegrationStoreService — connections", () => {
           access_token_enc: "token",
         })
       ).rejects.toThrow("Failed to upsert");
+    });
+
+    it("sets todoistImportCutoffIso on insert for new todoist connections", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2025-06-01T12:00:00.000Z"));
+      const row = makeConnectionRow({
+        config: JSON.stringify({ todoistImportCutoffIso: "2025-06-01T12:00:00.000Z" }),
+      });
+      queryOneFn.mockResolvedValueOnce(undefined).mockResolvedValueOnce(row);
+
+      await store.upsertConnection({
+        project_id: "proj-1",
+        provider: "todoist",
+        access_token_enc: "enc-token",
+      });
+
+      vi.useRealTimers();
+      const insertCall = executeFn.mock.calls.find((c) =>
+        (c[0] as string).includes("INSERT INTO integration_connections")
+      );
+      expect(insertCall).toBeDefined();
+      const args = insertCall![1] as unknown[];
+      expect(JSON.parse(args[12] as string)).toEqual({
+        todoistImportCutoffIso: "2025-06-01T12:00:00.000Z",
+      });
     });
   });
 
@@ -388,6 +416,40 @@ describe("IntegrationStoreService — ledger", () => {
       queryOneFn.mockResolvedValueOnce(undefined);
       const result = await store.hasBeenImported("proj-1", "todoist", "ext-1");
       expect(result).toBe(false);
+    });
+  });
+
+  describe("listImportedExternalIds", () => {
+    it("returns external ids only for finalized import statuses (not importing)", async () => {
+      queryFn.mockResolvedValueOnce([{ external_item_id: "a" }, { external_item_id: "b" }]);
+      const result = await store.listImportedExternalIds("proj-1", "todoist");
+      expect(result).toEqual(new Set(["a", "b"]));
+      expect(queryFn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "import_status IN ('pending_delete', 'completed', 'failed_delete')"
+        ),
+        ["proj-1", "todoist"]
+      );
+    });
+  });
+
+  describe("mergeConnectionConfig", () => {
+    it("merges JSON patch into existing config", async () => {
+      queryOneFn.mockResolvedValueOnce({ config: '{"pollIntervalSeconds":60}' });
+      await store.mergeConnectionConfig("conn-1", { todoistPendingBackfill: true });
+      expect(executeFn).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE integration_connections SET config"),
+        expect.arrayContaining([
+          expect.stringContaining("todoistPendingBackfill"),
+          expect.any(String),
+          "conn-1",
+        ])
+      );
+      const args = executeFn.mock.calls[0][1] as unknown[];
+      expect(JSON.parse(args[0] as string)).toEqual({
+        pollIntervalSeconds: 60,
+        todoistPendingBackfill: true,
+      });
     });
   });
 });

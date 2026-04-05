@@ -4,6 +4,7 @@ import request from "supertest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { TODOIST_CONNECTION_CONFIG } from "@opensprint/shared";
 import {
   createTodoistIntegrationRouter,
   OAuthStateStore,
@@ -100,8 +101,8 @@ const DEFAULT_CONNECTION = {
   last_sync_at: "2025-01-01T00:00:00.000Z",
   last_error: null,
   config: null,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
+  created_at: "2025-01-15T10:00:00.000Z",
+  updated_at: "2025-01-15T10:00:00.000Z",
 };
 
 function makeDeps(overrides?: Partial<TodoistIntegrationRouterDeps>): TodoistIntegrationRouterDeps {
@@ -114,6 +115,7 @@ function makeDeps(overrides?: Partial<TodoistIntegrationRouterDeps>): TodoistInt
       updateSelectedResource: vi.fn().mockResolvedValue(undefined),
       deleteConnection: vi.fn().mockResolvedValue(undefined),
       getPendingDeletes: vi.fn().mockResolvedValue([]),
+      mergeConnectionConfig: vi.fn().mockResolvedValue(undefined),
       ...(overrides?.integrationStore ?? {}),
     },
     tokenEncryption: {
@@ -379,6 +381,33 @@ describe("Todoist OAuth Routes", () => {
       });
       expect(res.body.data.lastSyncAt).toBe("2025-01-01T00:00:00.000Z");
       expect(res.body.data.lastError).toBeUndefined();
+      expect(res.body.data.pendingOneTimeImport).toBe(false);
+      expect(res.body.data.importNewAfterIso).toBe("2025-01-15T10:00:00.000Z");
+    });
+
+    it("exposes Todoist sync gating fields from connection config", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({
+            ...DEFAULT_CONNECTION,
+            created_at: "2024-01-01T00:00:00.000Z",
+            config: {
+              [TODOIST_CONNECTION_CONFIG.importCutoffIso]: "2024-06-01T12:00:00.000Z",
+              [TODOIST_CONNECTION_CONFIG.pendingBackfill]: true,
+            },
+          }),
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      const res = await request(app)
+        .get("/api/v1/projects/proj-1/integrations/todoist/status")
+        .expect(200);
+
+      expect(res.body.data.importNewAfterIso).toBe("2024-06-01T12:00:00.000Z");
+      expect(res.body.data.pendingOneTimeImport).toBe(true);
     });
 
     it("omits optional fields when they are null", async () => {
@@ -703,6 +732,29 @@ describe("Todoist OAuth Routes", () => {
         "p1",
         "Inbox"
       );
+      expect(deps.integrationStore.mergeConnectionConfig).not.toHaveBeenCalled();
+    });
+
+    it("sets pending one-time backfill when importExistingOpenTasks is true", async () => {
+      const deps = makeDeps({
+        integrationStore: {
+          getConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
+          getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
+          updateSelectedResource: vi.fn().mockResolvedValue(undefined),
+        } as Partial<
+          TodoistIntegrationRouterDeps["integrationStore"]
+        > as TodoistIntegrationRouterDeps["integrationStore"],
+      });
+      const app = createTestApp(deps);
+
+      await request(app)
+        .put("/api/v1/projects/proj-1/integrations/todoist/project")
+        .send({ todoistProjectId: "p1", importExistingOpenTasks: true })
+        .expect(200);
+
+      expect(deps.integrationStore.mergeConnectionConfig).toHaveBeenCalledWith("conn-1", {
+        [TODOIST_CONNECTION_CONFIG.pendingBackfill]: true,
+      });
     });
 
     it("returns 500 when encrypted token is missing", async () => {

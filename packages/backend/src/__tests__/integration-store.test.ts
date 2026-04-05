@@ -109,7 +109,10 @@ describe("IntegrationStoreService — integration_connections", () => {
         provider_user_email: "new@example.com",
       });
       queryOneFn
-        .mockResolvedValueOnce({ id: "conn-1" }) // existing row found
+        .mockResolvedValueOnce({
+          id: "conn-1",
+          config: '{"pollIntervalSeconds":60}',
+        }) // existing row found
         .mockResolvedValueOnce(updatedRow); // fetched after update
 
       const result = await store.upsertConnection({

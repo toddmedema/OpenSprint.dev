@@ -54,6 +54,8 @@ export interface PlanMetadata {
   mockups?: PlanMockup[];
   /** Parent plan ID for sub-plan hierarchy; undefined for root plans */
   parentPlanId?: string;
+  /** Depth in the hierarchy (1 = root) when persisted for sub-plans */
+  depth?: number;
 }
 
 /** Plan with its content and metadata */
@@ -110,6 +112,9 @@ export interface CreatePlanRequest {
   depends_on_plans?: string[];
   /** Parent plan ID when creating a sub-plan */
   parentPlanId?: string;
+  /** Persisted hierarchy depth (1 = root); sub-plans are typically parent depth + 1 */
+  depth?: number;
+  plan_depth?: number;
   tasks?: Array<{
     title?: string;
     task_title?: string;

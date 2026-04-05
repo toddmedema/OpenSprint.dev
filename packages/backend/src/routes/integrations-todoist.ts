@@ -32,10 +32,11 @@ import type { IntegrationStoreService } from "../services/integration-store.serv
 import type { TokenEncryptionService } from "../services/token-encryption.service.js";
 import type { TodoistSyncService } from "../services/todoist-sync.service.js";
 import type { Permission } from "@doist/todoist-api-typescript";
-import type {
-  TodoistOAuthStartResponse,
-  TodoistIntegrationStatus,
-  TodoistSyncResult,
+import {
+  TODOIST_CONNECTION_CONFIG,
+  type TodoistOAuthStartResponse,
+  type TodoistIntegrationStatus,
+  type TodoistSyncResult,
 } from "@opensprint/shared";
 import { createLogger } from "../utils/logger.js";
 
@@ -202,6 +203,7 @@ const oauthCallbackQuerySchema = z.object({
 
 const selectProjectBodySchema = z.object({
   todoistProjectId: z.string().min(1, "todoistProjectId is required"),
+  importExistingOpenTasks: z.boolean().optional(),
 });
 
 export interface TodoistIntegrationRouterDeps {
@@ -214,6 +216,7 @@ export interface TodoistIntegrationRouterDeps {
     | "updateSelectedResource"
     | "deleteConnection"
     | "getPendingDeletes"
+    | "mergeConnectionConfig"
   >;
   tokenEncryption: Pick<TokenEncryptionService, "encryptToken" | "decryptToken">;
   todoistSyncService?: Pick<TodoistSyncService, "runSync">;
@@ -411,6 +414,15 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
         status.lastError = connection.last_error;
       }
 
+      const cfg = connection.config;
+      const cutoffRaw = cfg?.[TODOIST_CONNECTION_CONFIG.importCutoffIso];
+      status.importNewAfterIso =
+        typeof cutoffRaw === "string" && cutoffRaw.trim().length > 0
+          ? cutoffRaw.trim()
+          : connection.created_at;
+      status.pendingOneTimeImport =
+        cfg?.[TODOIST_CONNECTION_CONFIG.pendingBackfill] === true;
+
       log.info("Returned integration status", { projectId, connected: true });
       res.json({ data: status });
     })
@@ -518,7 +530,9 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
     validateBody(selectProjectBodySchema),
     wrapAsync(async (req: Request<ProjectParams>, res) => {
       const { projectId } = req.params;
-      const { todoistProjectId } = req.body as z.infer<typeof selectProjectBodySchema>;
+      const { todoistProjectId, importExistingOpenTasks } = req.body as z.infer<
+        typeof selectProjectBodySchema
+      >;
 
       const connection = await integrationStore.getConnection(projectId, "todoist");
       if (!connection) {
@@ -611,6 +625,16 @@ export function createTodoistIntegrationRouter(deps: TodoistIntegrationRouterDep
         selectedProject.id,
         selectedProject.name
       );
+
+      if (importExistingOpenTasks === true) {
+        await integrationStore.mergeConnectionConfig(connection.id, {
+          [TODOIST_CONNECTION_CONFIG.pendingBackfill]: true,
+        });
+        log.info("Todoist one-time backfill enabled from UI", {
+          projectId,
+          connectionId: connection.id,
+        });
+      }
 
       log.info("Todoist project selected", {
         projectId,

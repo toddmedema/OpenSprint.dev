@@ -241,6 +241,16 @@ async function renderExecutePhase(store: ReturnType<typeof createFullPageStore>)
   return view;
 }
 
+async function openExecuteChatTab(user: ReturnType<typeof userEvent.setup>) {
+  await waitFor(() => {
+    expect(screen.getByRole("tab", { name: "Chat" })).toBeInTheDocument();
+  });
+  await user.click(screen.getByRole("tab", { name: "Chat" }));
+  await waitFor(() => {
+    expect(screen.getByTestId("execute-agent-chat-panel")).toBeInTheDocument();
+  });
+}
+
 function createSidebarProps(overrides?: {
   chatSupported?: boolean;
   chatUnsupportedReason?: string;
@@ -288,8 +298,6 @@ function createSidebarProps(overrides?: {
       setDescriptionSectionExpanded: vi.fn(),
       artifactsSectionExpanded: true,
       setArtifactsSectionExpanded: vi.fn(),
-      chatSectionExpanded: true,
-      setChatSectionExpanded: vi.fn(),
       diagnosticsSectionExpanded: true,
       setDiagnosticsSectionExpanded: vi.fn(),
     },
@@ -371,14 +379,11 @@ describe("E2E: Execute chat — API backend (Scenario A)", () => {
     const store = createFullPageStore();
     await renderExecutePhase(store);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("execute-agent-chat-panel")).toBeInTheDocument();
-    });
+    const user = userEvent.setup();
+    await openExecuteChatTab(user);
 
     const input = screen.getByPlaceholderText("Message the agent…");
     expect(input).not.toBeDisabled();
-
-    const user = userEvent.setup();
     await user.type(input, "Focus on error handling first{Enter}");
 
     await waitFor(() => {
@@ -399,6 +404,7 @@ describe("E2E: Execute chat — API backend (Scenario A)", () => {
     await renderExecutePhase(store);
 
     const user = userEvent.setup();
+    await openExecuteChatTab(user);
     const input = screen.getByPlaceholderText("Message the agent…");
     await user.type(input, "Hello agent{Enter}");
 
@@ -449,6 +455,7 @@ describe("E2E: Execute chat — API backend (Scenario A)", () => {
     await renderExecutePhase(store);
 
     const user = userEvent.setup();
+    await openExecuteChatTab(user);
     const input = screen.getByPlaceholderText("Message the agent…");
     await user.type(input, "Test delivery{Enter}");
 
@@ -479,6 +486,7 @@ describe("E2E: Execute chat — API backend (Scenario A)", () => {
     await renderExecutePhase(store);
 
     const user = userEvent.setup();
+    await openExecuteChatTab(user);
     const input = screen.getByPlaceholderText("Message the agent…");
     await user.type(input, "First message{Enter}");
 
@@ -497,7 +505,8 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
   const CLI_UNSUPPORTED_MSG =
     "Chat is not available for CLI-based agent backends. Switch to API mode (Project Settings → Agent Config) to chat with running agents.";
 
-  it("shows unsupported notice with exact spec message for CLI backend", () => {
+  it("shows unsupported notice with exact spec message for CLI backend", async () => {
+    const user = userEvent.setup();
     const store = createSidebarStore({ chatSupported: false });
     const props = createSidebarProps({
       chatSupported: false,
@@ -510,8 +519,8 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
       </Provider>
     );
 
-    const chatHeadings = screen.getAllByText("Chat with agent");
-    expect(chatHeadings.length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Chat with agent")).not.toBeInTheDocument();
+    await openExecuteChatTab(user);
 
     expect(screen.getByTestId("chat-unsupported-notice")).toBeInTheDocument();
     expect(screen.getByText(CLI_UNSUPPORTED_MSG)).toBeInTheDocument();
@@ -541,7 +550,8 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
     expect(support?.reason).toBe(CLI_UNSUPPORTED_MSG);
   });
 
-  it("shows not-running notice when agent is idle and chat is supported", () => {
+  it("shows not-running notice when agent is idle and chat is supported", async () => {
+    const user = userEvent.setup();
     const store = createSidebarStore();
     const props = createSidebarProps({ chatSupported: true });
     const propsWithNoActiveAgent = {
@@ -555,11 +565,14 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
       </Provider>
     );
 
+    await openExecuteChatTab(user);
+
     expect(screen.getByTestId("chat-not-running-notice")).toBeInTheDocument();
     expect(screen.getByText(/The agent is not currently running/)).toBeInTheDocument();
   });
 
-  it("unsupported notice takes priority over not-running notice", () => {
+  it("unsupported notice takes priority over not-running notice", async () => {
+    const user = userEvent.setup();
     const store = createSidebarStore({ chatSupported: false });
     const props = createSidebarProps({
       chatSupported: false,
@@ -575,6 +588,8 @@ describe("E2E: Execute chat — CLI backend disabled (Scenario B)", () => {
         <TaskDetailSidebar {...propsWithNoActiveAgent} />
       </Provider>
     );
+
+    await openExecuteChatTab(user);
 
     expect(screen.getByTestId("chat-unsupported-notice")).toBeInTheDocument();
     expect(screen.queryByTestId("chat-not-running-notice")).not.toBeInTheDocument();

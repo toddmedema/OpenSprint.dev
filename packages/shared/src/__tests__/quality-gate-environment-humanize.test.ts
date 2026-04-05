@@ -47,4 +47,22 @@ describe("humanizeEnvironmentSetupQualityGate", () => {
     });
     expect(result?.userTitle).toBe("Environment setup issue");
   });
+
+  it("maps worktree integrity failure reasons", () => {
+    const result = humanizeEnvironmentSetupQualityGate({
+      category: "environment_setup",
+      reason:
+        "Worktree integrity check failed and auto-rebuild unsuccessful: corrupt index | rebuild error: …",
+    });
+    expect(result?.userTitle).toBe("Task workspace could not be validated");
+  });
+
+  it("maps repo dependency health repair output", () => {
+    const result = humanizeEnvironmentSetupQualityGate({
+      category: "environment_setup",
+      reason: "repair output",
+      outputSnippet: "[repo dependency health @ /path/to/repo] npm ERR! extraneous",
+    });
+    expect(result?.userTitle).toBe("Repository dependency check failed");
+  });
 });

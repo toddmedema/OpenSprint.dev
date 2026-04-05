@@ -26,6 +26,13 @@ describe("ExecuteAgentChatPanel", () => {
     expect(screen.getByTestId("execute-agent-chat-panel")).toBeInTheDocument();
   });
 
+  it("does not render a redundant in-tab title row (Execute tabs already label Chat)", () => {
+    render(<ExecuteAgentChatPanel {...defaultProps} />);
+
+    expect(screen.queryByText(/Chatting with/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Chat with Coder/i)).not.toBeInTheDocument();
+  });
+
   it("shows empty state when no messages", () => {
     render(<ExecuteAgentChatPanel {...defaultProps} />);
 

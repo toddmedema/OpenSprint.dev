@@ -173,6 +173,9 @@ export class PlanService {
       dependsOnPlans?: string[];
       depends_on_plans?: string[];
       tasks?: Array<Record<string, unknown>>;
+      parentPlanId?: string;
+      depth?: number;
+      plan_depth?: number;
     }
   ): Promise<Plan> {
     return this.planCrudService.createPlan(projectId, body);

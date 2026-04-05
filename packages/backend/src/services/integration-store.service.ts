@@ -134,15 +134,28 @@ export class IntegrationStoreService {
     const now = new Date().toISOString();
     const id = randomUUID();
     const status = data.status ?? "active";
-    const configJson = data.config ? JSON.stringify(data.config) : "{}";
 
     let resultRow: IntegrationConnection | null = null;
 
     await taskStore.runWrite(async (client) => {
-      const existing = await client.queryOne(
-        "SELECT id FROM integration_connections WHERE project_id = $1 AND provider = $2",
+      const existing = (await client.queryOne(
+        "SELECT id, config FROM integration_connections WHERE project_id = $1 AND provider = $2",
         [data.project_id, data.provider]
-      );
+      )) as { id: string; config: string | null } | undefined;
+
+      let configJson: string;
+      if (data.config !== undefined) {
+        configJson = JSON.stringify(data.config);
+      } else if (existing) {
+        configJson =
+          existing.config != null && String(existing.config).trim() !== "" ? existing.config : "{}";
+      } else {
+        const defaults: Record<string, unknown> = {};
+        if (data.provider === "todoist") {
+          defaults.todoistImportCutoffIso = now;
+        }
+        configJson = JSON.stringify(defaults);
+      }
 
       if (existing) {
         await client.execute(
@@ -466,6 +479,47 @@ export class IntegrationStoreService {
       [projectId, provider, externalItemId]
     );
     return !!row;
+  }
+
+  /**
+   * External item ids with a finalized import path in the ledger, for sync gating.
+   * Excludes `importing`: those rows are in-flight or stale-recoverable via
+   * `claimImportSlot`, and must not be filtered out before `processTask` runs.
+   */
+  async listImportedExternalIds(
+    projectId: string,
+    provider: IntegrationProvider
+  ): Promise<Set<string>> {
+    const client = await taskStore.getDb();
+    const rows = await client.query(
+      `SELECT external_item_id FROM integration_import_ledger
+       WHERE project_id = $1 AND provider = $2
+         AND import_status IN ('pending_delete', 'completed', 'failed_delete')`,
+      [projectId, provider]
+    );
+    return new Set((rows as { external_item_id: string }[]).map((r) => String(r.external_item_id)));
+  }
+
+  /** Shallow-merge `patch` into JSON config for a connection row. */
+  async mergeConnectionConfig(connectionId: string, patch: Record<string, unknown>): Promise<void> {
+    const now = new Date().toISOString();
+    await taskStore.runWrite(async (client) => {
+      const row = await client.queryOne(
+        "SELECT config FROM integration_connections WHERE id = $1",
+        [connectionId]
+      );
+      const raw = row ? (row as { config: string | null }).config : null;
+      const current =
+        raw != null && String(raw).trim() !== ""
+          ? (JSON.parse(String(raw)) as Record<string, unknown>)
+          : {};
+      const next = { ...current, ...patch };
+      await client.execute(
+        "UPDATE integration_connections SET config = $1, updated_at = $2 WHERE id = $3",
+        [JSON.stringify(next), now, connectionId]
+      );
+    });
+    log.info("Merged integration connection config", { connectionId, keys: Object.keys(patch) });
   }
 }
 

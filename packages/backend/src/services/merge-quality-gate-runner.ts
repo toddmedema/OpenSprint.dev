@@ -232,6 +232,7 @@ const QUALITY_GATE_NOISE_PATTERNS: RegExp[] = [
   /^\s*npm (error|err!)/i,
   /^\s*lifecycle script .* failed/i,
   /^\s*exit code \d+/i,
+  /^\s*stdout \|/i,
   /^\s*stderr \|/i,
   /^\s*RUN\s+v?\d/i,
   /^\s*Test Files\s+\d+\s+passed/i,

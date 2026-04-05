@@ -61,6 +61,18 @@ const ENV_SETUP_RULES: Rule[] = [
       "The temporary folder used for merge validation was missing or could not be accessed.",
   },
   {
+    test: /Worktree integrity check failed/i,
+    userTitle: "Task workspace could not be validated",
+    userSummary:
+      "Open Sprint could not confirm your task worktree before merge checks, or automatic repair did not restore it.",
+  },
+  {
+    test: /\[repo dependency health/i,
+    userTitle: "Repository dependency check failed",
+    userSummary:
+      "Dependencies in your main repository did not pass a health check while preparing the merge preview.",
+  },
+  {
     test: /Workspace not ready:/i,
     userTitle: "Workspace not ready",
     userSummary:

@@ -212,6 +212,7 @@ export class PlanCrudService {
     const content = row.content;
     const lastModified = row.updated_at;
     const parentPlanId = row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
+    const storedMetaDepth = row.metadata.depth;
     const metadata: PlanMetadata = {
       planId: (row.metadata.planId as string) ?? planId,
       epicId: (row.metadata.epicId as string) ?? "",
@@ -221,6 +222,9 @@ export class PlanCrudService {
       complexity: (row.metadata.complexity as PlanMetadata["complexity"]) ?? "medium",
       mockups: (row.metadata.mockups as PlanMetadata["mockups"]) ?? undefined,
       parentPlanId: parentPlanId || undefined,
+      ...(typeof storedMetaDepth === "number" && Number.isFinite(storedMetaDepth)
+        ? { depth: storedMetaDepth }
+        : {}),
     };
 
     const currentVersion = row.current_version_number ?? 1;
@@ -436,6 +440,8 @@ export class PlanCrudService {
       depends_on_plans?: string[];
       tasks?: Array<Record<string, unknown>>;
       parentPlanId?: string;
+      depth?: number;
+      plan_depth?: number;
     }
   ): Promise<Plan> {
     await this.getRepoPath(projectId);
@@ -546,6 +552,11 @@ export class PlanCrudService {
       ? rawMockups.filter((m) => m && typeof m === "object" && m.title && m.content)
       : [];
     const parentPlanId = body.parentPlanId || undefined;
+    const rawDepth = body.depth ?? body.plan_depth;
+    const persistedDepth =
+      typeof rawDepth === "number" && Number.isFinite(rawDepth)
+        ? Math.max(1, Math.floor(rawDepth))
+        : undefined;
     const metadata: PlanMetadata = {
       planId,
       epicId: epicId,
@@ -554,6 +565,7 @@ export class PlanCrudService {
       complexity,
       mockups: mockups.length > 0 ? mockups : undefined,
       parentPlanId,
+      ...(persistedDepth != null ? { depth: persistedDepth } : {}),
     };
     await this.taskStore.planInsert(projectId, planId, {
       epic_id: epicId,
@@ -569,6 +581,7 @@ export class PlanCrudService {
       taskCount: rawTasks.length,
       doneTaskCount: 0,
       dependencyCount: 0,
+      ...(persistedDepth != null ? { depth: persistedDepth } : {}),
     };
     if (createdTaskIds.length > 0) {
       plan._createdTaskIds = createdTaskIds;

@@ -20,6 +20,8 @@ import {
   normalizeDependsOnPlans,
   ensureDependenciesSection,
   normalizePlannerOpenQuestions,
+  normalizePlanMarkdownContent,
+  type NormalizedSubPlan,
 } from "./plan/planner-normalize.js";
 import {
   DECOMPOSE_SYSTEM_PROMPT,
@@ -193,6 +195,44 @@ export class PlanDecomposeGenerateService {
       log.warn("buildPrdContext: PRD unavailable", { err: getErrorMessage(err) });
       return "No PRD exists yet.";
     }
+  }
+
+  /**
+   * Persist child plans + epics for a sub-plan split. Runs sequentially so epic IDs stay unique.
+   * Injects cross-sub-plan ordering into markdown via `ensureDependenciesSection`, broadcasts
+   * `plan.updated` for each child and the parent.
+   */
+  private async createSubPlans(
+    projectId: string,
+    parentPlan: Plan,
+    subPlans: NormalizedSubPlan[]
+  ): Promise<Plan[]> {
+    if (subPlans.length === 0) return [];
+
+    const parentDepth = parentPlan.metadata.depth ?? parentPlan.depth ?? 1;
+    const childDepth = parentDepth + 1;
+    const created: Plan[] = [];
+
+    for (const spec of subPlans) {
+      const scoped = spec.content.trim().startsWith("#")
+        ? spec.content
+        : `# ${spec.title}\n\n${spec.overview}\n\n${spec.content}`;
+      const markdown = normalizePlanMarkdownContent(scoped);
+      const content = ensureDependenciesSection(markdown, spec.dependsOnPlans);
+
+      const child = await this.deps.createPlan(projectId, {
+        title: spec.title,
+        content,
+        parentPlanId: parentPlan.metadata.planId,
+        depth: childDepth,
+        complexity: parentPlan.metadata.complexity,
+      });
+      created.push(child);
+      broadcastToProject(projectId, { type: "plan.updated", planId: child.metadata.planId });
+    }
+
+    broadcastToProject(projectId, { type: "plan.updated", planId: parentPlan.metadata.planId });
+    return created;
   }
 
   async autoReviewPlanAgainstRepo(
