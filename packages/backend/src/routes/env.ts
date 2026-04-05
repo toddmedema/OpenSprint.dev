@@ -25,6 +25,7 @@ import { ErrorCodes } from "../middleware/error-codes.js";
 import { getErrorMessage } from "../utils/error-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { getBackendRuntimeInfo } from "../utils/runtime-info.js";
+import { getFsBrowsePolicyRuntimeInfo } from "../utils/fs-allowed-root.js";
 import { validateApiKey } from "./env-keys-validate.js";
 import { getGlobalSettings, updateGlobalSettings } from "../services/global-settings.service.js";
 
@@ -183,7 +184,10 @@ envRouter.get(
   "/runtime",
   wrapAsync(async (_req, res) => {
     res.json({
-      data: getBackendRuntimeInfo(),
+      data: {
+        ...getBackendRuntimeInfo(),
+        fsBrowsePolicy: getFsBrowsePolicyRuntimeInfo(),
+      },
     } as ApiResponse<EnvRuntimeResponse>);
   })
 );

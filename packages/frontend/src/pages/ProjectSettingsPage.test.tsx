@@ -22,6 +22,7 @@ import notificationReducer from "../store/slices/notificationSlice";
 
 const mockGetSettings = vi.fn();
 const mockGetKeys = vi.fn();
+const mockGetRuntime = vi.fn();
 const mockModelsList = vi.fn();
 
 vi.mock("../api/client", () => ({
@@ -58,6 +59,7 @@ vi.mock("../api/client", () => ({
     },
     env: {
       getKeys: (...args: unknown[]) => mockGetKeys(...args),
+      getRuntime: (...args: unknown[]) => mockGetRuntime(...args),
     },
     models: {
       list: (...args: unknown[]) => mockModelsList(...args),
@@ -156,6 +158,19 @@ describe("ProjectSettingsPage", () => {
       openai: true,
       claudeCli: true,
       useCustomCli: false,
+    });
+    mockGetRuntime.mockResolvedValue({
+      platform: "darwin",
+      isWsl: false,
+      wslDistroName: null,
+      repoPathPolicy: "any",
+      fsBrowsePolicy: {
+        homeBrowseEnvRequested: false,
+        homeBrowseEffective: false,
+        homeBrowseSuppressedByCi: false,
+        fsRootConfigured: false,
+        adminWarning: null,
+      },
     });
     mockModelsList.mockResolvedValue([]);
     vi.stubGlobal(

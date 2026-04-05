@@ -324,6 +324,10 @@ else
   fi
 fi
 
+if [ "${CI:-}" = "true" ] || [ "${CI:-}" = "1" ]; then
+  echo "==> CI detected: OPENSPRINT_ALLOW_HOME_BROWSE does not expand the FS API to \$HOME unless OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI=1 is also set."
+fi
+
 if [ "$IS_WSL" -eq 1 ]; then
   echo "==> Setup complete. Run: npm run dev from your WSL terminal"
 else

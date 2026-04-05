@@ -38,6 +38,7 @@ const mockClearLimitHit = vi.fn();
 const mockSetupTables = vi.fn();
 
 const mockEnvGetKeys = vi.fn();
+const mockEnvGetRuntime = vi.fn();
 const mockInstallCursorCli = vi.fn();
 const mockModelsList = vi.fn();
 
@@ -53,6 +54,7 @@ vi.mock("../api/client", () => ({
     },
     env: {
       getKeys: () => mockEnvGetKeys(),
+      getRuntime: () => mockEnvGetRuntime(),
       installCursorCli: () => mockInstallCursorCli(),
     },
     models: {
@@ -65,6 +67,19 @@ vi.mock("../api/client", () => ({
 describe("GlobalSettingsContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEnvGetRuntime.mockResolvedValue({
+      platform: "darwin",
+      isWsl: false,
+      wslDistroName: null,
+      repoPathPolicy: "any",
+      fsBrowsePolicy: {
+        homeBrowseEnvRequested: false,
+        homeBrowseEffective: false,
+        homeBrowseSuppressedByCi: false,
+        fsRootConfigured: false,
+        adminWarning: null,
+      },
+    });
     mockEnvGetKeys.mockResolvedValue({
       claudeCli: true,
       cursorCli: true,
@@ -106,6 +121,28 @@ describe("GlobalSettingsContent", () => {
     expect(screen.getByTestId("api-key-add-ANTHROPIC_API_KEY")).toBeInTheDocument();
     expect(screen.getByTestId("api-key-add-CURSOR_API_KEY")).toBeInTheDocument();
     expect(screen.getByTestId("api-key-add-OPENAI_API_KEY")).toBeInTheDocument();
+  });
+
+  it("shows filesystem browse policy warning when adminWarning is present", async () => {
+    mockEnvGetRuntime.mockResolvedValue({
+      platform: "darwin",
+      isWsl: false,
+      wslDistroName: null,
+      repoPathPolicy: "any",
+      fsBrowsePolicy: {
+        homeBrowseEnvRequested: true,
+        homeBrowseEffective: true,
+        homeBrowseSuppressedByCi: false,
+        fsRootConfigured: false,
+        adminWarning: "Test FS browse warning for admins.",
+      },
+    });
+
+    renderGlobalSettingsContent();
+
+    expect(await screen.findByTestId("fs-browse-policy-warning")).toHaveTextContent(
+      "Test FS browse warning for admins."
+    );
   });
 
   it("shows existing keys when apiKeys from global settings", async () => {

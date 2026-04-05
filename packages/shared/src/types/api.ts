@@ -43,11 +43,27 @@ export type BackendPlatform = "linux" | "darwin" | "win32";
 
 export type RepoPathPolicy = "any" | "linux_fs_only";
 
+/** Filesystem browse policy for admin surfaces (Settings, Help). */
+export interface FsBrowsePolicyRuntimeInfo {
+  /** Raw OPENSPRINT_ALLOW_HOME_BROWSE requests home-wide browse */
+  homeBrowseEnvRequested: boolean;
+  /** Home-wide browse is active (not blocked by CI policy, and OPENSPRINT_FS_ROOT is unset) */
+  homeBrowseEffective: boolean;
+  /** OPENSPRINT_ALLOW_HOME_BROWSE set but ignored in CI without OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI */
+  homeBrowseSuppressedByCi: boolean;
+  /** OPENSPRINT_FS_ROOT is set */
+  fsRootConfigured: boolean;
+  /** Non-null when elevated or customized FS exposure deserves an explicit admin notice */
+  adminWarning: string | null;
+}
+
 export interface EnvRuntimeResponse {
   platform: BackendPlatform;
   isWsl: boolean;
   wslDistroName: string | null;
   repoPathPolicy: RepoPathPolicy;
+  /** Present from GET /env/runtime; documents FS API env vars and active policy */
+  fsBrowsePolicy?: FsBrowsePolicyRuntimeInfo;
 }
 
 /** Task context for Execute chat replies (enables agent to resolve "this task" references) */

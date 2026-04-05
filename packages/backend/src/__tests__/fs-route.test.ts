@@ -27,6 +27,8 @@ describe("Filesystem API", () => {
   let originalHomeDrive: string | undefined;
   let originalHomePath: string | undefined;
   let originalPlatform: PropertyDescriptor | undefined;
+  let originalCi: string | undefined;
+  let originalAllowHomeInCi: string | undefined;
 
   beforeEach(async () => {
     app = createMinimalFsApp();
@@ -40,6 +42,8 @@ describe("Filesystem API", () => {
     originalHomeDrive = process.env.HOMEDRIVE;
     originalHomePath = process.env.HOMEPATH;
     originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    originalCi = process.env.CI;
+    originalAllowHomeInCi = process.env.OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI;
     process.env.HOME = tempDir;
     delete process.env.OPENSPRINT_FS_ROOT;
     delete process.env.OPENSPRINT_ALLOW_HOME_BROWSE;
@@ -77,8 +81,22 @@ describe("Filesystem API", () => {
     if (originalPlatform) {
       Object.defineProperty(process, "platform", originalPlatform);
     }
+    if (originalCi === undefined) delete process.env.CI;
+    else process.env.CI = originalCi;
+    if (originalAllowHomeInCi === undefined) {
+      delete process.env.OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI;
+    } else {
+      process.env.OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI = originalAllowHomeInCi;
+    }
     await fs.rm(tempDir, { recursive: true, force: true });
   });
+
+  function enableHomeBrowseForTest(): void {
+    process.env.OPENSPRINT_ALLOW_HOME_BROWSE = "1";
+    if (process.env.CI === "true" || process.env.CI === "1") {
+      process.env.OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI = "1";
+    }
+  }
 
   it("browses cwd by default when no path is provided and FS root is not configured", async () => {
     const childDir = path.join(tempDir, "projects");
@@ -157,7 +175,7 @@ describe("Filesystem API", () => {
     const underHome = path.join(homeDir, "allowed-project");
     await fs.mkdir(underHome, { recursive: true });
     process.env.HOME = homeDir;
-    process.env.OPENSPRINT_ALLOW_HOME_BROWSE = "1";
+    enableHomeBrowseForTest();
 
     try {
       const allowedRes = await request(app)
@@ -200,7 +218,7 @@ describe("Filesystem API", () => {
     await fs.mkdir(windowsHome, { recursive: true });
     process.env.HOME = "/nonexistent-posix-home";
     process.env.USERPROFILE = windowsHome;
-    process.env.OPENSPRINT_ALLOW_HOME_BROWSE = "true";
+    enableHomeBrowseForTest();
     delete process.env.HOMEDRIVE;
     delete process.env.HOMEPATH;
     Object.defineProperty(process, "platform", {
@@ -212,5 +230,23 @@ describe("Filesystem API", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.current).toBe(windowsHome);
+  });
+
+  it("does not expand browse to HOME in CI unless OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI is set", async () => {
+    const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-ci-home-"));
+    const underHome = path.join(homeDir, "proj");
+    await fs.mkdir(underHome, { recursive: true });
+    process.env.HOME = homeDir;
+    process.env.CI = "true";
+    process.env.OPENSPRINT_ALLOW_HOME_BROWSE = "1";
+    delete process.env.OPENSPRINT_ALLOW_HOME_BROWSE_IN_CI;
+
+    try {
+      const res = await request(app).get(`${API_PREFIX}/fs/browse`).query({ path: underHome });
+      expect(res.status).toBe(400);
+      expect(res.body.error?.message).toBe("Path is outside the allowed directory.");
+    } finally {
+      await fs.rm(homeDir, { recursive: true, force: true });
+    }
   });
 });

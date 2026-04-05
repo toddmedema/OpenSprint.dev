@@ -399,12 +399,19 @@ describe("Env API", () => {
       const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/env/runtime`));
 
       expect(res.status).toBe(200);
-      expect(res.body.data).toEqual({
+      expect(res.body.data).toMatchObject({
         platform: "linux",
         isWsl: false,
         wslDistroName: null,
         repoPathPolicy: "any",
       });
+      const pol = res.body.data.fsBrowsePolicy;
+      expect(pol).toBeDefined();
+      expect(typeof pol.homeBrowseEnvRequested).toBe("boolean");
+      expect(typeof pol.homeBrowseEffective).toBe("boolean");
+      expect(typeof pol.homeBrowseSuppressedByCi).toBe("boolean");
+      expect(typeof pol.fsRootConfigured).toBe("boolean");
+      expect(pol.adminWarning === null || typeof pol.adminWarning === "string").toBe(true);
     });
 
     it("returns WSL runtime info with distro name", async () => {
@@ -418,12 +425,16 @@ describe("Env API", () => {
       const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/env/runtime`));
 
       expect(res.status).toBe(200);
-      expect(res.body.data).toEqual({
+      expect(res.body.data).toMatchObject({
         platform: "linux",
         isWsl: true,
         wslDistroName: "Ubuntu",
         repoPathPolicy: "linux_fs_only",
       });
+      const pol = res.body.data.fsBrowsePolicy;
+      expect(pol).toBeDefined();
+      expect(typeof pol.homeBrowseEnvRequested).toBe("boolean");
+      expect(typeof pol.adminWarning === "string" || pol.adminWarning === null).toBe(true);
     });
   });
 

@@ -6,6 +6,7 @@ import { SettingsPage } from "./SettingsPage";
 import { renderApp } from "../test/test-utils";
 
 const mockGetKeys = vi.fn();
+const mockGetRuntime = vi.fn();
 const mockGlobalSettingsGet = vi.fn();
 
 const mockGlobalSettingsPut = vi.fn();
@@ -14,6 +15,7 @@ vi.mock("../api/client", () => ({
   api: {
     env: {
       getKeys: () => mockGetKeys(),
+      getRuntime: () => mockGetRuntime(),
     },
     globalSettings: {
       get: () => mockGlobalSettingsGet(),
@@ -54,6 +56,19 @@ describe("SettingsPage", () => {
       openai: true,
       claudeCli: true,
       useCustomCli: false,
+    });
+    mockGetRuntime.mockResolvedValue({
+      platform: "darwin",
+      isWsl: false,
+      wslDistroName: null,
+      repoPathPolicy: "any",
+      fsBrowsePolicy: {
+        homeBrowseEnvRequested: false,
+        homeBrowseEffective: false,
+        homeBrowseSuppressedByCi: false,
+        fsRootConfigured: false,
+        adminWarning: null,
+      },
     });
     mockGlobalSettingsGet.mockResolvedValue({ databaseUrl: "" });
   });

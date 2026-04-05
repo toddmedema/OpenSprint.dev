@@ -7,70 +7,13 @@ import {
   fsDetectTestFrameworkQuerySchema,
 } from "../schemas/request-fs.js";
 import { readdir, stat, mkdir } from "fs/promises";
-import path from "path";
 import { join, resolve, dirname } from "path";
-import { existsSync, realpathSync } from "fs";
+import { existsSync } from "fs";
 import type { ApiResponse } from "@opensprint/shared";
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { detectTestFramework } from "../services/test-framework.service.js";
-
-/** Used only when OPENSPRINT_ALLOW_HOME_BROWSE opts in to home-directory browsing. */
-function resolveUserHomeDirectory(): string {
-  if (process.platform === "win32") {
-    const windowsHome =
-      process.env.USERPROFILE?.trim() ||
-      `${process.env.HOMEDRIVE ?? ""}${process.env.HOMEPATH ?? ""}`.trim() ||
-      process.env.HOME?.trim();
-    if (windowsHome) {
-      return path.resolve(windowsHome);
-    }
-  }
-
-  const homeDir = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
-  if (homeDir) {
-    return path.resolve(homeDir);
-  }
-
-  return path.resolve(process.cwd());
-}
-
-function isHomeBrowseOptIn(): boolean {
-  const v = process.env.OPENSPRINT_ALLOW_HOME_BROWSE?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
-
-/**
- * Allowed tree for FS API routes. When OPENSPRINT_FS_ROOT is unset, defaults to
- * process.cwd() unless OPENSPRINT_ALLOW_HOME_BROWSE opts in to the user home directory.
- */
-function getFsAllowedRoot(): string {
-  const configuredRoot = process.env.OPENSPRINT_FS_ROOT?.trim();
-  if (configuredRoot) {
-    return path.resolve(configuredRoot);
-  }
-
-  if (isHomeBrowseOptIn()) {
-    return resolveUserHomeDirectory();
-  }
-
-  return path.resolve(process.cwd());
-}
-
-function realpathOrNormalized(absPath: string): string {
-  try {
-    return realpathSync(absPath);
-  } catch {
-    return path.normalize(absPath);
-  }
-}
-
-function isPathUnderRoot(resolvedPath: string): boolean {
-  const allowedRoot = realpathOrNormalized(getFsAllowedRoot());
-  const normalized = realpathOrNormalized(path.normalize(resolvedPath));
-  const relative = path.relative(allowedRoot, normalized);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
+import { getLogicalFsAllowedRoot, isPathUnderAllowedRoot } from "../utils/fs-allowed-root.js";
 
 export const fsRouter = Router();
 
@@ -86,9 +29,9 @@ fsRouter.get(
   validateQuery(fsBrowseQuerySchema),
   wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
     const rawPath = (req.query as { path?: string }).path;
-    const targetPath = rawPath?.trim() ? resolve(rawPath) : getFsAllowedRoot();
+    const targetPath = rawPath?.trim() ? resolve(rawPath) : getLogicalFsAllowedRoot();
 
-    if (!isPathUnderRoot(targetPath)) {
+    if (!isPathUnderAllowedRoot(targetPath)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
     }
     if (!existsSync(targetPath)) {
@@ -146,11 +89,8 @@ fsRouter.post(
     }
 
     const parentResolved = resolve(parentPath);
-    const newPath = join(parentResolved, trimmedName);
-    if (!newPath.startsWith(parentResolved)) {
-      throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid path");
-    }
-    if (!isPathUnderRoot(parentResolved) || !isPathUnderRoot(newPath)) {
+    const newPath = resolve(parentResolved, trimmedName);
+    if (!isPathUnderAllowedRoot(parentResolved) || !isPathUnderAllowedRoot(newPath)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
     }
 
@@ -181,10 +121,10 @@ fsRouter.get(
   "/detect-test-framework",
   validateQuery(fsDetectTestFrameworkQuerySchema),
   wrapAsync(async (req: Request<object, object, object, { path?: string }>, res) => {
-    const rawPath = (req.query as { path: string }).path.trim();
+    const rawPath = String((req.query as { path?: string }).path ?? "").trim();
 
     const targetPath = resolve(rawPath);
-    if (!isPathUnderRoot(targetPath)) {
+    if (!isPathUnderAllowedRoot(targetPath)) {
       throw new AppError(400, ErrorCodes.INVALID_INPUT, "Path is outside the allowed directory.");
     }
     if (!existsSync(targetPath)) {

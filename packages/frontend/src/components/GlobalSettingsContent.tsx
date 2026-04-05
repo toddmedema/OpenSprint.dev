@@ -19,6 +19,7 @@ import type {
   ApiKeys,
   ApiKeyUpdateEntry,
   ApiKeysUpdate,
+  FsBrowsePolicyRuntimeInfo,
   MaskedApiKeyEntry,
   MaskedApiKeys,
   MaskedTodoistOAuthCredentials,
@@ -186,6 +187,7 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
   const [modelRefreshTrigger, setModelRefreshTrigger] = useState(0);
   const [agentConfigError, setAgentConfigError] = useState<string | null>(null);
   const agentSaveOnBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [fsBrowsePolicy, setFsBrowsePolicy] = useState<FsBrowsePolicyRuntimeInfo | null>(null);
 
   const refreshAgentEnvKeys = useCallback(async () => {
     const [global, env] = await Promise.all([api.globalSettings.get(), api.env.getKeys()]);
@@ -326,6 +328,13 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
     if (panelTab !== "agents") return;
     refreshAgentEnvKeys().catch(() => setAgentEnvKeys(null));
   }, [panelTab, refreshAgentEnvKeys]);
+
+  useEffect(() => {
+    void api.env
+      .getRuntime()
+      .then((r) => setFsBrowsePolicy(r.fsBrowsePolicy ?? null))
+      .catch(() => setFsBrowsePolicy(null));
+  }, []);
 
   useEffect(() => {
     setDatabaseUrlLoading(true);
@@ -549,7 +558,14 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
       );
       scheduleSaveComplete(startTime);
     }
-  }, [todoistClientId, todoistClientSecret, todoistRedirectUri, todoistOAuth, notifySaveState, scheduleSaveComplete]);
+  }, [
+    todoistClientId,
+    todoistClientSecret,
+    todoistRedirectUri,
+    todoistOAuth,
+    notifySaveState,
+    scheduleSaveComplete,
+  ]);
 
   const handleTodoistClear = useCallback(async () => {
     setTodoistError(null);
@@ -558,7 +574,9 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
     const startTime = Date.now();
     notifySaveState("saving");
     try {
-      const res = await api.globalSettings.put({ todoistOAuth: null } as Parameters<typeof api.globalSettings.put>[0]);
+      const res = await api.globalSettings.put({ todoistOAuth: null } as Parameters<
+        typeof api.globalSettings.put
+      >[0]);
       setTodoistOAuth(res.todoistOAuth);
       setTodoistClientId("");
       setTodoistClientSecret("");
@@ -660,6 +678,15 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
         )}
         {panelTab === "general" && (
           <>
+            {fsBrowsePolicy?.adminWarning ? (
+              <div
+                className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-theme-text"
+                role="status"
+                data-testid="fs-browse-policy-warning"
+              >
+                {fsBrowsePolicy.adminWarning}
+              </div>
+            ) : null}
             <div data-testid="api-keys-section-wrapper">
               <ApiKeysSection
                 apiKeys={apiKeys}
@@ -680,8 +707,8 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
             <div data-testid="todoist-credentials-section">
               <h3 className="text-sm font-semibold text-theme-text">Todoist Credentials</h3>
               <p className="text-xs text-theme-muted mb-3">
-                Enter your Todoist OAuth app credentials. These are stored locally and never
-                sent to any third party.{" "}
+                Enter your Todoist OAuth app credentials. These are stored locally and never sent to
+                any third party.{" "}
                 <a
                   href="https://developer.todoist.com/appconsole.html"
                   target="_blank"
@@ -795,7 +822,11 @@ export function GlobalSettingsContent({ onSaveStateChange }: GlobalSettingsConte
                   )}
                 </div>
                 {todoistError && (
-                  <p className="text-sm text-theme-error-text" role="alert" data-testid="todoist-credentials-error">
+                  <p
+                    className="text-sm text-theme-error-text"
+                    role="alert"
+                    data-testid="todoist-credentials-error"
+                  >
                     {todoistError}
                   </p>
                 )}
