@@ -156,9 +156,6 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
     mutationFn: () => api.integrations.todoist.syncNow(projectId),
     onSuccess: (data) => {
       setSyncMessage({ text: `${data.imported} item${data.imported === 1 ? "" : "s"} imported`, severity: "success" });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.integrations.todoistStatus(projectId),
-      });
       setTimeout(() => setSyncMessage(null), 5_000);
     },
     onError: (error) => {
@@ -168,6 +165,11 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
         setSyncMessage({ text: error instanceof Error ? error.message : "Sync failed", severity: "error" });
       }
       setTimeout(() => setSyncMessage(null), 5_000);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.integrations.todoistStatus(projectId),
+      });
     },
   });
 
@@ -395,8 +397,14 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
           className="p-3 rounded-lg bg-theme-warning-bg border border-theme-warning-border"
           data-testid="todoist-reconnect-banner"
         >
+          {status.lastError ? (
+            <p className="text-xs text-theme-warning-text font-medium mb-2" data-testid="todoist-reconnect-error">
+              {status.lastError}
+            </p>
+          ) : null}
           <p className="text-xs text-theme-warning-text">
-            Your Todoist connection needs to be re-authorized. Please reconnect to continue syncing.
+            Your Todoist connection needs to be re-authorized. Reconnect to restore access and continue
+            syncing.
           </p>
           <button
             type="button"
@@ -455,6 +463,7 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
           onRetryFetch={() => void projectsQuery.refetch()}
           secondaryButtonClass={intakeSecondaryBtn}
           primaryButtonClass={intakePrimaryBtn}
+          showPermanentDeletionNotice
         />
       ) : selectedProject ? (
         <div data-testid="todoist-project-info">
@@ -527,6 +536,8 @@ export function TodoistIntegrationCard({ projectId }: TodoistIntegrationCardProp
 
 interface ProjectPickerProps {
   pickerOpen: boolean;
+  /** When set, shows Todoist deletion helper next to the project picker. */
+  showPermanentDeletionNotice?: boolean;
   projectsQuery: {
     data?: { projects: Array<{ id: string; name: string; taskCount?: number }> };
     isLoading: boolean;
@@ -553,6 +564,7 @@ interface ProjectPickerProps {
 
 function ProjectPicker({
   pickerOpen,
+  showPermanentDeletionNotice = false,
   projectsQuery,
   selectedPickerProjectId,
   importExistingTasks,
@@ -594,6 +606,12 @@ function ProjectPicker({
       >
         {selectedProject ? "Change Todoist project" : "Select a Todoist project"}
       </label>
+
+      {showPermanentDeletionNotice ? (
+        <p className="text-xs text-theme-muted mb-2" data-testid="todoist-picker-delete-notice">
+          Tasks will be permanently deleted from Todoist after successful import.
+        </p>
+      ) : null}
 
       {isLoading && !hasProjects && (
         <div className="flex items-center gap-2 py-2" data-testid="todoist-projects-loading">

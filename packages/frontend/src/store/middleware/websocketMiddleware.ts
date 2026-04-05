@@ -775,11 +775,27 @@ export const websocketMiddleware: Middleware = (storeApi) => {
         void qc.invalidateQueries({
           queryKey: queryKeys.integrations.status(projectId, syncEv.provider),
         });
+        if (syncEv.provider === "todoist") {
+          void qc.invalidateQueries({
+            queryKey: queryKeys.integrations.todoistStatus(projectId),
+          });
+        }
         void qc.invalidateQueries({
           queryKey: queryKeys.integrations.all(projectId),
         });
         if (syncEv.imported > 0) {
           void qc.invalidateQueries({ queryKey: queryKeys.feedback.list(projectId) });
+          if (syncEv.provider === "todoist") {
+            const label =
+              syncEv.imported === 1 ? "1 item imported from Todoist" : `${syncEv.imported} items imported from Todoist`;
+            d(
+              addToast({
+                message: label,
+                severity: "success",
+                timeout: 6000,
+              })
+            );
+          }
         }
         break;
       }

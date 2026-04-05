@@ -263,6 +263,24 @@ describe("TodoistIntegrationCard", () => {
     expect(screen.getByTestId("todoist-reconnect-btn")).toBeInTheDocument();
   });
 
+  it("shows server lastError inside reconnect banner when needs_reconnect", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "needs_reconnect",
+      todoistUser: { id: "user-1", email: "user@example.com" },
+      selectedProject: { id: "tp-1", name: "Project" },
+      lastSyncAt: null,
+      lastError: "Token revoked or expired",
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    const banner = await screen.findByTestId("todoist-reconnect-banner");
+    expect(banner).toHaveTextContent("Token revoked or expired");
+    expect(screen.getByTestId("todoist-reconnect-error")).toHaveTextContent("Token revoked or expired");
+    expect(screen.queryByTestId("todoist-error-banner")).not.toBeInTheDocument();
+  });
+
   it("reconnect button triggers OAuth flow", async () => {
     mockGetStatus.mockResolvedValue({
       connected: true,
@@ -943,6 +961,26 @@ describe("TodoistIntegrationCard", () => {
     renderCard(<TodoistIntegrationCard projectId="proj-1" />);
 
     expect(await screen.findByTestId("todoist-delete-warning")).toHaveTextContent(
+      "Tasks will be permanently deleted from Todoist after successful import."
+    );
+  });
+
+  it("shows permanent deletion notice in project picker when selecting a project", async () => {
+    mockGetStatus.mockResolvedValue({
+      connected: true,
+      status: "active",
+      todoistUser: { id: "user-1", email: "dev@test.io" },
+      selectedProject: null,
+      lastSyncAt: null,
+      lastError: null,
+    });
+    mockListProjects.mockResolvedValue({
+      projects: [{ id: "tp-1", name: "Inbox" }],
+    });
+
+    renderCard(<TodoistIntegrationCard projectId="proj-1" />);
+
+    expect(await screen.findByTestId("todoist-picker-delete-notice")).toHaveTextContent(
       "Tasks will be permanently deleted from Todoist after successful import."
     );
   });
