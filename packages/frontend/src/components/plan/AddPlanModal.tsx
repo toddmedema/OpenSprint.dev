@@ -333,20 +333,18 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
             data-testid="file-input"
             tabIndex={-1}
           />
-          <span
-            className="relative inline-flex"
-            role="presentation"
-            onMouseEnter={handleAttachTooltipMouseEnter}
-            onMouseLeave={handleAttachTooltipMouseLeave}
-          >
+          <div className="relative inline-flex items-center">
             <button
               ref={attachButtonRef}
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="btn-secondary h-10 w-10 shrink-0 p-0 flex items-center justify-center disabled:opacity-50"
               aria-label={ATTACH_CONTROL_LABEL}
+              title={ATTACH_CONTROL_LABEL}
               aria-describedby={attachTooltipVisible ? attachTooltipId : undefined}
               data-testid="attach-files-button"
+              onMouseEnter={handleAttachTooltipMouseEnter}
+              onMouseLeave={handleAttachTooltipMouseLeave}
               onFocus={() => {
                 clearAttachTooltipHoverTimer();
                 setAttachTooltipVisible(true);
@@ -379,7 +377,7 @@ export function AddPlanModal({ projectId, onGenerate, onClose }: AddPlanModalPro
                 {ATTACH_CONTROL_LABEL}
               </div>
             )}
-          </span>
+          </div>
           <button
             type="button"
             onClick={() => {

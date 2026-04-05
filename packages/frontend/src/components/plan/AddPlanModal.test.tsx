@@ -122,6 +122,10 @@ describe("AddPlanModal", () => {
       const attachBtn = screen.getByTestId("attach-files-button");
       expect(attachBtn).toBeInTheDocument();
       expect(attachBtn).toHaveAccessibleName("Attach images or documents for more context");
+      expect(attachBtn).toHaveAttribute(
+        "title",
+        "Attach images or documents for more context"
+      );
       expect(attachBtn.textContent?.replace(/\s/g, "")).toBe("");
 
       const footer = attachBtn.parentElement!.parentElement!;
