@@ -5,10 +5,15 @@ import { PlanDecomposeGenerateService } from "../services/plan-decompose-generat
 import { ProjectService } from "../services/project.service.js";
 import { PrdService } from "../services/prd.service.js";
 import type { NormalizedSubPlan } from "../services/plan/planner-normalize.js";
+import type { StoredTask } from "../services/task-store.service.js";
 
-vi.mock("../websocket/index.js", () => ({
-  broadcastToProject: vi.fn(),
-}));
+vi.mock("../websocket/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../websocket/index.js")>();
+  return {
+    ...actual,
+    broadcastToProject: vi.fn(),
+  };
+});
 
 const { broadcastToProject } = await import("../websocket/index.js");
 
@@ -113,6 +118,98 @@ function createMockTaskStore() {
   return { store, plans };
 }
 
+interface TrackedVersionRow {
+  version_number: number;
+  content: string;
+  title: string | null;
+  metadata: string;
+}
+
+/** Like createMockTaskStore but persists plan_versions per plan for versioning assertions. */
+function createVersionTrackingMockTaskStore() {
+  const planVersions = new Map<string, TrackedVersionRow[]>();
+  const extraIssues: StoredTask[] = [];
+  const { store, plans } = createMockTaskStore();
+
+  store.listPlanVersions = vi.fn(async (_projectId: string, planId: string) =>
+    (planVersions.get(planId) ?? []).map((r) => ({ version_number: r.version_number }))
+  );
+
+  store.planVersionInsert = vi.fn(async (data: Record<string, unknown>) => {
+    const planId = data.plan_id as string;
+    const row: TrackedVersionRow = {
+      version_number: data.version_number as number,
+      content: data.content as string,
+      title: (data.title as string | null) ?? null,
+      metadata: (data.metadata as string) ?? "{}",
+    };
+    const list = [...(planVersions.get(planId) ?? []), row].sort(
+      (a, b) => a.version_number - b.version_number
+    );
+    planVersions.set(planId, list);
+    return {
+      id: list.length,
+      project_id: data.project_id as string,
+      plan_id: planId,
+      version_number: row.version_number,
+      title: row.title,
+      content: row.content,
+      metadata: row.metadata,
+      created_at: new Date().toISOString(),
+      is_executed_version: false,
+    };
+  });
+
+  store.planVersionUpdateContent = vi.fn(
+    async (_projectId: string, planId: string, versionNumber: number, content: string, title?: string | null) => {
+      const list = planVersions.get(planId);
+      const vrow = list?.find((r) => r.version_number === versionNumber);
+      if (vrow) {
+        vrow.content = content;
+        if (title !== undefined) vrow.title = title ?? null;
+      }
+    }
+  );
+
+  store.planVersionGetByVersionNumber = vi.fn(
+    async (_projectId: string, planId: string, versionNumber: number) => {
+      const row = planVersions.get(planId)?.find((r) => r.version_number === versionNumber);
+      if (!row) throw new Error("version not found");
+      return { content: row.content };
+    }
+  );
+
+  store.planUpdateContent = vi.fn(
+    async (_projectId: string, planId: string, content: string, currentVersionNumber?: number) => {
+      const row = plans.get(planId);
+      if (row) {
+        row.content = content;
+        row.updated_at = new Date().toISOString();
+        if (currentVersionNumber !== undefined) row.current_version_number = currentVersionNumber;
+      }
+    }
+  );
+
+  store.planUpdateVersionNumbers = vi.fn(
+    async (
+      _projectId: string,
+      planId: string,
+      updates: { current_version_number?: number; last_executed_version_number?: number | null }
+    ) => {
+      const row = plans.get(planId);
+      if (!row) return;
+      if (updates.current_version_number != null) row.current_version_number = updates.current_version_number;
+      if (updates.last_executed_version_number !== undefined) {
+        row.last_executed_version_number = updates.last_executed_version_number ?? null;
+      }
+    }
+  );
+
+  store.listAll = vi.fn(async () => extraIssues);
+
+  return { store, plans, planVersions, extraIssues };
+}
+
 function createMockProjectService(): ProjectService {
   return {
     getProject: vi.fn(async () => ({ repoPath: "/tmp/test-repo" })),
@@ -166,6 +263,8 @@ describe("PlanDecomposeGenerateService.createSubPlans", () => {
         createPlan: (projectId, body) =>
           crud.createPlan(projectId, body as Parameters<PlanCrudService["createPlan"]>[1]),
         getPlan: (projectId, planId, opts) => crud.getPlan(projectId, planId, opts),
+        ensurePlanHasAtLeastOneVersion: (projectId, planId) =>
+          crud.ensurePlanHasAtLeastOneVersion(projectId, planId),
       },
       {}
     );
@@ -289,5 +388,101 @@ describe("PlanDecomposeGenerateService.createSubPlans", () => {
     ];
     const created = await callCreateSubPlans(svc, PROJECT_ID, parent, subPlans);
     expect(created[0]!.metadata.depth).toBe(3);
+  });
+});
+
+describe("PlanDecomposeGenerateService.createSubPlans plan_versions snapshots", () => {
+  it("creates v1 per child from scoped child content; child update adds v2 without changing parent versions", async () => {
+    const { store, plans, planVersions, extraIssues } = createVersionTrackingMockTaskStore();
+    const projectService = createMockProjectService();
+    const crud = new PlanCrudService(store, projectService);
+    const svc = new PlanDecomposeGenerateService(
+      {
+        taskStore: {
+          listAll: vi.fn(async () => []),
+          createMany: vi.fn(),
+          addDependencies: vi.fn(),
+          addLabel: vi.fn(),
+          close: vi.fn(),
+          create: vi.fn(),
+          update: vi.fn(),
+          planUpdateMetadata: vi.fn(),
+        },
+        projectService,
+        prdService: createMockPrdService(),
+        createPlan: (projectId, body) =>
+          crud.createPlan(projectId, body as Parameters<PlanCrudService["createPlan"]>[1]),
+        getPlan: (projectId, planId, opts) => crud.getPlan(projectId, planId, opts),
+        ensurePlanHasAtLeastOneVersion: (projectId, planId) =>
+          crud.ensurePlanHasAtLeastOneVersion(projectId, planId),
+      },
+      {}
+    );
+
+    const parent = await crud.createPlan(PROJECT_ID, {
+      title: "Root Feature",
+      content: "# Root Feature\n\nParent-only body.",
+    });
+    await crud.ensurePlanHasAtLeastOneVersion(PROJECT_ID, parent.metadata.planId);
+
+    const parentV1Content = planVersions.get(parent.metadata.planId)?.[0]?.content;
+    expect(parentV1Content).toBeDefined();
+    expect(parentV1Content).toContain("Parent-only body");
+
+    const subPlans: NormalizedSubPlan[] = [
+      {
+        title: "Stream A",
+        overview: "First stream",
+        content: "## Technical\n\nChild A unique body",
+        dependsOnPlans: [],
+      },
+      {
+        title: "Stream B",
+        overview: "Second stream",
+        content: "## Technical\n\nChild B unique body",
+        dependsOnPlans: [],
+      },
+    ];
+    const created = await callCreateSubPlans(svc, PROJECT_ID, parent, subPlans);
+    expect(created).toHaveLength(2);
+
+    for (let i = 0; i < created.length; i++) {
+      const child = created[i]!;
+      const vers = planVersions.get(child.metadata.planId) ?? [];
+      expect(vers).toHaveLength(1);
+      expect(vers[0]!.version_number).toBe(1);
+      expect(vers[0]!.content).not.toContain("Parent-only body");
+      expect(vers[0]!.content).toContain(i === 0 ? "Child A unique body" : "Child B unique body");
+      const persisted = plans.get(child.metadata.planId);
+      expect(persisted?.content).toBe(vers[0]!.content);
+    }
+
+    const childA = created[0]!;
+    const epicA = childA.metadata.epicId;
+    extraIssues.push({
+      id: `${epicA}.1`,
+      title: "Task under child A",
+      status: "open",
+      issue_type: "task",
+      type: "task",
+      sourcePlanVersionNumber: 1,
+    } as StoredTask);
+
+    const childAMarkdown = (plans.get(childA.metadata.planId)?.content ?? childA.content) + "\n\n## Extra\n\nMore scope.\n";
+    await crud.updatePlan(PROJECT_ID, childA.metadata.planId, { content: childAMarkdown });
+
+    const childVers = planVersions.get(childA.metadata.planId) ?? [];
+    expect(childVers.map((v) => v.version_number)).toEqual([1, 2]);
+    expect(childVers[1]!.content).toContain("More scope");
+
+    const parentVersAfter = planVersions.get(parent.metadata.planId) ?? [];
+    expect(parentVersAfter).toHaveLength(1);
+    expect(parentVersAfter[0]!.content).toBe(parentV1Content);
+
+    const childPlanLoaded = await crud.getPlan(PROJECT_ID, childA.metadata.planId, {
+      allIssues: extraIssues,
+    });
+    expect(childPlanLoaded.currentVersionNumber).toBe(2);
+    expect(childPlanLoaded.hasGeneratedPlanTasksForCurrentVersion).toBe(false);
   });
 });

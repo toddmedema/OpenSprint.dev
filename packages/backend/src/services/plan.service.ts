@@ -95,6 +95,8 @@ export class PlanService {
             planId,
             opts?: { allIssues?: StoredTask[]; edges?: PlanDependencyEdge[] }
           ) => this.planCrudService.getPlan(projectId, planId, opts),
+          ensurePlanHasAtLeastOneVersion: (projectId, planId) =>
+            this.planCrudService.ensurePlanHasAtLeastOneVersion(projectId, planId),
         },
         {
           chatService: this.chatService,

@@ -25,6 +25,8 @@ import { createTasksRouter } from "../routes/tasks.js";
 import type { TaskService } from "../services/task.service.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
+import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
+import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Mocks for open-editor dependencies (project service, orchestrator, etc.)
@@ -380,6 +382,7 @@ describe("open-editor integration (HTTP)", () => {
     const taskService = {} as unknown as TaskService;
     app = express();
     app.use(express.json());
+    app.use(API_PREFIX, requireLocalSessionAuth);
     app.use(`${API_PREFIX}/projects/:projectId/tasks`, createTasksRouter(taskService));
     app.use(errorHandler);
   });
@@ -402,7 +405,9 @@ describe("open-editor integration (HTTP)", () => {
       ],
     });
 
-    const res = await request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-1234/open-editor`);
+    const res = await withLocalSessionAuth(
+      request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-1234/open-editor`)
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.worktreePath).toBe(tmpDir);
@@ -425,7 +430,9 @@ describe("open-editor integration (HTTP)", () => {
       ],
     });
 
-    const res = await request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-404/open-editor`);
+    const res = await withLocalSessionAuth(
+      request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-404/open-editor`)
+    );
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("WORKTREE_NOT_FOUND");
@@ -438,7 +445,9 @@ describe("open-editor integration (HTTP)", () => {
       activeTasks: [],
     });
 
-    const res = await request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-idle/open-editor`);
+    const res = await withLocalSessionAuth(
+      request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-idle/open-editor`)
+    );
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("TASK_NOT_EXECUTING");
@@ -460,8 +469,8 @@ describe("open-editor integration (HTTP)", () => {
       ],
     });
 
-    const res = await request(app).post(
-      `${API_PREFIX}/projects/proj-1/tasks/os-branch/open-editor`
+    const res = await withLocalSessionAuth(
+      request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-branch/open-editor`)
     );
 
     expect(res.status).toBe(200);
@@ -485,8 +494,8 @@ describe("open-editor integration (HTTP)", () => {
       branchWorktreePath: tmpDir,
     });
 
-    const res = await request(app).post(
-      `${API_PREFIX}/projects/proj-1/tasks/os-fallback/open-editor`
+    const res = await withLocalSessionAuth(
+      request(app).post(`${API_PREFIX}/projects/proj-1/tasks/os-fallback/open-editor`)
     );
 
     expect(res.status).toBe(200);

@@ -154,6 +154,8 @@ export interface PlanDecomposeGenerateDeps {
     planId: string,
     opts?: { allIssues?: StoredTask[]; edges?: PlanDependencyEdge[] }
   ) => Promise<Plan>;
+  /** Ensures each new plan has a v1 row in plan_versions from that plan's stored content (used for sub-plans). */
+  ensurePlanHasAtLeastOneVersion: (projectId: string, planId: string) => Promise<void>;
 }
 
 export interface PlanDecomposeGenerateOptionalDeps {
@@ -227,6 +229,7 @@ export class PlanDecomposeGenerateService {
         depth: childDepth,
         complexity: parentPlan.metadata.complexity,
       });
+      await this.deps.ensurePlanHasAtLeastOneVersion(projectId, child.metadata.planId);
       created.push(child);
       broadcastToProject(projectId, { type: "plan.updated", planId: child.metadata.planId });
     }

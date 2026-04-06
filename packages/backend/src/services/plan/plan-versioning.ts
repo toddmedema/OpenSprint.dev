@@ -22,6 +22,9 @@ export interface PlanVersioningStore {
 /**
  * Ensure the plan has at least one version. When there are no versions (e.g. first load),
  * create version 1 from current plan content so the version dropdown and execute flow are consistent.
+ *
+ * For sub-plans: call once per new child plan after its row is persisted so `plan_versions` v1 matches
+ * that plan’s scoped markdown; parent and sibling plans are unaffected (separate `plan_id` rows).
  */
 export async function ensurePlanHasAtLeastOneVersion(
   projectId: string,

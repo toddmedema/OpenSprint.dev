@@ -82,6 +82,9 @@ export const backendResolveConfig = {
       find: /^.*[/\\]drizzle-schema-pg\.js$/,
       replacement: drizzleSchemaPgSource,
     },
+    // Some transforms resolve an erroneous repo-root `/src/db/...` id during merge gates / coverage.
+    { find: /^\/src\/db\/drizzle-schema-pg\.ts$/, replacement: drizzleSchemaPgSource },
+    { find: /^\/src\/db\/drizzle-schema-pg\.js$/, replacement: drizzleSchemaPgSource },
     { find: "@opensprint/shared/types", replacement: path.resolve(__dirname, "../shared/src/types/index.ts") },
     {
       find: "@opensprint/shared/constants",

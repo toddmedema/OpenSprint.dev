@@ -11,6 +11,10 @@ import {
 } from "../services/git-commit-queue.service.js";
 import { TaskStoreService } from "../services/task-store.service.js";
 import { ProjectService } from "../services/project.service.js";
+import {
+  pinOpenSprintPathsForTesting,
+  resetOpenSprintPathsForTesting,
+} from "./opensprint-path-test-helper.js";
 import { truncateTitle } from "../utils/commit-message.js";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
 
@@ -228,9 +232,8 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
   });
 
   it("invokes merger for each sequential rebase conflict and still completes merge", async () => {
-    const projectHome = path.join(os.tmpdir(), `gq-rebase-multi-${Date.now()}`);
-    const originalHome = process.env.HOME;
-    process.env.HOME = projectHome;
+    const isolationRoot = await fs.mkdtemp(path.join(os.tmpdir(), "gq-rebase-multi-"));
+    pinOpenSprintPathsForTesting(isolationRoot);
     const { agentService } = await import("../services/agent.service.js");
     const mergerSpy = vi.spyOn(agentService, "runMergerAgentAndWait");
     try {
@@ -296,7 +299,8 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
       expect(mergedContent.trim()).toBe("resolved-2");
     } finally {
       mergerSpy.mockRestore();
-      process.env.HOME = originalHome;
+      resetOpenSprintPathsForTesting();
+      await fs.rm(isolationRoot, { recursive: true, force: true }).catch(() => {});
     }
   });
 
@@ -432,9 +436,8 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
   });
 
   it("should fetch task title from task store when available", { timeout: 30_000 }, async () => {
-    const projectHome = path.join(os.tmpdir(), `gq-project-home-${Date.now()}`);
-    const originalHome = process.env.HOME;
-    process.env.HOME = projectHome;
+    const isolationRoot = await fs.mkdtemp(path.join(os.tmpdir(), "gq-task-title-"));
+    pinOpenSprintPathsForTesting(isolationRoot);
     try {
       const projectService = new ProjectService();
       const project = await projectService.createProject({
@@ -473,7 +476,8 @@ describe.skipIf(!gitQueuePostgresOk)("GitCommitQueue", () => {
       expect(logOut).toContain(`Closed ${task.id}: Title from task store`);
       expect(logOut).not.toContain("Fallback title");
     } finally {
-      process.env.HOME = originalHome;
+      resetOpenSprintPathsForTesting();
+      await fs.rm(isolationRoot, { recursive: true, force: true }).catch(() => {});
     }
   });
 

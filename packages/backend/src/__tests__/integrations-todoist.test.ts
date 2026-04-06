@@ -61,6 +61,14 @@ vi.mock("../services/todoist-api-client.service.js", () => {
 const mockedService = await import("../services/todoist-api-client.service.js");
 
 function seedTodoistServiceMocks(): void {
+  // `mockImplementationOnce` / partial resets from other suites can queue bogus API clients; clear before seeding.
+  vi.mocked(mockedService.TodoistApiClient).mockReset();
+  vi.mocked(mockedService.generateOAuthState).mockReset();
+  vi.mocked(mockedService.buildAuthorizationUrl).mockReset();
+  vi.mocked(mockedService.exchangeCodeForToken).mockReset();
+  vi.mocked(mockedService.revokeAccessToken).mockReset();
+  vi.mocked(mockedService.getTodoistOAuthConfig).mockReset();
+
   vi.mocked(mockedService.generateOAuthState).mockReturnValue("mock-state-abc");
   vi.mocked(mockedService.buildAuthorizationUrl).mockReturnValue(
     "https://todoist.example/authorize?state=mock-state-abc"
@@ -109,7 +117,7 @@ function makeDeps(overrides?: Partial<TodoistIntegrationRouterDeps>): TodoistInt
   return {
     integrationStore: {
       upsertConnection: vi.fn().mockResolvedValue({ ...DEFAULT_CONNECTION }),
-      getConnection: vi.fn().mockResolvedValue(null),
+      getConnection: vi.fn().mockImplementation(async () => null),
       getEncryptedTokenById: vi.fn().mockResolvedValue("encrypted-token-abc"),
       updateConnectionStatus: vi.fn().mockResolvedValue(undefined),
       updateSelectedResource: vi.fn().mockResolvedValue(undefined),
@@ -132,8 +140,8 @@ function makeDeps(overrides?: Partial<TodoistIntegrationRouterDeps>): TodoistInt
 
 describe("Todoist OAuth Routes", () => {
   beforeEach(() => {
-    // Reset all mock behavior so one-off implementations cannot leak between tests.
-    vi.resetAllMocks();
+    // Clear call history; avoid resetAllMocks (clears implementations before seed runs, racing with in-flight work).
+    vi.clearAllMocks();
     seedTodoistServiceMocks();
     oauthStateStore.destroy();
   });
@@ -1267,16 +1275,20 @@ describe("Todoist OAuth Routes", () => {
     it("returns OAUTH_STATE_STORE_FAILED when state persistence throws", async () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
-      vi.spyOn(oauthStateStore, "store").mockImplementationOnce(() => {
+      const storeSpy = vi.spyOn(oauthStateStore, "store").mockImplementationOnce(() => {
         throw new Error("EACCES: permission denied");
       });
 
-      const res = await request(app)
-        .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
-        .expect(500);
+      try {
+        const res = await request(app)
+          .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
+          .expect(500);
 
-      expect(res.body.error.code).toBe("OAUTH_STATE_STORE_FAILED");
-      expect(res.body.error.message).toContain("writable");
+        expect(res.body.error.code).toBe("OAUTH_STATE_STORE_FAILED");
+        expect(res.body.error.message).toContain("writable");
+      } finally {
+        storeSpy.mockRestore();
+      }
     });
   });
 
