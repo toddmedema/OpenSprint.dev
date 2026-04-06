@@ -76,8 +76,10 @@ export interface Plan {
   lastTaskGenerationVersionNumber?: number;
   /** True when task generation has run for currentVersionNumber. */
   hasGeneratedPlanTasksForCurrentVersion?: boolean;
-  /** Depth in the sub-plan hierarchy (0 = root); computed from parent chain */
+  /** Depth in the sub-plan hierarchy (1 = root); computed from parent chain */
   depth?: number;
+  /** Same as metadata.parentPlanId; duplicated at top level for list/detail API consumers */
+  parentPlanId?: string | null;
   /** IDs of immediate child plans for tree rendering */
   childPlanIds?: string[];
 
@@ -97,10 +99,18 @@ export interface PlanDependencyEdge {
   type: "blocks" | "related";
 }
 
+/** Parent→child link between plans (sub-plan hierarchy), separate from blocking edges. */
+export interface PlanHierarchyEdge {
+  parentPlanId: string;
+  childPlanId: string;
+}
+
 /** Dependency graph data */
 export interface PlanDependencyGraph {
   plans: Plan[];
   edges: PlanDependencyEdge[];
+  /** Hierarchy links derived from parent_plan_id / metadata.parentPlanId for graph UIs. */
+  hierarchyEdges?: PlanHierarchyEdge[];
 }
 
 /**

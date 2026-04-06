@@ -8,6 +8,7 @@ import type {
   PlanMockup,
   PlanDependencyGraph,
   PlanDependencyEdge,
+  PlanHierarchyEdge,
   PlanComplexity,
   CrossEpicDependenciesResponse,
   PlanHierarchyNode,
@@ -217,6 +218,20 @@ export class PlanCrudService {
     return { plansMap, childPlanIdsMap };
   }
 
+  private static hierarchyEdgesFromChildMap(
+    childPlanIdsMap: Map<string, string[]>
+  ): PlanHierarchyEdge[] {
+    const out: PlanHierarchyEdge[] = [];
+    const parentIds = [...childPlanIdsMap.keys()].sort();
+    for (const parentPlanId of parentIds) {
+      const children = childPlanIdsMap.get(parentPlanId) ?? [];
+      for (const childPlanId of [...children].sort()) {
+        out.push({ parentPlanId, childPlanId });
+      }
+    }
+    return out;
+  }
+
   /** Build a {@link Plan} DTO from a persisted row (no planGet). */
   private async materializePlanFromStoreRow(
     projectId: string,
@@ -297,7 +312,7 @@ export class PlanCrudService {
     const hasGeneratedPlanTasksForCurrentVersion =
       lastTaskGenerationVersionNumber != null && lastTaskGenerationVersionNumber === currentVersion;
 
-    let depth: number | undefined;
+    let depth = 1;
     if (opts?.plansMap) {
       try {
         depth = calculatePlanDepth(planId, opts.plansMap);
@@ -321,6 +336,7 @@ export class PlanCrudService {
       lastTaskGenerationVersionNumber,
       hasGeneratedPlanTasksForCurrentVersion,
       depth,
+      parentPlanId: parentPlanId ? parentPlanId : null,
       childPlanIds,
     };
   }
@@ -336,11 +352,16 @@ export class PlanCrudService {
       childPlanIdsMap?: Map<string, string[]>;
     }
   ): Promise<Plan> {
+    let merged = opts;
+    if (!opts?.plansMap || !opts?.childPlanIdsMap) {
+      const maps = await this.buildHierarchyMaps(projectId);
+      merged = { ...opts, plansMap: maps.plansMap, childPlanIdsMap: maps.childPlanIdsMap };
+    }
     const row = await this.taskStore.planGet(projectId, planId);
     if (!row) {
       throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${planId}' not found`, { planId });
     }
-    return this.materializePlanFromStoreRow(projectId, planId, row, opts);
+    return this.materializePlanFromStoreRow(projectId, planId, row, merged);
   }
 
   async ensurePlanHasAtLeastOneVersion(projectId: string, planId: string): Promise<void> {
@@ -381,7 +402,8 @@ export class PlanCrudService {
       }
     }
 
-    return { plans, edges };
+    const hierarchyEdges = PlanCrudService.hierarchyEdgesFromChildMap(childPlanIdsMap);
+    return { plans, edges, hierarchyEdges };
   }
 
   /** List all Plans for a project. */
@@ -626,7 +648,8 @@ export class PlanCrudService {
       taskCount: rawTasks.length,
       doneTaskCount: 0,
       dependencyCount: 0,
-      ...(persistedDepth != null ? { depth: persistedDepth } : {}),
+      depth: persistedDepth ?? 1,
+      parentPlanId: parentPlanId ? parentPlanId : null,
     };
     if (createdTaskIds.length > 0) {
       plan._createdTaskIds = createdTaskIds;

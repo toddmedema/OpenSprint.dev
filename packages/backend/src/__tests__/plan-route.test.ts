@@ -617,6 +617,53 @@ Updated description for task two.`;
     ).toBe(true);
   });
 
+  it("GET /projects/:id/plans and GET plan detail include hierarchyEdges, depth, parentPlanId, childPlanIds", async () => {
+    const rootRes = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send({ title: "Hierarchy Root API", content: "# R\n\n.", complexity: "low" });
+    expect(rootRes.status).toBe(201);
+    const rootId = rootRes.body.data.metadata.planId as string;
+    expect(rootRes.body.data.depth).toBe(1);
+    expect(rootRes.body.data.parentPlanId).toBeNull();
+
+    const childRes = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects/${projectId}/plans`)
+      .send({
+        title: "Hierarchy Child API",
+        content: "# C\n\n.",
+        complexity: "low",
+        parentPlanId: rootId,
+      });
+    expect(childRes.status).toBe(201);
+    const childId = childRes.body.data.metadata.planId as string;
+
+    const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.data.hierarchyEdges).toEqual(
+      expect.arrayContaining([{ parentPlanId: rootId, childPlanId: childId }])
+    );
+
+    const byId = new Map(
+      (listRes.body.data.plans as Array<{ metadata: { planId: string } }>).map((p) => [
+        p.metadata.planId,
+        p,
+      ])
+    );
+    expect((byId.get(rootId) as { depth: number }).depth).toBe(1);
+    expect((byId.get(rootId) as { parentPlanId: string | null }).parentPlanId).toBeNull();
+    expect((byId.get(rootId) as { childPlanIds?: string[] }).childPlanIds).toEqual([childId]);
+    expect((byId.get(childId) as { depth: number }).depth).toBe(2);
+    expect((byId.get(childId) as { parentPlanId: string }).parentPlanId).toBe(rootId);
+
+    const detailRes = await authedSupertest(app).get(
+      `${API_PREFIX}/projects/${projectId}/plans/${childId}`
+    );
+    expect(detailRes.status).toBe(200);
+    expect(detailRes.body.data.depth).toBe(2);
+    expect(detailRes.body.data.parentPlanId).toBe(rootId);
+    expect(detailRes.body.data.childPlanIds).toBeUndefined();
+  });
+
   it("POST /projects/:id/plans/:planId/plan-tasks invokes Planner and creates tasks", async () => {
     mockBroadcastToProject.mockClear();
     mockPlanningAgentInvoke.mockClear();

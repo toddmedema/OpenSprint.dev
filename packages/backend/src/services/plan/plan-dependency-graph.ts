@@ -2,7 +2,12 @@
  * Plan dependency graph: build edges from task store + markdown, list plans with edges.
  * Pure edge-building logic; listPlansWithEdges takes store/getPlan callbacks to avoid circular deps.
  */
-import type { Plan, PlanDependencyGraph, PlanDependencyEdge } from "@opensprint/shared";
+import type {
+  Plan,
+  PlanDependencyGraph,
+  PlanDependencyEdge,
+  PlanHierarchyEdge,
+} from "@opensprint/shared";
 import { getEpicId } from "@opensprint/shared";
 import { createLogger } from "../../utils/logger.js";
 import { getErrorMessage } from "../../utils/error-utils.js";
@@ -99,5 +104,6 @@ export async function listPlansWithEdges(
     }
   }
 
-  return { plans, edges };
+  const hierarchyEdges: PlanHierarchyEdge[] = [];
+  return { plans, edges, hierarchyEdges };
 }
