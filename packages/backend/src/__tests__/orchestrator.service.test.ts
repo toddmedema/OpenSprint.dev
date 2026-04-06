@@ -25,6 +25,8 @@ vi.mock("../db/drizzle-schema-pg.js", () => ({ plansTable: {} }));
 
 // ─── Mocks ───
 
+const worktreePathOverrideByKey = vi.hoisted(() => new Map<string, string>());
+
 const {
   mockBroadcastToProject,
   mockSendAgentOutputToProject,
@@ -317,11 +319,11 @@ vi.mock("../services/branch-manager.js", () => {
       }),
       reconcileDependenciesAfterMerge: vi.fn().mockResolvedValue(undefined),
       getWorktreeBasePath: vi.fn().mockReturnValue(path.join(os.tmpdir(), "opensprint-worktrees")),
-      getWorktreePath: vi
-        .fn()
-        .mockImplementation((taskId: string) =>
-          path.join(os.tmpdir(), "opensprint-worktrees", taskId)
-        ),
+      getWorktreePath: vi.fn().mockImplementation((key: string) => {
+        const override = worktreePathOverrideByKey.get(key);
+        if (override) return override;
+        return path.join(os.tmpdir(), "opensprint-worktrees", key);
+      }),
     })),
   };
 });
@@ -664,8 +666,9 @@ describe("OrchestratorService (slot-based model)", () => {
    */
   function setupSingleTaskFlow(taskId = "task-1") {
     const task = makeTask(taskId);
-    // Align with BranchManager.getWorktreePath (os.tmpdir-based); /tmp alone diverges on macOS.
-    const wtPath = path.join(os.tmpdir(), "opensprint-worktrees", taskId);
+    // Unique path per invocation so parallel vitest workers or other suites do not clobber disk state.
+    const wtPath = path.join(os.tmpdir(), "opensprint-worktrees", `${taskId}-${randomUUID()}`);
+    worktreePathOverrideByKey.set(task.id, wtPath);
 
     mockTaskStoreReady.mockResolvedValue([task]);
     mockTaskStoreAreAllBlockersClosed.mockResolvedValue(true);
@@ -687,6 +690,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    worktreePathOverrideByKey.clear();
     orchestrator = new OrchestratorService();
     orchestrator.setSessionManager(mockSessionManager);
 
@@ -742,7 +746,7 @@ describe("OrchestratorService (slot-based model)", () => {
     mockTaskStoreGetBlockersFromIssue.mockReturnValue([]);
     mockCaptureBranchDiff.mockResolvedValue("");
     mockCommitWip.mockResolvedValue(undefined);
-    mockRemoveTaskWorktree.mockResolvedValue(undefined);
+    mockRemoveTaskWorktree.mockResolvedValue(true);
     mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
     mockDeleteBranch.mockResolvedValue(undefined);
     mockTaskStoreComment.mockResolvedValue(undefined);
@@ -2860,7 +2864,9 @@ describe("OrchestratorService (slot-based model)", () => {
       });
       mockTaskStoreReady.mockResolvedValue([task1, task2]);
       mockCreateTaskWorktree.mockImplementation(async (_repo: string, taskId: string) => {
-        return `/tmp/opensprint-worktrees/${taskId}`;
+        const p = path.join(os.tmpdir(), "opensprint-worktrees", `${taskId}-${randomUUID()}`);
+        worktreePathOverrideByKey.set(taskId, p);
+        return p;
       });
       mockGetActiveDir.mockImplementation((base: string, tid: string) =>
         path.join(base, ".opensprint", "active", tid)
@@ -2905,7 +2911,13 @@ describe("OrchestratorService (slot-based model)", () => {
       mockTaskStoreReady.mockResolvedValueOnce([childTask]);
       // listAll is called inside pickTask for resolveEpicId; must include epic so branch is epic_os-abc
       mockTaskStoreListAll.mockResolvedValueOnce([epic, childTask]);
-      mockCreateTaskWorktree.mockResolvedValue(`/tmp/opensprint-worktrees/epic_${epicId}`);
+      const epicWtPath = path.join(
+        os.tmpdir(),
+        "opensprint-worktrees",
+        `epic_${epicId}-${randomUUID()}`
+      );
+      mockCreateTaskWorktree.mockResolvedValue(epicWtPath);
+      worktreePathOverrideByKey.set("epic_os-abc", epicWtPath);
       mockGetActiveDir.mockImplementation((base: string, tid: string) =>
         path.join(base, ".opensprint", "active", tid)
       );
@@ -2952,7 +2964,13 @@ describe("OrchestratorService (slot-based model)", () => {
       mockTaskStoreReady.mockResolvedValueOnce([topLevelTask]);
       // listAll: only this task (no parent epic), so resolveEpicId returns null
       mockTaskStoreListAll.mockResolvedValueOnce([topLevelTask]);
-      mockCreateTaskWorktree.mockResolvedValue(`/tmp/opensprint-worktrees/${topLevelTask.id}`);
+      const standaloneWtPath = path.join(
+        os.tmpdir(),
+        "opensprint-worktrees",
+        `${topLevelTask.id}-${randomUUID()}`
+      );
+      mockCreateTaskWorktree.mockResolvedValue(standaloneWtPath);
+      worktreePathOverrideByKey.set(topLevelTask.id, standaloneWtPath);
       mockGetActiveDir.mockImplementation((base: string, tid: string) =>
         path.join(base, ".opensprint", "active", tid)
       );
@@ -3021,9 +3039,11 @@ describe("OrchestratorService (slot-based model)", () => {
       (taskWithAgent as { assignee: string | null }).assignee = "Frodo";
       const taskUnassigned = makeTask("task-unassigned");
       mockTaskStoreReady.mockResolvedValue([taskWithAgent, taskUnassigned]);
-      mockCreateTaskWorktree.mockImplementation(
-        async (_repo: string, taskId: string) => `/tmp/opensprint-worktrees/${taskId}`
-      );
+      mockCreateTaskWorktree.mockImplementation(async (_repo: string, taskId: string) => {
+        const p = path.join(os.tmpdir(), "opensprint-worktrees", `${taskId}-${randomUUID()}`);
+        worktreePathOverrideByKey.set(taskId, p);
+        return p;
+      });
       mockGetActiveDir.mockImplementation((base: string, tid: string) =>
         path.join(base, ".opensprint", "active", tid)
       );

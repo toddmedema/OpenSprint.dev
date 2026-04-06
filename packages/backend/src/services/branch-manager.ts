@@ -23,7 +23,9 @@ import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
 import {
   evaluateWorktreeCleanupProtection,
   getWorktreeCleanupAssignmentGuardMs,
+  listAssignmentSummariesInWorktree,
   logWorktreeCleanupBlocked,
+  logWorktreeDeletionImminent,
   validateWorktreeCheckout,
   worktreePathsResolveEqually,
 } from "../utils/worktree-health.js";
@@ -1326,6 +1328,34 @@ export class BranchManager {
           );
         }
 
+        const project = await this.projectService.getProjectByRepoPath(repoPath).catch(() => null);
+        if (project) {
+          const resolvedOther = path.resolve(
+            await fs.realpath(safeOtherPath).catch(() => safeOtherPath)
+          );
+          const protection = await evaluateWorktreeCleanupProtection(
+            project.id,
+            resolvedOther,
+            (pid, tid) => this.taskStore.show(pid, tid),
+            getWorktreeCleanupAssignmentGuardMs()
+          );
+          if (protection.forbid) {
+            logWorktreeCleanupBlocked("free_branch_elsewhere", {
+              projectId: project.id,
+              worktreePath: resolvedOther,
+              reason: protection.reason ?? "unknown",
+              referencingTaskIds: protection.referencingTaskIds,
+              cleanupTrigger: "free_branch_stale_duplicate",
+            });
+            throw new WorktreeBranchInUseError(
+              `Branch ${branchName} is in use by worktree at ${worktreePath} (assignment/task guard: ${protection.reason}). Retry later or restart the backend.`,
+              branchName,
+              worktreePath,
+              otherTaskId
+            );
+          }
+        }
+
         log.warn("Branch already in use by another worktree; removing stale entry", {
           branchName,
           otherPath: worktreePath,
@@ -1422,7 +1452,39 @@ export class BranchManager {
       }
     }
 
-    // Remove stale worktree at our path if it exists
+    // Remove stale worktree at our path if it exists (assignment guard before lease release)
+    try {
+      await fs.access(wtPath);
+      const project = await this.projectService.getProjectByRepoPath(repoPath).catch(() => null);
+      if (project) {
+        const resolvedWt = path.resolve(await fs.realpath(wtPath).catch(() => wtPath));
+        const prot = await evaluateWorktreeCleanupProtection(
+          project.id,
+          resolvedWt,
+          (pid, tid) => this.taskStore.show(pid, tid),
+          getWorktreeCleanupAssignmentGuardMs()
+        );
+        if (prot.forbid) {
+          logWorktreeCleanupBlocked("create_task_worktree_reclaim", {
+            projectId: project.id,
+            worktreePath: resolvedWt,
+            reason: prot.reason ?? "unknown",
+            referencingTaskIds: prot.referencingTaskIds,
+            cleanupTrigger: "create_task_worktree",
+          });
+          throw new WorktreeBranchInUseError(
+            `Cannot reclaim worktree at ${wtPath}: ${prot.reason ?? "active references"}`,
+            branchName,
+            wtPath,
+            worktreeKey
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof WorktreeBranchInUseError) throw err;
+      // ENOENT: path absent — proceed to prepare/remove no-op
+    }
+
     await this.prepareWorktreeForRemoval(worktreeKey);
     await this.removeTaskWorktree(repoPath, worktreeKey);
 
@@ -1970,13 +2032,59 @@ export class BranchManager {
    * @param actualPath - When provided (e.g. from assignment or git worktree list), use this path
    *   instead of getWorktreePath(worktreeKey). Critical when os.tmpdir() changes between process runs,
    *   which would otherwise leave orphaned worktrees.
+   * @param opts - When bypassReferenceProtection is true, skips assignment/active-task guard (internal
+   *   callers that already deleted assignments or mirrored RecoveryService protection).
+   * @returns false when removal was skipped (protection, lease, or unsafe target); true when cleanup ran.
    */
   async removeTaskWorktree(
     repoPath: string,
     worktreeKey: string,
-    actualPath?: string
-  ): Promise<void> {
+    actualPath?: string,
+    opts?: {
+      bypassReferenceProtection?: boolean;
+      ignoreLiveTaskStatusForTaskIds?: Set<string>;
+    }
+  ): Promise<boolean> {
     const wtPath = actualPath ?? this.getWorktreePath(worktreeKey, repoPath);
+
+    let pathExists = false;
+    try {
+      await fs.access(wtPath);
+      pathExists = true;
+    } catch {
+      pathExists = false;
+    }
+
+    if (!opts?.bypassReferenceProtection && pathExists) {
+      const resolvedRepoRoot = await fs.realpath(repoPath).catch(() => path.resolve(repoPath));
+      const resolvedWt = path.resolve(await fs.realpath(wtPath).catch(() => wtPath));
+      const normRepo = await fs.realpath(resolvedRepoRoot).catch(() => resolvedRepoRoot);
+      const normWt = await fs.realpath(resolvedWt).catch(() => resolvedWt);
+      if (normRepo !== normWt) {
+        const project = await this.projectService.getProjectByRepoPath(repoPath).catch(() => null);
+        if (project) {
+          const protection = await evaluateWorktreeCleanupProtection(
+            project.id,
+            resolvedWt,
+            (pid, tid) => this.taskStore.show(pid, tid),
+            getWorktreeCleanupAssignmentGuardMs(),
+            opts?.ignoreLiveTaskStatusForTaskIds
+              ? { ignoreLiveTaskStatusForTaskIds: opts.ignoreLiveTaskStatusForTaskIds }
+              : undefined
+          );
+          if (protection.forbid) {
+            logWorktreeCleanupBlocked("remove_task_worktree", {
+              projectId: project.id,
+              worktreePath: resolvedWt,
+              reason: protection.reason ?? "unknown",
+              referencingTaskIds: protection.referencingTaskIds,
+              cleanupTrigger: "remove_task_worktree",
+            });
+            return false;
+          }
+        }
+      }
+    }
 
     const dbCanCleanup = await worktreeLeaseService.canCleanup(worktreeKey).catch(() => true);
     if (!dbCanCleanup) {
@@ -1984,7 +2092,7 @@ export class BranchManager {
         worktreeKey,
         worktreePath: wtPath,
       });
-      return;
+      return false;
     }
 
     const registryEntry = worktreeRegistry.get(worktreeKey);
@@ -2021,11 +2129,11 @@ export class BranchManager {
           wtPath,
         }
       );
-      return;
+      return false;
     }
 
     if (!(await this.removalTargetMatchesDurableLeasePath(worktreeKey, wtPath))) {
-      return;
+      return false;
     }
 
     const registeredPath = await this.resolveRegisteredWorktreePath(repoPath, worktreeKey, wtPath);
@@ -2048,7 +2156,20 @@ export class BranchManager {
           candidatePath: wtPath,
           err: "Refusing to treat the repository root as a disposable worktree",
         });
-        return;
+        return false;
+      }
+      const projUnreg = await this.projectService.getProjectByRepoPath(repoPath).catch(() => null);
+      if (projUnreg) {
+        const resolvedUnreg = path.resolve(await fs.realpath(wtPath).catch(() => wtPath));
+        const summariesUnreg = await listAssignmentSummariesInWorktree(resolvedUnreg).catch(() => []);
+        logWorktreeDeletionImminent("remove_task_worktree", {
+          projectId: projUnreg.id,
+          worktreePath: resolvedUnreg,
+          worktreeKey,
+          assignmentSlotCount: summariesUnreg.length,
+          assignmentTaskIds: summariesUnreg.map((s) => s.taskId),
+          cleanupTrigger: "remove_unregistered_worktree_dir",
+        });
       }
       await this.removeWorktreeDirectorySafely(
         repoPath,
@@ -2056,7 +2177,7 @@ export class BranchManager {
         wtPath,
         "Refusing to remove unregistered worktree path"
       );
-      return;
+      return true;
     }
 
     let safeRegisteredPath: string;
@@ -2073,7 +2194,20 @@ export class BranchManager {
         registeredPath,
         err: err instanceof Error ? err.message : String(err),
       });
-      return;
+      return false;
+    }
+
+    const projectForLog = await this.projectService.getProjectByRepoPath(repoPath).catch(() => null);
+    if (projectForLog) {
+      const summaries = await listAssignmentSummariesInWorktree(safeRegisteredPath).catch(() => []);
+      logWorktreeDeletionImminent("remove_task_worktree", {
+        projectId: projectForLog.id,
+        worktreePath: path.resolve(safeRegisteredPath),
+        worktreeKey,
+        assignmentSlotCount: summaries.length,
+        assignmentTaskIds: summaries.map((s) => s.taskId),
+        cleanupTrigger: "remove_registered_worktree",
+      });
     }
 
     try {
@@ -2108,6 +2242,7 @@ export class BranchManager {
 
     worktreeRegistry.retire(worktreeKey);
     worktreeRegistry.remove(worktreeKey);
+    return true;
   }
 
   private async removeWorktreePathWithEscalation(

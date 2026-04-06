@@ -480,7 +480,12 @@ export class OrchestratorDispatchService {
         const bm = this.host.getBranchManager() as {
           ensureOnMain(repoPath: string, baseBranch: string): Promise<void>;
           getWorktreePath(key: string, repoPath?: string): string;
-          removeTaskWorktree(repoPath: string, worktreeKey: string, actualPath?: string): Promise<void>;
+          removeTaskWorktree(
+            repoPath: string,
+            worktreeKey: string,
+            actualPath?: string,
+            opts?: { bypassReferenceProtection?: boolean; ignoreLiveTaskStatusForTaskIds?: Set<string> }
+          ): Promise<boolean>;
           createTaskWorktree(repoPath: string, taskId: string, baseBranch: string, options?: { worktreeKey?: string; branchName?: string }): Promise<string>;
         };
         const rebuildResult = await rebuildWorktreeIfInvalid(
@@ -490,7 +495,8 @@ export class OrchestratorDispatchService {
           branchName,
           baseBranch,
           {
-            removeWorktree: (rp, key, ap) => bm.removeTaskWorktree(rp, key, ap),
+            removeWorktree: (rp, key, ap) =>
+              bm.removeTaskWorktree(rp, key, ap, { bypassReferenceProtection: true }),
             createWorktree: (rp, tid, bb, opts) => bm.createTaskWorktree(rp, tid, bb, opts),
           }
         );

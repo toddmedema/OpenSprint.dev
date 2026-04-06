@@ -1171,7 +1171,8 @@ export async function runMergeQualityGates(
         options.branchName,
         options.baseBranch,
         {
-          removeWorktree: (rp, key, ap) => branchManager.removeTaskWorktree(rp, key, ap),
+          removeWorktree: (rp, key, ap) =>
+            branchManager.removeTaskWorktree(rp, key, ap, { bypassReferenceProtection: true }),
           createWorktree: (rp, tid, bb, opts) =>
             branchManager.createTaskWorktree(rp, tid, bb, opts),
         }

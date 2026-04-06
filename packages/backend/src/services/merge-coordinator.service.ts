@@ -1,3 +1,4 @@
+import fs from "fs/promises";
 import path from "path";
 
 /**
@@ -211,9 +212,10 @@ export interface MergeCoordinatorHost {
     } | null>;
   };
   branchManager: {
+    getWorktreePath(key: string, repoPath?: string): string;
     waitForGitReady(wtPath: string): Promise<void>;
     commitWip(wtPath: string, taskId: string): Promise<unknown>;
-    removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
+    removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<boolean>;
     prepareWorktreeForRemoval(worktreeKey: string): Promise<void>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     revertAndReturnToMain?(
@@ -477,24 +479,31 @@ export class MergeCoordinatorService {
           }
         } else {
           const key = target.worktreeKey ?? target.taskId;
-          if (target.worktreePath) {
-            const resolvedWt = path.resolve(target.worktreePath);
-            const protection = await evaluateWorktreeCleanupProtection(
-              projectId,
-              resolvedWt,
-              (pid, tid) => this.host.taskStore.show(pid, tid),
-              getWorktreeCleanupAssignmentGuardMs()
-            );
-            if (protection.forbid) {
-              logWorktreeCleanupBlocked("merge_push_cleanup", {
+          const pathForGuard =
+            target.worktreePath ?? this.host.branchManager.getWorktreePath(key, repoPath);
+          if (pathForGuard) {
+            try {
+              await fs.access(pathForGuard);
+              const resolvedWt = path.resolve(await fs.realpath(pathForGuard).catch(() => pathForGuard));
+              const protection = await evaluateWorktreeCleanupProtection(
                 projectId,
-                worktreePath: resolvedWt,
-                reason: protection.reason ?? "unknown",
-                referencingTaskIds: protection.referencingTaskIds,
-                cleanupTrigger: "merge_success_push",
-                intentTaskId: target.taskId,
-              });
-              continue;
+                resolvedWt,
+                (pid, tid) => this.host.taskStore.show(pid, tid),
+                getWorktreeCleanupAssignmentGuardMs()
+              );
+              if (protection.forbid) {
+                logWorktreeCleanupBlocked("merge_push_cleanup", {
+                  projectId,
+                  worktreePath: resolvedWt,
+                  reason: protection.reason ?? "unknown",
+                  referencingTaskIds: protection.referencingTaskIds,
+                  cleanupTrigger: "merge_success_push",
+                  intentTaskId: target.taskId,
+                });
+                continue;
+              }
+            } catch {
+              // Worktree directory missing — nothing to guard on disk
             }
           }
           await this.host.branchManager.prepareWorktreeForRemoval(key);
@@ -517,11 +526,19 @@ export class MergeCoordinatorService {
               },
             })
             .catch(() => {});
-          await this.host.branchManager.removeTaskWorktree(
+          const removedOk = await this.host.branchManager.removeTaskWorktree(
             repoPath,
             key,
             target.worktreePath ?? undefined
           );
+          if (!removedOk) {
+            log.warn("Deferred cleanup skipped branch delete after worktree removal was blocked", {
+              taskId: target.taskId,
+              branchName: target.branchName,
+              worktreeKey: key,
+            });
+            continue;
+          }
           await this.host.branchManager.deleteBranch(repoPath, target.branchName);
         }
         perProject.delete(target.taskId);

@@ -153,7 +153,12 @@ export interface FailureHandlerHost {
     captureBranchDiff(repoPath: string, branchName: string, baseBranch?: string): Promise<string>;
     captureUncommittedDiff(wtPath: string): Promise<string>;
     prepareWorktreeForRemoval(worktreeKey: string): Promise<void>;
-    removeTaskWorktree(repoPath: string, taskId: string, actualPath?: string): Promise<void>;
+    removeTaskWorktree(
+      repoPath: string,
+      taskId: string,
+      actualPath?: string,
+      opts?: { bypassReferenceProtection?: boolean; ignoreLiveTaskStatusForTaskIds?: Set<string> }
+    ): Promise<boolean>;
     deleteBranch(repoPath: string, branchName: string): Promise<void>;
     revertAndReturnToMain(repoPath: string, branchName: string, baseBranch?: string): Promise<void>;
   };
@@ -177,7 +182,7 @@ export interface FailureHandlerHost {
     }>;
   };
   persistCounters(projectId: string, repoPath: string): Promise<void>;
-  deleteAssignment(repoPath: string, taskId: string): Promise<void>;
+  deleteAssignment(repoPath: string, taskId: string, worktreePath?: string | null): Promise<void>;
   transition(projectId: string, t: { to: "fail"; taskId: string }): void;
   nudge(projectId: string): void;
   removeSlot(
@@ -1590,13 +1595,29 @@ export class FailureHandlerService {
       return;
     }
     await worktreeLeaseService.forceRelease(worktreeKey).catch(() => {});
+    let worktreeRemovalAttempted = false;
+    let worktreeRemovalOk = true;
     if (slot.worktreePath) {
+      await this.host.deleteAssignment(repoPath, taskId, slot.worktreePath);
       await this.host.branchManager.prepareWorktreeForRemoval(worktreeKey);
-      await this.host.branchManager.removeTaskWorktree(repoPath, worktreeKey, slot.worktreePath);
+      worktreeRemovalAttempted = true;
+      worktreeRemovalOk = await this.host.branchManager.removeTaskWorktree(
+        repoPath,
+        worktreeKey,
+        slot.worktreePath
+      );
       slot.worktreePath = null;
     }
     if (options?.deleteBranch) {
-      await this.host.branchManager.deleteBranch(repoPath, branchName);
+      if (!worktreeRemovalAttempted || worktreeRemovalOk) {
+        await this.host.branchManager.deleteBranch(repoPath, branchName);
+      } else {
+        log.warn("Skipping branch delete after worktree removal was blocked (demotion/failure cleanup)", {
+          taskId,
+          branchName,
+          worktreeKey,
+        });
+      }
     }
   }
 

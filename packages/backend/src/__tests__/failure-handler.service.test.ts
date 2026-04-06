@@ -129,7 +129,7 @@ describe("FailureHandlerService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRemoveTaskWorktree.mockResolvedValue(undefined);
+    mockRemoveTaskWorktree.mockResolvedValue(true);
     mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
     mockDeleteBranch.mockResolvedValue(undefined);
     mockRevertAndReturnToMain.mockResolvedValue(undefined);

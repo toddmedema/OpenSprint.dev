@@ -132,6 +132,28 @@ export function logWorktreeCleanupBlocked(
   });
 }
 
+/**
+ * Structured log immediately before a destructive worktree delete (after protection checks).
+ * Use for observability: correlates teardown attempts with on-disk assignment slots.
+ */
+export function logWorktreeDeletionImminent(
+  context: string,
+  meta: {
+    projectId: string;
+    worktreePath: string;
+    worktreeKey: string;
+    assignmentSlotCount: number;
+    assignmentTaskIds?: string[];
+    cleanupTrigger?: string;
+  }
+): void {
+  guardLog.info("worktree.delete_imminent", {
+    context,
+    forbiddenDeletesAvoided: 0,
+    ...meta,
+  });
+}
+
 
 const EXCLUDED_ROOT_DIRS = new Set([
   ".git",
@@ -468,7 +490,7 @@ export interface WorktreeRebuildResult {
 }
 
 export interface WorktreeRebuildDeps {
-  removeWorktree(repoPath: string, worktreeKey: string, actualPath?: string): Promise<void>;
+  removeWorktree(repoPath: string, worktreeKey: string, actualPath?: string): Promise<boolean>;
   createWorktree(
     repoPath: string,
     taskId: string,

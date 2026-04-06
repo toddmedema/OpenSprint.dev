@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   MergeCoordinatorService,
   type MergeCoordinatorHost,
@@ -208,6 +208,8 @@ describe("MergeCoordinatorService", () => {
   let coordinator: MergeCoordinatorService;
   let mockHost: MergeCoordinatorHost;
   let hostState: ReturnType<MergeCoordinatorHost["getState"]>;
+  /** Tracks fire-and-forget {@link MergeCoordinatorService.postCompletionAsync} from performMergeAndDone. */
+  const postCompletionInflight: Promise<void>[] = [];
   const projectId = "proj-1";
   const repoPath = "/tmp/repo";
   const taskId = "os-abc1";
@@ -251,6 +253,7 @@ describe("MergeCoordinatorService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    postCompletionInflight.length = 0;
     mockGitQueueDrain.mockResolvedValue(undefined);
     mockGitQueueEnqueueAndWait.mockResolvedValue(undefined);
     mockNotificationCreate.mockResolvedValue(undefined);
@@ -334,10 +337,11 @@ describe("MergeCoordinatorService", () => {
         planGetByEpicId: vi.fn().mockResolvedValue(null),
       },
       branchManager: {
+        getWorktreePath: vi.fn().mockImplementation((key: string) => `/tmp/opensprint-worktrees/${key}`),
         waitForGitReady: vi.fn().mockResolvedValue(undefined),
         commitWip: vi.fn().mockResolvedValue(undefined),
         prepareWorktreeForRemoval: mockPrepareWorktreeForRemoval.mockResolvedValue(undefined),
-        removeTaskWorktree: mockRemoveTaskWorktree.mockResolvedValue(undefined),
+        removeTaskWorktree: mockRemoveTaskWorktree.mockResolvedValue(true),
         deleteBranch: mockDeleteBranch.mockResolvedValue(undefined),
         getChangedFiles: vi.fn().mockResolvedValue([]),
         prepareMainForPush: vi.fn().mockResolvedValue(undefined),
@@ -383,6 +387,18 @@ describe("MergeCoordinatorService", () => {
     };
 
     coordinator = new MergeCoordinatorService(mockHost);
+    const realPostCompletion =
+      MergeCoordinatorService.prototype.postCompletionAsync.bind(coordinator);
+    vi.spyOn(coordinator, "postCompletionAsync").mockImplementation((...args) => {
+      const p = realPostCompletion(...args);
+      postCompletionInflight.push(p);
+      return p;
+    });
+  });
+
+  afterEach(async () => {
+    await Promise.allSettled(postCompletionInflight);
+    postCompletionInflight.length = 0;
   });
 
   it("calls removeTaskWorktree when gitWorkingMode is worktree", async () => {
@@ -472,7 +488,7 @@ describe("MergeCoordinatorService", () => {
     for (const mode of ["worktree", "branches"] as const) {
       vi.clearAllMocks();
       mockPrepareWorktreeForRemoval.mockResolvedValue(undefined);
-      mockRemoveTaskWorktree.mockResolvedValue(undefined);
+      mockRemoveTaskWorktree.mockResolvedValue(true);
       mockDeleteBranch.mockResolvedValue(undefined);
 
       mockGetSettings.mockResolvedValue({

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import * as worktreeHealth from "../utils/worktree-health.js";
 import { RecoveryService } from "../services/recovery.service.js";
 
 const TEST_PID = 99999;
@@ -121,7 +122,7 @@ describe("RecoveryService — stale heartbeat recovery", () => {
     mockReadAssignmentAt.mockResolvedValue(null);
     mockListCleanupIntents.mockResolvedValue([]);
     mockRemoveCleanupIntent.mockResolvedValue(undefined);
-    mockRemoveTaskWorktree.mockResolvedValue(undefined);
+    mockRemoveTaskWorktree.mockResolvedValue(true);
     mockDeleteBranch.mockResolvedValue(undefined);
     mockPruneOrphanWorktrees.mockResolvedValue([]);
     mockListTaskWorktrees.mockResolvedValue([]);
@@ -1263,7 +1264,8 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
         tmpDir,
         "task-released",
-        wtPath
+        wtPath,
+        { ignoreLiveTaskStatusForTaskIds: new Set(["task-released"]) }
       );
     });
 
@@ -1288,7 +1290,8 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
         tmpDir,
         "task-err",
-        wtPath
+        wtPath,
+        { ignoreLiveTaskStatusForTaskIds: new Set(["task-err"]) }
       );
     });
 
@@ -1459,7 +1462,8 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       expect(mockRemoveTaskWorktree).toHaveBeenCalledWith(
         tmpDir,
         "task-stale-gone",
-        wtPath
+        wtPath,
+        { ignoreLiveTaskStatusForTaskIds: new Set(["task-stale-gone"]) }
       );
     });
 
@@ -1586,6 +1590,119 @@ describe("RecoveryService — stale heartbeat recovery", () => {
       const pruneExcludePaths: Set<string> = pruneCall[4];
       expect(pruneExcludeKeys.has("epic_requeue_shared")).toBe(true);
       expect(pruneExcludePaths.has(path.resolve(epicWtPath))).toBe(true);
+    });
+  });
+
+  describe("overlapping assign/cleanup stress (git_entry_missing guard)", () => {
+    it("does not replay cleanup intent when only fresh on-disk assignments exist (no slot yet) under worktree base", async () => {
+      const base = path.join(os.tmpdir(), "opensprint-worktrees");
+      const wtKey = `stress-gap-${Date.now()}`;
+      const wtPath = path.join(base, wtKey);
+      try {
+        await fs.mkdir(path.join(wtPath, ".opensprint", "active", "task-live"), { recursive: true });
+        await fs.writeFile(
+          path.join(wtPath, ".opensprint", "active", "task-live", "assignment.json"),
+          JSON.stringify({
+            taskId: "task-live",
+            createdAt: new Date().toISOString(),
+            worktreePath: wtPath,
+            worktreeKey: wtKey,
+          }),
+          "utf-8"
+        );
+
+        const hostNoSlots = {
+          getSlottedTaskIds: () => [] as string[],
+          getActiveAgentIds: () => [] as string[],
+        };
+
+        mockListCleanupIntents.mockResolvedValue([
+          {
+            taskId: "task-merged-old",
+            branchName: "opensprint/task-merged-old",
+            worktreePath: wtPath,
+            gitWorkingMode: "worktree",
+            worktreeKey: wtKey,
+          },
+        ]);
+
+        vi.mocked(taskStore.listAll).mockResolvedValue([
+          { id: "task-live", status: "in_progress" } as never,
+          { id: "task-merged-old", status: "closed" } as never,
+        ]);
+        vi.mocked(taskStore.show).mockImplementation(async (_p, id) => {
+          if (id === "task-live") return { status: "in_progress" } as never;
+          return { status: "closed" } as never;
+        });
+
+        mockRemoveTaskWorktree.mockClear();
+        const result = await service.runFullRecovery("proj-1", tmpDir, hostNoSlots);
+
+        expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+        expect(result.cleaned).not.toContain("cleanup_intent:task-merged-old");
+      } finally {
+        await fs.rm(wtPath, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+
+    it("records zero forbidden-delete regressions when active slot blocks intent replay (metrics field)", async () => {
+      const wtHeld = path.join(tmpDir, "wt-slot-stress");
+      await fs.mkdir(path.join(wtHeld, ".opensprint", "active", "child-slot"), { recursive: true });
+      await fs.writeFile(
+        path.join(wtHeld, ".opensprint", "active", "child-slot", "assignment.json"),
+        JSON.stringify({
+          taskId: "child-slot",
+          createdAt: new Date(Date.now() - 60_000).toISOString(),
+          worktreePath: wtHeld,
+          worktreeKey: "epic_slot_stress",
+        }),
+        "utf-8"
+      );
+
+      mockListCleanupIntents.mockResolvedValue([
+        {
+          taskId: "parent-merged",
+          branchName: "opensprint/parent-merged",
+          worktreePath: wtHeld,
+          gitWorkingMode: "worktree",
+          worktreeKey: "epic_slot_stress",
+        },
+      ]);
+
+      // Omit worktree key/path from slot exclusions so replay reaches on-disk protection
+      // (mirrors races where the slot holder path is not yet mirrored into exclude sets).
+      const slottedHost = {
+        getSlottedTaskIds: () => ["child-slot"],
+        getActiveAgentIds: () => [] as string[],
+        getSlottedWorktreeKeys: () => [] as string[],
+        getSlottedWorktreePaths: () => [] as string[],
+      };
+
+      vi.mocked(taskStore.listAll).mockResolvedValue([
+        { id: "parent-merged", status: "closed" } as never,
+      ]);
+      vi.mocked(taskStore.show).mockImplementation(async (_p, tid) => {
+        if (tid === "child-slot") return { status: "in_progress" } as never;
+        return { status: "closed" } as never;
+      });
+
+      const blockedSpy = vi.spyOn(worktreeHealth, "logWorktreeCleanupBlocked");
+
+      mockRemoveTaskWorktree.mockClear();
+      mockDeleteBranch.mockClear();
+      await service.runFullRecovery("proj-1", tmpDir, slottedHost);
+      expect(mockRemoveTaskWorktree).not.toHaveBeenCalled();
+      expect(mockDeleteBranch).not.toHaveBeenCalled();
+      expect(blockedSpy).toHaveBeenCalledTimes(1);
+      expect(blockedSpy).toHaveBeenCalledWith(
+        "replay_cleanup_intent",
+        expect.objectContaining({
+          projectId: "proj-1",
+          cleanupTrigger: "recovery_replay",
+          reason: expect.stringMatching(/active_task/),
+        })
+      );
+      blockedSpy.mockRestore();
     });
   });
 });

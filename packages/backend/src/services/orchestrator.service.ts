@@ -669,6 +669,10 @@ export class OrchestratorService {
       log.warn("heartbeat delete failed", { taskId, wtPath, err: err instanceof Error ? err.message : String(err) });
     });
 
+    // Drop assignment before worktree teardown so assignment-based cleanup guards (and recovery scans)
+    // do not race with intentional slot finalization.
+    await this.deleteAssignmentAt(repoPath, taskId, slot.worktreePath ?? undefined);
+
     if (slot.worktreePath && slot.worktreePath !== repoPath) {
       const worktreeKey = slot.worktreeKey ?? taskId;
       try {
@@ -678,8 +682,6 @@ export class OrchestratorService {
         // Best effort; worktree may already be gone
       }
     }
-
-    await this.deleteAssignmentAt(repoPath, taskId, slot.worktreePath ?? undefined);
     this.removeSlot(state, taskId);
 
     if (options?.broadcast !== false) {
@@ -688,8 +690,12 @@ export class OrchestratorService {
   }
 
   /** Delete assignment.json for a task (from main repo or from given base path e.g. worktree) */
-  /** @internal */ async deleteAssignment(repoPath: string, taskId: string): Promise<void> {
-    await this.deleteAssignmentAt(repoPath, taskId, undefined);
+  /** @internal */ async deleteAssignment(
+    repoPath: string,
+    taskId: string,
+    worktreePath?: string | null
+  ): Promise<void> {
+    await this.deleteAssignmentAt(repoPath, taskId, worktreePath ?? undefined);
   }
 
   private async deleteAssignmentAt(

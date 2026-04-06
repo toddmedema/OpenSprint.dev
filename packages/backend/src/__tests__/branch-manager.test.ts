@@ -1649,7 +1649,8 @@ describe("BranchManager", () => {
         const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
         worktreePaths.push(wtPath);
 
-        await branchManager.removeTaskWorktree(repoPath, taskId);
+        const ok = await branchManager.removeTaskWorktree(repoPath, taskId);
+        expect(ok).toBe(false);
         await fs.access(wtPath);
       });
 
@@ -1666,11 +1667,12 @@ describe("BranchManager", () => {
         const wtPath = await branchManager.createTaskWorktree(repoPath, taskId);
         worktreePaths.push(wtPath);
 
-        await branchManager.removeTaskWorktree(repoPath, taskId);
+        const ok = await branchManager.removeTaskWorktree(repoPath, taskId);
+        expect(ok).toBe(true);
         await expect(fs.access(wtPath)).rejects.toThrow();
       });
 
-      it("removes worktree when DB allows cleanup even if registry shows in_use (stale entry retired)", async () => {
+      it("retires stale in_use registry entry and removes worktree when DB lease allows cleanup", async () => {
         await execAsync("git init", { cwd: repoPath });
         await execAsync("git branch -M main", { cwd: repoPath });
         await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
@@ -1683,7 +1685,8 @@ describe("BranchManager", () => {
         worktreePaths.push(wtPath);
 
         worktreeRegistry.transition(taskId, "in_use");
-        await branchManager.removeTaskWorktree(repoPath, taskId);
+        const ok = await branchManager.removeTaskWorktree(repoPath, taskId);
+        expect(ok).toBe(true);
         await expect(fs.access(wtPath)).rejects.toThrow();
       });
     });

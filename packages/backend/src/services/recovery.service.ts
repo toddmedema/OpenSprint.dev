@@ -1142,11 +1142,20 @@ export class RecoveryService {
               },
             })
             .catch(() => {});
-          await this.branchManager.removeTaskWorktree(
+          const removedOk = await this.branchManager.removeTaskWorktree(
             repoPath,
             worktreeKey,
             intent.worktreePath ?? undefined
           );
+          if (!removedOk) {
+            log.warn("Recovery replay skipped branch delete after worktree removal was blocked", {
+              projectId,
+              taskId: intent.taskId,
+              branchName: intent.branchName,
+              worktreeKey,
+            });
+            continue;
+          }
           await this.branchManager.deleteBranch(repoPath, intent.branchName);
         }
         await worktreeCleanupIntentService.removeBestEffort(repoPath, projectId, intent.taskId);
@@ -1201,7 +1210,18 @@ export class RecoveryService {
   ): Promise<void> {
     const guardMs = getWorktreeCleanupAssignmentGuardMs();
     const now = Date.now();
-    const bases = [this.branchManager.getWorktreeBasePath(repoPath)];
+    const baseCandidates = [
+      this.branchManager.getWorktreeBasePath(repoPath),
+      this.branchManager.getLegacyWorktreeBasePath(),
+    ];
+    const bases: string[] = [];
+    const seenBases = new Set<string>();
+    for (const b of baseCandidates) {
+      const norm = path.resolve(b);
+      if (seenBases.has(norm)) continue;
+      seenBases.add(norm);
+      bases.push(b);
+    }
     const seenWt = new Set<string>();
     /** Avoid scanning huge legacy temp roots (can contain thousands of stale dirs). */
     const maxDirsPerBase = 96;
@@ -1522,7 +1542,9 @@ export class RecoveryService {
             return;
           }
         }
-        await this.branchManager.removeTaskWorktree(repoPath, task.id, found?.worktreePath);
+        await this.branchManager.removeTaskWorktree(repoPath, task.id, found?.worktreePath, {
+          ignoreLiveTaskStatusForTaskIds: new Set([task.id]),
+        });
       } catch {
         // Worktree may not exist
       }
@@ -1638,8 +1660,10 @@ export class RecoveryService {
       leaseReleasedAt: lease?.releasedAt ?? null,
     });
     try {
-      await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath);
-      await Promise.resolve(worktreeLeaseService.forceRelease(worktreeKey)).catch((err) => {
+      await this.branchManager.removeTaskWorktree(repoPath, worktreeKey, worktreePath, {
+        ignoreLiveTaskStatusForTaskIds: new Set([taskId]),
+      });
+      await worktreeLeaseService.forceRelease(worktreeKey).catch((err) => {
         log.warn("worktree lease force-release failed", { worktreeKey, err: err instanceof Error ? err.message : String(err) });
       });
     } catch {
