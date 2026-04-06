@@ -2639,6 +2639,10 @@ describe("AgentClient", () => {
         "proj-123"
       );
 
+      // Async key resolution + trySpawn can yield before spawn; remove the task file only after
+      // the first subprocess starts so we exercise "teardown during transient retry", not "never spawned".
+      await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(1), { timeout: 3000 });
+
       await fs.rm(taskFilePath, { force: true });
 
       await vi.waitFor(
