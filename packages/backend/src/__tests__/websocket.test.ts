@@ -11,6 +11,10 @@ import {
 import { AgentChatService } from "../services/agent-chat.service.js";
 import { ActiveAgentsService } from "../services/active-agents.service.js";
 import { VITEST_DEFAULT_LOCAL_SESSION_TOKEN } from "../services/local-session-auth.service.js";
+import {
+  issueWebSocketUpgradeTicket,
+  clearWebSocketUpgradeTicketsForTesting,
+} from "../services/websocket-upgrade-ticket.service.js";
 
 const WS_AUTH = { headers: { Authorization: `Bearer ${VITEST_DEFAULT_LOCAL_SESSION_TOKEN}` } };
 
@@ -35,6 +39,7 @@ describe("WebSocket server and connection handling", () => {
   let port: number;
 
   beforeEach(() => {
+    clearWebSocketUpgradeTicketsForTesting();
     server = createServer((_req, res) => {
       res.writeHead(404);
       res.end();
@@ -89,10 +94,9 @@ describe("WebSocket server and connection handling", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("accepts connections with token query parameter", async () => {
-    const q = new URLSearchParams({
-      token: VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
-    });
+  it("accepts connections with one-time ticket query parameter", async () => {
+    const ticket = issueWebSocketUpgradeTicket();
+    const q = new URLSearchParams({ ticket });
     const ws = new WebSocket(`ws://localhost:${port}/ws?${q.toString()}`);
     await new Promise<void>((resolve) => {
       ws.on("open", () => {
@@ -102,6 +106,24 @@ describe("WebSocket server and connection handling", () => {
       });
     });
     await waitForClose(ws);
+  });
+
+  it("rejects session token in query string (legacy)", async () => {
+    const q = new URLSearchParams({
+      token: VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
+    });
+    await expect(
+      Promise.race([
+        new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(`ws://localhost:${port}/ws?${q.toString()}`);
+          ws.on("open", () => reject(new Error("unexpected open with session token in query")));
+          ws.on("error", () => resolve());
+        }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("handshake timeout")), 5000)
+        ),
+      ])
+    ).resolves.toBeUndefined();
   });
 
   it("accepts connections to /ws/projects/:id", async () => {

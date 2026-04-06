@@ -103,6 +103,24 @@ async function getGlobalStatus(app: EnvMinimalApp) {
   }
 }
 
+/**
+ * POST `/env/keys` with timeout and one retry on supertest "socket hang up".
+ * Same flake class as `getGlobalStatus` when this suite runs in the full `npm run test` graph.
+ */
+async function postEnvKeys(app: EnvMinimalApp, body: object) {
+  const url = `${API_PREFIX}/env/keys`;
+  const doRequest = () => authedSupertest(app).post(url).send(body).timeout(10_000);
+  try {
+    return await doRequest();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/socket hang up/i.test(msg)) {
+      return await doRequest();
+    }
+    throw err;
+  }
+}
+
 describe("Env API", () => {
   let app: ReturnType<typeof createMinimalEnvApp>;
   let tmpDir: string;
@@ -502,13 +520,13 @@ describe("Env API", () => {
 
   describe("POST /env/keys", () => {
     it("returns 400 when key and value are missing", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({});
+      const res = await postEnvKeys(app, {});
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
     });
 
     it("returns 400 when key is not allowed", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      const res = await postEnvKeys(app, {
         key: "OTHER_KEY",
         value: "secret",
       });
@@ -517,7 +535,7 @@ describe("Env API", () => {
     });
 
     it("returns 400 when value is empty", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      const res = await postEnvKeys(app, {
         key: "ANTHROPIC_API_KEY",
         value: "   ",
       });
@@ -526,7 +544,7 @@ describe("Env API", () => {
     });
 
     it("saves allowed key to .env and returns 200", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      const res = await postEnvKeys(app, {
         key: "ANTHROPIC_API_KEY",
         value: "sk-test-value",
       });
@@ -540,7 +558,7 @@ describe("Env API", () => {
     it("appends to existing .env without stripping other keys", async () => {
       fs.writeFileSync(path.join(tmpDir, ".env"), "EXISTING=ok\n", "utf-8");
 
-      await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      await postEnvKeys(app, {
         key: "CURSOR_API_KEY",
         value: "cursor-secret",
       });
@@ -551,7 +569,7 @@ describe("Env API", () => {
     });
 
     it("persists to global store with unique id", async () => {
-      await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      await postEnvKeys(app, {
         key: "ANTHROPIC_API_KEY",
         value: "sk-ant-global-test",
       });
@@ -573,7 +591,7 @@ describe("Env API", () => {
         },
       });
 
-      await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      await postEnvKeys(app, {
         key: "ANTHROPIC_API_KEY",
         value: "sk-ant-new",
       });
@@ -595,7 +613,7 @@ describe("Env API", () => {
         },
       });
 
-      await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      await postEnvKeys(app, {
         key: "CURSOR_API_KEY",
         value: "cursor-new",
       });
@@ -607,7 +625,7 @@ describe("Env API", () => {
     });
 
     it("saves OPENAI_API_KEY to .env and global store", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys`).send({
+      const res = await postEnvKeys(app, {
         key: "OPENAI_API_KEY",
         value: "sk-openai-test-value",
       });

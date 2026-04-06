@@ -109,6 +109,28 @@ describe("App", () => {
     expect(res.status).toBe(403);
   });
 
+  it("issues ws-upgrade ticket with Bearer auth", async () => {
+    const app = createApp();
+    const res = await withLocalSessionAuth(
+      request(app)
+        .post(`${API_PREFIX}/ws-upgrade-ticket`)
+        .set("Content-Type", "application/json")
+        .send({})
+    );
+    expect(res.status).toBe(200);
+    expect(typeof res.body?.data?.ticket).toBe("string");
+    expect((res.body.data.ticket as string).length).toBeGreaterThan(20);
+  });
+
+  it("rejects ws-upgrade ticket without Bearer auth", async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post(`${API_PREFIX}/ws-upgrade-ticket`)
+      .set("Content-Type", "application/json")
+      .send({});
+    expect(res.status).toBe(403);
+  });
+
   it("should parse JSON request bodies", async () => {
     const app = createApp();
     const res = await withLocalSessionAuth(

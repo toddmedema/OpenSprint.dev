@@ -58,6 +58,7 @@ import {
   type AgentChatState,
 } from "../slices/agentChatSlice";
 import type { QueryClient } from "@tanstack/react-query";
+import { API_PREFIX } from "@opensprint/shared";
 import { getQueryClient } from "../../queryClient";
 import { queryKeys } from "../../api/queryKeys";
 import { isViewingProjectPhase } from "../../lib/currentProjectRoute";
@@ -132,15 +133,73 @@ const RECONNECT_MAX_MS = 30000;
 const AGENT_ACTIVITY_QUERY_THROTTLE_MS = 1000;
 
 /**
- * Browsers cannot set WebSocket upgrade headers; append the same local session token used for
- * `Authorization: Bearer` on API fetch (see `api/client.ts`).
+ * Single visibility/focus subscription for the whole app. Each `configureStore` must not add its own
+ * listeners — tests create many stores sequentially, and duplicate handlers were firing `connect()` from
+ * stale middleware and breaking MockWebSocket tests (wrong `ws` / timer interactions).
  */
-function buildWebSocketUrl(pathFromHost: string): string {
+let windowReturnOnVisible: (() => void) | null = null;
+let windowReturnOnFocusDebounced: (() => void) | null = null;
+let windowLifecycleHooksInstalled = false;
+
+function installWindowLifecycleHooksOnce(): void {
+  if (windowLifecycleHooksInstalled) return;
+  windowLifecycleHooksInstalled = true;
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      windowReturnOnVisible?.();
+    });
+  }
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("focus", () => {
+      windowReturnOnFocusDebounced?.();
+    });
+  }
+}
+
+const API_V1_BASE = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ""}${API_PREFIX}`;
+
+/**
+ * Exchange Bearer session for a one-time WS upgrade ticket over HTTPS (avoids putting the session
+ * in the WebSocket URL, which is often logged). Node `ws` clients can use the header instead.
+ */
+async function fetchWebSocketUpgradeTicket(): Promise<string | null> {
+  const token =
+    typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
+  if (!token) return null;
+  try {
+    const res = await fetch(`${API_V1_BASE}/ws-upgrade-ticket`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: "{}",
+    });
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    if (
+      body &&
+      typeof body === "object" &&
+      "data" in body &&
+      body.data &&
+      typeof body.data === "object" &&
+      "ticket" in body.data &&
+      typeof (body.data as { ticket?: unknown }).ticket === "string"
+    ) {
+      return (body.data as { ticket: string }).ticket;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function buildWebSocketUrl(pathFromHost: string, ticket: string | null): string {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const base = `${protocol}//${window.location.host}${pathFromHost}`;
-  const token = typeof window !== "undefined" ? window.__OPENSPRINT_LOCAL_SESSION__ : undefined;
-  if (!token) return base;
-  return `${base}?${new URLSearchParams({ token }).toString()}`;
+  if (!ticket) return base;
+  return `${base}?${new URLSearchParams({ ticket }).toString()}`;
 }
 
 export const websocketMiddleware: Middleware = (storeApi) => {
@@ -217,21 +276,7 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     reconnectAttempt = 0;
   }
 
-  function connect(projectId: string) {
-    // Skip if already connected to the same project
-    if (currentProjectId === projectId && ws && ws.readyState === WebSocket.OPEN) {
-      return;
-    }
-
-    cleanup();
-    intentionalClose = false;
-    currentProjectId = projectId;
-
-    const url = buildWebSocketUrl(`/ws/projects/${projectId}`);
-
-    const socket = new WebSocket(url);
-    ws = socket;
-
+  function attachProjectSocketHandlers(socket: WebSocket, projectId: string) {
     socket.onopen = () => {
       reconnectAttempt = 0;
       dispatch(setConnected(true));
@@ -288,6 +333,27 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     };
   }
 
+  function connect(projectId: string) {
+    // Skip if already connected to the same project
+    if (currentProjectId === projectId && ws && ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    cleanup();
+    intentionalClose = false;
+    currentProjectId = projectId;
+
+    void (async () => {
+      const ticket = await fetchWebSocketUpgradeTicket();
+      if (intentionalClose || currentProjectId !== projectId) return;
+
+      const url = buildWebSocketUrl(`/ws/projects/${projectId}`, ticket);
+      const socket = new WebSocket(url);
+      ws = socket;
+      attachProjectSocketHandlers(socket, projectId);
+    })();
+  }
+
   function scheduleReconnect(projectId: string) {
     const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt), RECONNECT_MAX_MS);
     reconnectAttempt++;
@@ -303,29 +369,35 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     cleanup();
     intentionalClose = false;
     currentProjectId = HOME_SENTINEL;
-    const url = buildWebSocketUrl("/ws");
-    const socket = new WebSocket(url);
-    ws = socket;
-    socket.onopen = () => {
-      reconnectAttempt = 0;
-      dispatch(setConnected(true));
-      dispatch(setConnectionError(false));
-    };
-    socket.onmessage = () => {
-      // No project scope — backend does not send project events to /ws-only clients
-    };
-    socket.onclose = () => {
-      if (socket !== ws) return;
-      dispatch(setConnected(false));
-      if (!intentionalClose && currentProjectId === HOME_SENTINEL) {
-        const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt), RECONNECT_MAX_MS);
-        reconnectAttempt++;
-        reconnectTimer = setTimeout(() => {
-          if (currentProjectId === HOME_SENTINEL) connectHome();
-        }, delay);
-      }
-    };
-    socket.onerror = () => {};
+
+    void (async () => {
+      const ticket = await fetchWebSocketUpgradeTicket();
+      if (intentionalClose || currentProjectId !== HOME_SENTINEL) return;
+
+      const url = buildWebSocketUrl("/ws", ticket);
+      const socket = new WebSocket(url);
+      ws = socket;
+      socket.onopen = () => {
+        reconnectAttempt = 0;
+        dispatch(setConnected(true));
+        dispatch(setConnectionError(false));
+      };
+      socket.onmessage = () => {
+        // No project scope — backend does not send project events to /ws-only clients
+      };
+      socket.onclose = () => {
+        if (socket !== ws) return;
+        dispatch(setConnected(false));
+        if (!intentionalClose && currentProjectId === HOME_SENTINEL) {
+          const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt), RECONNECT_MAX_MS);
+          reconnectAttempt++;
+          reconnectTimer = setTimeout(() => {
+            if (currentProjectId === HOME_SENTINEL) connectHome();
+          }, delay);
+        }
+      };
+      socket.onerror = () => {};
+    })();
   }
 
   /** Invalidate project queries so UI refetches when window returns to focus (Electron or browser tab). */
@@ -356,27 +428,20 @@ export const websocketMiddleware: Middleware = (storeApi) => {
     }
   }
 
-  // Reconnect immediately when tab becomes visible (helps after server restart; avoids throttled timers in background).
-  // Also invalidate project queries so UI updates when window returns to focus (Electron or browser).
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState !== "visible") return;
-      onWindowReturn();
-    });
-  }
-
-  // Electron often does not fire visibilitychange when the window regains focus; listen for window focus and debounce to avoid refetch on every internal focus.
+  // Debounce focus only (per store instance) — visibility should reconnect/invalidate immediately.
   const FOCUS_DEBOUNCE_MS = 2000;
   let lastFocusRefreshAt = 0;
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    window.addEventListener("focus", () => {
-      if (intentionalClose) return;
-      const now = Date.now();
-      if (now - lastFocusRefreshAt < FOCUS_DEBOUNCE_MS) return;
-      lastFocusRefreshAt = now;
-      onWindowReturn();
-    });
+  function onWindowReturnFromFocus() {
+    if (intentionalClose) return;
+    const now = Date.now();
+    if (now - lastFocusRefreshAt < FOCUS_DEBOUNCE_MS) return;
+    lastFocusRefreshAt = now;
+    onWindowReturn();
   }
+
+  installWindowLifecycleHooksOnce();
+  windowReturnOnVisible = onWindowReturn;
+  windowReturnOnFocusDebounced = onWindowReturnFromFocus;
 
   function handleServerEvent(
     d: StoreDispatch,

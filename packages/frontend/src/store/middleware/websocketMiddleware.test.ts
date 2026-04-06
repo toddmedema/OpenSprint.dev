@@ -123,10 +123,13 @@ vi.mock("../../api/client", () => ({
 }));
 
 const TEST_WEBSOCKET_SESSION = "test-ws-session-token";
+const MOCK_WS_UPGRADE_TICKET = "mock-ws-upgrade-ticket-for-tests";
 
 describe("websocketMiddleware", () => {
   let MockWS: typeof MockWebSocket;
   let wsInstance: MockWebSocket | null = null;
+  /** Close sockets and timers so stale middleware reconnects do not steal the shared MockWebSocket instance. */
+  let storeUnderTest: ReturnType<typeof configureStore> | null = null;
 
   function setCurrentPath(pathname: string) {
     vi.stubGlobal("window", {
@@ -168,7 +171,7 @@ describe("websocketMiddleware", () => {
   beforeEach(() => {
     resetMergeGateExecuteStatusSnapshots();
     wsInstance = null;
-    focusListeners.length = 0;
+    // Do not clear focusListeners: visibility/focus hooks register once and must stay bound across tests.
     mockInvalidateQueries.mockClear();
     mockSetQueryData.mockClear();
     MockWS = class extends MockWebSocket {
@@ -178,6 +181,13 @@ describe("websocketMiddleware", () => {
       }
     };
     vi.stubGlobal("WebSocket", MockWS);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: { ticket: MOCK_WS_UPGRADE_TICKET } }),
+      })
+    );
     vi.stubGlobal("window", {
       ...globalThis.window,
       __OPENSPRINT_LOCAL_SESSION__: TEST_WEBSOCKET_SESSION,
@@ -197,11 +207,18 @@ describe("websocketMiddleware", () => {
   });
 
   afterEach(() => {
+    try {
+      storeUnderTest?.dispatch(wsDisconnect());
+    } catch {
+      // ignore
+    }
+    storeUnderTest = null;
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
   function createStore() {
-    return configureStore({
+    const store = configureStore({
       reducer: {
         project: projectReducer,
         websocket: websocketReducer,
@@ -220,20 +237,35 @@ describe("websocketMiddleware", () => {
           serializableCheck: { ignoredActions: ["ws/connect", "ws/disconnect", "ws/send"] },
         }).concat(websocketMiddleware),
     });
+    storeUnderTest = store;
+    return store;
   }
 
+  /** Wait until the middleware finishes the HTTPS ticket exchange and constructs the WebSocket. */
+  async function flushPendingWsInstance(urlMustContain?: string) {
+    await vi.waitFor(() => {
+      expect(wsInstance).toBeTruthy();
+      if (urlMustContain !== undefined) {
+        expect(wsInstance!.url).toContain(urlMustContain);
+      }
+    });
+  }
+
+
   describe("wsConnect", () => {
-    it("creates WebSocket connection to project URL", () => {
+    it("creates WebSocket connection to project URL", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-123" }));
 
+      await flushPendingWsInstance("/ws/projects/proj-123");
+
       expect(wsInstance).toBeTruthy();
       expect(wsInstance!.url).toBe(
-        `ws://localhost:3100/ws/projects/proj-123?token=${encodeURIComponent(TEST_WEBSOCKET_SESSION)}`
+        `ws://localhost:3100/ws/projects/proj-123?ticket=${encodeURIComponent(MOCK_WS_UPGRADE_TICKET)}`
       );
     });
 
-    it("uses wss when protocol is https", () => {
+    it("uses wss when protocol is https", async () => {
       vi.stubGlobal("window", {
         ...globalThis.window,
         __OPENSPRINT_LOCAL_SESSION__: TEST_WEBSOCKET_SESSION,
@@ -242,14 +274,18 @@ describe("websocketMiddleware", () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-456" }));
 
+      await flushPendingWsInstance("/ws/projects/proj-456");
+
       expect(wsInstance!.url).toBe(
-        `wss://localhost:3100/ws/projects/proj-456?token=${encodeURIComponent(TEST_WEBSOCKET_SESSION)}`
+        `wss://localhost:3100/ws/projects/proj-456?ticket=${encodeURIComponent(MOCK_WS_UPGRADE_TICKET)}`
       );
     });
 
     it("dispatches setConnected(true) when socket opens", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+
+      await flushPendingWsInstance("/ws/projects/proj-1");
 
       wsInstance!.simulateOpen();
 
@@ -258,22 +294,28 @@ describe("websocketMiddleware", () => {
       });
     });
 
-    it("does not create duplicate connection for same project when already open", () => {
+    it("does not create duplicate connection for same project when already open", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
 
       const firstWs = wsInstance;
       store.dispatch(wsConnect({ projectId: "proj-1" }));
 
+      await flushPendingWsInstance("/ws/projects/proj-1");
+
       expect(wsInstance).toBe(firstWs);
     });
 
-    it("replaces connection when connecting to different project", () => {
+    it("replaces connection when connecting to different project", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       const firstWs = wsInstance;
       store.dispatch(wsConnect({ projectId: "proj-2" }));
+
+      await flushPendingWsInstance("/ws/projects/proj-2");
 
       expect(wsInstance).not.toBe(firstWs);
       expect(wsInstance!.url).toContain("proj-2");
@@ -284,6 +326,7 @@ describe("websocketMiddleware", () => {
     it("closes socket and clears connection state", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
 
       store.dispatch(wsDisconnect());
@@ -298,6 +341,7 @@ describe("websocketMiddleware", () => {
       vi.useFakeTimers();
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       store.dispatch(wsDisconnect());
 
@@ -312,6 +356,7 @@ describe("websocketMiddleware", () => {
     it("sends message when socket is open", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
 
       store.dispatch(wsSend({ type: "agent.subscribe", taskId: "task-1" }));
@@ -321,9 +366,10 @@ describe("websocketMiddleware", () => {
       );
     });
 
-    it("does not send when socket is closed", () => {
+    it("does not send when socket is closed", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       wsInstance!.simulateClose();
 
@@ -336,6 +382,7 @@ describe("websocketMiddleware", () => {
     it("queues agent.subscribe when socket not yet open and replays on connect (fixes stuck live output)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       // Socket is CONNECTING, not OPEN yet
       expect(wsInstance!.readyState).toBe(WebSocket.CONNECTING);
 
@@ -359,6 +406,7 @@ describe("websocketMiddleware", () => {
       const { setSelectedTaskId } = await import("../slices/executeSlice");
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       store.dispatch(setSelectedTaskId("task-1"));
 
@@ -375,6 +423,7 @@ describe("websocketMiddleware", () => {
     it("invalidates PRD and plan status queries on prd.updated", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -399,6 +448,7 @@ describe("websocketMiddleware", () => {
     it("invalidates plans queries on plan.generated", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -417,6 +467,7 @@ describe("websocketMiddleware", () => {
     it("invalidates plans, plan chat, and tasks on plan.updated", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -444,6 +495,7 @@ describe("websocketMiddleware", () => {
     it("stores live decompose progress on plan.decompose.progress", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -462,6 +514,7 @@ describe("websocketMiddleware", () => {
     it("invalidates tasks list on plan.updated so UI can refetch", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -479,6 +532,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-2/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -493,6 +547,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-1/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -507,6 +562,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-1/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -524,6 +580,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-2/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -538,6 +595,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-1/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -557,6 +615,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-2/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -571,6 +630,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-1/plan");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -585,6 +645,7 @@ describe("websocketMiddleware", () => {
         const store = createStore();
         setCurrentPath("/projects/proj-1/sketch");
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -622,6 +683,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -650,6 +712,7 @@ describe("websocketMiddleware", () => {
     it("invalidates tasks list when task.updated for unknown task (Plan page will refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -683,6 +746,7 @@ describe("websocketMiddleware", () => {
         };
         store.dispatch(updateNotification(resolvedNotification));
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -713,6 +777,7 @@ describe("websocketMiddleware", () => {
         };
         store.dispatch(addNotification(openNotification));
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -732,6 +797,7 @@ describe("websocketMiddleware", () => {
     it("dispatches taskCreated on task.created for live-update (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -794,6 +860,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -834,6 +901,7 @@ describe("websocketMiddleware", () => {
     it("invalidates tasks list on task.created when task payload is missing", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -852,6 +920,7 @@ describe("websocketMiddleware", () => {
     it("dispatches appendAgentOutput on agent.output", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -873,6 +942,7 @@ describe("websocketMiddleware", () => {
     it("invalidates diagnostics on agent.activity", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -894,6 +964,7 @@ describe("websocketMiddleware", () => {
     it("invalidates diagnostics and active-agent lists on suspended activity events", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -916,14 +987,15 @@ describe("websocketMiddleware", () => {
     });
 
     it("coalesces repeated agent.activity invalidations within the throttle window", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
       vi.useFakeTimers();
       vi.setSystemTime(0);
       try {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
-
         const waiting = {
           type: "agent.activity" as const,
           taskId: "task-1",
@@ -966,14 +1038,15 @@ describe("websocketMiddleware", () => {
     });
 
     it("dedupes diagnostics invalidation for the same task across coalesced agent.activity events", async () => {
+      const store = createStore();
+      store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
+      wsInstance!.simulateOpen();
+      await vi.waitFor(() => store.getState().websocket.connected);
+
       vi.useFakeTimers();
       vi.setSystemTime(0);
       try {
-        const store = createStore();
-        store.dispatch(wsConnect({ projectId: "proj-1" }));
-        wsInstance!.simulateOpen();
-        await vi.waitFor(() => store.getState().websocket.connected);
-
         const toolCompleted = {
           type: "agent.activity" as const,
           taskId: "task-1",
@@ -1027,6 +1100,7 @@ describe("websocketMiddleware", () => {
       try {
         const store = createStore();
         store.dispatch(wsConnect({ projectId: "proj-1" }));
+        await flushPendingWsInstance("/ws/projects/proj-1");
         wsInstance!.simulateOpen();
         await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1060,6 +1134,7 @@ describe("websocketMiddleware", () => {
     it("dispatches setCompletionState on agent.completed", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1083,6 +1158,7 @@ describe("websocketMiddleware", () => {
     it("stores reason in completionState when agent.completed has status failed and reason", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1108,6 +1184,7 @@ describe("websocketMiddleware", () => {
     it("dispatches setOrchestratorRunning and setAwaitingApproval on execute.status", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1128,6 +1205,7 @@ describe("websocketMiddleware", () => {
     it("sets orchestratorRunning false when execute.status has no currentTask and zero queueDepth", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1145,6 +1223,7 @@ describe("websocketMiddleware", () => {
     it("sets selfImprovementRunInProgress when execute.status includes selfImprovementRunInProgress: true", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1163,6 +1242,7 @@ describe("websocketMiddleware", () => {
     it("stores baseline pause details from execute.status", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1192,6 +1272,7 @@ describe("websocketMiddleware", () => {
     it("invalidates tasks list when execute.status merge-related fields change (deduped)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1246,6 +1327,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1291,6 +1373,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1331,6 +1414,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1369,6 +1453,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1392,6 +1477,7 @@ describe("websocketMiddleware", () => {
     it("dispatches updateFeedbackItem on feedback.updated when event includes item (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1438,6 +1524,7 @@ describe("websocketMiddleware", () => {
     it("dispatches updateFeedbackItem on feedback.mapped when event includes item (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1484,6 +1571,7 @@ describe("websocketMiddleware", () => {
     it("updates only the matching feedback card when feedback.updated received with multiple items", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1537,6 +1625,7 @@ describe("websocketMiddleware", () => {
     it("dispatches updateFeedbackItem on feedback.resolved when event includes item (no refetch)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1581,6 +1670,7 @@ describe("websocketMiddleware", () => {
     it("dispatches updateFeedbackItemResolved (not fetchFeedback) on feedback.resolved when event has no item", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1615,6 +1705,7 @@ describe("websocketMiddleware", () => {
     it("invalidates feedback list when feedback.mapped has no item", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1635,6 +1726,7 @@ describe("websocketMiddleware", () => {
     it("dispatches fetchTasksByIds when feedback.updated includes createdTaskIds (Analyst ticket creation)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1722,6 +1814,7 @@ describe("websocketMiddleware", () => {
     it("uses event taskIds fallback when feedback item has no createdTaskIds", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1782,6 +1875,7 @@ describe("websocketMiddleware", () => {
         ])
       );
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1856,6 +1950,7 @@ describe("websocketMiddleware", () => {
     it("dispatches notification on deliver.started", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1873,6 +1968,7 @@ describe("websocketMiddleware", () => {
     it("dispatches success notification on deliver.completed success", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1894,6 +1990,7 @@ describe("websocketMiddleware", () => {
     it("dispatches error notification on deliver.completed failure", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1917,6 +2014,7 @@ describe("websocketMiddleware", () => {
     it("marks optimistic user message as delivered on agent.chat.received", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1950,6 +2048,7 @@ describe("websocketMiddleware", () => {
     it("dedupes agent.chat.received by messageId (ignores duplicate)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -1987,6 +2086,7 @@ describe("websocketMiddleware", () => {
     it("adds assistant response and clears sending on agent.chat.response", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2018,6 +2118,7 @@ describe("websocketMiddleware", () => {
     it("dedupes agent.chat.response by messageId (no duplicate assistant message)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2047,6 +2148,7 @@ describe("websocketMiddleware", () => {
     it("sets chat unsupported on agent.chat.unsupported and clears sending", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2075,6 +2177,7 @@ describe("websocketMiddleware", () => {
     it("resets chat sending on agent.completed (terminal event re-enables send)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2102,6 +2205,7 @@ describe("websocketMiddleware", () => {
     it("invalidates chat-history query on agent.chat.received", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2131,6 +2235,7 @@ describe("websocketMiddleware", () => {
     it("invalidates chat-history query on agent.chat.response", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2153,6 +2258,7 @@ describe("websocketMiddleware", () => {
     it("fetches chat history for non-sender tab on agent.chat.received (no pending optimistic)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2189,6 +2295,7 @@ describe("websocketMiddleware", () => {
       vi.useFakeTimers();
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2226,6 +2333,7 @@ describe("websocketMiddleware", () => {
       vi.useFakeTimers();
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2242,6 +2350,7 @@ describe("websocketMiddleware", () => {
       vi.useFakeTimers();
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2272,6 +2381,7 @@ describe("websocketMiddleware", () => {
       vi.useFakeTimers();
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2302,6 +2412,7 @@ describe("websocketMiddleware", () => {
     it("invalidates project queries when window returns to focus (visibility visible) so UI updates", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2341,6 +2452,7 @@ describe("websocketMiddleware", () => {
     it("invalidates project queries when window focus fires (Electron fallback when visibilitychange is unreliable)", async () => {
       const store = createStore();
       store.dispatch(wsConnect({ projectId: "proj-1" }));
+      await flushPendingWsInstance("/ws/projects/proj-1");
       wsInstance!.simulateOpen();
       await vi.waitFor(() => store.getState().websocket.connected);
 
@@ -2362,7 +2474,7 @@ describe("websocketMiddleware", () => {
   });
 
   describe("action passthrough", () => {
-    it("passes non-websocket actions to next middleware", () => {
+    it("passes non-websocket actions to next middleware", async () => {
       const store = createStore();
       const action = { type: "some/other/action" };
       expect(() => store.dispatch(action)).not.toThrow();

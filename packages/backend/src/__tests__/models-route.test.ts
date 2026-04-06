@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import request from "supertest";
 import express from "express";
 import { modelsRouter } from "../routes/models.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
+import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
+import { ensureLocalSessionToken } from "../services/local-session-auth.service.js";
 import * as modelListCache from "../services/model-list-cache.js";
 import { clearInFlightFetches, validateApiKey } from "../routes/models.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 const mockModelsList = vi.fn();
 const mockGetNextKey = vi.fn();
@@ -24,9 +26,12 @@ vi.mock("@anthropic-ai/sdk", () => ({
 
 const originalFetch = globalThis.fetch;
 
+/** Matches createApp(): `/api/v1` is behind requireLocalSessionAuth before /models is mounted. */
 function createMinimalModelsApp() {
+  ensureLocalSessionToken();
   const app = express();
   app.use(express.json());
+  app.use(API_PREFIX, requireLocalSessionAuth);
   app.use(`${API_PREFIX}/models`, modelsRouter);
   app.use(errorHandler);
   return app;
@@ -67,7 +72,7 @@ describe("Models API", () => {
     it("returns empty array when provider is claude and no API key", async () => {
       delete process.env.ANTHROPIC_API_KEY;
       mockGetNextKey.mockResolvedValue(null);
-      const res = await request(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
       expect(mockModelsList).not.toHaveBeenCalled();
@@ -76,7 +81,7 @@ describe("Models API", () => {
     it("returns empty array when provider is cursor and no API key", async () => {
       delete process.env.CURSOR_API_KEY;
       mockGetNextKey.mockResolvedValue(null);
-      const res = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -84,7 +89,7 @@ describe("Models API", () => {
     it("returns empty array when provider is openai and no API key", async () => {
       delete process.env.OPENAI_API_KEY;
       mockGetNextKey.mockResolvedValue(null);
-      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -92,7 +97,7 @@ describe("Models API", () => {
     it("returns empty array when provider is google and no API key", async () => {
       delete process.env.GOOGLE_API_KEY;
       mockGetNextKey.mockResolvedValue(null);
-      const res = await request(app).get(`${API_PREFIX}/models?provider=google`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=google`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -105,7 +110,7 @@ describe("Models API", () => {
         text: () => Promise.resolve(""),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
 
       expect(res.status).toBe(200);
       expect(mockGetNextKey).toHaveBeenCalledWith("", "OPENAI_API_KEY", {
@@ -115,7 +120,7 @@ describe("Models API", () => {
     });
 
     it("returns empty array for unknown provider", async () => {
-      const res = await request(app).get(`${API_PREFIX}/models?provider=unknown`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=unknown`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
@@ -126,7 +131,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "model-1" }] }),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([{ id: "model-1", displayName: "model-1" }]);
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -147,7 +152,7 @@ describe("Models API", () => {
           }),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
         { id: "local-model-1", displayName: "local-model-1" },
@@ -165,7 +170,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "custom-model" }] }),
       });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=http://192.168.1.10:1234`
       );
       expect(res.status).toBe(200);
@@ -182,7 +187,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [] }),
       });
 
-      await request(app).get(
+      await authedSupertest(app).get(
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=http://localhost:1234/`
       );
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -197,7 +202,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "trimmed-model" }] }),
       });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=%20%20http://localhost:1234%20%20`
       );
       expect(res.status).toBe(200);
@@ -209,7 +214,7 @@ describe("Models API", () => {
     });
 
     it("returns 400 for LM Studio with invalid baseUrl (non-http(s))", async () => {
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=ftp://localhost:1234`
       );
       expect(res.status).toBe(400);
@@ -220,7 +225,7 @@ describe("Models API", () => {
     it("returns 502 when LM Studio is unreachable (connection refused)", async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"));
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(502);
       expect(res.body.error?.code).toBe("LM_STUDIO_UNREACHABLE");
       expect(res.body.error?.message).toContain("LM Studio is not reachable");
@@ -233,7 +238,7 @@ describe("Models API", () => {
         text: () => Promise.resolve("Internal Server Error"),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(502);
       expect(res.body.error?.code).toBe("LM_STUDIO_UNREACHABLE");
       expect(res.body.error?.message).toContain("LM Studio is not reachable");
@@ -251,7 +256,7 @@ describe("Models API", () => {
           }),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=ollama`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=ollama`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
@@ -272,7 +277,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "llama3.2" }] }),
       });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/models?provider=ollama&baseUrl=${encodeURIComponent(" http://192.168.1.10:11434/proxy/v1/ ")}`
       );
 
@@ -300,7 +305,7 @@ describe("Models API", () => {
             }),
         });
 
-      const res = await request(app).get(
+      const res = await authedSupertest(app).get(
         `${API_PREFIX}/models?provider=ollama&baseUrl=${encodeURIComponent("http://127.0.0.1:11434/proxy/v1")}`
       );
 
@@ -327,7 +332,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [] }),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=ollama`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=ollama`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -336,7 +341,7 @@ describe("Models API", () => {
     it("returns 502 when the Ollama API is unreachable", async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"));
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=ollama`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=ollama`);
 
       expect(res.status).toBe(502);
       expect(res.body.error?.code).toBe("OLLAMA_UNREACHABLE");
@@ -349,12 +354,12 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "llama3.2" }] }),
       });
 
-      const res1 = await request(app).get(`${API_PREFIX}/models?provider=ollama`);
+      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=ollama`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toEqual([{ id: "llama3.2", displayName: "llama3.2" }]);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
 
-      const res2 = await request(app).get(`${API_PREFIX}/models?provider=ollama`);
+      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=ollama`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toEqual([{ id: "llama3.2", displayName: "llama3.2" }]);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
@@ -369,12 +374,12 @@ describe("Models API", () => {
         json: mockJson,
       });
 
-      const res1 = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
 
-      const res2 = await request(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
@@ -388,7 +393,7 @@ describe("Models API", () => {
       }
       mockModelsList.mockReturnValue(gen());
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
         { id: "claude-sonnet-4", displayName: "Claude Sonnet 4" },
@@ -404,12 +409,12 @@ describe("Models API", () => {
       }
       mockModelsList.mockReturnValue(gen());
 
-      const res1 = await request(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toHaveLength(1);
       expect(mockModelsList).toHaveBeenCalledTimes(1);
 
-      const res2 = await request(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(mockModelsList).toHaveBeenCalledTimes(1); // no additional call
@@ -422,7 +427,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ models: ["gpt-4", "claude-3"] }),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
         { id: "gpt-4", displayName: "gpt-4" },
@@ -441,12 +446,12 @@ describe("Models API", () => {
       });
       vi.stubGlobal("fetch", cursorFetch);
 
-      const res1 = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toHaveLength(1);
       expect(cursorFetch).toHaveBeenCalledTimes(1);
 
-      const res2 = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(cursorFetch).toHaveBeenCalledTimes(1); // no additional call — cache hit
@@ -468,7 +473,7 @@ describe("Models API", () => {
           }),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
         { id: "gpt-4o", displayName: "gpt-4o" },
@@ -505,7 +510,7 @@ describe("Models API", () => {
         text: () => Promise.resolve(""),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
@@ -529,12 +534,12 @@ describe("Models API", () => {
         text: () => Promise.resolve(""),
       });
 
-      const res1 = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
 
-      const res2 = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
@@ -542,14 +547,14 @@ describe("Models API", () => {
 
     it("defaults to claude when provider not specified", async () => {
       delete process.env.ANTHROPIC_API_KEY;
-      const res = await request(app).get(`${API_PREFIX}/models`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
 
     it("returns hardcoded defaults for claude-cli when no API key is set", async () => {
       delete process.env.ANTHROPIC_API_KEY;
-      const res = await request(app).get(`${API_PREFIX}/models?provider=claude-cli`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude-cli`);
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBeGreaterThan(0);
       expect(res.body.data[0]).toHaveProperty("id");
@@ -563,7 +568,7 @@ describe("Models API", () => {
       }
       mockModelsList.mockReturnValue(gen());
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=claude-cli`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude-cli`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([{ id: "claude-sonnet-4", displayName: "Claude Sonnet 4" }]);
     });
@@ -585,9 +590,9 @@ describe("Models API", () => {
       globalThis.fetch = vi.fn().mockReturnValue(fetchPromise);
 
       const requests = [
-        request(app).get(`${API_PREFIX}/models?provider=cursor`),
-        request(app).get(`${API_PREFIX}/models?provider=cursor`),
-        request(app).get(`${API_PREFIX}/models?provider=cursor`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`),
       ];
 
       const results = await Promise.all(requests);
@@ -609,7 +614,7 @@ describe("Models API", () => {
         text: () => Promise.resolve("Rate limit exceeded"),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=cursor`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=cursor`);
       expect(res.status).toBe(429);
       expect(res.body.error?.message).toContain("rate limit");
       expect(res.body.error?.message).toContain("30 minutes");
@@ -623,7 +628,7 @@ describe("Models API", () => {
         text: () => Promise.resolve("Rate limit exceeded"),
       });
 
-      const res = await request(app).get(`${API_PREFIX}/models?provider=openai`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`);
       expect(res.status).toBe(429);
       expect(res.body.error?.message).toContain("rate limit");
       expect(res.body.error?.message).toContain("30 minutes");
@@ -637,7 +642,7 @@ describe("Models API", () => {
       mockModelsList.mockReturnValue(gen());
 
       delete process.env.ANTHROPIC_API_KEY;
-      const res = await request(app).get(`${API_PREFIX}/models?provider=claude&projectId=proj-123`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude&projectId=proj-123`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([{ id: "claude-sonnet-4", displayName: "Claude Sonnet 4" }]);
@@ -655,7 +660,7 @@ describe("Models API", () => {
       mockModelsList.mockReturnValue(gen());
 
       delete process.env.ANTHROPIC_API_KEY;
-      const res = await request(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([{ id: "claude-sonnet-4", displayName: "Claude Sonnet 4" }]);
@@ -680,9 +685,9 @@ describe("Models API", () => {
       });
 
       const requests = [
-        request(app).get(`${API_PREFIX}/models?provider=openai`),
-        request(app).get(`${API_PREFIX}/models?provider=openai`),
-        request(app).get(`${API_PREFIX}/models?provider=openai`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=openai`),
       ];
 
       const results = await Promise.all(requests);
@@ -705,8 +710,8 @@ describe("Models API", () => {
       mockModelsList.mockReturnValue(gen());
 
       const requests = [
-        request(app).get(`${API_PREFIX}/models?provider=claude`),
-        request(app).get(`${API_PREFIX}/models?provider=claude`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`),
+        authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`),
       ];
 
       const results = await Promise.all(requests);

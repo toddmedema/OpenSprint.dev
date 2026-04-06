@@ -21,6 +21,7 @@ import {
 import { fsRouter } from "./routes/fs.js";
 import { modelsRouter } from "./routes/models.js";
 import { envRouter } from "./routes/env.js";
+import { wsUpgradeTicketRouter } from "./routes/ws-upgrade-ticket.js";
 import { globalSettingsRouter } from "./routes/global-settings.js";
 import { helpRouter } from "./routes/help.js";
 import { dbStatusRouter } from "./routes/db-status.js";
@@ -92,6 +93,7 @@ export function createApp(services?: AppServices) {
 
   app.use(`${API_PREFIX}/db-status`, dbStatusRouter);
   app.use(`${API_PREFIX}/models`, modelsRouter);
+  app.use(`${API_PREFIX}/ws-upgrade-ticket`, wsUpgradeTicketRouter);
   app.use(`${API_PREFIX}/env`, envRouter);
   app.use(`${API_PREFIX}/global-settings`, globalSettingsRouter);
   app.use(`${API_PREFIX}/help`, requireDatabase, helpRouter);

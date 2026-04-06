@@ -902,6 +902,26 @@ describe("OrchestratorService (slot-based model)", () => {
   });
 
   describe("coding no_result recovery", () => {
+    /**
+     * TaskStoreService omits blocked tasks from ready(). These tests use a static ready() mock;
+     * when the orchestrator blocks for open questions, align ready() so a later loop tick cannot
+     * spawn a duplicate coder (order-sensitive under the full unit graph).
+     */
+    function whenOpenQuestionBlockReadyEmpties(): void {
+      mockTaskStoreUpdate.mockImplementation(async (_projectId, _taskId, patch) => {
+        if (
+          patch &&
+          typeof patch === "object" &&
+          "status" in patch &&
+          (patch as { status?: string }).status === "blocked" &&
+          (patch as { block_reason?: string }).block_reason === OPEN_QUESTION_BLOCK_REASON
+        ) {
+          mockTaskStoreReady.mockResolvedValue([]);
+        }
+        return undefined;
+      });
+    }
+
     it("relaunches coder once when result.json is malformed", async () => {
       const { task, wtPath } = setupSingleTaskFlow("task-repair-result");
       mockReadRawResult.mockResolvedValue("{ invalid json");
@@ -969,6 +989,8 @@ describe("OrchestratorService (slot-based model)", () => {
           resolvedAt: null,
         })
       );
+
+      whenOpenQuestionBlockReadyEmpties();
 
       await orchestrator.ensureRunning(projectId);
       await vi.waitFor(() => {
@@ -1074,6 +1096,8 @@ describe("OrchestratorService (slot-based model)", () => {
           resolvedAt: null,
         })
       );
+
+      whenOpenQuestionBlockReadyEmpties();
 
       await orchestrator.ensureRunning(projectId);
       await vi.waitFor(() => {
@@ -1189,6 +1213,8 @@ describe("OrchestratorService (slot-based model)", () => {
           resolvedAt: null,
         })
       );
+
+      whenOpenQuestionBlockReadyEmpties();
 
       await orchestrator.ensureRunning(projectId);
       await vi.waitFor(() => {

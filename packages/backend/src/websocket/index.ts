@@ -16,18 +16,23 @@ import {
   AgentChatService,
   agentChatService as defaultAgentChatService,
 } from "../services/agent-chat.service.js";
-import {
-  isValidLocalSessionToken,
-  requestHasValidBearerToken,
-} from "../services/local-session-auth.service.js";
+import { requestHasValidBearerToken } from "../services/local-session-auth.service.js";
+import { consumeWebSocketUpgradeTicket } from "../services/websocket-upgrade-ticket.service.js";
 
 const log = createLogger("websocket");
 
-/** WebSocket upgrade must present the same Bearer session as mutating HTTP routes (header or `token` query). */
+/**
+ * WebSocket upgrade auth: `Authorization: Bearer <session>` (Node `ws` clients) or a one-time
+ * `ticket` query param from `POST /api/v1/ws-upgrade-ticket` (browser). Session tokens MUST NOT
+ * appear in query strings — they are often logged by proxies.
+ */
 function webSocketUpgradeAuthenticated(req: IncomingMessage, url: URL): boolean {
   if (requestHasValidBearerToken(req.headers.authorization)) return true;
-  const q = url.searchParams.get("token");
-  return isValidLocalSessionToken(q);
+  const ticket = url.searchParams.get("ticket");
+  if (ticket != null && ticket.length > 0) {
+    return consumeWebSocketUpgradeTicket(ticket);
+  }
+  return false;
 }
 
 function verifyWebSocketUpgrade(info: { req: IncomingMessage }): boolean {

@@ -1,0 +1,31 @@
+import { randomBytes } from "node:crypto";
+
+const TTL_MS = 120_000;
+
+const tickets = new Map<string, number>();
+
+/** Issue a one-time WebSocket upgrade ticket (valid ~2 minutes until consumed). */
+export function issueWebSocketUpgradeTicket(): string {
+  const id = randomBytes(32).toString("base64url");
+  tickets.set(id, Date.now() + TTL_MS);
+  return id;
+}
+
+/**
+ * Validates and consumes a ticket. Returns false for unknown, expired, empty, or reused tickets.
+ */
+export function consumeWebSocketUpgradeTicket(raw: string | null | undefined): boolean {
+  if (raw == null) return false;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return false;
+  const expiresAt = tickets.get(trimmed);
+  if (expiresAt == null) return false;
+  tickets.delete(trimmed);
+  if (Date.now() > expiresAt) return false;
+  return true;
+}
+
+/** Test helper: clear in-memory tickets between tests. */
+export function clearWebSocketUpgradeTicketsForTesting(): void {
+  tickets.clear();
+}
