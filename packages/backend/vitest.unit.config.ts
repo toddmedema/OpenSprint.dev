@@ -5,7 +5,6 @@ import {
   backendSsrConfig,
   backendTestInclude,
   backendUnitExclude,
-  unitWorkers,
 } from "./vitest.shared.js";
 
 export default defineProject({
@@ -19,6 +18,12 @@ export default defineProject({
     env: { OPENSPRINT_VITEST_SCHEMA_SCOPE: "unit" },
     pool: "forks",
     minWorkers: 1,
-    maxWorkers: unitWorkers,
+    /**
+     * Single worker: only one backend unit test file runs at a time globally. Parallel workers
+     * + supertest was still producing rare 401/socket/parse flakes (different processes contending
+     * on the same host resources).
+     */
+    maxWorkers: 1,
+    fileParallelism: false,
   },
 });

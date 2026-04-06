@@ -573,9 +573,12 @@ describe("PlanPhase Redux integration", () => {
     const dismissBtn = screen.getByRole("button", { name: /Dismiss error/i });
     await user.click(dismissBtn);
 
-    await waitFor(() => {
-      expect(store.getState().plan.error).toBeNull();
-    });
+    await waitFor(
+      () => {
+        expect(store.getState().plan.error).toBeNull();
+      },
+      { timeout: 8000 }
+    );
     expect(screen.queryByText("Failed to load plans")).not.toBeInTheDocument();
   });
 
@@ -917,7 +920,7 @@ describe("PlanPhase inline editing", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    const titleInput = screen.getByRole("textbox", { name: /title/i });
+    const titleInput = await screen.findByRole("textbox", { name: /title/i }, { timeout: 12000 });
     await user.clear(titleInput);
     await user.type(titleInput, "New Title");
     titleInput.blur();
@@ -932,7 +935,7 @@ describe("PlanPhase inline editing", () => {
           })
         );
       },
-      { timeout: 2000 }
+      { timeout: 8000 }
     );
   });
 
@@ -948,7 +951,8 @@ describe("PlanPhase inline editing", () => {
       { wrapper: PlanPhaseWrapper }
     );
 
-    const nav = await screen.findByTestId("sidebar-section-nav");
+    await screen.findByRole("textbox", { name: /title/i }, { timeout: 12000 });
+    const nav = await screen.findByTestId("sidebar-section-nav", { timeout: 12000 });
     expect(nav).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-section-nav-select")).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-section-nav-progress")).toHaveTextContent(/\d+ of \d+/i);

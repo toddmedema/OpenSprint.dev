@@ -2719,6 +2719,7 @@ export class MergeCoordinatorService {
           lastFailureClass: failureFingerprint.failureClass,
         },
       });
+      await this.host.taskStore.setMergeStage(projectId, task.id, null);
       await this.host.taskStore.comment(
         projectId,
         task.id,

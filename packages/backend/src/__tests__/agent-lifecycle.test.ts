@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
@@ -74,6 +74,7 @@ describe("AgentLifecycleManager", () => {
   };
 
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     manager = new AgentLifecycleManager();
     timers = new TimerRegistry();
@@ -113,6 +114,10 @@ describe("AgentLifecycleManager", () => {
         return mockHandle;
       }
     );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("run", () => {

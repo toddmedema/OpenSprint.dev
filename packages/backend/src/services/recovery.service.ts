@@ -473,6 +473,7 @@ export class RecoveryService {
       log.info("Recovery: PID dead or missing, requeuing task", { projectId, taskId });
       try {
         await this.taskStore.update(projectId, taskId, { status: "open", assignee: "" });
+        await this.taskStore.setMergeStage(projectId, taskId, null);
         await this.taskStore.comment(
           projectId,
           taskId,
@@ -1517,6 +1518,7 @@ export class RecoveryService {
               status: "open",
               assignee: "",
             });
+            await this.taskStore.setMergeStage(projectId, task.id, null);
             return;
           }
         }
@@ -1530,6 +1532,7 @@ export class RecoveryService {
       status: "open",
       assignee: "",
     });
+    await this.taskStore.setMergeStage(projectId, task.id, null);
   }
 
   private async readAssignment(repoPath: string, taskId: string): Promise<GuppAssignment | null> {

@@ -31,6 +31,7 @@ vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
     show: vi.fn(),
     update: vi.fn().mockResolvedValue(undefined),
+    setMergeStage: vi.fn().mockResolvedValue(undefined),
     listAll: vi.fn().mockResolvedValue([]),
     listInProgressWithAgentAssignee: vi.fn().mockResolvedValue([]),
     listInProgressWithoutAssignee: vi.fn().mockResolvedValue([]),

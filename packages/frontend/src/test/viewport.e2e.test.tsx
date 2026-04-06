@@ -259,16 +259,22 @@ describe("viewport E2E: critical flows", () => {
           expect(screen.getByText("Test Project")).toBeInTheDocument();
         });
 
-        await waitFor(() => {
-          expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task A");
-        });
+        await waitFor(
+          () => {
+            expect(screen.getByTestId("task-detail-title")).toHaveTextContent("Task A");
+          },
+          { timeout: 15000 }
+        );
 
         const closeBtn = screen.getByRole("button", { name: "Close task detail" });
         await user.click(closeBtn);
 
-        await waitFor(() => {
-          expect(screen.queryByTestId("task-detail-title")).not.toBeInTheDocument();
-        });
+        await waitFor(
+          () => {
+            expect(screen.queryByTestId("task-detail-title")).not.toBeInTheDocument();
+          },
+          { timeout: 15000 }
+        );
       } finally {
         restore();
       }

@@ -967,6 +967,10 @@ describe("OrchestratorService (slot-based model)", () => {
       );
 
       await orchestrator.ensureRunning(projectId);
+      await vi.waitFor(() => {
+        expect(mockInvokeCodingAgent).toHaveBeenCalledTimes(1);
+      });
+
       const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
       await vi.waitFor(async () => {
         await expect(fs.readFile(assignmentPath, "utf-8")).resolves.toMatch(/\{/);
@@ -1276,10 +1280,15 @@ describe("OrchestratorService (slot-based model)", () => {
       });
 
       const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
-      const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
-        string,
-        unknown
-      >;
+      let baseAssignment!: Record<string, unknown>;
+      await vi.waitFor(
+        async () => {
+          const raw = await fs.readFile(assignmentPath, "utf-8");
+          expect(raw.trim().length).toBeGreaterThan(0);
+          baseAssignment = JSON.parse(raw) as Record<string, unknown>;
+        },
+        { timeout: 10_000, interval: 10 }
+      );
       await fs.writeFile(
         assignmentPath,
         JSON.stringify(

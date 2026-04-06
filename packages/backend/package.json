@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "reset-in-progress-tasks": "tsx src/scripts/reset-in-progress-tasks.ts",
-    "test": "npx vitest run",
+    "test": "npx vitest run --project backend-unit --project backend-env-route && npx vitest run --project backend-integration",
     "test:unit": "npx vitest run --project backend-unit --project backend-env-route",
     "test:integration": "npx vitest run --project backend-integration",
     "test:coverage": "npx vitest run --coverage",

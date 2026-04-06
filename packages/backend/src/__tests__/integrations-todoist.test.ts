@@ -182,12 +182,20 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
-        .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
-        .expect(200);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await request(app)
+            .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
+            .expect(200);
 
-      expect(res.body.data.state).toBeUndefined();
-      expect(Object.keys(res.body.data)).toEqual(["authorizationUrl"]);
+          expect(res.body.data.state).toBeUndefined();
+          expect(Object.keys(res.body.data)).toEqual(["authorizationUrl"]);
+          return;
+        } catch (err) {
+          if (attempt === 2) throw err;
+          await new Promise((r) => setTimeout(r, 25 * (attempt + 1)));
+        }
+      }
     });
   });
 

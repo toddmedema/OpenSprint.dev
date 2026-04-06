@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import express from "express";
 import { localhostCors } from "../middleware/cors.js";
@@ -11,7 +11,11 @@ function createTestApp() {
 }
 
 describe("localhostCors", () => {
-  const app = createTestApp();
+  let app: ReturnType<typeof createTestApp>;
+
+  beforeEach(() => {
+    app = createTestApp();
+  });
 
   it("allows requests with no Origin header", async () => {
     const res = await request(app).get("/test");

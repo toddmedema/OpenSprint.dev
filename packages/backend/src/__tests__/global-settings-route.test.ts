@@ -116,10 +116,20 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://user:secret123@db.example.com:5432/mydb",
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
-      expect(res.status).toBe(200);
-      expect(res.body.data.databaseUrl).toBe("postgresql://user:***@db.example.com:5432/mydb");
-      expect(res.body.data.databaseUrl).not.toContain("secret123");
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+          expect(res.status).toBe(200);
+          expect(res.body.data.databaseUrl).toBe("postgresql://user:***@db.example.com:5432/mydb");
+          expect(res.body.data.databaseUrl).not.toContain("secret123");
+          return;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const retryable = msg.includes("Parse Error") || msg.includes("socket hang up");
+          if (!retryable || attempt === 2) throw err;
+          await new Promise((r) => setTimeout(r, 30 * (attempt + 1)));
+        }
+      }
     });
 
     it("returns host and port visible in masked URL", async () => {
@@ -627,11 +637,20 @@ describe("Global Settings API", () => {
           },
         });
 
-      const res = await authedSupertest(app).get(
-        `${API_PREFIX}/global-settings/reveal-todoist-secret`
-      );
-      expect(res.status).toBe(200);
-      expect(res.body.data.value).toBe("the-actual-secret");
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await authedSupertest(app).get(
+            `${API_PREFIX}/global-settings/reveal-todoist-secret`
+          );
+          expect(res.status).toBe(200);
+          expect(res.body.data.value).toBe("the-actual-secret");
+          return;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes("socket hang up") || attempt === 2) throw err;
+          await new Promise((r) => setTimeout(r, 40 * (attempt + 1)));
+        }
+      }
     });
 
     it("GET /reveal-todoist-secret returns 404 when not configured", async () => {

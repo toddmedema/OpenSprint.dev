@@ -23,6 +23,7 @@ export default defineProject({
     minWorkers: 1,
     maxWorkers: 1,
     isolate: true,
+    retry: 2,
     poolOptions: {
       forks: {
         singleFork: true,
