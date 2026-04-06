@@ -31,6 +31,7 @@ import {
   getPlanTemplateStructure,
 } from "./plan/plan-prompts.js";
 import {
+  buildPlanTaskSummaryFromCreated,
   buildPrdContextString,
   explainDecomposeResponseFailure,
   parseDecomposeResponse,
@@ -38,10 +39,13 @@ import {
 } from "./plan/plan-decompose-generate.js";
 import { runAutoReviewPlanAgainstRepo } from "./plan/plan-auto-review.js";
 import { runPlannerWithRepoGuard } from "./plan/plan-repo-guard.js";
-import { generateAndCreateTasks as generateAndCreateTasksImpl } from "./plan/plan-task-generation.js";
+import {
+  generateAndCreateTasks as generateAndCreateTasksImpl,
+  type PlanTaskHierarchyContext,
+} from "./plan/plan-task-generation.js";
 import { evaluatePlanComplexity } from "./plan/plan-complexity-gate.js";
 import { ProjectService } from "./project.service.js";
-import type { StoredTask } from "./task-store.service.js";
+import type { StoredTask } from "./task-store.types.js";
 import { PrdService } from "./prd.service.js";
 import { buildAutonomyDescription } from "./autonomy-description.js";
 import { getCombinedInstructions } from "./agent-instructions.service.js";
@@ -54,6 +58,14 @@ import { createLogger } from "../utils/logger.js";
 import { invokeStructuredPlanningAgent } from "./structured-agent-output.service.js";
 
 const log = createLogger("plan-decompose-generate");
+
+/** Match plan-crud version filtering for tasks listed under an epic. */
+function taskPlanVersionForTaskGeneration(task: StoredTask): number {
+  const raw =
+    (task as Record<string, unknown>).sourcePlanVersionNumber ??
+    (task as Record<string, unknown>).source_plan_version_number;
+  return typeof raw === "number" && raw >= 1 ? raw : 1;
+}
 
 export const GENERATE_PLAN_SYSTEM_PROMPT = `You are an AI planning assistant for Open Sprint. The user will describe a feature idea in freeform text. Your job is to produce a complete feature plan (markdown in content; optional structured mockups; no subtasks).
 
@@ -278,6 +290,94 @@ export class PlanDecomposeGenerateService {
     return lines.join("\n");
   }
 
+  private planTitleFromContent(plan: Plan): string {
+    return (
+      plan.content.trim().split("\n")[0]?.replace(/^#\s*/, "").trim() || plan.metadata.planId
+    );
+  }
+
+  private planOverviewFromContent(plan: Plan): string {
+    const body = plan.content.replace(/^#[^\n]*\n?/, "").trim();
+    const overviewMatch = body.match(/^##\s*Overview\s*\n+([\s\S]*?)(?=\n##\s|\n#\s|$)/i);
+    if (overviewMatch?.[1]) return overviewMatch[1].trim();
+    return body.split(/\n\n+/)[0]?.trim() ?? "";
+  }
+
+  /**
+   * Hierarchy context for recursive task generation: ancestor chain + siblings that already
+   * have implementation tasks for the current plan version.
+   */
+  private async buildTaskGenerationHierarchyContext(
+    projectId: string,
+    plan: Plan
+  ): Promise<PlanTaskHierarchyContext | undefined> {
+    const parentPlanId = plan.metadata.parentPlanId?.trim();
+    if (!parentPlanId) return undefined;
+
+    const ancestors: PlanTaskHierarchyContext["ancestors"] = [];
+    let walkId: string | undefined = parentPlanId;
+    let guard = 0;
+    while (walkId && guard++ < 16) {
+      try {
+        const p = await this.deps.getPlan(projectId, walkId);
+        ancestors.unshift({
+          title: this.planTitleFromContent(p),
+          overview: this.planOverviewFromContent(p),
+        });
+        walkId = p.metadata.parentPlanId?.trim() || undefined;
+      } catch {
+        break;
+      }
+    }
+
+    let siblingIds: string[];
+    try {
+      siblingIds = await this.deps.taskStore.planListByParent(projectId, parentPlanId);
+    } catch (err) {
+      log.warn("buildTaskGenerationHierarchyContext: planListByParent failed", {
+        err: getErrorMessage(err),
+        planId: plan.metadata.planId,
+      });
+      return { ancestors, siblings: [] };
+    }
+
+    const selfId = plan.metadata.planId;
+    const siblings: PlanTaskHierarchyContext["siblings"] = [];
+    for (const sid of [...siblingIds].filter((id) => id !== selfId).sort()) {
+      try {
+        const sib = await this.deps.getPlan(projectId, sid);
+        if ((sib.taskCount ?? 0) === 0) continue;
+        const epicId = sib.metadata.epicId?.trim();
+        if (!epicId) continue;
+        const allIssues = await this.deps.taskStore.listAll(projectId);
+        const currentVersion = sib.currentVersionNumber ?? 1;
+        const children = allIssues.filter((issue) => {
+          if (!issue.id.startsWith(`${epicId}.`)) return false;
+          if ((issue.issue_type ?? issue.type) === "epic") return false;
+          return taskPlanVersionForTaskGeneration(issue) === currentVersion;
+        });
+        if (children.length === 0) continue;
+        const sorted = [...children].sort((a, b) => a.id.localeCompare(b.id));
+        const planForSummary = {
+          ...sib,
+          _createdTaskIds: sorted.map((c) => c.id),
+          _createdTaskTitles: sorted.map((c) => c.title),
+        };
+        siblings.push({
+          title: this.planTitleFromContent(sib),
+          taskSummary: buildPlanTaskSummaryFromCreated([planForSummary]),
+        });
+      } catch (err) {
+        log.warn("buildTaskGenerationHierarchyContext: skipped sibling", {
+          err: getErrorMessage(err),
+          siblingId: sid,
+        });
+      }
+    }
+
+    return { ancestors, siblings };
+  }
+
   /**
    * Persist child plans + epics for a sub-plan split. Runs sequentially so epic IDs stay unique.
    * Injects cross-sub-plan ordering into markdown via `ensureDependenciesSection`, broadcasts
@@ -345,6 +445,7 @@ export class PlanDecomposeGenerateService {
   }> {
     const settings = await this.deps.projectService.getSettings(projectId);
     const prdContext = await this.buildPrdContext(projectId);
+    const hierarchyContext = await this.buildTaskGenerationHierarchyContext(projectId, plan);
     const ancestorChainSummary = await this.buildAncestorChainSummary(projectId, plan);
     const siblingPlanSummaries = await this.buildSiblingPlanSummaries(projectId, plan);
     return generateAndCreateTasksImpl({
@@ -352,8 +453,9 @@ export class PlanDecomposeGenerateService {
       repoPath,
       plan,
       prdContext,
-      ancestorChainSummary,
-      siblingPlanSummaries,
+      hierarchyContext,
+      ancestorChainSummary: hierarchyContext ? undefined : ancestorChainSummary,
+      siblingPlanSummaries: hierarchyContext ? undefined : siblingPlanSummaries,
       settings,
       taskStore: this.deps.taskStore,
     });
@@ -436,15 +538,38 @@ export class PlanDecomposeGenerateService {
       }
       const ordered = sortResult.ordered;
       const childPlans = await this.createSubPlans(projectId, planWithEpic, ordered);
+      const failedPlanIds: string[] = [];
+      const successPlanIds: string[] = [];
       let cumulativeTaskCount = 0;
-      try {
-        for (const child of childPlans) {
-          const updatedChild = await this.planTasks(projectId, child.metadata.planId);
-          cumulativeTaskCount += updatedChild.taskCount ?? 0;
+
+      for (const child of childPlans) {
+        const childPlanId = child.metadata.planId;
+        try {
+          const updatedChild = await this.planTasks(projectId, childPlanId);
+          cumulativeTaskCount += updatedChild.totalTasksCreated ?? 0;
+          const refreshed = await this.deps.getPlan(projectId, childPlanId);
+          if (refreshed.hasGeneratedPlanTasksForCurrentVersion) {
+            successPlanIds.push(childPlanId);
+          } else {
+            failedPlanIds.push(childPlanId);
+            broadcastToProject(projectId, {
+              type: "plan.updated",
+              planId: childPlanId,
+              planTasksGenerationFailed: true,
+              planTasksGenerationErrorMessage:
+                "Plan Tasks did not complete for this sub-plan; retry on this plan.",
+            });
+          }
+        } catch (err) {
+          log.error("Recursive plan tasks failed for child", { planId, childPlanId, err });
+          failedPlanIds.push(childPlanId);
+          broadcastToProject(projectId, {
+            type: "plan.updated",
+            planId: childPlanId,
+            planTasksGenerationFailed: true,
+            planTasksGenerationErrorMessage: getErrorMessage(err),
+          });
         }
-      } catch (err) {
-        log.error("Recursive plan tasks failed", { planId, err });
-        throw err;
       }
 
       if (cumulativeTaskCount === 0) {
@@ -455,17 +580,30 @@ export class PlanDecomposeGenerateService {
         );
       }
 
-      const generatedForVersion = plan.currentVersionNumber ?? 1;
-      await taskStore.planUpdateMetadata(projectId, planId, {
-        ...planWithEpic.metadata,
-        lastTaskGenerationVersionNumber: generatedForVersion,
-      } as unknown as Record<string, unknown>);
+      const allDirectChildrenSucceeded = failedPlanIds.length === 0;
+      if (allDirectChildrenSucceeded) {
+        const generatedForVersion = plan.currentVersionNumber ?? 1;
+        await taskStore.planUpdateMetadata(projectId, planId, {
+          ...planWithEpic.metadata,
+          lastTaskGenerationVersionNumber: generatedForVersion,
+        } as unknown as Record<string, unknown>);
+      }
 
       const updatedPlan = await this.deps.getPlan(projectId, planId);
       await this.autoReviewPlanAgainstRepo(projectId, [updatedPlan]);
       broadcastToProject(projectId, { type: "plan.updated", planId });
-      log.info("planTasks sub-plan split complete", { planId, cumulativeTaskCount });
-      return this.deps.getPlan(projectId, planId);
+      log.info("planTasks sub-plan split complete", {
+        planId,
+        cumulativeTaskCount,
+        failedPlanIds,
+        successPlanIds,
+      });
+      return {
+        ...updatedPlan,
+        totalTasksCreated: cumulativeTaskCount,
+        failedPlanIds,
+        successPlanIds,
+      };
     }
 
     let tasksGenerated = 0;
@@ -500,8 +638,14 @@ export class PlanDecomposeGenerateService {
       );
     }
 
+    const finalPlan = await this.deps.getPlan(projectId, planId);
     broadcastToProject(projectId, { type: "plan.updated", planId });
-    return this.deps.getPlan(projectId, planId);
+    return {
+      ...finalPlan,
+      totalTasksCreated: tasksGenerated,
+      failedPlanIds: [],
+      successPlanIds: [planId],
+    };
   }
 
   async suggestPlans(projectId: string): Promise<{ plans: SuggestedPlan[] }> {

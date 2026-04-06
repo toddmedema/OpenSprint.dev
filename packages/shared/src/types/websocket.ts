@@ -283,6 +283,10 @@ export interface NotificationResolvedEvent {
 export interface PlanUpdatedEvent {
   type: "plan.updated";
   planId: string;
+  /** Set when plan-tasks failed for this plan node (recursive flow); clients can offer retry. */
+  planTasksGenerationFailed?: boolean;
+  /** Short error detail when planTasksGenerationFailed is true */
+  planTasksGenerationErrorMessage?: string;
 }
 
 export interface PlanGeneratedEvent {

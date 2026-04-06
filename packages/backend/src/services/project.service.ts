@@ -1,3 +1,4 @@
+import fs from "fs";
 import type {
   Project,
   CreateProjectRequest,
@@ -31,6 +32,19 @@ import {
 } from "./project/project-archive-delete-flow.js";
 
 export { getNextScheduledSelfImprovementRunAt } from "./project/project-scheduling.js";
+
+/** Canonicalize existing paths so /var/... and /private/var/... match on macOS. */
+function normalizeRepoPathForLookup(p: string): string {
+  const base = normalizeRepoPath(p);
+  try {
+    if (base && fs.existsSync(base)) {
+      return fs.realpathSync(base);
+    }
+  } catch {
+    /* keep base when realpath fails */
+  }
+  return base;
+}
 
 export class ProjectService {
   private taskStore = taskStoreSingleton;
@@ -121,8 +135,8 @@ export class ProjectService {
   /** Get project by repo path (for callers that only have repoPath). */
   async getProjectByRepoPath(repoPath: string): Promise<Project | null> {
     const entries = await projectIndex.getProjects();
-    const normalized = normalizeRepoPath(repoPath);
-    const entry = entries.find((e) => normalizeRepoPath(e.repoPath) === normalized);
+    const normalized = normalizeRepoPathForLookup(repoPath);
+    const entry = entries.find((e) => normalizeRepoPathForLookup(e.repoPath) === normalized);
     if (!entry) return null;
     try {
       return await this.getProject(entry.id);

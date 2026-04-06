@@ -276,7 +276,8 @@ export function createPlansRouter(planService: PlanService): Router {
     })
   );
 
-  // POST /projects/:projectId/plans/:planId/plan-tasks — Plan Tasks (create epic if missing, then AI-generate tasks)
+  // POST /projects/:projectId/plans/:planId/plan-tasks — Plan Tasks (create epic if missing, then AI-generate tasks).
+  // On success, `data` includes optional `totalTasksCreated`, `failedPlanIds`, and `successPlanIds` when useful (recursive sub-plans).
   router.post(
     "/:planId/plan-tasks",
     validateParams(planIdParamSchema),

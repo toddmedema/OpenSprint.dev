@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DEFAULT_HIL_CONFIG } from "@opensprint/shared";
+import { broadcastToProject } from "../websocket/index.js";
 import { PlanCrudService, type PlanCrudStore } from "../services/plan-crud.service.js";
 import { PlanDecomposeGenerateService } from "../services/plan-decompose-generate.service.js";
 import { ProjectService } from "../services/project.service.js";
@@ -296,6 +297,10 @@ describe("PlanDecomposeGenerateService.planTasks recursive sub-plans", () => {
 
     expect(result.hasGeneratedPlanTasksForCurrentVersion).toBe(true);
     expect(result.lastTaskGenerationVersionNumber).toBe(1);
+    expect(result.totalTasksCreated).toBe(2);
+    expect(result.failedPlanIds).toEqual([]);
+    expect(result.successPlanIds).toEqual(expect.arrayContaining(["first-stream", "second-stream"]));
+    expect(result.successPlanIds).toHaveLength(2);
 
     const childGateCalls = mockEvaluatePlanComplexity.mock.calls.filter(
       (c) => (c[0] as { planId?: string }).planId === "first-stream"
@@ -318,8 +323,116 @@ describe("PlanDecomposeGenerateService.planTasks recursive sub-plans", () => {
     const firstStreamContent = (
       firstStreamTaskCall?.[0] as { messages?: Array<{ content?: string }> } | undefined
     )?.messages?.[0]?.content;
-    expect(firstStreamContent).toContain("## Sibling plans");
-    expect(firstStreamContent).toContain("## Ancestor chain");
+    expect(firstStreamContent).toContain("## Hierarchy: Ancestor chain");
+    expect(firstStreamContent).toContain("Split Root");
+    expect(firstStreamContent).toContain("Large feature");
+    expect(firstStreamContent).toContain("## Feature Plan");
+
+    const secondStreamTaskCall = mockInvokePlanningAgent.mock.calls.find(
+      (c) =>
+        (c[0] as { tracking?: { label?: string; planId?: string } }).tracking?.label ===
+          "Task generation" &&
+        (c[0] as { tracking?: { planId?: string } }).tracking?.planId === "second-stream"
+    );
+    const secondStreamContent = (
+      secondStreamTaskCall?.[0] as { messages?: Array<{ content?: string }> } | undefined
+    )?.messages?.[0]?.content;
+    expect(secondStreamContent).toContain("## Hierarchy: Sibling sub-plans");
+    expect(secondStreamContent).toContain("**1** implementation task");
+    expect(secondStreamContent).toContain("first-stream");
+    expect(secondStreamContent).toContain("Implement first-stream");
+  });
+
+  it("continues when a middle child fails: siblings succeed, parent incomplete, failed child retryable", async () => {
+    const parent = await crud.createPlan(PROJECT_ID, {
+      title: "Partial Root",
+      content: "# Partial Root\n\n## Overview\n\nThree streams.",
+      complexity: "high",
+    });
+    const rootId = parent.metadata.planId;
+
+    mockEvaluatePlanComplexity.mockImplementation(
+      async (opts: { planId?: string; planContent?: string }) => {
+        if (opts.planId === rootId) {
+          return {
+            strategy: "sub_plans" as const,
+            subPlans: [
+              {
+                title: "Alpha Stream",
+                overview: "A",
+                content: "## Technical\n\nAlpha.",
+                dependsOnPlans: [],
+              },
+              {
+                title: "Beta Stream",
+                overview: "B",
+                content: "## Technical\n\nBeta.",
+                dependsOnPlans: [],
+              },
+              {
+                title: "Gamma Stream",
+                overview: "C",
+                content: "## Technical\n\nGamma.",
+                dependsOnPlans: [],
+              },
+            ],
+          };
+        }
+        return { strategy: "tasks" as const, tasks: [] };
+      }
+    );
+
+    mockInvokePlanningAgent.mockImplementation(
+      (opts: { tracking?: { label?: string; planId?: string } }) => {
+        if (opts.tracking?.label === "Task generation" && opts.tracking?.planId === "beta-stream") {
+          return Promise.reject(new Error("Simulated planner failure for middle child"));
+        }
+        if (opts.tracking?.label === "Task generation") {
+          const pid = opts.tracking?.planId ?? "plan";
+          return Promise.resolve({
+            content: JSON.stringify({
+              tasks: [
+                {
+                  title: `Implement ${pid}`,
+                  description: "Scoped work",
+                  priority: 1,
+                  dependsOn: [],
+                },
+              ],
+            }),
+          });
+        }
+        return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+      }
+    );
+
+    const result = await decompose.planTasks(PROJECT_ID, rootId);
+
+    expect(result.totalTasksCreated).toBe(2);
+    expect(result.failedPlanIds).toEqual(["beta-stream"]);
+    expect(result.successPlanIds).toEqual(["alpha-stream", "gamma-stream"]);
+    expect(result.hasGeneratedPlanTasksForCurrentVersion).toBe(false);
+    expect(result.lastTaskGenerationVersionNumber).toBeUndefined();
+
+    const alpha = await crud.getPlan(PROJECT_ID, "alpha-stream");
+    const beta = await crud.getPlan(PROJECT_ID, "beta-stream");
+    const gamma = await crud.getPlan(PROJECT_ID, "gamma-stream");
+    expect(alpha.hasGeneratedPlanTasksForCurrentVersion).toBe(true);
+    expect(alpha.lastTaskGenerationVersionNumber).toBe(1);
+    expect(beta.hasGeneratedPlanTasksForCurrentVersion).toBe(false);
+    expect(beta.lastTaskGenerationVersionNumber).toBeUndefined();
+    expect(gamma.hasGeneratedPlanTasksForCurrentVersion).toBe(true);
+
+    const failureBroadcasts = vi.mocked(broadcastToProject).mock.calls.filter(
+      (c) =>
+        (c[1] as { type?: string; planTasksGenerationFailed?: boolean })?.type === "plan.updated" &&
+        (c[1] as { planTasksGenerationFailed?: boolean }).planTasksGenerationFailed === true
+    );
+    expect(
+      failureBroadcasts.some(
+        (c) => (c[1] as { planId?: string }).planId === "beta-stream"
+      )
+    ).toBe(true);
   });
 
   it("rejects cyclic depends_on_plans between sibling sub-plans", async () => {
@@ -368,6 +481,9 @@ describe("PlanDecomposeGenerateService.planTasks recursive sub-plans", () => {
 
     expect(result.taskCount).toBe(1);
     expect(result.hasGeneratedPlanTasksForCurrentVersion).toBe(true);
+    expect(result.totalTasksCreated).toBe(1);
+    expect(result.failedPlanIds).toEqual([]);
+    expect(result.successPlanIds).toEqual([planId]);
     const taskCalls = mockInvokePlanningAgent.mock.calls.filter(
       (c) => (c[0] as { tracking?: { label?: string } }).tracking?.label === "Task generation"
     );

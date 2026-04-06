@@ -198,6 +198,27 @@ class GitCommitQueueImpl implements GitCommitQueueService {
     }
   }
 
+  /**
+   * Re-resolve the task title from the task store immediately before the merge commit.
+   * Long merge/rebase paths can race with DB setup or path canonicalization; a second lookup
+   * keeps "Closed <id>: <store title>" stable when the job passed a stale fallback title.
+   */
+  private async resolveWorktreeMergeTaskTitle(
+    repoPath: string,
+    job: WorktreeMergeJob,
+    currentTitle: string
+  ): Promise<string> {
+    try {
+      await this.taskStore.init();
+      const project = await this.projectService.getProjectByRepoPath(repoPath);
+      if (!project) return currentTitle;
+      const issue = await this.taskStore.show(project.id, job.taskId);
+      return (issue.title as string) || currentTitle;
+    } catch {
+      return currentTitle;
+    }
+  }
+
   private async getMergeAgentConfig(
     repoPath: string,
     _taskId: string
@@ -636,6 +657,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             throw this.buildQualityGateJobError(qualityGateFailure, mergeCandidate.worktreePath);
           }
 
+          taskTitle = await this.resolveWorktreeMergeTaskTitle(repoPath, job, taskTitle);
           const msg = formatMergeCommitMessage(job.taskId, taskTitle);
           await waitForGitReady(mergeCandidate.worktreePath);
           const noHooksMerge = getGitNoHooksPath();

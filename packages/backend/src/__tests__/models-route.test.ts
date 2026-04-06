@@ -37,6 +37,22 @@ function createMinimalModelsApp() {
   return app;
 }
 
+type MinimalModelsApp = ReturnType<typeof createMinimalModelsApp>;
+
+/** GET with timeout and one retry on supertest "socket hang up" (merge-gate flake with full test graph). */
+async function authedGetWithHangupRetry(app: MinimalModelsApp, url: string) {
+  const doRequest = () => authedSupertest(app).get(url).timeout(10_000);
+  try {
+    return await doRequest();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/socket hang up/i.test(msg)) {
+      return await doRequest();
+    }
+    throw err;
+  }
+}
+
 describe("Models API", () => {
   let app: ReturnType<typeof createMinimalModelsApp>;
   let originalAnthropicKey: string | undefined;
@@ -132,7 +148,7 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "model-1" }] }),
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([{ id: "model-1", displayName: "model-1" }]);
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -153,7 +169,7 @@ describe("Models API", () => {
           }),
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([
         { id: "local-model-1", displayName: "local-model-1" },
@@ -171,7 +187,8 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "custom-model" }] }),
       });
 
-      const res = await authedSupertest(app).get(
+      const res = await authedGetWithHangupRetry(
+        app,
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=http://192.168.1.10:1234`
       );
       expect(res.status).toBe(200);
@@ -188,7 +205,8 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [] }),
       });
 
-      await authedSupertest(app).get(
+      await authedGetWithHangupRetry(
+        app,
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=http://localhost:1234/`
       );
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -203,7 +221,8 @@ describe("Models API", () => {
         json: () => Promise.resolve({ data: [{ id: "trimmed-model" }] }),
       });
 
-      const res = await authedSupertest(app).get(
+      const res = await authedGetWithHangupRetry(
+        app,
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=%20%20http://localhost:1234%20%20`
       );
       expect(res.status).toBe(200);
@@ -215,7 +234,8 @@ describe("Models API", () => {
     });
 
     it("returns 400 for LM Studio with invalid baseUrl (non-http(s))", async () => {
-      const res = await authedSupertest(app).get(
+      const res = await authedGetWithHangupRetry(
+        app,
         `${API_PREFIX}/models?provider=lmstudio&baseUrl=ftp://localhost:1234`
       );
       expect(res.status).toBe(400);
@@ -226,7 +246,7 @@ describe("Models API", () => {
     it("returns 502 when LM Studio is unreachable (connection refused)", async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"));
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(502);
       expect(res.body.error?.code).toBe("LM_STUDIO_UNREACHABLE");
       expect(res.body.error?.message).toContain("LM Studio is not reachable");
@@ -239,7 +259,7 @@ describe("Models API", () => {
         text: () => Promise.resolve("Internal Server Error"),
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=lmstudio`);
       expect(res.status).toBe(502);
       expect(res.body.error?.code).toBe("LM_STUDIO_UNREACHABLE");
       expect(res.body.error?.message).toContain("LM Studio is not reachable");
@@ -375,12 +395,12 @@ describe("Models API", () => {
         json: mockJson,
       });
 
-      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res1 = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=lmstudio`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
 
-      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=lmstudio`);
+      const res2 = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=lmstudio`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);

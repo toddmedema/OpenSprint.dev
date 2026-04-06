@@ -24,11 +24,77 @@ import { invokeStructuredPlanningAgent } from "../structured-agent-output.servic
 
 const log = createLogger("plan-task-generation");
 
+/** One ancestor plan from root toward the parent of the node receiving task generation. */
+export interface PlanTaskHierarchyAncestorEntry {
+  title: string;
+  overview: string;
+}
+
+/** A sibling sub-plan that already has generated implementation tasks (recursive flow). */
+export interface PlanTaskHierarchySiblingEntry {
+  title: string;
+  /** Output of `buildPlanTaskSummaryFromCreated` for that sibling’s plan + tasks. */
+  taskSummary: string;
+}
+
+/** Structured hierarchy context for recursive task generation prompts. */
+export interface PlanTaskHierarchyContext {
+  ancestors: PlanTaskHierarchyAncestorEntry[];
+  siblings: PlanTaskHierarchySiblingEntry[];
+}
+
+const HIERARCHY_TITLE_MAX = 120;
+const HIERARCHY_OVERVIEW_MAX = 320;
+const HIERARCHY_SCOPE_MAX = 900;
+
+function truncateForPlanningSnippet(text: string, maxChars: number): string {
+  const singleLine = text.replace(/\s+/g, " ").trim();
+  if (singleLine.length <= maxChars) return singleLine;
+  return `${singleLine.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
+/**
+ * Renders hierarchy context for the task-generation user message (prepended before the feature plan).
+ */
+export function formatPlanTaskHierarchyContextForPrompt(ctx: PlanTaskHierarchyContext): string {
+  const parts: string[] = [];
+
+  if (ctx.ancestors.length > 0) {
+    parts.push("## Hierarchy: Ancestor chain (root → parent)\n");
+    for (const a of ctx.ancestors) {
+      const title = truncateForPlanningSnippet(a.title, HIERARCHY_TITLE_MAX);
+      const overview = truncateForPlanningSnippet(a.overview, HIERARCHY_OVERVIEW_MAX);
+      parts.push(`### ${title}\n**Overview:** ${overview}\n`);
+    }
+  }
+
+  if (ctx.siblings.length > 0) {
+    parts.push("\n## Hierarchy: Sibling sub-plans (tasks already generated)\n");
+    for (const s of ctx.siblings) {
+      const taskLines = s.taskSummary.split("\n").filter((line) => /^\s*-\s*\*\*/.test(line));
+      const count = taskLines.length;
+      const title = truncateForPlanningSnippet(s.title, HIERARCHY_TITLE_MAX);
+      const scope = truncateForPlanningSnippet(s.taskSummary.replace(/\s+/g, " ").trim(), HIERARCHY_SCOPE_MAX);
+      parts.push(
+        `### ${title} — **${count}** implementation task${count === 1 ? "" : "s"}\n` +
+          `**Scope (generated tasks):** ${scope || "(no task lines)"}\n`
+      );
+    }
+  }
+
+  return parts.join("\n").trim();
+}
+
 export interface PlanTaskGenerationDeps {
   projectId: string;
   repoPath: string;
   plan: Plan;
   prdContext: string;
+  /**
+   * Rich hierarchy for recursive sub-plan task generation. When set, string-based
+   * `ancestorChainSummary` / `siblingPlanSummaries` are omitted to avoid duplication.
+   */
+  hierarchyContext?: PlanTaskHierarchyContext;
   /** Oldest → newest plan titles on the path to this node (recursive planning). */
   ancestorChainSummary?: string;
   /** One line per sibling plan under the same parent (excludes this plan). */
@@ -123,6 +189,7 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     repoPath,
     plan,
     prdContext,
+    hierarchyContext,
     ancestorChainSummary,
     siblingPlanSummaries,
     settings,
@@ -138,24 +205,31 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     };
   }
 
+  const hierarchyBlock =
+    hierarchyContext != null ? formatPlanTaskHierarchyContextForPrompt(hierarchyContext).trim() : "";
+
   const promptSections: string[] = [
     "## Feature Plan",
     plan.content,
     "## PRD Context",
     prdContext,
   ];
-  const ancestor = ancestorChainSummary?.trim();
-  if (ancestor) {
-    promptSections.push("## Ancestor chain (root → parent)", ancestor);
-  }
-  const siblings = siblingPlanSummaries?.trim();
-  if (siblings) {
-    promptSections.push("## Sibling plans (same parent)", siblings);
+  if (hierarchyContext == null) {
+    const ancestor = ancestorChainSummary?.trim();
+    if (ancestor) {
+      promptSections.push("## Ancestor chain (root → parent)", ancestor);
+    }
+    const siblings = siblingPlanSummaries?.trim();
+    if (siblings) {
+      promptSections.push("## Sibling plans (same parent)", siblings);
+    }
   }
 
+  const body = promptSections.join("\n\n");
   const prompt =
+    (hierarchyBlock ? `${hierarchyBlock}\n\n` : "") +
     "Break down the following feature plan into implementation tasks.\n\n" +
-    promptSections.join("\n\n");
+    body;
 
   const agentId = `plan-task-gen-${projectId}-${Date.now()}`;
 

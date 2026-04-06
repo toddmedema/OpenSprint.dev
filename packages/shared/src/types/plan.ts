@@ -80,6 +80,14 @@ export interface Plan {
   depth?: number;
   /** IDs of immediate child plans for tree rendering */
   childPlanIds?: string[];
+
+  /**
+   * POST /plan-tasks response only: recursive task generation outcome.
+   * Omitted on GET plan and other endpoints.
+   */
+  totalTasksCreated?: number;
+  failedPlanIds?: string[];
+  successPlanIds?: string[];
 }
 
 /** Dependency edge between Plans for the dependency graph */
