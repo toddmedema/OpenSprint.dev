@@ -45,6 +45,7 @@ import type {
   EnvRuntimeResponse,
   PlanVersionSummary,
   PlanVersionContent,
+  PlanHierarchyResponse,
   OpenEditorResponse,
   AgentChatHistoryResponse,
   AgentChatSupportResponse,
@@ -500,6 +501,8 @@ export const api = {
       }),
     get: (projectId: string, planId: string) =>
       request<Plan>(`/projects/${projectId}/plans/${planId}`),
+    getHierarchy: (projectId: string, planId: string) =>
+      request<PlanHierarchyResponse>(`/projects/${projectId}/plans/${planId}/hierarchy`),
     listVersions: async (projectId: string, planId: string) => {
       const res = await request<{ versions: PlanVersionSummary[] }>(
         `/projects/${projectId}/plans/${planId}/versions`

@@ -22,8 +22,25 @@ vi.mock("../services/branch-manager.js", () => {
       this.name = "RebaseConflictError";
     }
   }
+  class RebaseContinueBlockedError extends Error {
+    constructor(
+      message: string,
+      public readonly diagnostics: {
+        cause: "preflight_unmerged" | "preflight_staged_markers" | "continue_failed";
+        rebaseMetadataPresent: string[];
+        conflictedFiles: string[];
+        gitStatusShort?: string;
+        underlyingMessage?: string;
+      },
+      public readonly mergeFailureStage?: string
+    ) {
+      super(message);
+      this.name = "RebaseContinueBlockedError";
+    }
+  }
   return {
     RebaseConflictError,
+    RebaseContinueBlockedError,
     BranchManager: vi.fn().mockImplementation(() => ({
       waitForGitReady: vi.fn(),
       commitWip: vi.fn(),
@@ -1628,6 +1645,64 @@ describe("MergeCoordinatorService", () => {
         repoPath,
         taskId: "baseline:main",
         validationWorkspace: "baseline",
+      })
+    );
+    expect(pushMainToOrigin).toHaveBeenCalledWith(repoPath, "main");
+    expect(rebaseAbort).not.toHaveBeenCalled();
+  });
+
+  it("runs another merger round when rebaseContinue is blocked preflight (unmerged paths)", async () => {
+    const { RebaseConflictError, RebaseContinueBlockedError } = await import(
+      "../services/branch-manager.js"
+    );
+    const prepareMainForPush = mockHost.branchManager.prepareMainForPush as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const rebaseContinue = mockHost.branchManager.rebaseContinue as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const pushMainToOrigin = mockHost.branchManager.pushMainToOrigin as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const rebaseAbort = mockHost.branchManager.rebaseAbort as unknown as ReturnType<typeof vi.fn>;
+    mockInspectGitRepoState.mockResolvedValue({
+      isGitRepo: true,
+      hasHead: true,
+      currentBranch: "main",
+      baseBranch: "main",
+      hasOrigin: true,
+      originReachable: true,
+      remoteMode: "remote",
+      originUrl: "git@github.com:opensprint/opensprint.git",
+      identity: { name: "Test", email: "test@test.com", valid: true },
+    });
+
+    mockHost.runMergeQualityGates = vi.fn().mockResolvedValue(null);
+    prepareMainForPush.mockRejectedValueOnce(new RebaseConflictError(["still.ts"]));
+    rebaseContinue
+      .mockRejectedValueOnce(
+        new RebaseContinueBlockedError(
+          "Rebase continue blocked (preflight): unmerged paths remain: still.ts",
+          {
+            cause: "preflight_unmerged",
+            rebaseMetadataPresent: ["rebase-merge"],
+            conflictedFiles: ["still.ts"],
+          },
+          "push_rebase"
+        )
+      )
+      .mockResolvedValueOnce(undefined);
+    pushMainToOrigin.mockResolvedValue(undefined);
+    (mockHost.runMergerAgentAndWait as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+
+    await coordinator.postCompletionAsync(projectId, repoPath, taskId);
+
+    expect(mockHost.runMergerAgentAndWait).toHaveBeenCalledTimes(2);
+    expect(mockHost.runMergerAgentAndWait).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        phase: "push_rebase",
+        conflictedFiles: ["still.ts"],
       })
     );
     expect(pushMainToOrigin).toHaveBeenCalledWith(repoPath, "main");

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as commandRunner from "../utils/command-runner.js";
-import { runGit, gitNoHooksConfigPrefix } from "../utils/git-command.js";
+import { runGit, gitNoHooksConfigPrefix, gitListUnmergedPaths } from "../utils/git-command.js";
 
 describe("git-command", () => {
   afterEach(() => {
@@ -28,5 +28,22 @@ describe("git-command", () => {
       "-c",
       "core.hooksPath=/tmp/empty-hooks",
     ]);
+  });
+
+  it("gitListUnmergedPaths parses diff-filter=U output", async () => {
+    const spy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue({
+      stdout: "a.txt\nb.txt\n",
+      stderr: "",
+      executable: "git",
+      cwd: "/r",
+      exitCode: 0,
+      signal: null,
+    });
+    const paths = await gitListUnmergedPaths({ cwd: "/r", timeout: 5_000 });
+    expect(paths).toEqual(["a.txt", "b.txt"]);
+    expect(spy).toHaveBeenCalledWith(
+      { command: "git", args: ["diff", "--name-only", "--diff-filter=U"] },
+      { cwd: "/r", timeout: 5_000 }
+    );
   });
 });

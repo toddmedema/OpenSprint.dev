@@ -8,6 +8,8 @@ import planReducer, {
   executePlan,
   reExecutePlan,
   planTasks,
+  planTasksForSubtree,
+  buildPlanHierarchyCache,
   fetchPlanChat,
   sendPlanMessage,
   fetchSinglePlan,
@@ -109,6 +111,7 @@ describe("planSlice", () => {
       expect(state.error).toBeNull();
       expect(state.backgroundError).toBeNull();
       expect(state.executeError).toBeNull();
+      expect(state.planHierarchyCache).toEqual({});
     });
   });
 
@@ -167,6 +170,35 @@ describe("planSlice", () => {
       expect(store.getState().plan.dependencyGraph).toEqual(mockGraph);
     });
 
+    it("setPlansAndGraph builds planHierarchyCache grouped by parentPlanId", () => {
+      const root: Plan = {
+        ...mockPlan,
+        metadata: { ...mockPlan.metadata, planId: "root-plan" },
+        status: "planning",
+      };
+      const child: Plan = {
+        ...mockPlan,
+        metadata: {
+          ...mockPlan.metadata,
+          planId: "child-plan",
+          parentPlanId: "root-plan",
+          depth: 2,
+        },
+        status: "building",
+      };
+      const store = createStore();
+      store.dispatch(
+        setPlansAndGraph({
+          plans: [child, root],
+          dependencyGraph: { plans: [child, root], edges: [] },
+        })
+      );
+      const cache = store.getState().plan.planHierarchyCache;
+      expect(cache["root-plan"]?.children.map((c) => c.planId)).toEqual(["child-plan"]);
+      expect(cache["child-plan"]?.children).toEqual([]);
+      expect(buildPlanHierarchyCache([])).toEqual({});
+    });
+
     it("setDecomposeProgress stores live decompose progress", () => {
       const store = createStore();
       store.dispatch(setDecomposeProgress({ createdCount: 2, totalCount: 4 }));
@@ -194,6 +226,7 @@ describe("planSlice", () => {
       expect(state.error).toBeNull();
       expect(state.backgroundError).toBeNull();
       expect(state.executeError).toBeNull();
+      expect(state.planHierarchyCache).toEqual({});
     });
 
     it("setExecutingPlanId sets executingPlanId synchronously", () => {
@@ -702,6 +735,58 @@ describe("planSlice", () => {
       await store.dispatch(planTasks({ projectId: "proj-1", planId: mockPlan.metadata.planId }));
 
       expect(store.getState().plan.executeError).toBeNull();
+    });
+  });
+
+  describe("planTasksForSubtree thunk", () => {
+    it("merges root and refreshed child plans and rebuilds hierarchy cache", async () => {
+      const root: Plan = {
+        ...mockPlan,
+        metadata: { ...mockPlan.metadata, planId: "root-1" },
+      };
+      const child: Plan = {
+        ...mockPlan,
+        metadata: {
+          ...mockPlan.metadata,
+          planId: "child-1",
+          parentPlanId: "root-1",
+          depth: 2,
+        },
+        taskCount: 4,
+      };
+      const rootResponse: Plan = {
+        ...root,
+        successPlanIds: ["child-1"],
+        failedPlanIds: [],
+        totalTasksCreated: 5,
+      };
+      vi.mocked(api.plans.planTasks).mockResolvedValue(rootResponse);
+      vi.mocked(api.plans.get).mockResolvedValue(child);
+
+      const store = createStore();
+      store.dispatch(
+        setPlansAndGraph({ plans: [root], dependencyGraph: { plans: [root], edges: [] } })
+      );
+
+      await store.dispatch(planTasksForSubtree({ projectId: "proj-1", planId: "root-1" }));
+
+      const state = store.getState().plan;
+      expect(api.plans.planTasks).toHaveBeenCalledWith("proj-1", "root-1");
+      expect(api.plans.get).toHaveBeenCalledWith("proj-1", "child-1");
+      expect(state.plans.map((p) => p.metadata.planId).sort()).toEqual(["child-1", "root-1"]);
+      expect(state.plans.find((p) => p.metadata.planId === "child-1")?.taskCount).toBe(4);
+      expect(state.planHierarchyCache["root-1"]?.children[0]?.planId).toBe("child-1");
+      expect(state.planTasksPlanIds).not.toContain("root-1");
+    });
+
+    it("sets executeError on rejected like planTasks", async () => {
+      vi.mocked(api.plans.planTasks).mockRejectedValue(new Error("Split failed"));
+      const store = createStore();
+      await store.dispatch(planTasksForSubtree({ projectId: "proj-1", planId: "root-1" }));
+      expect(store.getState().plan.executeError).toEqual({
+        planId: "root-1",
+        message: "Split failed",
+      });
     });
   });
 

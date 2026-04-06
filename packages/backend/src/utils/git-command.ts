@@ -11,6 +11,12 @@ export async function runGit(
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
+/** Paths still in conflict in the index (unmerged). Used before `git rebase --continue`. */
+export async function gitListUnmergedPaths(options: CommandRunOptions): Promise<string[]> {
+  const { stdout } = await runGit(["diff", "--name-only", "--diff-filter=U"], options);
+  return stdout.trim().split("\n").filter(Boolean);
+}
+
 /** Place before the git subcommand (e.g. point core.hooksPath at an empty directory). */
 export function gitNoHooksConfigPrefix(hooksPath: string): string[] {
   return ["-c", `core.hooksPath=${hooksPath}`];

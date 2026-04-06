@@ -11,6 +11,7 @@ import {
   isEnvironmentSetupQualityGateMergeError,
   toQualityGateOutputSnippet,
 } from "../services/merge-quality-gate-failure-utils.js";
+import { buildFailureFingerprint } from "../utils/failure-fingerprint.js";
 
 describe("merge-quality-gate-failure-utils", () => {
   it("getFirstNonEmptyLine skips blanks", () => {
@@ -135,5 +136,14 @@ describe("merge-quality-gate-failure-utils", () => {
     });
     expect(text).toContain("low-confidence");
     expect(text).toContain("npm ci");
+  });
+
+  it("classifies rebase continue blocked messages as merge_conflict fingerprints", () => {
+    const fp = buildFailureFingerprint(
+      "Rebase continue blocked (preflight): unmerged paths remain: a.txt",
+      "rebase_before_merge",
+      "opensprint/os-xxxx"
+    );
+    expect(fp.failureClass).toBe("merge_conflict");
   });
 });

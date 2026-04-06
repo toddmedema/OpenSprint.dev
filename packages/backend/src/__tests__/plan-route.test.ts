@@ -2074,6 +2074,89 @@ Feature that depends on auth.
     });
   });
 
+  describe("GET /projects/:id/plans/:planId/hierarchy", () => {
+    it("returns root with empty children when plan has no sub-plans", async () => {
+      const planBody = {
+        title: "Solo Hierarchy Plan",
+        content: "# Solo\n\n## Dependencies\n\nNone.",
+        complexity: "low",
+      };
+      const createRes = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const planId = createRes.body.data.metadata.planId;
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/plans/${planId}/hierarchy`
+      );
+      expect(res.status).toBe(200);
+      const root = res.body.data.root;
+      expect(root.planId).toBe(planId);
+      expect(root.children).toEqual([]);
+      expect(root).toMatchObject({
+        epicId: createRes.body.data.metadata.epicId,
+        depth: expect.any(Number),
+        status: expect.any(String),
+        taskCount: expect.any(Number),
+      });
+    });
+
+    it("returns root with two nested child plans", async () => {
+      const rootRes = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send({
+          title: "Root For Subplans",
+          content: "# Root\n\n## Dependencies\n\nNone.",
+          complexity: "low",
+        });
+      expect(rootRes.status).toBe(201);
+      const rootId = rootRes.body.data.metadata.planId;
+
+      const childA = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send({
+          title: "Child Plan Alpha",
+          content: "# Alpha\n\n## Dependencies\n\nNone.",
+          complexity: "low",
+          parentPlanId: rootId,
+        });
+      const childB = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send({
+          title: "Child Plan Beta",
+          content: "# Beta\n\n## Dependencies\n\nNone.",
+          complexity: "low",
+          parentPlanId: rootId,
+        });
+      expect(childA.status).toBe(201);
+      expect(childB.status).toBe(201);
+      const childAId = childA.body.data.metadata.planId;
+      const childBId = childB.body.data.metadata.planId;
+
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/plans/${rootId}/hierarchy`
+      );
+      expect(res.status).toBe(200);
+      const { root } = res.body.data;
+      expect(root.planId).toBe(rootId);
+      expect(root.children).toHaveLength(2);
+      const childIds = root.children.map((c: { planId: string }) => c.planId).sort();
+      expect(childIds).toEqual([childAId, childBId].sort());
+      for (const c of root.children) {
+        expect(c.parentPlanId).toBe(rootId);
+        expect(c.children).toEqual([]);
+      }
+    });
+
+    it("returns 404 when plan does not exist", async () => {
+      const res = await authedSupertest(app).get(
+        `${API_PREFIX}/projects/${projectId}/plans/nonexistent-plan-hierarchy-xyz/hierarchy`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe("GET /projects/:id/plans/:planId/auditor-runs", () => {
     it("returns empty array when plan has no auditor runs", async () => {
       const planBody = {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { usePlanVersions, usePlanVersion, useExecutePlan } from "./plans";
+import { usePlanVersions, usePlanVersion, useExecutePlan, usePlanHierarchy } from "./plans";
 
 vi.mock("../client", () => ({
   api: {
@@ -10,6 +10,7 @@ vi.mock("../client", () => ({
       listVersions: vi.fn(),
       getVersion: vi.fn(),
       execute: vi.fn(),
+      getHierarchy: vi.fn(),
     },
   },
 }));
@@ -27,6 +28,61 @@ function createWrapper() {
   Wrapper.displayName = "PlansTestWrapper";
   return Wrapper;
 }
+
+describe("usePlanHierarchy", () => {
+  const hierarchyPayload = {
+    root: {
+      planId: "plan-1",
+      epicId: "epic-1",
+      depth: 1,
+      status: "planning" as const,
+      taskCount: 0,
+      children: [] as const,
+    },
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.plans.getHierarchy).mockResolvedValue(hierarchyPayload);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("fetches hierarchy when projectId and planId are set", async () => {
+    const spy = vi.mocked(api.plans.getHierarchy);
+    const wrapper = createWrapper();
+
+    const { result } = renderHook(() => usePlanHierarchy("proj-1", "plan-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(spy).toHaveBeenCalledWith("proj-1", "plan-1");
+    expect(result.current.data).toEqual(hierarchyPayload);
+  });
+
+  it("does not fetch when projectId or planId is undefined", async () => {
+    const spy = vi.mocked(api.plans.getHierarchy);
+    const wrapper = createWrapper();
+
+    const { result } = renderHook(() => usePlanHierarchy(undefined, "plan-1"), { wrapper });
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
+    expect(spy).not.toHaveBeenCalled();
+
+    const { result: r2 } = renderHook(() => usePlanHierarchy("proj-1", undefined), { wrapper });
+    await waitFor(() => expect(r2.current.isFetching).toBe(false));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("exposes error when getHierarchy rejects", async () => {
+    vi.mocked(api.plans.getHierarchy).mockRejectedValue(new Error("hierarchy failed"));
+    const wrapper = createWrapper();
+
+    const { result } = renderHook(() => usePlanHierarchy("proj-1", "plan-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toEqual(new Error("hierarchy failed"));
+  });
+});
 
 describe("usePlanVersions", () => {
   beforeEach(() => {

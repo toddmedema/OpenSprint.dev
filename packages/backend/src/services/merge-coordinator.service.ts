@@ -24,7 +24,7 @@ import {
 import type { ServerEvent } from "@opensprint/shared";
 import type { StoredTask } from "./task-store.service.js";
 import { resolveEpicId } from "./task-store.service.js";
-import { RebaseConflictError } from "./branch-manager.js";
+import { RebaseConflictError, RebaseContinueBlockedError } from "./branch-manager.js";
 import { gitCommitQueue, MergeJobError } from "./git-commit-queue.service.js";
 import { agentIdentityService, buildAgentAttemptId } from "./agent-identity.service.js";
 import { eventLogService } from "./event-log.service.js";
@@ -2315,9 +2315,11 @@ export class MergeCoordinatorService {
     const stage =
       mergeErr instanceof MergeJobError
         ? mergeErr.stage
-        : mergeErr instanceof RebaseConflictError
-          ? "push_rebase"
-          : "merge_to_main";
+        : mergeErr instanceof RebaseContinueBlockedError
+          ? mergeErr.mergeFailureStage ?? "merge_to_main"
+          : mergeErr instanceof RebaseConflictError
+            ? "push_rebase"
+            : "merge_to_main";
     const normalizedStage = stage as MergeFailureStage;
     const humanFailureMessage = this.getHumanFailureMessage(normalizedStage);
     const isQualityGateFailure = normalizedStage === "quality_gate";
@@ -2326,7 +2328,15 @@ export class MergeCoordinatorService {
         ? mergeErr.conflictedFiles
         : mergeErr instanceof RebaseConflictError
           ? mergeErr.conflictedFiles
-          : [];
+          : mergeErr instanceof RebaseContinueBlockedError
+            ? mergeErr.diagnostics.conflictedFiles
+            : [];
+    const rebaseContinueDiagnostics =
+      mergeErr instanceof MergeJobError
+        ? mergeErr.rebaseContinueDiagnostics
+        : mergeErr instanceof RebaseContinueBlockedError
+          ? mergeErr.diagnostics
+          : undefined;
     if (await this.host.branchManager.isMergeInProgress(repoPath)) {
       await this.host.branchManager.mergeAbort(repoPath);
     }
@@ -2438,6 +2448,19 @@ export class MergeCoordinatorService {
         phase: failureFingerprint.phase,
         branch: failureFingerprint.branch,
       });
+      if (rebaseContinueDiagnostics) {
+        log.info("merge.rebase_continue_blocked", {
+          taskId: task.id,
+          cause: rebaseContinueDiagnostics.cause,
+          rebaseMetadataPresent: rebaseContinueDiagnostics.rebaseMetadataPresent,
+          conflictedFiles: rebaseContinueDiagnostics.conflictedFiles,
+        });
+        appendRuntimeTrace("merge.rebase_continue_blocked", task.id, {
+          cause: rebaseContinueDiagnostics.cause,
+          rebaseMetadataPresent: rebaseContinueDiagnostics.rebaseMetadataPresent,
+          conflictedFiles: rebaseContinueDiagnostics.conflictedFiles,
+        });
+      }
 
       const mergeBlockReason = this.getMergeFailureBlockReason(normalizedStage);
       const mergeFailureType = this.getMergeFailureType(
@@ -2543,6 +2566,7 @@ export class MergeCoordinatorService {
             qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
             lastFailureFingerprint: failureFingerprint.hash,
             lastFailureClass: failureFingerprint.failureClass,
+            ...(rebaseContinueDiagnostics ? { rebaseContinueDiagnostics } : {}),
           },
         });
         await this.host.taskStore.comment(
@@ -2717,6 +2741,7 @@ export class MergeCoordinatorService {
           qualityGateDetail: qualityGateStructuredDetails.qualityGateDetail,
           lastFailureFingerprint: failureFingerprint.hash,
           lastFailureClass: failureFingerprint.failureClass,
+          ...(rebaseContinueDiagnostics ? { rebaseContinueDiagnostics } : {}),
         },
       });
       await this.host.taskStore.setMergeStage(projectId, task.id, null);
@@ -3092,6 +3117,42 @@ export class MergeCoordinatorService {
       } catch (continueErr) {
         if (continueErr instanceof RebaseConflictError) {
           pendingConflict = continueErr;
+        } else if (continueErr instanceof RebaseContinueBlockedError) {
+          const d = continueErr.diagnostics;
+          if (
+            (d.cause === "preflight_unmerged" || d.cause === "preflight_staged_markers") &&
+            d.conflictedFiles.length > 0
+          ) {
+            log.info("merge.merger_rebase_continue_skipped_preflight", {
+              projectId,
+              round,
+              conflictedFiles: d.conflictedFiles,
+              rebaseMetadataPresent: d.rebaseMetadataPresent,
+              context: "push_rebase",
+            });
+            appendRuntimeTrace("merge.merger_rebase_continue_skipped_preflight", projectId, {
+              round,
+              conflictedFiles: d.conflictedFiles,
+              rebaseMetadataPresent: d.rebaseMetadataPresent,
+              context: "push_rebase",
+            });
+            pendingConflict = new RebaseConflictError(d.conflictedFiles);
+          } else {
+            log.warn("rebase continue blocked after merger (push)", {
+              projectId,
+              round,
+              diagnostics: d,
+            });
+            await this.host.branchManager.rebaseAbort(repoPath);
+            return {
+              ok: false,
+              error: new RebaseContinueBlockedError(
+                continueErr.message,
+                continueErr.diagnostics,
+                "push_rebase"
+              ),
+            };
+          }
         } else {
           log.warn("rebase --continue failed after merger", {
             projectId,

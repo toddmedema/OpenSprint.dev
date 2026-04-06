@@ -7,6 +7,7 @@ import { promisify } from "util";
 import {
   BranchManager,
   RebaseConflictError,
+  RebaseContinueBlockedError,
   WorktreeBranchInUseError,
 } from "../services/branch-manager.js";
 import { worktreeLeaseService } from "../services/worktree-lease.service.js";
@@ -580,6 +581,41 @@ describe("BranchManager", () => {
         RebaseConflictError
       );
       await expect(branchManager.getConflictedFiles(repoPath)).resolves.toEqual(["conflict.txt"]);
+    });
+
+    it("throws RebaseContinueBlockedError when staged conflict markers remain before continue (preflight)", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      const filePath = path.join(repoPath, "conflict.txt");
+      await fs.writeFile(filePath, "base\n");
+      await execAsync('git add conflict.txt && git commit -m "initial"', { cwd: repoPath });
+
+      await execAsync("git checkout -b feature", { cwd: repoPath });
+      await fs.writeFile(filePath, "feature\n");
+      await execAsync('git add conflict.txt && git commit -m "feature"', { cwd: repoPath });
+
+      await execAsync("git checkout main", { cwd: repoPath });
+      await fs.writeFile(filePath, "main\n");
+      await execAsync('git add conflict.txt && git commit -m "main"', { cwd: repoPath });
+
+      await execAsync("git checkout feature", { cwd: repoPath });
+      await expect(execAsync("git rebase main", { cwd: repoPath })).rejects.toThrow();
+
+      let caught: unknown;
+      try {
+        await branchManager.rebaseContinue(repoPath);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(RebaseContinueBlockedError);
+      const blocked = caught as RebaseContinueBlockedError;
+      expect(blocked.diagnostics.cause).toBe("preflight_staged_markers");
+      expect(blocked.diagnostics.conflictedFiles).toContain("conflict.txt");
+      expect(blocked.diagnostics.rebaseMetadataPresent).toContain("rebase-merge");
+
+      await branchManager.rebaseAbort(repoPath);
     });
   });
 

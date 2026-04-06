@@ -1,11 +1,13 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type {
-  GeneratePlanResult,
-  Plan,
-  PlanAttachment,
-  PlanDependencyGraph,
-  PlanExecuteBatchItem,
-  PlanStatusResponse,
+import {
+  sortPlansByStatus,
+  type GeneratePlanResult,
+  type Plan,
+  type PlanAttachment,
+  type PlanDependencyGraph,
+  type PlanExecuteBatchItem,
+  type PlanHierarchyNode,
+  type PlanStatusResponse,
 } from "@opensprint/shared";
 import { api } from "../../api/client";
 import { DEDUP_SKIP } from "../dedup";
@@ -22,8 +24,59 @@ export type FetchPlansArg = string | { projectId: string; background?: boolean }
 /** Number of in-flight fetchPlans requests; used to skip duplicate calls (skip when > 1). */
 const PLANS_IN_FLIGHT_KEY = "plansInFlightCount" as const;
 
+/** Map planId → tree node (nested children) for hierarchy lookups; rebuilt from `plans`. */
+export function buildPlanHierarchyCache(plans: Plan[]): Record<string, PlanHierarchyNode> {
+  const cache: Record<string, PlanHierarchyNode> = {};
+  if (plans.length === 0) return cache;
+
+  const idSet = new Set(plans.map((p) => p.metadata.planId));
+  const childrenByParent = new Map<string, Plan[]>();
+
+  for (const p of plans) {
+    const parent = p.metadata.parentPlanId;
+    if (parent && idSet.has(parent)) {
+      const arr = childrenByParent.get(parent);
+      if (arr) arr.push(p);
+      else childrenByParent.set(parent, [p]);
+    }
+  }
+
+  const roots: Plan[] = [];
+  for (const p of plans) {
+    const parent = p.metadata.parentPlanId;
+    if (!parent || !idSet.has(parent)) roots.push(p);
+  }
+
+  function toHierarchyNode(plan: Plan): PlanHierarchyNode {
+    const rawKids = childrenByParent.get(plan.metadata.planId) ?? [];
+    const sortedKids = sortPlansByStatus([...rawKids]);
+    const children = sortedKids.map(toHierarchyNode);
+    const depth = plan.depth ?? plan.metadata.depth ?? 1;
+    const node: PlanHierarchyNode = {
+      planId: plan.metadata.planId,
+      epicId: plan.metadata.epicId,
+      ...(plan.metadata.parentPlanId != null ? { parentPlanId: plan.metadata.parentPlanId } : {}),
+      depth,
+      status: plan.status,
+      taskCount: plan.taskCount,
+      children,
+    };
+    cache[plan.metadata.planId] = node;
+    return node;
+  }
+
+  sortPlansByStatus(roots).forEach(toHierarchyNode);
+  return cache;
+}
+
+function syncPlanHierarchyCache(state: { plans: Plan[]; planHierarchyCache: Record<string, PlanHierarchyNode> }) {
+  state.planHierarchyCache = buildPlanHierarchyCache(state.plans);
+}
+
 export interface PlanState {
   plans: Plan[];
+  /** Quick tree lookup by plan id (nodes include nested children). */
+  planHierarchyCache: Record<string, PlanHierarchyNode>;
   dependencyGraph: PlanDependencyGraph | null;
   selectedPlanId: string | null;
   chatMessages: Record<string, Message[]>;
@@ -61,6 +114,7 @@ export interface PlanState {
 
 const initialState: PlanState = {
   plans: [],
+  planHierarchyCache: {},
   dependencyGraph: null,
   selectedPlanId: null,
   chatMessages: {},
@@ -179,6 +233,46 @@ export const planTasks = createAsyncThunk(
   }
 );
 
+export interface PlanTasksForSubtreeResult {
+  rootPlan: Plan;
+  updatedPlans: Plan[];
+}
+
+/**
+ * Plan Tasks on a root plan when the backend may recurse into sub-plans (partial success).
+ * Refreshes each affected plan in Redux so child rows stay in sync without a full list fetch.
+ */
+export const planTasksForSubtree = createAsyncThunk(
+  "plan/planTasksForSubtree",
+  async ({
+    projectId,
+    planId,
+  }: {
+    projectId: string;
+    planId: string;
+  }): Promise<PlanTasksForSubtreeResult> => {
+    const rootPlan = await api.plans.planTasks(projectId, planId);
+    const rootPlanId = rootPlan.metadata.planId;
+    const ids = new Set<string>([rootPlanId]);
+    for (const id of rootPlan.successPlanIds ?? []) ids.add(id);
+    for (const id of rootPlan.failedPlanIds ?? []) ids.add(id);
+
+    const updatedPlans: Plan[] = [];
+    for (const id of ids) {
+      if (id === rootPlanId) {
+        updatedPlans.push(rootPlan);
+      } else {
+        try {
+          updatedPlans.push(await api.plans.get(projectId, id));
+        } catch {
+          // Omit plans we could not re-fetch; root response still applied above.
+        }
+      }
+    }
+    return { rootPlan, updatedPlans };
+  }
+);
+
 export const archivePlan = createAsyncThunk(
   "plan/archive",
   async ({ projectId, planId }: { projectId: string; planId: string }) => {
@@ -291,6 +385,7 @@ const planSlice = createSlice({
     },
     addPlanLocally(state, action: PayloadAction<Plan>) {
       state.plans.push(action.payload);
+      syncPlanHierarchyCache(state);
     },
     setPlanError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
@@ -321,6 +416,7 @@ const planSlice = createSlice({
     ) {
       state.plans = action.payload.plans;
       state.dependencyGraph = action.payload.dependencyGraph;
+      syncPlanHierarchyCache(state);
     },
     enqueuePlanTasksId(state, action: PayloadAction<string>) {
       if (!state.planTasksPlanIds.includes(action.payload)) {
@@ -351,6 +447,7 @@ const planSlice = createSlice({
       );
       if (idx >= 0) {
         state.plans[idx] = action.payload;
+        syncPlanHierarchyCache(state);
       }
     },
     resetPlan() {
@@ -378,6 +475,7 @@ const planSlice = createSlice({
       // createPlan
       .addCase(createPlan.fulfilled, (state, action) => {
         state.plans.push(action.payload);
+        syncPlanHierarchyCache(state);
       })
       // fetchPlans
       .addCase(fetchPlans.pending, (state, action) => {
@@ -391,6 +489,7 @@ const planSlice = createSlice({
       .addCase(fetchPlans.fulfilled, (state, action) => {
         state.plans = action.payload.plans;
         state.dependencyGraph = action.payload.dependencyGraph;
+        syncPlanHierarchyCache(state);
         state.loading = false;
         state.backgroundError = null;
         state[PLANS_IN_FLIGHT_KEY] = Math.max(0, (state[PLANS_IN_FLIGHT_KEY] ?? 1) - 1);
@@ -441,6 +540,7 @@ const planSlice = createSlice({
         }
         if (action.payload.status === "created") {
           state.plans.push(action.payload.plan);
+          syncPlanHierarchyCache(state);
         }
       })
       .addCase(generatePlan.rejected, (state, action) => {
@@ -482,6 +582,7 @@ const planSlice = createSlice({
         const plan = action.payload;
         const idx = state.plans.findIndex((p) => p.metadata.planId === plan.metadata.planId);
         if (idx >= 0) state.plans[idx] = plan;
+        syncPlanHierarchyCache(state);
       })
       .addCase(generateTasksForPlan.rejected, (state, action) => {
         state.planTasksPlanIds = state.planTasksPlanIds.filter(
@@ -536,8 +637,40 @@ const planSlice = createSlice({
         if (idx >= 0) {
           state.plans[idx] = action.payload;
         }
+        syncPlanHierarchyCache(state);
       })
       .addCase(planTasks.rejected, (state, action) => {
+        state.planTasksPlanIds = state.planTasksPlanIds.filter(
+          (id) => id !== action.meta.arg.planId
+        );
+        if (!isNotificationManagedAgentFailure(action.error)) {
+          state.executeError = {
+            planId: action.meta.arg.planId,
+            message: action.error.message || "Failed to generate tasks",
+          };
+        }
+      })
+      // planTasksForSubtree
+      .addCase(planTasksForSubtree.pending, (state, action) => {
+        if (!state.planTasksPlanIds.includes(action.meta.arg.planId)) {
+          state.planTasksPlanIds.push(action.meta.arg.planId);
+        }
+        state.error = null;
+      })
+      .addCase(planTasksForSubtree.fulfilled, (state, action) => {
+        const rootId = action.meta.arg.planId;
+        state.planTasksPlanIds = state.planTasksPlanIds.filter((id) => id !== rootId);
+        if (state.executeError?.planId === rootId) {
+          state.executeError = null;
+        }
+        for (const plan of action.payload.updatedPlans) {
+          const idx = state.plans.findIndex((p) => p.metadata.planId === plan.metadata.planId);
+          if (idx >= 0) state.plans[idx] = plan;
+          else state.plans.push(plan);
+        }
+        syncPlanHierarchyCache(state);
+      })
+      .addCase(planTasksForSubtree.rejected, (state, action) => {
         state.planTasksPlanIds = state.planTasksPlanIds.filter(
           (id) => id !== action.meta.arg.planId
         );
@@ -626,6 +759,7 @@ const planSlice = createSlice({
         );
         if (idx >= 0) {
           state.plans[idx] = action.payload;
+          syncPlanHierarchyCache(state);
         }
       })
       // updatePlan
@@ -635,6 +769,7 @@ const planSlice = createSlice({
         );
         if (idx >= 0) {
           state.plans[idx] = action.payload;
+          syncPlanHierarchyCache(state);
         }
       });
   },

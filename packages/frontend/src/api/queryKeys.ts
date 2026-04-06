@@ -31,6 +31,8 @@ export const queryKeys = {
     decompose: (projectId: string) => ["plans", projectId, "decompose"] as const,
     status: (projectId: string) => ["plans", projectId, "status"] as const,
     detail: (projectId: string, planId: string) => ["plans", projectId, planId] as const,
+    hierarchy: (projectId: string, planId: string) =>
+      ["plans", projectId, planId, "hierarchy"] as const,
     versions: (projectId: string, planId: string) =>
       ["plans", projectId, planId, "versions"] as const,
     version: (projectId: string, planId: string, versionNumber: number) =>

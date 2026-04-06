@@ -34,6 +34,7 @@ import {
 } from "./plan-versioning.service.js";
 import { syncPlanTasksFromContent } from "./plan-task-sync.service.js";
 import { ProjectService } from "./project.service.js";
+import type { PlanGetResult, PlanListAllRow } from "./plan-store.service.js";
 import { planComplexityToTask } from "./plan-complexity.js";
 import type { StoredTask } from "./task-store.service.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -46,18 +47,9 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("plan-crud");
 
 export interface PlanCrudStore extends PlanVersioningStore {
-  planGet(
-    projectId: string,
-    planId: string
-  ): Promise<{
-    content: string;
-    metadata: Record<string, unknown>;
-    updated_at: string;
-    current_version_number?: number;
-    last_executed_version_number?: number | null;
-    parent_plan_id?: string | null;
-  } | null>;
+  planGet(projectId: string, planId: string): Promise<PlanGetResult | null>;
   planListIds(projectId: string): Promise<string[]>;
+  planListAllForProject(projectId: string): Promise<PlanListAllRow[]>;
   planListByParent(projectId: string, parentPlanId: string): Promise<string[]>;
   listAll(projectId: string): Promise<StoredTask[]>;
   show(projectId: string, taskId: string): Promise<StoredTask>;
@@ -199,10 +191,37 @@ export class PlanCrudService {
     return buildDependencyEdgesCore(planInfos, allIssues);
   }
 
-  /** Get a single Plan by ID. Optionally pass allIssues/edges/plansMap to avoid redundant store calls. */
-  async getPlan(
+  private static hierarchyMapsFromPlanListRows(rows: PlanListAllRow[]): {
+    plansMap: Map<string, { parentPlanId?: string }>;
+    childPlanIdsMap: Map<string, string[]>;
+  } {
+    const plansMap = new Map<string, { parentPlanId?: string }>();
+    for (const r of rows) {
+      const parentPlanId = r.parent_plan_id ?? (r.metadata.parentPlanId as string) ?? undefined;
+      plansMap.set(r.plan_id, { parentPlanId: parentPlanId || undefined });
+    }
+    const treeEntries = Array.from(plansMap.entries()).map(([planId, v]) => ({
+      planId,
+      parentPlanId: v.parentPlanId,
+    }));
+    const tree = buildPlanTree(treeEntries);
+    const childPlanIdsMap = new Map<string, string[]>();
+    for (const [parentKey, children] of tree) {
+      if (parentKey) {
+        childPlanIdsMap.set(
+          parentKey,
+          children.map((c) => c.planId)
+        );
+      }
+    }
+    return { plansMap, childPlanIdsMap };
+  }
+
+  /** Build a {@link Plan} DTO from a persisted row (no planGet). */
+  private async materializePlanFromStoreRow(
     projectId: string,
     planId: string,
+    row: PlanGetResult,
     opts?: {
       allIssues?: StoredTask[];
       edges?: PlanDependencyEdge[];
@@ -210,10 +229,6 @@ export class PlanCrudService {
       childPlanIdsMap?: Map<string, string[]>;
     }
   ): Promise<Plan> {
-    const row = await this.taskStore.planGet(projectId, planId);
-    if (!row) {
-      throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${planId}' not found`, { planId });
-    }
     const content = row.content;
     const lastModified = row.updated_at;
     const parentPlanId = row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
@@ -310,6 +325,24 @@ export class PlanCrudService {
     };
   }
 
+  /** Get a single Plan by ID. Optionally pass allIssues/edges/plansMap to avoid redundant store calls. */
+  async getPlan(
+    projectId: string,
+    planId: string,
+    opts?: {
+      allIssues?: StoredTask[];
+      edges?: PlanDependencyEdge[];
+      plansMap?: Map<string, { parentPlanId?: string }>;
+      childPlanIdsMap?: Map<string, string[]>;
+    }
+  ): Promise<Plan> {
+    const row = await this.taskStore.planGet(projectId, planId);
+    if (!row) {
+      throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${planId}' not found`, { planId });
+    }
+    return this.materializePlanFromStoreRow(projectId, planId, row, opts);
+  }
+
   async ensurePlanHasAtLeastOneVersion(projectId: string, planId: string): Promise<void> {
     await ensurePlanHasAtLeastOneVersionFn(projectId, planId, this.taskStore);
   }
@@ -322,29 +355,8 @@ export class PlanCrudService {
     plansMap: Map<string, { parentPlanId?: string }>;
     childPlanIdsMap: Map<string, string[]>;
   }> {
-    const planIds = await this.taskStore.planListIds(projectId);
-    const plansMap = new Map<string, { parentPlanId?: string }>();
-    for (const pid of planIds) {
-      const row = await this.taskStore.planGet(projectId, pid);
-      if (!row) continue;
-      const parentPlanId = row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? undefined;
-      plansMap.set(pid, { parentPlanId: parentPlanId || undefined });
-    }
-    const treeEntries = Array.from(plansMap.entries()).map(([planId, v]) => ({
-      planId,
-      parentPlanId: v.parentPlanId,
-    }));
-    const tree = buildPlanTree(treeEntries);
-    const childPlanIdsMap = new Map<string, string[]>();
-    for (const [parentKey, children] of tree) {
-      if (parentKey) {
-        childPlanIdsMap.set(
-          parentKey,
-          children.map((c) => c.planId)
-        );
-      }
-    }
-    return { plansMap, childPlanIdsMap };
+    const rows = await this.taskStore.planListAllForProject(projectId);
+    return PlanCrudService.hierarchyMapsFromPlanListRows(rows);
   }
 
   /** List all Plans with dependency graph in one call. */
@@ -791,12 +803,39 @@ export class PlanCrudService {
     return plans;
   }
 
-  /** Recursively build the plan hierarchy tree starting from a root plan. */
+  /**
+   * Build the plan hierarchy tree for a root plan. Loads all plan rows for the project in one query
+   * plus one task list query, then assembles the tree in memory (no per-node plan fetches).
+   */
   async getPlanHierarchy(projectId: string, rootPlanId: string): Promise<PlanHierarchyNode> {
-    const { plansMap, childPlanIdsMap } = await this.buildHierarchyMaps(projectId);
+    const allRows = await this.taskStore.planListAllForProject(projectId);
+    const rowMap = new Map(allRows.map((r) => [r.plan_id, r]));
+    if (!rowMap.has(rootPlanId)) {
+      throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${rootPlanId}' not found`, {
+        planId: rootPlanId,
+      });
+    }
+
+    const allIssues = await this.taskStore.listAll(projectId);
+    const planInfos = allRows.map((r) => ({
+      planId: r.plan_id,
+      epicId: (r.metadata.epicId as string) ?? "",
+      content: r.content,
+    }));
+    const edges = buildDependencyEdgesCore(planInfos, allIssues);
+    const { plansMap, childPlanIdsMap } = PlanCrudService.hierarchyMapsFromPlanListRows(allRows);
 
     const buildNode = async (planId: string): Promise<PlanHierarchyNode> => {
-      const plan = await this.getPlan(projectId, planId, { plansMap, childPlanIdsMap });
+      const row = rowMap.get(planId);
+      if (!row) {
+        throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Plan '${planId}' not found`, { planId });
+      }
+      const plan = await this.materializePlanFromStoreRow(projectId, planId, row, {
+        allIssues,
+        edges,
+        plansMap,
+        childPlanIdsMap,
+      });
       const childIds = childPlanIdsMap.get(planId) ?? [];
       const children: PlanHierarchyNode[] = [];
       for (const childId of childIds) {

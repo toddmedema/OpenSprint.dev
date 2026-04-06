@@ -12,7 +12,7 @@ import {
   isNoRebaseInProgressError,
   shouldAttemptRebaseSkip,
 } from "../utils/git-error-classifier.js";
-import { runGit, gitNoHooksConfigPrefix } from "../utils/git-command.js";
+import { runGit, gitNoHooksConfigPrefix, gitListUnmergedPaths } from "../utils/git-command.js";
 import {
   ensureRepoHasInitialCommit,
   getOriginUrl,
@@ -65,6 +65,38 @@ export class RebaseConflictError extends Error {
   constructor(public readonly conflictedFiles: string[]) {
     super(`Rebase conflict in ${conflictedFiles.length} file(s): ${conflictedFiles.join(", ")}`);
     this.name = "RebaseConflictError";
+  }
+}
+
+/** Structured context when `rebase --continue` must not run or failed for a non-conflict reason. */
+export interface RebaseContinueDiagnostics {
+  cause: "preflight_unmerged" | "preflight_staged_markers" | "continue_failed";
+  /** Which rebase metadata dirs exist under the resolved git dir (e.g. `rebase-merge`). */
+  rebaseMetadataPresent: string[];
+  conflictedFiles: string[];
+  /** Truncated `git status --short` for task diagnostics. */
+  gitStatusShort?: string;
+  /** Git/command message when `rebase --continue` was attempted and failed. */
+  underlyingMessage?: string;
+}
+
+/**
+ * Thrown instead of a bare {@link CommandRunError} when automation should not treat the failure
+ * as a generic infra/git glitch (e.g. unmerged paths before continue, or continue failed oddly).
+ */
+export class RebaseContinueBlockedError extends Error {
+  constructor(
+    message: string,
+    public readonly diagnostics: RebaseContinueDiagnostics,
+    /** When set, merge coordination can attribute the failure to the correct stage. */
+    public readonly mergeFailureStage?:
+      | "rebase_before_merge"
+      | "merge_to_main"
+      | "push_rebase"
+      | "quality_gate"
+  ) {
+    super(message);
+    this.name = "RebaseContinueBlockedError";
   }
 }
 
@@ -799,12 +831,106 @@ export class BranchManager {
     }
   }
 
+  private async getStagedPathNames(repoPath: string): Promise<string[]> {
+    try {
+      const { stdout } = await this.gitExec(
+        repoPath,
+        ["diff", "--cached", "--name-only"],
+        { timeout: 10_000 }
+      );
+      return stdout.trim().split("\n").filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  private async collectRebaseContinueDiagnostics(
+    repoPath: string,
+    cause: RebaseContinueDiagnostics["cause"],
+    opts?: { underlyingMessage?: string }
+  ): Promise<RebaseContinueDiagnostics> {
+    const conflictedFiles = await this.getConflictedFiles(repoPath);
+    const rebaseMetadataPresent: string[] = [];
+    for (const dir of ["rebase-merge", "rebase-apply"] as const) {
+      try {
+        const metaPath = await this.resolveGitMetadataPath(repoPath, dir);
+        await fs.access(metaPath);
+        rebaseMetadataPresent.push(dir);
+      } catch {
+        // absent
+      }
+    }
+    let gitStatusShort: string | undefined;
+    try {
+      const { stdout } = await this.gitExec(repoPath, ["status", "--short"], { timeout: 10_000 });
+      const t = stdout.trim();
+      gitStatusShort = t.length > 2000 ? `${t.slice(0, 2000)}…` : t || undefined;
+    } catch {
+      // best-effort
+    }
+    return {
+      cause,
+      rebaseMetadataPresent,
+      conflictedFiles,
+      gitStatusShort,
+      underlyingMessage: opts?.underlyingMessage,
+    };
+  }
+
   /**
    * Stage all resolved files and continue an in-progress rebase.
    */
   async rebaseContinue(repoPath: string): Promise<void> {
     await this.gitExec(repoPath, ["add", "-A"]);
     await this.resetExcludedWipPaths(repoPath);
+    const unmergedPrefetch = await gitListUnmergedPaths({ cwd: repoPath, timeout: 10_000 });
+    if (unmergedPrefetch.length > 0) {
+      const diagnostics = await this.collectRebaseContinueDiagnostics(
+        repoPath,
+        "preflight_unmerged"
+      );
+      log.warn("rebaseContinue: skipping git rebase — unmerged paths remain after staging", {
+        repoPath,
+        unmerged: unmergedPrefetch,
+        rebaseMetadataPresent: diagnostics.rebaseMetadataPresent,
+      });
+      throw new RebaseContinueBlockedError(
+        `Rebase continue blocked (preflight): unmerged paths remain: ${unmergedPrefetch.join(", ")}`,
+        diagnostics
+      );
+    }
+
+    try {
+      await this.gitExec(repoPath, ["diff", "--cached", "--check"], { timeout: 10_000 });
+    } catch (checkErr) {
+      const stagedNames = await this.getStagedPathNames(repoPath);
+      const baseDiag = await this.collectRebaseContinueDiagnostics(
+        repoPath,
+        "preflight_staged_markers",
+        { underlyingMessage: getErrorText(checkErr).trim().slice(0, 500) || undefined }
+      );
+      const conflictedFiles =
+        stagedNames.length > 0 ? stagedNames : baseDiag.conflictedFiles;
+      const fileHint =
+        conflictedFiles.length > 0
+          ? conflictedFiles.join(", ")
+          : "(see git diff --cached --check output)";
+      const diagnostics: RebaseContinueDiagnostics = {
+        ...baseDiag,
+        cause: "preflight_staged_markers",
+        conflictedFiles,
+      };
+      log.warn("rebaseContinue: skipping git rebase — staged content still has conflict markers", {
+        repoPath,
+        stagedNames,
+        rebaseMetadataPresent: diagnostics.rebaseMetadataPresent,
+      });
+      throw new RebaseContinueBlockedError(
+        `Rebase continue blocked (preflight): conflict markers or whitespace errors in index (files: ${fileHint})`,
+        diagnostics
+      );
+    }
+
     const noHooks = getGitNoHooksPath();
     try {
       await this.gitExec(
@@ -847,10 +973,30 @@ export class BranchManager {
               throw new RebaseConflictError(conflictedAfterSkip);
             }
           }
-          throw skipErr;
+          const skipDiag = await this.collectRebaseContinueDiagnostics(repoPath, "continue_failed", {
+            underlyingMessage: getErrorText(skipErr).trim().slice(0, 500) || undefined,
+          });
+          log.warn("rebaseContinue: rebase --skip failed with no unmerged paths", {
+            repoPath,
+            diagnostics: skipDiag,
+          });
+          throw new RebaseContinueBlockedError(
+            `Rebase continue failed after skip: ${getErrorText(skipErr).trim().slice(0, 300) || "unknown error"}`,
+            skipDiag
+          );
         }
       }
-      throw err;
+      const diagnostics = await this.collectRebaseContinueDiagnostics(repoPath, "continue_failed", {
+        underlyingMessage: getErrorText(err).trim().slice(0, 500) || undefined,
+      });
+      log.warn("rebaseContinue: rebase --continue failed with no unmerged paths", {
+        repoPath,
+        diagnostics,
+      });
+      throw new RebaseContinueBlockedError(
+        `Rebase continue failed: ${getErrorText(err).trim().slice(0, 300) || "unknown error"}`,
+        diagnostics
+      );
     }
   }
 

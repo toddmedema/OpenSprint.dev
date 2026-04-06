@@ -14,7 +14,11 @@ import {
   isTaskWorktreeMergeGateArtifactCurrent,
   runMergeQualityGatesWithArtifact,
 } from "./merge-verification.service.js";
-import { RebaseConflictError, type BranchManager } from "./branch-manager.js";
+import {
+  RebaseConflictError,
+  RebaseContinueBlockedError,
+  type BranchManager,
+} from "./branch-manager.js";
 import type { StoredTask } from "./task-store.service.js";
 import { eventLogService } from "./event-log.service.js";
 import { createLogger } from "../utils/logger.js";
@@ -308,6 +312,36 @@ export async function ensureTaskWorktreeRebasedForMergeGates(
       } catch (continueErr) {
         if (continueErr instanceof RebaseConflictError) {
           rebaseConflict = continueErr;
+        } else if (continueErr instanceof RebaseContinueBlockedError) {
+          const d = continueErr.diagnostics;
+          if (
+            (d.cause === "preflight_unmerged" || d.cause === "preflight_staged_markers") &&
+            d.conflictedFiles.length > 0
+          ) {
+            log.info("merge.merger_rebase_continue_skipped_preflight", {
+              taskId: task.id,
+              branchName,
+              round,
+              conflictedFiles: d.conflictedFiles,
+              rebaseMetadataPresent: d.rebaseMetadataPresent,
+              context: "pre_validation",
+            });
+            rebaseConflict = new RebaseConflictError(d.conflictedFiles);
+          } else {
+            await host.branchManager.rebaseAbort(wtPath).catch((err: unknown) => {
+              log.warn("rebase abort failed", { err: err instanceof Error ? err.message : String(err) });
+            });
+            await host.failureHandler.handleTaskFailure(
+              projectId,
+              repoPath,
+              task,
+              branchName,
+              `Rebase onto ${baseBranch} before validation: ${continueErr.message}`,
+              null,
+              "merge_conflict"
+            );
+            return false;
+          }
         } else {
           const cf = await host.branchManager.getConflictedFiles(wtPath);
           if (cf.length > 0) {

@@ -40,6 +40,9 @@ export type PlanGetResult = {
   parent_plan_id: string | null;
 };
 
+/** One row per plan; same fields as {@link PlanGetResult} plus `plan_id` (bulk list query). */
+export type PlanListAllRow = PlanGetResult & { plan_id: string };
+
 export type PlanGetByEpicIdResult = {
   plan_id: string;
   content: string;
@@ -248,6 +251,60 @@ export class PlanStore {
       [projectId]
     );
     return rows.map((r) => r.plan_id as string);
+  }
+
+  /** All plan rows for a project in one query (for hierarchy / bulk in-memory assembly). */
+  async planListAllForProject(projectId: string): Promise<PlanListAllRow[]> {
+    const db = this.getDrizzle ? await this.getDrizzle() : null;
+    if (db) {
+      const rows = await db
+        .select({
+          planId: plansTable.planId,
+          content: plansTable.content,
+          metadata: plansTable.metadata,
+          shippedContent: plansTable.shippedContent,
+          updatedAt: plansTable.updatedAt,
+          currentVersionNumber: plansTable.currentVersionNumber,
+          lastExecutedVersionNumber: plansTable.lastExecutedVersionNumber,
+          parentPlanId: plansTable.parentPlanId,
+        })
+        .from(plansTable)
+        .where(eq(plansTable.projectId, projectId))
+        .orderBy(plansTable.updatedAt);
+      return rows.map((row) => ({
+        plan_id: row.planId ?? "",
+        content: row.content ?? "",
+        metadata: this.parseMetadata(row.metadata),
+        shipped_content: row.shippedContent ?? null,
+        updated_at: row.updatedAt ?? "",
+        current_version_number: row.currentVersionNumber ?? 1,
+        last_executed_version_number: row.lastExecutedVersionNumber ?? null,
+        parent_plan_id: row.parentPlanId ?? null,
+      }));
+    }
+    const client = this.getClient();
+    const rows = await client.query(
+      toPgParams(
+        `SELECT plan_id, content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number, parent_plan_id
+         FROM plans WHERE project_id = ? ORDER BY updated_at ASC`
+      ),
+      [projectId]
+    );
+    return rows.map((r) => {
+      const metadata = this.parseMetadata(r.metadata);
+      return {
+        plan_id: r.plan_id as string,
+        content: (r.content as string) ?? "",
+        metadata,
+        shipped_content: (r.shipped_content as string) ?? null,
+        updated_at: (r.updated_at as string) ?? "",
+        current_version_number:
+          r.current_version_number != null ? Number(r.current_version_number) : 1,
+        last_executed_version_number:
+          r.last_executed_version_number != null ? Number(r.last_executed_version_number) : null,
+        parent_plan_id: (r.parent_plan_id as string) ?? null,
+      };
+    });
   }
 
   async planUpdateContent(

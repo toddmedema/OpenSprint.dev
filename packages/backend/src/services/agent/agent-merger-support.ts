@@ -125,7 +125,11 @@ ${repairSection}## Your Task
 1. Resolve every unmerged file and stage the resolved files.
 2. Prefer preserving both sides when they are compatible.
 3. Keep the branch compatible with the required quality gates above.
-4. Verify there are no remaining conflict markers or unmerged paths.
+4. **Before you exit successfully, explicitly verify resolution** (run these locally and fix until clean):
+   - \`git diff --name-only --diff-filter=U\` must print **nothing** (no unmerged paths).
+   - \`git status --short\` must show **no** unmerged states (\`UU\`, \`AA\`, \`DD\`, etc.).
+   - \`git diff --check\` and \`git diff --cached --check\` must pass (no conflict markers in the working tree or index).
+   Open Sprint stages with \`git add -A\` before \`rebase --continue\`; it **skips** continue when unmerged paths remain or when \`git diff --cached --check\` reports leftover markers, so another merger round runs instead of a bare git failure.
 5. Write your result to \`${resultPath}\` using this exact JSON format:
    \`\`\`json
    { "status": "success", "summary": "Brief description of how you resolved the conflicts" }
@@ -154,10 +158,10 @@ ${repairSection}## Your Task
 
 ## Rules
 
-- Do NOT run \`git rebase --continue\`, \`git commit\`, or \`git merge --continue\`.
+- Do NOT run \`git rebase --continue\`, \`git commit\`, or \`git merge --continue\` — the orchestrator continues the rebase/merge after you exit 0.
 - Resolve conflicts by editing files; do not delete files unless that is clearly correct.
 - Do NOT run destructive cleanup commands such as \`rm -rf\`, \`find ... -delete\`, or \`git clean -fdx\`.
-- Run \`git diff --check\` before exiting.
+- Run \`git diff --check\` and the unmerged-path checks above before exiting; do not rely on guesswork.
 - If post-resolution quality gates fail, diagnose the root cause from their output. Fix dependency drift, missing installs, or config issues directly. Re-run the failing gate to verify before reporting.
 - Exit with code 0 only when all conflicted files are resolved and staged.
 - Exit non-zero if you cannot produce a correct resolution.

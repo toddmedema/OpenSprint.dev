@@ -66,6 +66,20 @@ const mockPlanListIds = vi.fn().mockImplementation(async (projectId: string) => 
   const proj = mockPlanStore.get(projectId);
   return proj ? Array.from(proj.keys()) : [];
 });
+const mockPlanListAllForProject = vi.fn().mockImplementation(async (projectId: string) => {
+  const proj = mockPlanStore.get(projectId);
+  if (!proj) return [];
+  return Array.from(proj.entries()).map(([planId, row]) => ({
+    plan_id: planId,
+    content: row.content,
+    metadata: row.metadata,
+    shipped_content: row.shipped_content,
+    updated_at: row.updated_at,
+    current_version_number: row.current_version_number,
+    last_executed_version_number: row.last_executed_version_number,
+    parent_plan_id: null as string | null,
+  }));
+});
 const mockPlanVersionsStore = new Map<
   string,
   Map<string, Array<{ version_number: number; content: string; title: string | null }>>
@@ -367,6 +381,7 @@ vi.mock("../services/task-store.service.js", () => {
     planGet: (...args: unknown[]) => mockPlanGet(...args),
     planGetByEpicId: (...args: unknown[]) => mockPlanGetByEpicId(...args),
     planListIds: (...args: unknown[]) => mockPlanListIds(...args),
+    planListAllForProject: (...args: unknown[]) => mockPlanListAllForProject(...args),
     planUpdateContent: (...args: unknown[]) => mockPlanUpdateContent(...args),
     listPlanVersions: (...args: unknown[]) => mockListPlanVersions(...args),
     planVersionInsert: (...args: unknown[]) => mockPlanVersionInsert(...args),

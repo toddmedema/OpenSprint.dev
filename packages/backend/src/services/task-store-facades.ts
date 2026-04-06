@@ -1,4 +1,4 @@
-import { PlanStore, type PlanInsertData } from "./plan-store.service.js";
+import { PlanStore, type PlanInsertData, type PlanListAllRow } from "./plan-store.service.js";
 import {
   PlanVersionStore,
   type PlanVersionInsert,
@@ -76,6 +76,11 @@ export class TaskStorePlanAuditorSIFacade {
   async planListIds(projectId: string): Promise<string[]> {
     await this.deps.ensureInitialized();
     return this.deps.planStore.planListIds(projectId);
+  }
+
+  async planListAllForProject(projectId: string): Promise<PlanListAllRow[]> {
+    await this.deps.ensureInitialized();
+    return this.deps.planStore.planListAllForProject(projectId);
   }
 
   async planUpdateContent(

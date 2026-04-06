@@ -4,6 +4,7 @@ import type {
   PlanDependencyEdge,
   CrossEpicDependenciesResponse,
   GeneratePlanResult,
+  PlanHierarchyResponse,
 } from "@opensprint/shared";
 import {
   getCodebaseContextFromRepo,
@@ -155,6 +156,12 @@ export class PlanService {
     opts?: { allIssues?: StoredTask[]; edges?: import("@opensprint/shared").PlanDependencyEdge[] }
   ): Promise<Plan> {
     return this.planCrudService.getPlan(projectId, planId, opts);
+  }
+
+  /** Plan tree for a root plan (single bulk plan load + task list; assembled in memory). */
+  async getPlanHierarchy(projectId: string, planId: string): Promise<PlanHierarchyResponse> {
+    const root = await this.planCrudService.getPlanHierarchy(projectId, planId);
+    return { root };
   }
 
   /** Ensure the plan has at least one version. */

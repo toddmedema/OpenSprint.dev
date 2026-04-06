@@ -46,6 +46,21 @@ vi.mock("../services/branch-manager.js", () => {
       this.name = "MergeConflictError";
     }
   }
+  class RebaseContinueBlockedError extends Error {
+    constructor(
+      message: string,
+      public readonly diagnostics: {
+        cause: "preflight_unmerged" | "preflight_staged_markers" | "continue_failed";
+        rebaseMetadataPresent: string[];
+        conflictedFiles: string[];
+        gitStatusShort?: string;
+        underlyingMessage?: string;
+      }
+    ) {
+      super(message);
+      this.name = "RebaseContinueBlockedError";
+    }
+  }
   return {
     BranchManager: vi.fn().mockImplementation(() => ({
       syncMainWithOrigin: (...args: unknown[]) => mockSyncMainWithOrigin(...args),
@@ -69,6 +84,7 @@ vi.mock("../services/branch-manager.js", () => {
       withRepoRootAutoStash: (...args: unknown[]) => mockWithRepoRootAutoStash(...args),
     })),
     RebaseConflictError,
+    RebaseContinueBlockedError,
     MergeConflictError,
   };
 });

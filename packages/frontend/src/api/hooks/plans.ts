@@ -52,6 +52,18 @@ export function useSinglePlan(
   });
 }
 
+export function usePlanHierarchy(
+  projectId: string | undefined,
+  planId: string | undefined,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: queryKeys.plans.hierarchy(projectId ?? "", planId ?? ""),
+    queryFn: () => api.plans.getHierarchy(projectId!, planId!),
+    enabled: Boolean(projectId) && Boolean(planId) && options?.enabled !== false,
+  });
+}
+
 export function usePlanVersions(
   projectId: string | undefined,
   planId: string | undefined,

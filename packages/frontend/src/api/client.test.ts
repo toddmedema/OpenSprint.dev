@@ -342,12 +342,21 @@ describe("api client", () => {
       const mockGraph = {
         plans: [
           {
-            metadata: { planId: "p1", epicId: "e1", shippedAt: null, complexity: "medium" },
+            metadata: {
+              planId: "p1",
+              epicId: "e1",
+              shippedAt: null,
+              complexity: "medium",
+              parentPlanId: "parent-p1",
+              depth: 2,
+            },
             content: "# Plan",
             status: "in_review",
             taskCount: 2,
             doneTaskCount: 2,
             dependencyCount: 0,
+            depth: 1,
+            childPlanIds: ["child-a", "child-b"],
           },
         ],
         edges: [],
@@ -362,6 +371,73 @@ describe("api client", () => {
       expect(result).toEqual(mockGraph);
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/projects/proj-1/plans"),
+        expect.any(Object)
+      );
+    });
+
+    it("get calls GET /projects/:projectId/plans/:planId and returns plan including hierarchy fields", async () => {
+      const plan = {
+        metadata: {
+          planId: "p1",
+          epicId: "e1",
+          shippedAt: null,
+          complexity: "medium" as const,
+          parentPlanId: "root-1",
+          depth: 2,
+        },
+        content: "# Plan",
+        status: "planning" as const,
+        taskCount: 0,
+        doneTaskCount: 0,
+        dependencyCount: 0,
+        depth: 1,
+        childPlanIds: ["c1"],
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: plan }),
+      } as Response);
+
+      const result = await api.plans.get("proj-1", "p1");
+      expect(result).toEqual(plan);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/plans/p1"),
+        expect.any(Object)
+      );
+    });
+
+    it("getHierarchy calls GET /projects/:projectId/plans/:planId/hierarchy", async () => {
+      const hierarchy = {
+        root: {
+          planId: "p1",
+          epicId: "e1",
+          depth: 1,
+          status: "planning" as const,
+          taskCount: 0,
+          children: [
+            {
+              planId: "c1",
+              epicId: "e2",
+              parentPlanId: "p1",
+              depth: 2,
+              status: "planning" as const,
+              taskCount: 0,
+              children: [],
+            },
+          ],
+        },
+      };
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: hierarchy }),
+      } as Response);
+
+      const result = await api.plans.getHierarchy("proj-1", "p1");
+      expect(result).toEqual(hierarchy);
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/projects/proj-1/plans/p1/hierarchy"),
         expect.any(Object)
       );
     });

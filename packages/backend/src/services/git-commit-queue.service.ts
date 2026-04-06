@@ -7,7 +7,13 @@
 
 import { resolveTestCommand, type AgentConfig, type ToolchainProfile } from "@opensprint/shared";
 import { taskStore as taskStoreSingleton } from "./task-store.service.js";
-import { BranchManager, MergeConflictError, RebaseConflictError } from "./branch-manager.js";
+import {
+  BranchManager,
+  MergeConflictError,
+  RebaseConflictError,
+  RebaseContinueBlockedError,
+  type RebaseContinueDiagnostics,
+} from "./branch-manager.js";
 import { ProjectService } from "./project.service.js";
 import { agentService } from "./agent.service.js";
 import {
@@ -59,7 +65,8 @@ export class MergeJobError extends Error {
       signal?: string | null;
       classificationConfidence?: "high" | "low";
       classificationReason?: string;
-    }
+    },
+    public readonly rebaseContinueDiagnostics?: RebaseContinueDiagnostics
   ) {
     super(message);
     this.name = "MergeJobError";
@@ -333,6 +340,7 @@ class GitCommitQueueImpl implements GitCommitQueueService {
             err instanceof MergeConflictError ||
             err instanceof RepoConflictError ||
             err instanceof RebaseConflictError ||
+            err instanceof RebaseContinueBlockedError ||
             err instanceof MergeJobError
           ) {
             item.reject?.(err);
@@ -497,6 +505,32 @@ class GitCommitQueueImpl implements GitCommitQueueService {
               } catch (continueErr) {
                 if (continueErr instanceof RebaseConflictError) {
                   rebaseConflict = continueErr;
+                } else if (continueErr instanceof RebaseContinueBlockedError) {
+                  const files = continueErr.diagnostics.conflictedFiles;
+                  if (
+                    (continueErr.diagnostics.cause === "preflight_unmerged" ||
+                      continueErr.diagnostics.cause === "preflight_staged_markers") &&
+                    files.length > 0
+                  ) {
+                    log.info("merge.merger_rebase_continue_skipped_preflight", {
+                      taskId: job.taskId,
+                      branchName: job.branchName,
+                      round,
+                      conflictedFiles: files,
+                      rebaseMetadataPresent: continueErr.diagnostics.rebaseMetadataPresent,
+                    });
+                    rebaseConflict = new RebaseConflictError(files);
+                  } else {
+                    await this.branchManager.rebaseAbort(rebaseWorktreePath);
+                    throw new MergeJobError(
+                      continueErr.message,
+                      "rebase_before_merge",
+                      files,
+                      "requeued",
+                      undefined,
+                      continueErr.diagnostics
+                    );
+                  }
                 } else {
                   const conflictedFiles =
                     await this.branchManager.getConflictedFiles(rebaseWorktreePath);

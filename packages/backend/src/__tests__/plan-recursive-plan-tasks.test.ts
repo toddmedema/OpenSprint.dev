@@ -87,6 +87,18 @@ function createMockTaskStore() {
       };
     }),
     planListIds: vi.fn(async () => Array.from(plans.keys())),
+    planListAllForProject: vi.fn(async () =>
+      Array.from(plans.entries()).map(([planId, row]) => ({
+        plan_id: planId,
+        content: row.content,
+        metadata: row.metadata,
+        shipped_content: row.shipped_content,
+        updated_at: row.updated_at,
+        current_version_number: row.current_version_number,
+        last_executed_version_number: row.last_executed_version_number,
+        parent_plan_id: row.parent_plan_id,
+      }))
+    ),
     planListByParent: vi.fn(async (_projectId: string, parentPlanId: string) =>
       Array.from(plans.entries())
         .filter(([, row]) => row.parent_plan_id === parentPlanId)

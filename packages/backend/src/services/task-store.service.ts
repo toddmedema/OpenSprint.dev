@@ -12,7 +12,7 @@ import type { DbClient } from "../db/client.js";
 import { classifyDbConnectionError, isDbConnectionError } from "../db/db-errors.js";
 import type { AppDb, DrizzlePg } from "../db/app-db.js";
 import { initAppDb } from "../db/app-db.js";
-import { PlanStore, type PlanInsertData } from "./plan-store.service.js";
+import { PlanStore, type PlanInsertData, type PlanListAllRow } from "./plan-store.service.js";
 import {
   PlanVersionStore,
   type PlanVersionInsert,
@@ -1423,6 +1423,10 @@ export class TaskStoreService {
 
   async planListIds(projectId: string): Promise<string[]> {
     return this.planAuditorSIFacade.planListIds(projectId);
+  }
+
+  async planListAllForProject(projectId: string): Promise<PlanListAllRow[]> {
+    return this.planAuditorSIFacade.planListAllForProject(projectId);
   }
 
   async planListByParent(projectId: string, parentPlanId: string): Promise<string[]> {

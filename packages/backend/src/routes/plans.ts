@@ -30,6 +30,7 @@ import type {
   GeneratePlanResult,
   PlanExecuteBatchItem,
   PlanExecuteBatchStatus,
+  PlanHierarchyResponse,
 } from "@opensprint/shared";
 
 export function createPlansRouter(planService: PlanService): Router {
@@ -162,6 +163,17 @@ export function createPlansRouter(planService: PlanService): Router {
         req.params.planId
       );
       const body: ApiResponse<CrossEpicDependenciesResponse> = { data: result };
+      res.json(body);
+    })
+  );
+
+  // GET /projects/:projectId/plans/:planId/hierarchy — Sub-plan tree (bulk-loaded; 404 if plan missing)
+  router.get(
+    "/:planId/hierarchy",
+    validateParams(planIdParamSchema),
+    wrapAsync(async (req: Request<PlanParams>, res) => {
+      const data = await planService.getPlanHierarchy(req.params.projectId, req.params.planId);
+      const body: ApiResponse<PlanHierarchyResponse> = { data };
       res.json(body);
     })
   );
