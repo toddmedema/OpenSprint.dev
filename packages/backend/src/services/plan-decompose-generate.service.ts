@@ -14,7 +14,7 @@ import type {
   NotificationSource,
   ProjectSettings,
 } from "@opensprint/shared";
-import { getAgentForPlanningRole } from "@opensprint/shared";
+import { getAgentForPlanningRole, MAX_PLAN_DEPTH } from "@opensprint/shared";
 import {
   getEpicTitleFromPlanContent,
   normalizePlanSpec,
@@ -27,6 +27,7 @@ import {
 } from "./plan/planner-normalize.js";
 import {
   DECOMPOSE_SYSTEM_PROMPT,
+  buildMaxDepthTaskGenerationConsolidationInstruction,
   getPlanMarkdownSections,
   getPlanTemplateStructure,
 } from "./plan/plan-prompts.js";
@@ -391,6 +392,13 @@ export class PlanDecomposeGenerateService {
     if (subPlans.length === 0) return [];
 
     const parentDepth = parentPlan.metadata.depth ?? parentPlan.depth ?? 1;
+    if (parentDepth + 1 > MAX_PLAN_DEPTH) {
+      throw new AppError(
+        400,
+        ErrorCodes.PLAN_DEPTH_EXCEEDED,
+        "Cannot create sub-plans: maximum hierarchy depth of 4 reached"
+      );
+    }
     const childDepth = parentDepth + 1;
     const created: Plan[] = [];
 
@@ -437,7 +445,8 @@ export class PlanDecomposeGenerateService {
   async generateAndCreateTasks(
     projectId: string,
     repoPath: string,
-    plan: Plan
+    plan: Plan,
+    opts?: { extraUserPromptSuffix?: string }
   ): Promise<{
     count: number;
     taskRefs: Array<{ id: string; title: string }>;
@@ -456,6 +465,7 @@ export class PlanDecomposeGenerateService {
       hierarchyContext,
       ancestorChainSummary: hierarchyContext ? undefined : ancestorChainSummary,
       siblingPlanSummaries: hierarchyContext ? undefined : siblingPlanSummaries,
+      extraUserPromptSuffix: opts?.extraUserPromptSuffix,
       settings,
       taskStore: this.deps.taskStore,
     });
@@ -514,18 +524,21 @@ export class PlanDecomposeGenerateService {
     const ancestorChainSummary = await this.buildAncestorChainSummary(projectId, planWithEpic);
     const siblingPlanSummaries = await this.buildSiblingPlanSummaries(projectId, planWithEpic);
 
-    const decision = await evaluatePlanComplexity({
-      projectId,
-      repoPath,
-      planContent: planWithEpic.content,
-      prdContext,
-      currentDepth,
-      agentConfig,
-      planComplexity: planWithEpic.metadata.complexity,
-      planId: planWithEpic.metadata.planId,
-      ancestorChainSummary,
-      siblingPlanSummaries,
-    });
+    const atMaxDepth = currentDepth >= MAX_PLAN_DEPTH;
+    const decision = atMaxDepth
+      ? ({ strategy: "tasks" as const, tasks: [] })
+      : await evaluatePlanComplexity({
+          projectId,
+          repoPath,
+          planContent: planWithEpic.content,
+          prdContext,
+          currentDepth,
+          agentConfig,
+          planComplexity: planWithEpic.metadata.complexity,
+          planId: planWithEpic.metadata.planId,
+          ancestorChainSummary,
+          siblingPlanSummaries,
+        });
 
     if (decision.strategy === "sub_plans") {
       const sortResult = sortSubPlansTopologically(decision.subPlans);
@@ -609,7 +622,11 @@ export class PlanDecomposeGenerateService {
     let tasksGenerated = 0;
     let parseFailureReason: string | undefined;
     try {
-      const genResult = await this.generateAndCreateTasks(projectId, repoPath, planWithEpic);
+      const genResult = await this.generateAndCreateTasks(projectId, repoPath, planWithEpic, {
+        extraUserPromptSuffix: atMaxDepth
+          ? buildMaxDepthTaskGenerationConsolidationInstruction()
+          : undefined,
+      });
       tasksGenerated = genResult.count;
       parseFailureReason = genResult.parseFailureReason;
       if (tasksGenerated > 0) {

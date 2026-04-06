@@ -489,4 +489,56 @@ describe("PlanDecomposeGenerateService.planTasks recursive sub-plans", () => {
     );
     expect(taskCalls.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("at max plan depth (4) skips complexity gate and adds consolidation text to task generation", async () => {
+    const d1 = await crud.createPlan(PROJECT_ID, {
+      title: "L1 MaxDepth",
+      content: "# L1\n\n.",
+      complexity: "low",
+    });
+    const d2 = await crud.createPlan(PROJECT_ID, {
+      title: "L2 MaxDepth",
+      content: "# L2\n\n.",
+      parentPlanId: d1.metadata.planId,
+    });
+    const d3 = await crud.createPlan(PROJECT_ID, {
+      title: "L3 MaxDepth",
+      content: "# L3\n\n.",
+      parentPlanId: d2.metadata.planId,
+    });
+    const d4 = await crud.createPlan(PROJECT_ID, {
+      title: "L4 MaxDepth",
+      content: "# L4\n\nLeaf at max depth.",
+      parentPlanId: d3.metadata.planId,
+    });
+    expect(d4.metadata.depth).toBe(4);
+
+    mockEvaluatePlanComplexity.mockResolvedValue({
+      strategy: "sub_plans" as const,
+      subPlans: [
+        {
+          title: "Should Never Create",
+          overview: "x",
+          content: "## Technical\n\n.",
+          dependsOnPlans: [],
+        },
+      ],
+    });
+
+    const leafId = d4.metadata.planId;
+    const result = await decompose.planTasks(PROJECT_ID, leafId);
+
+    expect(mockEvaluatePlanComplexity).not.toHaveBeenCalled();
+    const taskCalls = mockInvokePlanningAgent.mock.calls.filter(
+      (c) => (c[0] as { tracking?: { label?: string; planId?: string } }).tracking?.label === "Task generation"
+    );
+    expect(taskCalls.length).toBeGreaterThanOrEqual(1);
+    const userContent = (
+      taskCalls[0]![0] as { messages?: Array<{ content?: string }> } | undefined
+    )?.messages?.[0]?.content;
+    expect(userContent).toContain("Maximum plan depth");
+    expect(result.hasGeneratedPlanTasksForCurrentVersion).toBe(true);
+    expect(result.totalTasksCreated).toBe(1);
+    expect(result.successPlanIds).toEqual([leafId]);
+  });
 });

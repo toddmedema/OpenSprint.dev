@@ -99,6 +99,8 @@ export interface PlanTaskGenerationDeps {
   ancestorChainSummary?: string;
   /** One line per sibling plan under the same parent (excludes this plan). */
   siblingPlanSummaries?: string;
+  /** Appended to the user message (e.g. max-depth consolidation). */
+  extraUserPromptSuffix?: string;
   settings: { aiAutonomyLevel?: string; hilConfig?: unknown };
   taskStore: {
     createMany(
@@ -192,6 +194,7 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     hierarchyContext,
     ancestorChainSummary,
     siblingPlanSummaries,
+    extraUserPromptSuffix,
     settings,
     taskStore,
   } = deps;
@@ -226,10 +229,12 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
   }
 
   const body = promptSections.join("\n\n");
+  const suffix = extraUserPromptSuffix?.trim();
   const prompt =
     (hierarchyBlock ? `${hierarchyBlock}\n\n` : "") +
     "Break down the following feature plan into implementation tasks.\n\n" +
-    body;
+    body +
+    (suffix ? `\n\n${suffix}` : "");
 
   const agentId = `plan-task-gen-${projectId}-${Date.now()}`;
 

@@ -43,6 +43,13 @@ describe("spa-content-security-policy", () => {
     expect(csp).not.toContain("upgrade-insecure-requests");
   });
 
+  it("buildSpaContentSecurityPolicyProduction embeds a desktop session nonce when provided", () => {
+    const csp = buildSpaContentSecurityPolicyProduction({
+      desktopSessionScriptNonce: "abc123",
+    });
+    expect(csp).toContain("script-src 'self' 'nonce-abc123'");
+  });
+
   it("buildSpaContentSecurityPolicyViteDevelopment allows eval and backend proxy targets", () => {
     const csp = buildSpaContentSecurityPolicyViteDevelopment();
     expect(csp).toContain("'unsafe-eval'");

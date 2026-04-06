@@ -12,7 +12,12 @@ import type {
   CrossEpicDependenciesResponse,
   PlanHierarchyNode,
 } from "@opensprint/shared";
-import { validatePlanContent, calculatePlanDepth, buildPlanTree } from "@opensprint/shared";
+import {
+  validatePlanContent,
+  calculatePlanDepth,
+  buildPlanTree,
+  MAX_PLAN_DEPTH,
+} from "@opensprint/shared";
 import { VALID_COMPLEXITIES } from "./plan/plan-prompts.js";
 import {
   normalizePlannerTask,
@@ -552,11 +557,39 @@ export class PlanCrudService {
       ? rawMockups.filter((m) => m && typeof m === "object" && m.title && m.content)
       : [];
     const parentPlanId = body.parentPlanId || undefined;
-    const rawDepth = body.depth ?? body.plan_depth;
-    const persistedDepth =
-      typeof rawDepth === "number" && Number.isFinite(rawDepth)
-        ? Math.max(1, Math.floor(rawDepth))
-        : undefined;
+
+    let persistedDepth: number | undefined;
+    if (parentPlanId) {
+      const parentRow = await this.taskStore.planGet(projectId, parentPlanId);
+      if (!parentRow) {
+        throw new AppError(404, ErrorCodes.PLAN_NOT_FOUND, `Parent plan '${parentPlanId}' not found`, {
+          parentPlanId,
+        });
+      }
+      const { plansMap } = await this.buildHierarchyMaps(projectId);
+      let parentDepth: number;
+      try {
+        parentDepth = calculatePlanDepth(parentPlanId, plansMap);
+      } catch {
+        throw new AppError(400, ErrorCodes.INVALID_INPUT, "Invalid plan hierarchy (cycle)", {
+          parentPlanId,
+        });
+      }
+      if (parentDepth >= MAX_PLAN_DEPTH) {
+        throw new AppError(
+          400,
+          ErrorCodes.PLAN_DEPTH_EXCEEDED,
+          "Cannot create sub-plans: maximum hierarchy depth of 4 reached"
+        );
+      }
+      persistedDepth = parentDepth + 1;
+    } else {
+      const rawDepth = body.depth ?? body.plan_depth;
+      persistedDepth =
+        typeof rawDepth === "number" && Number.isFinite(rawDepth)
+          ? Math.max(1, Math.floor(rawDepth))
+          : undefined;
+    }
     const metadata: PlanMetadata = {
       planId,
       epicId: epicId,

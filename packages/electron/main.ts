@@ -230,8 +230,9 @@ function fetchText(url: string, timeoutMs: number): Promise<string> {
 }
 
 /**
- * Resolves the local API Bearer token (desktop backend serves it without auth at
- * /__opensprint_local_session.js). Coalesces concurrent fetches.
+ * Resolves the local API Bearer token (desktop backend exposes a fallback script at
+ * `/__opensprint_local_session.js` for non-browser clients; the renderer gets the
+ * token inline in `index.html`). Coalesces concurrent fetches.
  */
 async function resolveDesktopLocalSessionToken(): Promise<string | null> {
   if (desktopLocalSessionToken) return desktopLocalSessionToken;
@@ -1363,9 +1364,18 @@ function setupSessionSecurity(): void {
       callback({ responseHeaders: details.responseHeaders });
       return;
     }
+    const incoming = details.responseHeaders ?? {};
+    const headers: Record<string, string | string[]> = { ...incoming };
+    const hasServerCsp = Object.keys(headers).some(
+      (k) => k.toLowerCase() === "content-security-policy"
+    );
+    if (hasServerCsp && details.url.startsWith(getBackendOrigin())) {
+      callback({ responseHeaders: headers });
+      return;
+    }
     callback({
       responseHeaders: {
-        ...details.responseHeaders,
+        ...headers,
         "Content-Security-Policy": [buildSpaContentSecurityPolicyProduction()],
       },
     });

@@ -73,7 +73,7 @@ describe("App", () => {
     expect(res.status).toBe(200);
   });
 
-  it("injects local session loader script into desktop SPA document responses", async () => {
+  it("injects nonce-guarded local session bootstrap into desktop SPA document responses", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-app-test-"));
     const indexPath = path.join(tmpDir, "index.html");
     await fs.writeFile(
@@ -90,14 +90,31 @@ describe("App", () => {
       const app = createApp();
       const res = await request(app).get("/");
       expect(res.status).toBe(200);
-      expect(res.headers["content-security-policy"]).toBe(buildSpaContentSecurityPolicyProduction());
-      expect(res.text).toContain('<script src="/__opensprint_local_session.js"></script>');
+      const nonceMatch = res.text.match(/<script nonce="([^"]+)">window\.__OPENSPRINT_LOCAL_SESSION__/);
+      expect(nonceMatch).toBeTruthy();
+      const nonce = nonceMatch![1];
+      expect(res.headers["content-security-policy"]).toBe(
+        buildSpaContentSecurityPolicyProduction({ desktopSessionScriptNonce: nonce })
+      );
+      expect(res.headers["cache-control"]).toMatch(/no-store/);
+      expect(res.text).toContain("window.__OPENSPRINT_LOCAL_SESSION__=");
+      expect(res.text).not.toContain("__opensprint_local_session.js");
 
       const tokenScriptRes = await request(app).get("/__opensprint_local_session.js");
       expect(tokenScriptRes.status).toBe(200);
       expect(tokenScriptRes.headers["content-type"]).toContain("application/javascript");
       expect(tokenScriptRes.headers["cache-control"]).toContain("no-store");
       expect(tokenScriptRes.text).toContain("window.__OPENSPRINT_LOCAL_SESSION__=");
+
+      const crossSite = await request(app)
+        .get("/__opensprint_local_session.js")
+        .set("Sec-Fetch-Site", "cross-site");
+      expect(crossSite.status).toBe(403);
+
+      const sameSite = await request(app)
+        .get("/__opensprint_local_session.js")
+        .set("Sec-Fetch-Site", "same-site");
+      expect(sameSite.status).toBe(403);
     } finally {
       if (prevDesktop === undefined) {
         delete process.env.OPENSPRINT_DESKTOP;

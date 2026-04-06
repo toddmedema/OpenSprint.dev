@@ -312,6 +312,42 @@ describe("PlanDecomposeGenerateService.createSubPlans", () => {
     expect(loadedB.metadata.depth).toBe(2);
   });
 
+  it("throws PLAN_DEPTH_EXCEEDED when parent is already at maximum depth", async () => {
+    const parent: Plan = {
+      metadata: {
+        planId: "depth-four-plan",
+        epicId: "os-epic-0",
+        shippedAt: null,
+        reviewedAt: null,
+        complexity: "high",
+        depth: 4,
+      },
+      content: "# Depth four\n\nBody.",
+      status: "planning",
+      taskCount: 0,
+      doneTaskCount: 0,
+      dependencyCount: 0,
+      lastModified: new Date().toISOString(),
+      currentVersionNumber: 1,
+      hasGeneratedPlanTasksForCurrentVersion: false,
+    };
+
+    const subPlans: NormalizedSubPlan[] = [
+      {
+        title: "Too Deep",
+        overview: "x",
+        content: "## Technical\n\n.",
+        dependsOnPlans: [],
+      },
+    ];
+
+    await expect(callCreateSubPlans(svc, PROJECT_ID, parent, subPlans)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "PLAN_DEPTH_EXCEEDED",
+      message: "Cannot create sub-plans: maximum hierarchy depth of 4 reached",
+    });
+  });
+
   it("injects a Dependencies section for depends_on_plans between sub-plans", async () => {
     const parent = await crud.createPlan(PROJECT_ID, {
       title: "Root",
@@ -375,13 +411,18 @@ describe("PlanDecomposeGenerateService.createSubPlans", () => {
     expect(broadcastToProject).not.toHaveBeenCalled();
   });
 
-  it("uses parent metadata depth + 1 when parent has persisted depth", async () => {
-    await crud.createPlan(PROJECT_ID, {
+  it("uses parent depth + 1 when parent is a real child in the hierarchy (persisted depth 2)", async () => {
+    const root = await crud.createPlan(PROJECT_ID, {
       title: "Root D",
       content: "# R\n\n.",
-      depth: 2,
     });
-    const parent = await crud.getPlan(PROJECT_ID, "root-d");
+    const mid = await crud.createPlan(PROJECT_ID, {
+      title: "Mid D",
+      content: "# Mid\n\n.",
+      parentPlanId: root.metadata.planId,
+    });
+    expect(mid.metadata.depth).toBe(2);
+    const parent = await crud.getPlan(PROJECT_ID, mid.metadata.planId);
 
     const subPlans: NormalizedSubPlan[] = [
       { title: "Deep Child", overview: "o", content: "## Work\n\nw", dependsOnPlans: [] },

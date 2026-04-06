@@ -19,6 +19,7 @@ describe("getErrorCodeHint", () => {
     expect(getErrorCodeHint("AGENT_INVOKE_FAILED")).toBe(
       "Check agent login or Project Settings → Agent Config."
     );
+    expect(getErrorCodeHint("PLAN_DEPTH_EXCEEDED")).toContain("four levels");
   });
 
   it("returns null for unknown code", () => {

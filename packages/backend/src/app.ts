@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs/promises";
-import express from "express";
+import { randomBytes } from "node:crypto";
+import express, { type Response } from "express";
 import { localhostCors } from "./middleware/cors.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { apiErrorNotificationMiddleware } from "./middleware/api-error-notification.js";
@@ -44,6 +45,7 @@ import {
   ensureLocalSessionToken,
 } from "./services/local-session-auth.service.js";
 import { buildSpaContentSecurityPolicyProduction } from "@opensprint/shared";
+import { allowDesktopLocalSessionScriptRequest } from "./desktop-local-session-guard.js";
 
 export function createApp(services?: AppServices) {
   ensureLocalSessionToken();
@@ -163,44 +165,57 @@ export function createApp(services?: AppServices) {
   if (process.env.OPENSPRINT_DESKTOP === "1") {
     const frontendDist = process.env.OPENSPRINT_FRONTEND_DIST;
     if (frontendDist) {
-      app.get("/__opensprint_local_session.js", (_req, res) => {
+      const sendDesktopSpaIndexHtml = async (res: Response) => {
+        const indexPath = path.join(frontendDist, "index.html");
+        const html = await fs.readFile(indexPath, "utf8");
+        const token = getLocalSessionToken();
+        const nonce = randomBytes(16).toString("base64url");
+        const spaCsp = buildSpaContentSecurityPolicyProduction({
+          desktopSessionScriptNonce: nonce,
+        });
+        const inject = `<script nonce="${nonce}">window.__OPENSPRINT_LOCAL_SESSION__=${JSON.stringify(token)};</script>`;
+        const body = html.includes("</head>")
+          ? html.replace("</head>", `${inject}</head>`)
+          : `${inject}${html}`;
+        res.setHeader("Content-Security-Policy", spaCsp);
+        res.setHeader("Cache-Control", "no-store");
+        res.type("html").send(body);
+      };
+
+      app.get("/__opensprint_local_session.js", (req, res) => {
+        if (!allowDesktopLocalSessionScriptRequest(req)) {
+          res.status(403).setHeader("Cache-Control", "no-store").type("text/plain").send("Forbidden");
+          return;
+        }
         const token = getLocalSessionToken();
         res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-        // Token is process-local and rotates on restart; avoid caching across launches.
         res.setHeader("Cache-Control", "no-store");
         res.send(`window.__OPENSPRINT_LOCAL_SESSION__=${JSON.stringify(token)};`);
       });
-      const spaCsp = buildSpaContentSecurityPolicyProduction();
-      // Disable implicit index.html serving so every SPA document request flows
-      // through the token-injection fallback below.
+
+      app.get("/", wrapAsync(async (_req, res) => sendDesktopSpaIndexHtml(res)));
+      app.get("/index.html", wrapAsync(async (_req, res) => sendDesktopSpaIndexHtml(res)));
+
       app.use(
         express.static(frontendDist, {
           index: false,
-          setHeaders(res, filePath) {
-            if (path.basename(filePath) === "index.html") {
-              res.setHeader("Content-Security-Policy", spaCsp);
-            }
-          },
         })
       );
-      app.get("*", async (req, res, next) => {
-        if (req.path.startsWith("/api/") || req.path.startsWith("/ws")) {
-          next();
-          return;
-        }
-        const indexPath = path.join(frontendDist, "index.html");
-        try {
-          const html = await fs.readFile(indexPath, "utf8");
-          const inject = '<script src="/__opensprint_local_session.js"></script>';
-          const body = html.includes("</head>")
-            ? html.replace("</head>", `${inject}</head>`)
-            : `${inject}${html}`;
-          res.setHeader("Content-Security-Policy", spaCsp);
-          res.type("html").send(body);
-        } catch (err) {
-          next(err);
-        }
-      });
+
+      app.get(
+        "*",
+        wrapAsync(async (req, res, next) => {
+          if (req.path.startsWith("/api/") || req.path.startsWith("/ws")) {
+            next();
+            return;
+          }
+          try {
+            await sendDesktopSpaIndexHtml(res);
+          } catch (err) {
+            next(err);
+          }
+        })
+      );
     }
   }
 

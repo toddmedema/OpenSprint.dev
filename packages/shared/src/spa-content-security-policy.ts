@@ -6,6 +6,15 @@
 export const SPA_INDEX_BOOT_INLINE_STYLE_SHA256 =
   "sha256-sIR4dCZFn3Uc0Xk0i4N73H1XXrjByqtiWZmZywW0T4k=";
 
+export type BuildSpaContentSecurityPolicyProductionOptions = {
+  /**
+   * Per-response nonce for the inline desktop local-session bootstrap script
+   * (injected into `index.html` when `OPENSPRINT_DESKTOP=1`). When set, `script-src`
+   * allows same-origin bundles plus that single inline script.
+   */
+  desktopSessionScriptNonce?: string;
+};
+
 /**
  * Strict baseline CSP for the Open Sprint SPA (desktop backend + Electron).
  *
@@ -13,16 +22,21 @@ export const SPA_INDEX_BOOT_INLINE_STYLE_SHA256 =
  * no broad `https:` script sources; `object-src` blocked; `frame-ancestors` denied.
  *
  * Production uses a hash for the single inline style block so `style-src` avoids
- * full `unsafe-inline`. Scripts are same-origin modules + `/theme-init.js` +
- * `/__opensprint_local_session.js` (desktop).
+ * full `unsafe-inline`. Scripts are same-origin modules (and, in desktop mode with
+ * `desktopSessionScriptNonce`, one nonce-guarded inline session bootstrap).
  */
-export function buildSpaContentSecurityPolicyProduction(): string {
+export function buildSpaContentSecurityPolicyProduction(
+  options?: BuildSpaContentSecurityPolicyProductionOptions
+): string {
+  const nonce = options?.desktopSessionScriptNonce?.trim();
+  const scriptSrc =
+    nonce && nonce.length > 0 ? `'self' 'nonce-${nonce}'` : "'self'";
   const directives: string[] = [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    "script-src 'self'",
+    `script-src ${scriptSrc}`,
     `style-src 'self' '${SPA_INDEX_BOOT_INLINE_STYLE_SHA256}' https://fonts.googleapis.com`,
     "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: blob:",

@@ -173,6 +173,56 @@ describe("PlanCrudService — hierarchy features", () => {
       const insertCall = (mockStore.store.planInsert as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(insertCall[2].parent_plan_id).toBeNull();
     });
+
+    it("sets child depth from parent chain and rejects a fifth level (depth 5)", async () => {
+      const d1 = await service.createPlan(PROJECT_ID, {
+        title: "L1 Depth",
+        content: "# L1\n\n.",
+      });
+      const d2 = await service.createPlan(PROJECT_ID, {
+        title: "L2 Depth",
+        content: "# L2\n\n.",
+        parentPlanId: d1.metadata.planId,
+      });
+      const d3 = await service.createPlan(PROJECT_ID, {
+        title: "L3 Depth",
+        content: "# L3\n\n.",
+        parentPlanId: d2.metadata.planId,
+      });
+      const d4 = await service.createPlan(PROJECT_ID, {
+        title: "L4 Depth",
+        content: "# L4\n\n.",
+        parentPlanId: d3.metadata.planId,
+      });
+      expect(d2.metadata.depth).toBe(2);
+      expect(d3.metadata.depth).toBe(3);
+      expect(d4.metadata.depth).toBe(4);
+
+      await expect(
+        service.createPlan(PROJECT_ID, {
+          title: "L5 Depth",
+          content: "# L5\n\n.",
+          parentPlanId: d4.metadata.planId,
+        })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: "PLAN_DEPTH_EXCEEDED",
+        message: "Cannot create sub-plans: maximum hierarchy depth of 4 reached",
+      });
+    });
+
+    it("returns 404 when parentPlanId does not exist", async () => {
+      await expect(
+        service.createPlan(PROJECT_ID, {
+          title: "Orphan",
+          content: "# Orphan\n\n.",
+          parentPlanId: "no-such-parent-plan",
+        })
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        code: "PLAN_NOT_FOUND",
+      });
+    });
   });
 
   describe("getPlan includes parentPlanId from row", () => {

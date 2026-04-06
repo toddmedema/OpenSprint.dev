@@ -2,7 +2,7 @@
  * System prompts and constants for plan-related agent flows (decompose, task gen, auto-review, complexity).
  */
 import type { PlanComplexity } from "@opensprint/shared";
-import { PLAN_MARKDOWN_SECTIONS } from "@opensprint/shared";
+import { MAX_PLAN_DEPTH, PLAN_MARKDOWN_SECTIONS } from "@opensprint/shared";
 
 const PLAN_TEMPLATE_STRUCTURE = PLAN_MARKDOWN_SECTIONS.join(", ");
 
@@ -129,7 +129,8 @@ export const COMPLEXITY_EVALUATION_SYSTEM_PROMPT = `Evaluate complexity (low|med
 
 export const VALID_COMPLEXITIES: PlanComplexity[] = ["low", "medium", "high", "very_high"];
 
-export const MAX_SUB_PLAN_DEPTH = 4;
+/** @deprecated Use MAX_PLAN_DEPTH from @opensprint/shared; kept for test imports. */
+export const MAX_SUB_PLAN_DEPTH = MAX_PLAN_DEPTH;
 const MIN_SUB_PLANS = 2;
 const MAX_SUB_PLANS = 8;
 
@@ -268,6 +269,16 @@ export function buildDepthExceededTaskRepairPrompt(currentDepth: number): string
     `The current plan depth is ${currentDepth}, which is the maximum (${MAX_SUB_PLAN_DEPTH}). ` +
     `You must NOT create sub-plans. Instead, consolidate the work into at most 15 direct tasks ` +
     `and return strategy "tasks". Return the same task JSON schema.`
+  );
+}
+
+/** Appended to task-generation user prompt when at max plan depth (skips complexity / sub-plan split). */
+export function buildMaxDepthTaskGenerationConsolidationInstruction(): string {
+  return (
+    `## Maximum plan depth\n\n` +
+    `This plan is at depth **${MAX_PLAN_DEPTH}**, the maximum allowed in the hierarchy (root = depth 1). ` +
+    `Do not assume further sub-plans — consolidate **all** remaining scope into **at most 15** implementation tasks in this single batch. ` +
+    `Merge related workstreams into broader tasks where needed; each task must still have one primary outcome, explicit acceptance criteria, and stable \`dependsOn\` titles.`
   );
 }
 

@@ -32,6 +32,8 @@ export const ErrorCodes = {
   /** Cannot cancel feedback once at least one linked task is done. */
   FEEDBACK_HAS_DONE_TASK: "FEEDBACK_HAS_DONE_TASK",
   DECOMPOSE_PARSE_FAILED: "DECOMPOSE_PARSE_FAILED",
+  /** Sub-plan hierarchy would exceed the maximum depth (4). */
+  PLAN_DEPTH_EXCEEDED: "PLAN_DEPTH_EXCEEDED",
   DECOMPOSE_JSON_INVALID: "DECOMPOSE_JSON_INVALID",
   DECOMPOSE_EMPTY: "DECOMPOSE_EMPTY",
   MIGRATION_REQUIRED: "MIGRATION_REQUIRED",

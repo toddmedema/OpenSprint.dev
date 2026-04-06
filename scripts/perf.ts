@@ -10,7 +10,8 @@
  * - Backend running on port 3100 (npm run dev:backend)
  * - Frontend running on port 5173 (npm run dev:frontend)
  * - If the API requires auth: set OPENSPRINT_LOCAL_SESSION to the backend token, or run the
- *   backend with OPENSPRINT_DESKTOP=1 so /__opensprint_local_session.js is available (same as Electron).
+ *   backend with OPENSPRINT_DESKTOP=1 and read the token from /__opensprint_local_session.js
+ *   (Node fetch omits Sec-Fetch-Site, same as Electron main; browsers cannot trivially scrape it cross-origin).
  * - Optional: at least one project with at least one task (for execute/sidebar metrics)
  *
  * Usage:

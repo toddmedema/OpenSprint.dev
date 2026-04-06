@@ -30,6 +30,8 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   NO_EPIC: "Plan has no epic. Use Generate Tasks to generate tasks first.",
   FEEDBACK_HAS_DONE_TASK: "Cannot cancel feedback once a linked task is done.",
   DECOMPOSE_PARSE_FAILED: "Plan decomposition failed; try regenerating tasks.",
+  PLAN_DEPTH_EXCEEDED:
+    "Plan hierarchy cannot go deeper than four levels. Consolidate work in the current plan or use task generation instead of another sub-plan.",
   DECOMPOSE_JSON_INVALID: "Invalid plan structure; try regenerating tasks.",
   DECOMPOSE_EMPTY: "Plan produced no tasks; try again or adjust the plan.",
   MIGRATION_REQUIRED: "Database migration is required. Restart the backend or run migrations.",

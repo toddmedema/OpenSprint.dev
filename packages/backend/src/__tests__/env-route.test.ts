@@ -82,43 +82,61 @@ function createMinimalEnvApp() {
 
 type EnvMinimalApp = ReturnType<typeof createMinimalEnvApp>;
 
-/**
- * GET `/env/global-status` with timeout and one retry on supertest "socket hang up".
- *
- * Regression: intermittent `socket hang up` / connection drops in this suite have caused
- * merge-gate failures (`npm run test`). Retrying once matches prior ad-hoc handling in
- * "useCustomCli reflects global settings".
- */
-async function getGlobalStatus(app: EnvMinimalApp) {
-  const url = `${API_PREFIX}/env/global-status`;
-  const doRequest = () => authedSupertest(app).get(url).timeout(10_000);
-  try {
-    return await doRequest();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/socket hang up/i.test(msg)) {
-      return await doRequest();
-    }
-    throw err;
-  }
+function isTransientSupertestTransportError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const code =
+    err && typeof err === "object" && "code" in err && typeof (err as { code: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : "";
+  return (
+    /socket hang up|ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|timeout|ECONNREFUSED/i.test(msg) ||
+    /socket hang up|ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|timeout|ECONNREFUSED/i.test(code)
+  );
 }
 
 /**
- * POST `/env/keys` with timeout and one retry on supertest "socket hang up".
+ * GET `/env/global-status` with timeout and limited retries on transient supertest transport errors.
+ *
+ * Regression: intermittent `socket hang up` / connection drops in this suite have caused
+ * merge-gate failures (`npm run test`). A single retry was insufficient under heavy parallel
+ * load; we retry a few times with the same 10s per-attempt cap.
+ */
+async function getGlobalStatus(app: EnvMinimalApp) {
+  const url = `${API_PREFIX}/env/global-status`;
+  const maxAttempts = 3;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await authedSupertest(app).get(url).timeout(10_000);
+    } catch (err: unknown) {
+      lastErr = err;
+      if (!isTransientSupertestTransportError(err) || attempt === maxAttempts - 1) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * POST `/env/keys` with timeout and limited retries on transient supertest transport errors.
  * Same flake class as `getGlobalStatus` when this suite runs in the full `npm run test` graph.
  */
 async function postEnvKeys(app: EnvMinimalApp, body: object) {
   const url = `${API_PREFIX}/env/keys`;
-  const doRequest = () => authedSupertest(app).post(url).send(body).timeout(10_000);
-  try {
-    return await doRequest();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/socket hang up/i.test(msg)) {
-      return await doRequest();
+  const maxAttempts = 3;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await authedSupertest(app).post(url).send(body).timeout(10_000);
+    } catch (err: unknown) {
+      lastErr = err;
+      if (!isTransientSupertestTransportError(err) || attempt === maxAttempts - 1) {
+        throw err;
+      }
     }
-    throw err;
   }
+  throw lastErr;
 }
 
 describe("Env API", () => {
