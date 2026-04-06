@@ -1,6 +1,7 @@
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
+import type { Plugin } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,6 +68,43 @@ export const integrationWorkers =
 /** Single source file for ESM imports that use the `.js` emit specifier (Node16). */
 const drizzleSchemaPgSource = path.resolve(__dirname, "src/db/drizzle-schema-pg.ts");
 
+function normalizeVitestModuleId(id: string): string {
+  const withoutQuery = id.split("?")[0] ?? id;
+  if (withoutQuery.startsWith("file:")) {
+    try {
+      return fileURLToPath(withoutQuery);
+    } catch {
+      return withoutQuery.replace(/\\/g, "/");
+    }
+  }
+  return withoutQuery.replace(/\\/g, "/");
+}
+
+/**
+ * Vitest/Vite sometimes surface Postgres schema imports as virtual `/src/db/drizzle-schema-pg.ts`
+ * (or `file:` URLs ending the same way) during coverage, merge gates, or certain graph orders.
+ * `resolve.alias` alone can miss query-suffixed ids or lose to another resolver — this hook pins
+ * the module to the on-disk TS source.
+ */
+export function createDrizzleSchemaPgResolvePlugin(): Plugin {
+  return {
+    name: "opensprint-drizzle-schema-pg",
+    enforce: "pre",
+    resolveId(id) {
+      const normalized = normalizeVitestModuleId(id);
+      if (
+        normalized === "/src/db/drizzle-schema-pg.ts" ||
+        normalized === "/src/db/drizzle-schema-pg.js" ||
+        normalized.endsWith("/src/db/drizzle-schema-pg.ts") ||
+        normalized.endsWith("/src/db/drizzle-schema-pg.js")
+      ) {
+        return drizzleSchemaPgSource;
+      }
+      return undefined;
+    },
+  };
+}
+
 export const backendUnitExclude = [
   ...backendIntegrationInclude,
   "**/git-working-mode-branches.integration.test.ts",
@@ -84,8 +122,8 @@ export const backendResolveConfig = {
       replacement: drizzleSchemaPgSource,
     },
     // Some transforms resolve an erroneous repo-root `/src/db/...` id during merge gates / coverage.
-    { find: /^\/src\/db\/drizzle-schema-pg\.ts$/, replacement: drizzleSchemaPgSource },
-    { find: /^\/src\/db\/drizzle-schema-pg\.js$/, replacement: drizzleSchemaPgSource },
+    { find: /^\/src\/db\/drizzle-schema-pg\.ts(\?.*)?$/, replacement: drizzleSchemaPgSource },
+    { find: /^\/src\/db\/drizzle-schema-pg\.js(\?.*)?$/, replacement: drizzleSchemaPgSource },
     { find: "@opensprint/shared/types", replacement: path.resolve(__dirname, "../shared/src/types/index.ts") },
     {
       find: "@opensprint/shared/constants",

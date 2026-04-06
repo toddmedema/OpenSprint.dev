@@ -1,6 +1,7 @@
 import { defineProject } from "vitest/config";
 import {
   backendCommonTestConfig,
+  createDrizzleSchemaPgResolvePlugin,
   backendResolveConfig,
   backendSsrConfig,
   backendTestInclude,
@@ -8,6 +9,7 @@ import {
 } from "./vitest.shared.js";
 
 export default defineProject({
+  plugins: [createDrizzleSchemaPgResolvePlugin()],
   resolve: backendResolveConfig,
   ssr: backendSsrConfig,
   test: {

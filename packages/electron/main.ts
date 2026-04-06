@@ -125,7 +125,7 @@ function getPaths(): {
     const resourcesPath = process.resourcesPath;
     return {
       backendDir: path.join(resourcesPath, "backend"),
-      backendEntry: path.join(resourcesPath, "backend", "dist", "services", "index.cjs"),
+      backendEntry: path.join(resourcesPath, "backend", "dist", "services", "index.mjs"),
       frontendDist: path.join(resourcesPath, "frontend"),
     };
   }

@@ -650,7 +650,7 @@ function writeRuntimeDiagnosticsManifest(backendOut, diagnostics) {
 async function bundleBackendRuntime(backendOut) {
   const esbuild = require("esbuild");
   const entryPoint = path.join(backendDir, "dist", "index.js");
-  const outFile = path.join(backendOut, "dist", "services", "index.cjs");
+  const outFile = path.join(backendOut, "dist", "services", "index.mjs");
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
 
   // Preserve docs path resolution in help-chat service by keeping bundle under dist/services.
@@ -662,7 +662,7 @@ async function bundleBackendRuntime(backendOut) {
     outfile: outFile,
     bundle: true,
     platform: "node",
-    format: "cjs",
+    format: "esm",
     target: ["node24"],
     minify: true,
     sourcemap: false,
