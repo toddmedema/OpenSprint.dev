@@ -1,3 +1,5 @@
+import { redactSecretsForUserDisplay } from "./secret-redaction.js";
+
 /**
  * Filters agent output for live stream and persisted log: show only user-facing
  * messages; drop tool-call, code-context, and internal callback noise.
@@ -185,7 +187,7 @@ export function createAgentOutputFilter(): AgentOutputFilter {
               results.push("\n");
               previousEmissionEndedWithNewline = true;
             }
-            results.push(content);
+            results.push(redactSecretsForUserDisplay(content));
             previousEmissionEndedWithNewline = /\n$/.test(content);
             previousEmissionWasDiscreteAssistantMessage = discreteAssistantMessage;
             previousLineWasThinkingDelta = thinkingDelta;
@@ -197,7 +199,7 @@ export function createAgentOutputFilter(): AgentOutputFilter {
           if (previousLineWasThinkingDelta) results.push("\n");
           previousLineWasThinkingDelta = false;
           previousEmissionWasDiscreteAssistantMessage = false;
-          results.push(line + "\n");
+          results.push(redactSecretsForUserDisplay(line) + "\n");
           previousEmissionEndedWithNewline = true;
         }
       }

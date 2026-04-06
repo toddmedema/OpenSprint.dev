@@ -164,6 +164,56 @@ Received: 200
     expect(getExecutedCommands(runCommand)).toEqual(["npm run test"]);
   });
 
+  it("redacts bearer tokens, sk- keys, and integration env assignments from gate failure output", async () => {
+    const worktreePath = await makeTempWorktree({ test: "vitest run" });
+    const jwt =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    const skLeak = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789AB";
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run test") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: `Command failed: npm run test | Authorization: Bearer ${jwt}`,
+            stderr: `FAIL src/x.test.ts
+Authorization: Bearer ${jwt}
+TODOIST_API_TOKEN=td-not-a-real-todoist-token
+invalid ${skLeak}
+`,
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-gate-redact",
+        branchName: "opensprint/os-gate-redact",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run test"],
+        runCommand,
+      }
+    );
+
+    expect(failure).toBeDefined();
+    const blob = `${failure!.reason}\n${failure!.output}\n${failure!.outputSnippet ?? ""}\n${failure!.firstErrorLine}`;
+    expect(blob).not.toContain(jwt);
+    expect(blob).not.toContain(skLeak);
+    expect(blob).not.toContain("td-not-a-real-todoist-token");
+    expect(blob).toMatch(/TODOIST_API_TOKEN=\[REDACTED\]/i);
+    expect(blob).toMatch(/Authorization:\s*\[REDACTED\]/i);
+    expect(getExecutedCommands(runCommand)).toEqual(["npm run test"]);
+  });
+
   it("ignores vitest stdout channel lines that embed structured INFO logs when extracting the first error", async () => {
     const worktreePath = await makeTempWorktree({ test: "vitest run" });
     const noisyStdoutLine =

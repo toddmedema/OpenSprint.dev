@@ -967,11 +967,11 @@ describe("OrchestratorService (slot-based model)", () => {
       );
 
       await orchestrator.ensureRunning(projectId);
-      await vi.waitFor(() => {
-        expect(mockWriteJsonAtomic).toHaveBeenCalled();
+      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
+      await vi.waitFor(async () => {
+        await expect(fs.readFile(assignmentPath, "utf-8")).resolves.toMatch(/\{/);
       });
 
-      const assignmentPath = path.join(wtPath, ".opensprint", "active", task.id, "assignment.json");
       const baseAssignment = JSON.parse(await fs.readFile(assignmentPath, "utf-8")) as Record<
         string,
         unknown

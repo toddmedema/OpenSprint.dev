@@ -20,6 +20,7 @@ import {
 import type { ToolchainProfile } from "@opensprint/shared";
 import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
 import { ValidationWorkspaceService } from "./validation-workspace.service.js";
+import { redactSecretsForUserDisplay } from "../utils/secret-redaction.js";
 
 const log = createLogger("merge-quality-gate-runner");
 const QUALITY_GATE_FAILURE_OUTPUT_LIMIT = 4000;
@@ -357,18 +358,22 @@ function buildFailure(params: {
   autoRepairOutput?: string;
 }): MergeQualityGateFailure {
   const output = (params.output ?? "").slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT);
-  const outputSnippet =
-    (params.outputSnippet ?? getRelevantOutputSnippet(output) ?? "").slice(0, 1800) || undefined;
-  const firstErrorLine =
+  const outputSnippetRaw =
+    (params.outputSnippet ?? getRelevantOutputSnippet(output) ?? "").slice(0, 1800) || "";
+  const outputSnippet = outputSnippetRaw
+    ? redactSecretsForUserDisplay(outputSnippetRaw).slice(0, 1800)
+    : undefined;
+  const firstErrorLineRaw =
     params.firstErrorLine?.trim() ||
-    getFirstMeaningfulErrorLine(outputSnippet) ||
+    getFirstMeaningfulErrorLine(outputSnippetRaw) ||
     getFirstMeaningfulErrorLine(output) ||
     getFirstNonEmptyLine(params.reason) ||
     "Unknown quality gate failure";
+  const firstErrorLine = redactSecretsForUserDisplay(firstErrorLineRaw);
   return {
     command: params.command,
-    reason: params.reason.slice(0, QUALITY_GATE_FAILURE_REASON_LIMIT),
-    output,
+    reason: redactSecretsForUserDisplay(params.reason).slice(0, QUALITY_GATE_FAILURE_REASON_LIMIT),
+    output: redactSecretsForUserDisplay(output),
     outputSnippet,
     worktreePath: params.worktreePath,
     firstErrorLine,
@@ -377,13 +382,49 @@ function buildFailure(params: {
     autoRepairAttempted: params.autoRepairAttempted ?? false,
     autoRepairSucceeded: params.autoRepairSucceeded ?? false,
     autoRepairCommands: params.autoRepairCommands ?? [],
-    autoRepairOutput: params.autoRepairOutput ?? "",
-    executable: params.executable?.trim() || undefined,
-    cwd: params.cwd?.trim() || undefined,
+    autoRepairOutput: redactSecretsForUserDisplay(
+      (params.autoRepairOutput ?? "").slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT)
+    ),
+    executable: params.executable?.trim()
+      ? redactSecretsForUserDisplay(params.executable.trim())
+      : undefined,
+    cwd: params.cwd?.trim() ? redactSecretsForUserDisplay(params.cwd.trim()) : undefined,
     exitCode: params.exitCode ?? undefined,
     signal: params.signal ?? undefined,
     classificationConfidence: params.classificationConfidence ?? "high",
-    classificationReason: params.classificationReason ?? undefined,
+    classificationReason: params.classificationReason
+      ? redactSecretsForUserDisplay(params.classificationReason)
+      : undefined,
+  };
+}
+
+/** Object literals that bypass buildFailure still need the same persisted diagnostic scrub. */
+function redactMergeQualityGateFailureSurface(failure: MergeQualityGateFailure): MergeQualityGateFailure {
+  return {
+    ...failure,
+    reason: redactSecretsForUserDisplay(failure.reason).slice(0, QUALITY_GATE_FAILURE_REASON_LIMIT),
+    output: redactSecretsForUserDisplay(failure.output).slice(0, QUALITY_GATE_FAILURE_OUTPUT_LIMIT),
+    outputSnippet:
+      failure.outputSnippet != null
+        ? redactSecretsForUserDisplay(failure.outputSnippet).slice(0, 1800)
+        : undefined,
+    firstErrorLine: failure.firstErrorLine
+      ? redactSecretsForUserDisplay(failure.firstErrorLine)
+      : failure.firstErrorLine,
+    autoRepairOutput:
+      failure.autoRepairOutput != null && failure.autoRepairOutput !== ""
+        ? redactSecretsForUserDisplay(failure.autoRepairOutput).slice(
+            0,
+            QUALITY_GATE_FAILURE_OUTPUT_LIMIT
+          )
+        : failure.autoRepairOutput,
+    classificationReason: failure.classificationReason
+      ? redactSecretsForUserDisplay(failure.classificationReason)
+      : failure.classificationReason,
+    executable: failure.executable
+      ? redactSecretsForUserDisplay(failure.executable)
+      : failure.executable,
+    cwd: failure.cwd ? redactSecretsForUserDisplay(failure.cwd) : failure.cwd,
   };
 }
 
@@ -1137,7 +1178,7 @@ export async function runMergeQualityGates(
       );
 
       if (!rebuildResult.rebuilt) {
-        return {
+        return redactMergeQualityGateFailureSurface({
           command: "(pre-gate integrity check)",
           reason: `Worktree integrity check failed and auto-rebuild unsuccessful: ${integrity.detail}${rebuildResult.error ? ` | rebuild error: ${rebuildResult.error}` : ""}`,
           output: "",
@@ -1146,7 +1187,7 @@ export async function runMergeQualityGates(
           category: "environment_setup",
           autoRepairAttempted: true,
           autoRepairSucceeded: false,
-        };
+        });
       }
 
       log.info("Worktree auto-rebuilt before quality gates", {
@@ -1173,7 +1214,7 @@ export async function runMergeQualityGates(
       worktreePath: normWt,
       errors: healthCheck.errors,
     });
-    return {
+    return redactMergeQualityGateFailureSurface({
       command: "workspace_health_check",
       reason: `Workspace not ready: ${healthCheck.errors.join("; ")}`,
       output: healthCheck.errors.join("\n"),
@@ -1182,7 +1223,7 @@ export async function runMergeQualityGates(
       category: "environment_setup",
       classificationConfidence: "high",
       classificationReason: "unified workspace health check failed before gate execution",
-    };
+    });
   }
 
   const runCommand = deps.runCommand ?? runCommandDefault;

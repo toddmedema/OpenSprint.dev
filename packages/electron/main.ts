@@ -1359,6 +1359,10 @@ function setupSessionSecurity(): void {
     callback(allowed.includes(permission));
   });
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    if (details.url.startsWith("data:")) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
     callback({
       responseHeaders: {
         ...details.responseHeaders,

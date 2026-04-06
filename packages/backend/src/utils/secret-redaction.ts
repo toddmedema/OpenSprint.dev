@@ -27,6 +27,15 @@ const SENSITIVE_ENV_ASSIGN = new RegExp(
   "g"
 );
 
+/**
+ * Integration / third-party sync env names (Conservative: substring match on name before `=`).
+ * Covers TODOIST_*, *INTEGRATION*, common OAuth client ids in env, without requiring KEY/TOKEN suffix.
+ */
+const INTEGRATION_ENV_ASSIGN = new RegExp(
+  String.raw`\b([A-Z][A-Z0-9_]*(?:INTEGRATION|TODOIST|OAUTH_CLIENT|CLIENT_SECRET)[A-Z0-9_]*)\s*=\s*\S+`,
+  "gi"
+);
+
 /** api_key=..., access_token=... in URLs or text */
 const QUERY_SECRET =
   /([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth|token|key))\s*=\s*[^&\s"'<>]+/gi;
@@ -66,6 +75,7 @@ export function redactSecretsForUserDisplay(text: string): string {
   s = s.replace(SK_GENERIC, REDACTED);
   s = s.replace(JWT_LIKE, REDACTED_JWT);
   s = s.replace(SENSITIVE_ENV_ASSIGN, `$1=${REDACTED}`);
+  s = s.replace(INTEGRATION_ENV_ASSIGN, `$1=${REDACTED}`);
   s = s.replace(QUERY_SECRET, `$1=${REDACTED}`);
   s = s.replace(GITHUB_PAT, REDACTED);
   s = s.replace(GITHUB_FINE, REDACTED);

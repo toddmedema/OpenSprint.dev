@@ -4,7 +4,7 @@
  * compiles to CommonJS; `@opensprint/shared` is ESM-only, so we duplicate here to
  * avoid `require`/`import` interop errors.
  */
-const SPA_INDEX_BOOT_INLINE_STYLE_SHA256 = "sha256-lcr+XcSCkIpPhhTJTzZ0zy4W3hnIOJgGGuqmcedRVls=";
+const SPA_INDEX_BOOT_INLINE_STYLE_SHA256 = "sha256-sIR4dCZFn3Uc0Xk0i4N73H1XXrjByqtiWZmZywW0T4k=";
 
 export function buildSpaContentSecurityPolicyProduction(): string {
   const directives: string[] = [

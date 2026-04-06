@@ -85,9 +85,25 @@ describe("agent-output-filter", () => {
       expect(filterAgentOutput("")).toBe("");
     });
 
-    it("passes through plain text unchanged", () => {
+    it("passes through plain diagnostic text unchanged when it has no credentials", () => {
       const raw = "Plain text output\nNo JSON here\n";
       expect(filterAgentOutput(raw)).toBe("Plain text output\nNo JSON here\n");
+    });
+
+    it("redacts secrets in plain-text lines", () => {
+      const raw = "curl -H 'Authorization: Bearer sk-not-real-key-012345678901234567890'\n";
+      const out = filterAgentOutput(raw);
+      expect(out).not.toMatch(/sk-not-real-key-012345678901234567890/);
+      expect(out).toMatch(/Authorization:\s*\[REDACTED\]/i);
+    });
+
+    it("redacts secrets inside extracted NDJSON text payloads", () => {
+      const jwt =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+      const raw = `${JSON.stringify({ type: "text", text: `token ${jwt}\n` })}\n`;
+      const out = filterAgentOutput(raw);
+      expect(out).not.toContain(jwt);
+      expect(out).toContain("[REDACTED_JWT]");
     });
 
     it("keeps one line break between assistant messages in full-pass mode", () => {

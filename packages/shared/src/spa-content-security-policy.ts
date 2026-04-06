@@ -4,7 +4,7 @@
  * update this constant — tests read the HTML file and fail when the hash drifts.
  */
 export const SPA_INDEX_BOOT_INLINE_STYLE_SHA256 =
-  "sha256-lcr+XcSCkIpPhhTJTzZ0zy4W3hnIOJgGGuqmcedRVls=";
+  "sha256-sIR4dCZFn3Uc0Xk0i4N73H1XXrjByqtiWZmZywW0T4k=";
 
 /**
  * Strict baseline CSP for the Open Sprint SPA (desktop backend + Electron).

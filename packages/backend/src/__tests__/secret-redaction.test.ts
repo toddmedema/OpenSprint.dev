@@ -20,6 +20,16 @@ describe("redactSecretsForUserDisplay", () => {
     expect(out).toMatch(/CURSOR_API_KEY=\[REDACTED\]/);
   });
 
+  it("redacts TODOIST_* and OPENSPRINT_INTEGRATION_* style env assignments", () => {
+    const raw =
+      "logged TODOIST_API_TOKEN=td-abc123 OPENSPRINT_INTEGRATION_WEBHOOK_SECRET=whsec_xyz integration ok";
+    const out = redactSecretsForUserDisplay(raw);
+    expect(out).not.toMatch(/td-abc123/);
+    expect(out).not.toMatch(/whsec_xyz/);
+    expect(out).toMatch(/TODOIST_API_TOKEN=\[REDACTED\]/i);
+    expect(out).toMatch(/OPENSPRINT_INTEGRATION_WEBHOOK_SECRET=\[REDACTED\]/i);
+  });
+
   it("redacts Bearer JWT-style tokens", () => {
     const jwt =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
