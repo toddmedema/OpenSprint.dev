@@ -80,6 +80,29 @@ function createMinimalEnvApp() {
   return app;
 }
 
+type EnvMinimalApp = ReturnType<typeof createMinimalEnvApp>;
+
+/**
+ * GET `/env/global-status` with timeout and one retry on supertest "socket hang up".
+ *
+ * Regression: intermittent `socket hang up` / connection drops in this suite have caused
+ * merge-gate failures (`npm run test`). Retrying once matches prior ad-hoc handling in
+ * "useCustomCli reflects global settings".
+ */
+async function getGlobalStatus(app: EnvMinimalApp) {
+  const url = `${API_PREFIX}/env/global-status`;
+  const doRequest = () => authedSupertest(app).get(url).timeout(10_000);
+  try {
+    return await doRequest();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/socket hang up/i.test(msg)) {
+      return await doRequest();
+    }
+    throw err;
+  }
+}
+
 describe("Env API", () => {
   let app: ReturnType<typeof createMinimalEnvApp>;
   let tmpDir: string;
@@ -602,7 +625,7 @@ describe("Env API", () => {
 
   describe("GET /env/global-status", () => {
     it("returns hasAnyKey and useCustomCli", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+      const res = await getGlobalStatus(app);
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(typeof res.body.data.hasAnyKey).toBe("boolean");
@@ -616,7 +639,7 @@ describe("Env API", () => {
         },
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+      const res = await getGlobalStatus(app);
       expect(res.status).toBe(200);
       expect(res.body.data.hasAnyKey).toBe(true);
     });
@@ -628,7 +651,7 @@ describe("Env API", () => {
         },
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+      const res = await getGlobalStatus(app);
       expect(res.status).toBe(200);
       expect(res.body.data.hasAnyKey).toBe(true);
     });
@@ -638,7 +661,7 @@ describe("Env API", () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
 
       try {
-        const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+        const res = await getGlobalStatus(app);
         expect(res.status).toBe(200);
         expect(res.body.data.hasAnyKey).toBe(true);
       } finally {
@@ -651,7 +674,7 @@ describe("Env API", () => {
       process.env.CURSOR_API_KEY = "cursor-test-key";
 
       try {
-        const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+        const res = await getGlobalStatus(app);
         expect(res.status).toBe(200);
         expect(res.body.data.hasAnyKey).toBe(true);
       } finally {
@@ -664,7 +687,7 @@ describe("Env API", () => {
       process.env.OPENAI_API_KEY = "sk-openai-test";
 
       try {
-        const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+        const res = await getGlobalStatus(app);
         expect(res.status).toBe(200);
         expect(res.body.data.hasAnyKey).toBe(true);
       } finally {
@@ -675,15 +698,7 @@ describe("Env API", () => {
     it("useCustomCli reflects global settings", async () => {
       await setGlobalSettings({ useCustomCli: true });
 
-      const fetchStatus = () =>
-        authedSupertest(app).get(`${API_PREFIX}/env/global-status`).timeout(10_000);
-      const res = await fetchStatus().catch(async (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/socket hang up/i.test(msg)) {
-          return fetchStatus();
-        }
-        throw err;
-      });
+      const res = await getGlobalStatus(app);
       expect(res.status).toBe(200);
       expect(res.body.data.useCustomCli).toBe(true);
     });
@@ -698,7 +713,7 @@ describe("Env API", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.useCustomCli).toBe(true);
 
-      const statusRes = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`);
+      const statusRes = await getGlobalStatus(app);
       expect(statusRes.body.data.useCustomCli).toBe(true);
     });
 
@@ -710,7 +725,7 @@ describe("Env API", () => {
       expect(putRes.status).toBe(200);
       expect(putRes.body.data?.useCustomCli).toBe(true);
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/env/global-status`).timeout(10_000);
+      const res = await getGlobalStatus(app);
       expect(res.status).toBe(200);
       expect(res.body.data.useCustomCli).toBe(true);
     });

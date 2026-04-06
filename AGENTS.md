@@ -89,6 +89,16 @@ The policy is enforced in:
 - `packages/backend/src/services/agent-default-instructions.ts` — coder and reviewer default instructions
 - `packages/backend/src/services/context-assembler.ts` — coding prompt (Protected Path Policy section) and review checklist
 
+## Merge quality gates and test stability
+
+**Default gates (this repo):** `npm run build`, `npm run lint`, and `npm run test`, in that order (`DEFAULT_MERGE_QUALITY_GATE_COMMANDS` in [`packages/backend/src/services/toolchain-profile.service.ts`](packages/backend/src/services/toolchain-profile.service.ts)). Open Sprint uses the same style of commands when validating merges unless the project overrides its toolchain profile.
+
+**Local verification:** From the repository root, `npm run verify:merge-gates` runs those three commands in sequence so human checks match what the orchestrator expects on `main`.
+
+**Flaky HTTP route tests:** [`packages/backend/src/__tests__/env-route.test.ts`](packages/backend/src/__tests__/env-route.test.ts) runs in an isolated Vitest project ([`packages/backend/vitest.env-route.config.ts`](packages/backend/vitest.env-route.config.ts)) because of `vi.mock` ordering. `GET /env/global-status` uses a shared helper with request timeout and a single retry on supertest `socket hang up` so merge-gate test runs do not fail intermittently. If you add new supertest coverage that mutates `process.env` and hits the same Express app, reuse that pattern instead of raw `authedSupertest(app).get(...)` for `/global-status`.
+
+Other tests that assign `process.env` are mostly unit-level (no in-process HTTP listener); they are lower risk for the same failure mode.
+
 ## Maintenance Notes
 
 - If you change the agent lifecycle or prompt contract, keep this file, the bootstrap contract in `packages/backend/src/services/project.service.ts`, and `packages/backend/docs/opensprint-help-context.md` in sync.
