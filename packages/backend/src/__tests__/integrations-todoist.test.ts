@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
-import request from "supertest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { TODOIST_CONNECTION_CONFIG } from "@opensprint/shared";
+import { API_PREFIX, TODOIST_CONNECTION_CONFIG } from "@opensprint/shared";
 import {
   createTodoistIntegrationRouter,
   OAuthStateStore,
@@ -12,6 +11,8 @@ import {
   type TodoistIntegrationRouterDeps,
 } from "../routes/integrations-todoist.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("../services/todoist-api-client.service.js", async () => {
   const { createTodoistApiClientVitestMock } = await import(
@@ -53,7 +54,11 @@ function seedTodoistServiceMocks(): void {
 function createTestApp(deps: TodoistIntegrationRouterDeps) {
   const app = express();
   app.use(express.json());
-  app.use("/api/v1/projects/:projectId/integrations/todoist", createTodoistIntegrationRouter(deps));
+  app.use(API_PREFIX, requireLocalSessionAuth);
+  app.use(
+    `${API_PREFIX}/projects/:projectId/integrations/todoist`,
+    createTodoistIntegrationRouter(deps)
+  );
   app.use(errorHandler);
   return app;
 }
@@ -117,7 +122,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
         .expect(200);
 
@@ -141,7 +146,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
         .expect(500);
 
@@ -154,7 +159,7 @@ describe("Todoist OAuth Routes", () => {
 
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          const res = await request(app)
+          const res = await authedSupertest(app)
             .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
             .expect(200);
 
@@ -176,7 +181,7 @@ describe("Todoist OAuth Routes", () => {
 
       oauthStateStore.store("valid-state", "proj-1");
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "valid-state" })
         .set("Accept", "application/json")
@@ -210,7 +215,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "bogus-state" })
         .set("Accept", "application/json")
@@ -227,7 +232,7 @@ describe("Todoist OAuth Routes", () => {
       oauthStateStore.store("expired-state", "proj-1");
       oauthStateStore.forceExpireForTest("expired-state");
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "expired-state" })
         .set("Accept", "application/json")
@@ -240,7 +245,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ state: "some-state" })
         .expect(400);
@@ -252,7 +257,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "some-code" })
         .expect(400);
@@ -266,7 +271,7 @@ describe("Todoist OAuth Routes", () => {
 
       oauthStateStore.store("browser-state", "proj-1");
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "browser-state" })
         .set("Accept", "text/html")
@@ -283,13 +288,13 @@ describe("Todoist OAuth Routes", () => {
 
       oauthStateStore.store("one-time-state", "proj-1");
 
-      await request(app)
+      await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "one-time-state" })
         .set("Accept", "application/json")
         .expect(200);
 
-      const res2 = await request(app)
+      const res2 = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "one-time-state" })
         .set("Accept", "application/json")
@@ -308,7 +313,7 @@ describe("Todoist OAuth Routes", () => {
         new Error("Missing Todoist OAuth config")
       );
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/oauth/callback")
         .query({ code: "auth-code-123", state: "config-missing-state" })
         .set("Accept", "application/json")
@@ -323,7 +328,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -343,7 +348,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -380,7 +385,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -406,7 +411,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -431,7 +436,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -449,7 +454,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -465,7 +470,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(404);
 
@@ -485,7 +490,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(409);
 
@@ -503,7 +508,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(200);
 
@@ -531,7 +536,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(401);
 
@@ -562,7 +567,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(429);
 
@@ -582,7 +587,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(500);
 
@@ -607,7 +612,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/projects")
         .expect(500);
 
@@ -620,7 +625,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1" })
         .expect(404);
@@ -638,7 +643,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({})
         .expect(400);
@@ -656,7 +661,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "" })
         .expect(400);
@@ -675,7 +680,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "nonexistent-project" })
         .expect(400);
@@ -696,7 +701,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1" })
         .expect(200);
@@ -725,7 +730,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      await request(app)
+      await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1", importExistingOpenTasks: true })
         .expect(200);
@@ -746,7 +751,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1" })
         .expect(500);
@@ -772,7 +777,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1" })
         .expect(500);
@@ -800,7 +805,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1" })
         .expect(401);
@@ -832,7 +837,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .put("/api/v1/projects/proj-1/integrations/todoist/project")
         .send({ todoistProjectId: "p1" })
         .expect(429);
@@ -848,7 +853,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(404);
 
@@ -868,7 +873,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(409);
 
@@ -889,7 +894,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(429);
 
@@ -910,7 +915,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(200);
 
@@ -931,7 +936,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(200);
 
@@ -954,7 +959,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(200);
 
@@ -975,7 +980,7 @@ describe("Todoist OAuth Routes", () => {
       deps.todoistSyncService = undefined;
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .post("/api/v1/projects/proj-1/integrations/todoist/sync")
         .expect(500);
 
@@ -988,7 +993,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(404);
 
@@ -1008,7 +1013,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(200);
 
@@ -1029,7 +1034,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      await request(app).delete("/api/v1/projects/proj-1/integrations/todoist").expect(200);
+      await authedSupertest(app).delete("/api/v1/projects/proj-1/integrations/todoist").expect(200);
 
       expect(mockedService.revokeAccessToken).toHaveBeenCalledWith(
         "test-client-id",
@@ -1055,7 +1060,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(200);
 
@@ -1083,7 +1088,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(200);
 
@@ -1143,7 +1148,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(200);
 
@@ -1166,7 +1171,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(200);
 
@@ -1192,7 +1197,7 @@ describe("Todoist OAuth Routes", () => {
       });
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .delete("/api/v1/projects/proj-1/integrations/todoist")
         .expect(200);
 
@@ -1210,7 +1215,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -1225,7 +1230,7 @@ describe("Todoist OAuth Routes", () => {
       const deps = makeDeps();
       const app = createTestApp(deps);
 
-      const res = await request(app)
+      const res = await authedSupertest(app)
         .get("/api/v1/projects/proj-1/integrations/todoist/status")
         .expect(200);
 
@@ -1242,7 +1247,7 @@ describe("Todoist OAuth Routes", () => {
       });
 
       try {
-        const res = await request(app)
+        const res = await authedSupertest(app)
           .post("/api/v1/projects/proj-1/integrations/todoist/oauth/start")
           .expect(500);
 
