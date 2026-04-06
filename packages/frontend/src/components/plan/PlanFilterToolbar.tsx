@@ -46,6 +46,27 @@ function GraphIcon({ className }: { className?: string }) {
   );
 }
 
+function TreeHierarchyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M8 2v3M8 5H4a1 1 0 00-1 1v3M8 5h4a1 1 0 011 1v2" />
+      <circle cx="8" cy="2" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="3" cy="11" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="11" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="13" cy="9" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function KebabIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -65,7 +86,7 @@ function KebabIcon({ className }: { className?: string }) {
   );
 }
 
-export type PlanViewMode = "card" | "graph";
+export type PlanViewMode = "card" | "graph" | "tree";
 
 interface PlanFilterToolbarProps {
   statusFilter: "all" | PlanStatus;
@@ -301,6 +322,7 @@ export function PlanFilterToolbar({
         compact
         options={[
           { value: "card", icon: <CardIcon className="w-3 h-3" />, label: "List view" },
+          { value: "tree", icon: <TreeHierarchyIcon className="w-3 h-3" />, label: "Tree view" },
           { value: "graph", icon: <GraphIcon className="w-3 h-3" />, label: "Graph view" },
         ]}
         value={viewMode}

@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request, { type Test } from "supertest";
 import express from "express";
 import { localhostCors } from "../middleware/cors.js";
+import {
+  ensureLocalSessionToken,
+  setLocalSessionTokenForTesting,
+  VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
+} from "../services/local-session-auth.service.js";
 
 /**
  * Timeout + one retry on supertest "socket hang up" (same flake class as env-route tests).
@@ -31,7 +36,17 @@ describe("localhostCors", () => {
   let app: ReturnType<typeof createTestApp>;
 
   beforeEach(() => {
+    // Other suites use `vi.stubGlobal("fetch", …)`; supertest/undici may route through
+    // `globalThis.fetch` in some Node versions — a stale mock can yield bogus statuses (merge-gate flake).
+    vi.unstubAllGlobals();
+    setLocalSessionTokenForTesting(VITEST_DEFAULT_LOCAL_SESSION_TOKEN);
+    ensureLocalSessionToken();
     app = createTestApp();
+  });
+
+  afterEach(() => {
+    setLocalSessionTokenForTesting(VITEST_DEFAULT_LOCAL_SESSION_TOKEN);
+    ensureLocalSessionToken();
   });
 
   it("allows requests with no Origin header", async () => {

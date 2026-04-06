@@ -4,7 +4,11 @@ import { modelsRouter } from "../routes/models.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
 import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
-import { ensureLocalSessionToken } from "../services/local-session-auth.service.js";
+import {
+  ensureLocalSessionToken,
+  setLocalSessionTokenForTesting,
+  VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
+} from "../services/local-session-auth.service.js";
 import * as modelListCache from "../services/model-list-cache.js";
 import { clearInFlightFetches, validateApiKey } from "../routes/models.js";
 import { authedSupertest } from "./local-auth-test-helpers.js";
@@ -28,6 +32,9 @@ const originalFetch = globalThis.fetch;
 
 /** Matches createApp(): `/api/v1` is behind requireLocalSessionAuth before /models is mounted. */
 function createMinimalModelsApp() {
+  // Other suites call `setLocalSessionTokenForTesting` with a non-default token; `ensureLocalSessionToken`
+  // is idempotent and would keep that token. Reset so `authedSupertest` and the gate agree (merge-gate flake).
+  setLocalSessionTokenForTesting(VITEST_DEFAULT_LOCAL_SESSION_TOKEN);
   ensureLocalSessionToken();
   const app = express();
   app.use(express.json());
@@ -83,6 +90,8 @@ describe("Models API", () => {
     process.env.OPENAI_API_KEY = originalOpenAIKey;
     process.env.GOOGLE_API_KEY = originalGoogleKey;
     globalThis.fetch = originalFetch;
+    setLocalSessionTokenForTesting(VITEST_DEFAULT_LOCAL_SESSION_TOKEN);
+    ensureLocalSessionToken();
   });
 
   describe("GET /models", () => {

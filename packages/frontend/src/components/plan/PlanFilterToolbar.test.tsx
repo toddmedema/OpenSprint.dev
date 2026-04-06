@@ -245,6 +245,9 @@ describe("PlanFilterToolbar", () => {
     const user = userEvent.setup();
     const props = renderToolbar();
 
+    await user.click(screen.getByTestId("view-toggle-tree"));
+    expect(props.onViewModeChange).toHaveBeenCalledWith("tree");
+
     await user.click(screen.getByTestId("view-toggle-graph"));
     expect(props.onViewModeChange).toHaveBeenCalledWith("graph");
   });

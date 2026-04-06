@@ -135,6 +135,10 @@ describe("Global Settings API", () => {
     } catch {
       // ignore
     }
+    // Other suites call `setLocalSessionTokenForTesting` with a non-default token; reset so the
+    // next file's `authedSupertest` / mini-apps agree with the Vitest default (merge-gate flake).
+    setLocalSessionTokenForTesting(VITEST_DEFAULT_LOCAL_SESSION_TOKEN);
+    ensureLocalSessionToken();
   });
 
   describe("GET /global-settings", () => {

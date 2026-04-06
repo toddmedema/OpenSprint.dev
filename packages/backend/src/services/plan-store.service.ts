@@ -4,7 +4,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import type { DrizzlePg } from "../db/app-db.js";
 import { plansTable } from "../db/drizzle-schema-pg.js";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 /** Plan row returned from plans table (metadata is JSON string; parse as PlanMetadata). */
 export interface StoredPlan {
@@ -199,6 +199,7 @@ export class PlanStore {
         })
         .from(plansTable)
         .where(and(eq(plansTable.projectId, projectId), eq(plansTable.epicId, epicId)))
+        .orderBy(asc(plansTable.planId))
         .limit(1);
       const row = rows[0];
       if (!row) return null;
@@ -216,7 +217,7 @@ export class PlanStore {
     const client = this.getClient();
     const row = await client.queryOne(
       toPgParams(
-        "SELECT plan_id, content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number FROM plans WHERE project_id = ? AND epic_id = ?"
+        "SELECT plan_id, content, metadata, shipped_content, updated_at, current_version_number, last_executed_version_number FROM plans WHERE project_id = ? AND epic_id = ? ORDER BY plan_id ASC LIMIT 1"
       ),
       [projectId, epicId]
     );

@@ -54,6 +54,7 @@ import { PlanDetailContent } from "../../../components/plan/PlanDetailContent";
 import { AddPlanModal } from "../../../components/plan/AddPlanModal";
 import { PlanFilterToolbar, type PlanViewMode } from "../../../components/plan/PlanFilterToolbar";
 import { PlanListView } from "../../../components/plan/PlanListView";
+import { PlanTreeView } from "../../../components/plan/PlanTreeView";
 import { AuditorRunsSection } from "../../../components/plan/AuditorRunsSection";
 import { PhaseEmptyState, PhaseEmptyStateLogo } from "../../../components/PhaseEmptyState";
 import { ResizableSidebar } from "../../../components/layout/ResizableSidebar";
@@ -268,7 +269,7 @@ export function usePlanPhaseMain({
     if (typeof window === "undefined") return "card";
     try {
       const stored = localStorage.getItem("opensprint.planView");
-      return stored === "card" || stored === "graph" ? stored : "card";
+      return stored === "card" || stored === "graph" || stored === "tree" ? stored : "card";
     } catch {
       return "card";
     }
@@ -1253,6 +1254,35 @@ export function usePlanPhaseMain({
                       : `No plans match the "${statusFilter === "all" ? "All" : statusFilter === "in_review" ? "In review" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}" filter.`}
                   </p>
                 </div>
+              ) : viewMode === "tree" ? (
+                <PlanTreeView
+                  plans={plansForListView}
+                  edges={dependencyGraph?.edges ?? []}
+                  selectedPlanId={selectedPlanId ?? null}
+                  executingPlanId={executingPlanId}
+                  reExecutingPlanId={reExecutingPlanId}
+                  planTasksPlanIds={planTasksPlanIds ?? []}
+                  executeError={executeError}
+                  onSelectPlan={handleSelectPlan}
+                  onShip={(planId, lastExecutedVersionNumber) => {
+                    const plan = plansForListView.find((p) => p.metadata.planId === planId);
+                    if (autoExecutePlans && plan) handleShipOrGenerateAndShip(plan);
+                    else handleShip(planId, lastExecutedVersionNumber);
+                  }}
+                  onPlanTasks={handlePlanTasks}
+                  onReship={handleReship}
+                  onClearError={() => dispatch(clearExecuteError())}
+                  onMarkComplete={(planId) => markPlanCompleteMutation.mutate(planId)}
+                  markCompletePendingPlanId={
+                    markPlanCompleteMutation.isPending
+                      ? (markPlanCompleteMutation.variables ?? null)
+                      : null
+                  }
+                  onGoToEvaluate={() => navigate(getProjectPhasePath(projectId, "eval"))}
+                  autoExecutePlans={autoExecutePlans}
+                  getPlanGenState={getPlanGenStateCallback}
+                  onRetryPlan={handleRetryPlan}
+                />
               ) : (
                 <PlanListView
                   plans={plansForListView}
