@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import type { PlanDependencyEdge } from "@opensprint/shared";
 import {
   buildDependencyEdgesCore,
+  validatePlanDependencyDAG,
   type PlanInfo,
 } from "../services/plan/plan-dependency-graph.js";
 import type { StoredTask } from "../services/task-store.service.js";
@@ -8,6 +10,46 @@ import type { StoredTask } from "../services/task-store.service.js";
 function makePlanInfo(planId: string, epicId: string, content = ""): PlanInfo {
   return { planId, epicId, content };
 }
+
+function block(from: string, to: string): PlanDependencyEdge {
+  return { from, to, type: "blocks" };
+}
+
+describe("validatePlanDependencyDAG", () => {
+  it("accepts an acyclic graph", () => {
+    const edges: PlanDependencyEdge[] = [block("a", "b"), block("b", "c")];
+    const allPlanIds = ["a", "b", "c", "d"];
+    expect(validatePlanDependencyDAG(edges, allPlanIds)).toEqual({ valid: true });
+  });
+
+  it("detects a 2-node cycle", () => {
+    const edges: PlanDependencyEdge[] = [block("a", "b"), block("b", "a")];
+    const r = validatePlanDependencyDAG(edges, ["a", "b"]);
+    expect(r.valid).toBe(false);
+    expect(r.cycle?.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(r.cycle)).toEqual(new Set(["a", "b"]));
+  });
+
+  it("detects a 3-node cycle", () => {
+    const edges: PlanDependencyEdge[] = [block("a", "b"), block("b", "c"), block("c", "a")];
+    const r = validatePlanDependencyDAG(edges, ["a", "b", "c"]);
+    expect(r.valid).toBe(false);
+    expect(new Set(r.cycle)).toEqual(new Set(["a", "b", "c"]));
+  });
+
+  it("detects a self-referencing edge", () => {
+    const r = validatePlanDependencyDAG([block("x", "x")], ["x"]);
+    expect(r).toEqual({ valid: false, cycle: ["x"] });
+  });
+
+  it("ignores related edges for cycle detection", () => {
+    const edges: PlanDependencyEdge[] = [
+      { from: "a", to: "b", type: "related" },
+      { from: "b", to: "a", type: "related" },
+    ];
+    expect(validatePlanDependencyDAG(edges, ["a", "b"])).toEqual({ valid: true });
+  });
+});
 
 describe("buildDependencyEdgesCore", () => {
   describe("task-store blocker edges", () => {
@@ -158,18 +200,15 @@ describe("buildDependencyEdgesCore", () => {
       expect(buildDependencyEdgesCore(plans, issues)).toEqual([]);
     });
 
-    it("does not detect cycles (documents known gap per SPEC)", () => {
-      // SPEC requires DAG validation; current implementation does not reject cycles.
-      // This test documents the gap: A→B and B→A both produce edges without rejection.
+    it("strips cyclic markdown-derived edges and returns an acyclic subset", () => {
       const plans: PlanInfo[] = [
         makePlanInfo("plan-a", "epic-a", "# A\n\n## Dependencies\n\nNeeds plan-b."),
         makePlanInfo("plan-b", "epic-b", "# B\n\n## Dependencies\n\nNeeds plan-a."),
       ];
 
       const edges = buildDependencyEdgesCore(plans, []);
-      expect(edges).toHaveLength(2);
-      const sorted = edges.map((e) => `${e.from}->${e.to}`).sort();
-      expect(sorted).toEqual(["plan-a->plan-b", "plan-b->plan-a"]);
+      expect(edges).toHaveLength(1);
+      expect(validatePlanDependencyDAG(edges, ["plan-a", "plan-b"]).valid).toBe(true);
     });
   });
 });

@@ -34,6 +34,8 @@ export const ErrorCodes = {
   DECOMPOSE_PARSE_FAILED: "DECOMPOSE_PARSE_FAILED",
   /** Sub-plan hierarchy would exceed the maximum depth (4). */
   PLAN_DEPTH_EXCEEDED: "PLAN_DEPTH_EXCEEDED",
+  /** Sub-plan or plan dependency graph contains a directed cycle. */
+  PLAN_CIRCULAR_DEPENDENCY: "PLAN_CIRCULAR_DEPENDENCY",
   DECOMPOSE_JSON_INVALID: "DECOMPOSE_JSON_INVALID",
   DECOMPOSE_EMPTY: "DECOMPOSE_EMPTY",
   MIGRATION_REQUIRED: "MIGRATION_REQUIRED",

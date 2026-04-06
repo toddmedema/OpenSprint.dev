@@ -15,6 +15,137 @@ import type { StoredTask } from "../task-store.service.js";
 
 const log = createLogger("plan");
 
+function findDirectedCycleInBlocksGraph(
+  nodeSet: Set<string>,
+  adj: Map<string, string[]>
+): string[] | null {
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+  const stack: string[] = [];
+
+  function dfs(u: string): string[] | null {
+    visited.add(u);
+    inStack.add(u);
+    stack.push(u);
+    for (const v of adj.get(u) ?? []) {
+      if (!nodeSet.has(v)) continue;
+      if (!visited.has(v)) {
+        const c = dfs(v);
+        if (c) return c;
+      } else if (inStack.has(v)) {
+        const i = stack.indexOf(v);
+        return stack.slice(i);
+      }
+    }
+    stack.pop();
+    inStack.delete(u);
+    return null;
+  }
+
+  for (const n of nodeSet) {
+    if (!visited.has(n)) {
+      const c = dfs(n);
+      if (c) return c;
+    }
+  }
+  return null;
+}
+
+/**
+ * Validates that `blocks` edges among `allPlanIds` form a DAG (topological order exists).
+ * Returns one directed cycle path when invalid (for messaging). `related` edges are ignored.
+ */
+export function validatePlanDependencyDAG(
+  edges: PlanDependencyEdge[],
+  allPlanIds: string[]
+): { valid: boolean; cycle?: string[] } {
+  const nodeSet = new Set(allPlanIds);
+  const relevantEdges = edges.filter(
+    (e) => e.type === "blocks" && nodeSet.has(e.from) && nodeSet.has(e.to)
+  );
+
+  for (const e of relevantEdges) {
+    if (e.from === e.to) {
+      return { valid: false, cycle: [e.from] };
+    }
+  }
+
+  const adj = new Map<string, string[]>();
+  const indegree = new Map<string, number>();
+  for (const id of nodeSet) {
+    indegree.set(id, 0);
+    adj.set(id, []);
+  }
+
+  const edgeKey = new Set<string>();
+  for (const e of relevantEdges) {
+    const key = `${e.from}->${e.to}`;
+    if (edgeKey.has(key)) continue;
+    edgeKey.add(key);
+    adj.get(e.from)!.push(e.to);
+    indegree.set(e.to, (indegree.get(e.to) ?? 0) + 1);
+  }
+
+  const queue: string[] = [];
+  for (const id of nodeSet) {
+    if ((indegree.get(id) ?? 0) === 0) queue.push(id);
+  }
+
+  let processed = 0;
+  while (queue.length > 0) {
+    const u = queue.shift()!;
+    processed++;
+    for (const v of adj.get(u) ?? []) {
+      const nd = (indegree.get(v) ?? 0) - 1;
+      indegree.set(v, nd);
+      if (nd === 0) queue.push(v);
+    }
+  }
+
+  if (processed === nodeSet.size) {
+    return { valid: true };
+  }
+
+  const cycle = findDirectedCycleInBlocksGraph(nodeSet, adj);
+  return { valid: false, cycle: cycle ?? undefined };
+}
+
+function stripCycleFormingPlanDependencyEdges(
+  edges: PlanDependencyEdge[],
+  allPlanIds: string[]
+): PlanDependencyEdge[] {
+  let working = [...edges];
+  const maxIterations = Math.max(1, edges.length + allPlanIds.length + 5);
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const check = validatePlanDependencyDAG(working, allPlanIds);
+    if (check.valid) return working;
+    const c = check.cycle;
+    if (!c?.length) break;
+
+    let removed = false;
+    for (let i = 0; i < c.length && !removed; i++) {
+      const from = c[i]!;
+      const to = c[(i + 1) % c.length]!;
+      const idx = working.findIndex((e) => e.type === "blocks" && e.from === from && e.to === to);
+      if (idx >= 0) {
+        log.warn("Removing cyclic plan dependency edge (blocks)", { from, to, cycle: c });
+        working = working.slice(0, idx).concat(working.slice(idx + 1));
+        removed = true;
+      }
+    }
+    if (!removed) break;
+  }
+
+  const finalCheck = validatePlanDependencyDAG(working, allPlanIds);
+  if (!finalCheck.valid) {
+    log.warn("Plan dependency graph remains cyclic after edge stripping", {
+      cycle: finalCheck.cycle,
+      planCount: allPlanIds.length,
+    });
+  }
+  return working;
+}
+
 export interface PlanInfo {
   planId: string;
   epicId: string;
@@ -69,7 +200,8 @@ export function buildDependencyEdgesCore(
     }
   }
 
-  return edges;
+  const planIds = planInfos.map((p) => p.planId);
+  return stripCycleFormingPlanDependencyEdges(edges, planIds);
 }
 
 export interface ListPlansWithEdgesDeps {

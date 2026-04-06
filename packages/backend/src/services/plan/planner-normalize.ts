@@ -2,6 +2,7 @@
  * Planner output normalization: accept camelCase and snake_case from Planner/API.
  * Pure helpers for parsing and normalizing plan/task JSON.
  */
+import type { PlanDependencyEdge } from "@opensprint/shared";
 import { clampTaskComplexity, PLAN_MARKDOWN_SECTIONS } from "@opensprint/shared";
 import { extractJsonFromAgentResponse } from "../../utils/json-extract.js";
 
@@ -385,6 +386,33 @@ export function sortSubPlansTopologically(
     return { ok: false, reason: "cyclic_depends_on_plans" };
   }
   return { ok: true, ordered: result };
+}
+
+/**
+ * Build blocking edges between sibling sub-plans from `dependsOnPlans` slugs
+ * (same resolution rules as `sortSubPlansTopologically`). Includes self-edges
+ * when a plan lists its own slug so DAG validation can reject them.
+ */
+export function buildSubPlanDependencyEdges(subPlans: NormalizedSubPlan[]): PlanDependencyEdge[] {
+  if (subPlans.length === 0) return [];
+  const slugFor = (sp: NormalizedSubPlan) => slugifyPlanTitleToId(sp.title);
+  const indexBySlug = new Map<string, number>();
+  for (let i = 0; i < subPlans.length; i++) {
+    indexBySlug.set(slugFor(subPlans[i]!), i);
+  }
+  const edges: PlanDependencyEdge[] = [];
+  const seen = new Set<string>();
+  for (const sp of subPlans) {
+    const toSlug = slugFor(sp);
+    for (const depSlug of sp.dependsOnPlans) {
+      if (!indexBySlug.has(depSlug)) continue;
+      const key = `${depSlug}->${toSlug}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      edges.push({ from: depSlug, to: toSlug, type: "blocks" });
+    }
+  }
+  return edges;
 }
 
 /**

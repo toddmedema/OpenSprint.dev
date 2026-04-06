@@ -22,6 +22,8 @@ import {
   ensureDependenciesSection,
   normalizePlannerOpenQuestions,
   normalizePlanMarkdownContent,
+  buildSubPlanDependencyEdges,
+  slugifyPlanTitleToId,
   sortSubPlansTopologically,
   type NormalizedSubPlan,
 } from "./plan/planner-normalize.js";
@@ -44,6 +46,7 @@ import {
   generateAndCreateTasks as generateAndCreateTasksImpl,
   type PlanTaskHierarchyContext,
 } from "./plan/plan-task-generation.js";
+import { validatePlanDependencyDAG } from "./plan/plan-dependency-graph.js";
 import { evaluatePlanComplexity } from "./plan/plan-complexity-gate.js";
 import { ProjectService } from "./project.service.js";
 import type { StoredTask } from "./task-store.types.js";
@@ -399,6 +402,19 @@ export class PlanDecomposeGenerateService {
         "Cannot create sub-plans: maximum hierarchy depth of 4 reached"
       );
     }
+
+    const interEdges = buildSubPlanDependencyEdges(subPlans);
+    const allSubPlanIds = subPlans.map((s) => slugifyPlanTitleToId(s.title));
+    const dagCheck = validatePlanDependencyDAG(interEdges, allSubPlanIds);
+    if (!dagCheck.valid) {
+      throw new AppError(
+        400,
+        ErrorCodes.PLAN_CIRCULAR_DEPENDENCY,
+        `Sub-plan dependencies contain a cycle: ${(dagCheck.cycle ?? []).join(" → ")}`,
+        { cycle: dagCheck.cycle }
+      );
+    }
+
     const childDepth = parentDepth + 1;
     const created: Plan[] = [];
 
@@ -541,12 +557,26 @@ export class PlanDecomposeGenerateService {
         });
 
     if (decision.strategy === "sub_plans") {
-      const sortResult = sortSubPlansTopologically(decision.subPlans);
-      if (!sortResult.ok) {
+      const interEdges = buildSubPlanDependencyEdges(decision.subPlans);
+      const allSiblingIds = decision.subPlans.map((s) => slugifyPlanTitleToId(s.title));
+      const dagGate = validatePlanDependencyDAG(interEdges, allSiblingIds);
+      if (!dagGate.valid) {
         throw new AppError(
           400,
-          ErrorCodes.DECOMPOSE_PARSE_FAILED,
-          "Sub-plan dependencies contain a cycle (depends_on_plans). Remove the circular ordering between sibling sub-plans and try Plan Tasks again."
+          ErrorCodes.PLAN_CIRCULAR_DEPENDENCY,
+          `Sub-plan dependencies contain a cycle: ${(dagGate.cycle ?? []).join(" → ")}`,
+          { cycle: dagGate.cycle }
+        );
+      }
+      const sortResult = sortSubPlansTopologically(decision.subPlans);
+      if (!sortResult.ok) {
+        log.error("sortSubPlansTopologically failed after DAG validation", {
+          reason: sortResult.reason,
+        });
+        throw new AppError(
+          400,
+          ErrorCodes.PLAN_CIRCULAR_DEPENDENCY,
+          "Sub-plan dependencies contain a cycle. Remove the circular ordering between sibling sub-plans and try Plan Tasks again."
         );
       }
       const ordered = sortResult.ordered;

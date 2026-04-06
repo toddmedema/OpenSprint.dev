@@ -475,6 +475,7 @@ describe("PlanDecomposeGenerateService.planTasks recursive sub-plans", () => {
 
     await expect(decompose.planTasks(PROJECT_ID, rootId)).rejects.toMatchObject({
       statusCode: 400,
+      code: "PLAN_CIRCULAR_DEPENDENCY",
       message: expect.stringMatching(/cycle/i),
     });
   });
