@@ -100,7 +100,6 @@ const interval = setInterval(() => {
 
   lastParentAlive = parentAlive;
 }, 1000);
-interval.unref();
 
 setTimeout(() => {
   write("sentinel.timeout", {

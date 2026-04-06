@@ -14,6 +14,7 @@ import {
   shell,
   dialog,
   ipcMain,
+  crashReporter,
   type MenuItemConstructorOptions,
 } from "electron";
 import { buildWindowOptions } from "./window-options";
@@ -102,6 +103,12 @@ process.on("uncaughtException", (error) => {
 });
 
 app.setName(APP_NAME);
+
+crashReporter.start({
+  uploadToServer: false,
+  extra: { sessionId: desktopSessionId },
+});
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   console.log(`${APP_NAME} is already running`);
