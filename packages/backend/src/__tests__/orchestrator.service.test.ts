@@ -1074,7 +1074,9 @@ describe("OrchestratorService (slot-based model)", () => {
 
     it("turns structured terminal clarification output into blocked open questions", async () => {
       const { task, wtPath } = setupSingleTaskFlow("task-open-question");
-      mockReadResult.mockResolvedValue(null);
+      // Force null raw reads (do not fall through to readFile): stale result.json under
+      // os.tmpdir()/opensprint-worktrees/<taskId> would otherwise parse as success.
+      mockReadRawResult.mockResolvedValue(null);
       mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
@@ -1191,7 +1193,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
     it("turns assistant chat clarification output into blocked open questions", async () => {
       const { task, wtPath } = setupSingleTaskFlow("task-open-question-chat");
-      mockReadResult.mockResolvedValue(null);
+      mockReadRawResult.mockResolvedValue(null);
       mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
@@ -1298,7 +1300,7 @@ describe("OrchestratorService (slot-based model)", () => {
 
     it("synthesizes Cursor API agent error into coding_failure without open questions", async () => {
       const { task, wtPath } = setupSingleTaskFlow("task-cursor-api-error-synthesis");
-      mockReadResult.mockResolvedValue(null);
+      mockReadRawResult.mockResolvedValue(null);
       mockWriteJsonAtomic.mockImplementation(async (filePath: string, data: unknown) => {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");

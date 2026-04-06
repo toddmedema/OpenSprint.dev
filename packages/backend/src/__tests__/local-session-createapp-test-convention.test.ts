@@ -3,9 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 
-const CREATE_APP_IMPORT = /from\s+["']\.\.\/app\.js["']/;
+/** Matches `import { createApp } from "../app.js"` (optional `.js` per Node16 emit). */
+const CREATE_APP_IMPORT = /from\s+["']\.\.\/app(?:\.js)?["']/;
 const USES_CREATE_APP = /\bcreateApp\s*\(/;
 const USES_RAW_REQUEST = /\brequest\s*\(\s*app\s*\)/;
+
+/** Only these files may combine `createApp` from `app` with raw `request(app)`. See `local-auth-test-helpers.ts`. */
+const RAW_REQUEST_APP_ALLOWLIST = new Set(["app.test.ts"]);
 
 function* walkTestTsFiles(dir: string): Generator<string> {
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -27,7 +31,7 @@ describe("createApp integration tests — local session auth convention", () => 
       if (!file.includes(`${path.sep}__tests__${path.sep}`)) {
         continue;
       }
-      if (path.basename(file) === "app.test.ts") {
+      if (RAW_REQUEST_APP_ALLOWLIST.has(path.basename(file))) {
         continue;
       }
 

@@ -322,6 +322,72 @@ export interface NormalizedSubPlan {
 }
 
 /**
+ * Slugify a plan title the same way `PlanCrudService.createPlan` derives `planId`.
+ */
+export function slugifyPlanTitleToId(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/** Result of ordering sibling sub-plans by `dependsOnPlans` (Kahn topological sort). */
+export type SortSubPlansTopologicallyResult =
+  | { ok: true; ordered: NormalizedSubPlan[] }
+  | { ok: false; reason: "cyclic_depends_on_plans" };
+
+/**
+ * Topologically sort sibling sub-plans so each plan appears after its `dependsOnPlans` references
+ * (slugified sibling titles). Unknown dependency slugs are ignored (no edge). A cycle among
+ * resolved edges yields `ok: false` so callers can surface a user-visible error.
+ */
+export function sortSubPlansTopologically(
+  subPlans: NormalizedSubPlan[]
+): SortSubPlansTopologicallyResult {
+  if (subPlans.length <= 1) return { ok: true, ordered: [...subPlans] };
+
+  const slugFor = (sp: NormalizedSubPlan) => slugifyPlanTitleToId(sp.title);
+  const indexBySlug = new Map<string, number>();
+  for (let i = 0; i < subPlans.length; i++) {
+    indexBySlug.set(slugFor(subPlans[i]!), i);
+  }
+
+  const n = subPlans.length;
+  const indegree = Array(n).fill(0);
+  const adj: number[][] = Array.from({ length: n }, () => []);
+
+  for (let i = 0; i < n; i++) {
+    const sp = subPlans[i]!;
+    for (const depSlug of sp.dependsOnPlans) {
+      const j = indexBySlug.get(depSlug);
+      if (j === undefined || j === i) continue;
+      adj[j]!.push(i);
+      indegree[i]++;
+    }
+  }
+
+  const queue: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (indegree[i] === 0) queue.push(i);
+  }
+
+  const result: NormalizedSubPlan[] = [];
+  while (queue.length > 0) {
+    const i = queue.shift()!;
+    result.push(subPlans[i]!);
+    for (const v of adj[i]!) {
+      indegree[v]--;
+      if (indegree[v] === 0) queue.push(v);
+    }
+  }
+
+  if (result.length !== n) {
+    return { ok: false, reason: "cyclic_depends_on_plans" };
+  }
+  return { ok: true, ordered: result };
+}
+
+/**
  * Normalize a single sub-plan object: validate required string fields and
  * normalize `depends_on_plans` / `dependsOnPlans` via the existing helper.
  * Returns null when any required field is missing or not a string.

@@ -11,8 +11,6 @@ import {
   synthesizeCodingResultFromOutput,
 } from "../services/no-result-reason.service.js";
 
-vi.mock("fs/promises");
-
 describe("no-result-reason.service", () => {
   describe("isMeaningfulNoResultFragment", () => {
     it("returns true for strings with alphanumeric content", () => {
@@ -242,8 +240,14 @@ describe("no-result-reason.service", () => {
   });
 
   describe("extractNoResultReasonFromLogs", () => {
+    let readFileSpy: ReturnType<typeof vi.spyOn<typeof fs, "readFile">>;
+
     beforeEach(() => {
-      vi.mocked(fs.readFile).mockRejectedValue(new Error("not found"));
+      readFileSpy = vi.spyOn(fs, "readFile").mockRejectedValue(new Error("not found"));
+    });
+
+    afterEach(() => {
+      readFileSpy.mockRestore();
     });
 
     it("uses in-memory output when present", async () => {

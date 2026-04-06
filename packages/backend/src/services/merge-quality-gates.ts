@@ -36,6 +36,7 @@ export function getMergeQualityGateExecutionPlan(options?: {
     return {
       command,
       env: {
+        /** Marker for subprocesses; keep test auth patterns aligned with `local-auth-test-helpers.ts`. */
         OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
         OPENSPRINT_VITEST_RUN_ID: runId && runId.length > 0 ? runId : undefined,
         OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(workerCap),

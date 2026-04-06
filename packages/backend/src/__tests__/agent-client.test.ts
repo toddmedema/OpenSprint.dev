@@ -2719,6 +2719,10 @@ describe("AgentClient", () => {
           "proj-123"
         );
 
+        // Cursor spawn truncates output.log via openSync("w") inside an async trySpawn; wait until
+        // that ran before writing or our content can be wiped by a later truncate (flake).
+        await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled(), { timeout: 3000 });
+
         await fs.writeFile(
           outputLogPath,
           `${path.join(brokenVersionDir, "node")}: Undefined error: 0\n`,

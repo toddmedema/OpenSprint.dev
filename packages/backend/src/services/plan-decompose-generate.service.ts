@@ -12,6 +12,7 @@ import type {
   GeneratePlanResult,
   Notification,
   NotificationSource,
+  ProjectSettings,
 } from "@opensprint/shared";
 import { getAgentForPlanningRole } from "@opensprint/shared";
 import {
@@ -21,6 +22,7 @@ import {
   ensureDependenciesSection,
   normalizePlannerOpenQuestions,
   normalizePlanMarkdownContent,
+  sortSubPlansTopologically,
   type NormalizedSubPlan,
 } from "./plan/planner-normalize.js";
 import {
@@ -37,6 +39,7 @@ import {
 import { runAutoReviewPlanAgainstRepo } from "./plan/plan-auto-review.js";
 import { runPlannerWithRepoGuard } from "./plan/plan-repo-guard.js";
 import { generateAndCreateTasks as generateAndCreateTasksImpl } from "./plan/plan-task-generation.js";
+import { evaluatePlanComplexity } from "./plan/plan-complexity-gate.js";
 import { ProjectService } from "./project.service.js";
 import type { StoredTask } from "./task-store.service.js";
 import { PrdService } from "./prd.service.js";
@@ -142,6 +145,7 @@ export interface PlanDecomposeGenerateDeps {
       planId: string,
       metadata: Record<string, unknown>
     ): Promise<void>;
+    planListByParent(projectId: string, parentPlanId: string): Promise<string[]>;
   };
   projectService: ProjectService;
   prdService: PrdService;
@@ -197,6 +201,81 @@ export class PlanDecomposeGenerateService {
       log.warn("buildPrdContext: PRD unavailable", { err: getErrorMessage(err) });
       return "No PRD exists yet.";
     }
+  }
+
+  /** Short ancestor chain (plan titles) for complexity-gate context on nested plans. */
+  private async buildAncestorChainSummary(
+    projectId: string,
+    plan: Plan
+  ): Promise<string | undefined> {
+    const titles: string[] = [];
+    let parentId = plan.metadata.parentPlanId;
+    let guard = 0;
+    while (parentId && guard++ < 8) {
+      try {
+        const parent = await this.deps.getPlan(projectId, parentId);
+        const firstLine =
+          parent.content.trim().split("\n")[0]?.replace(/^#\s*/, "").trim() ||
+          parent.metadata.planId;
+        titles.unshift(firstLine);
+        parentId = parent.metadata.parentPlanId;
+      } catch {
+        break;
+      }
+    }
+    if (titles.length === 0) return undefined;
+    const slice = titles.length > 4 ? titles.slice(-4) : titles;
+    return slice.join(" → ");
+  }
+
+  private truncatePlanningSnippet(text: string, maxChars: number): string {
+    const singleLine = text.replace(/\s+/g, " ").trim();
+    if (singleLine.length <= maxChars) return singleLine;
+    return `${singleLine.slice(0, Math.max(0, maxChars - 1))}…`;
+  }
+
+  /**
+   * Short summaries of other child plans under the same parent (for complexity gate + task prompts).
+   */
+  private async buildSiblingPlanSummaries(
+    projectId: string,
+    plan: Plan
+  ): Promise<string | undefined> {
+    const parentId = plan.metadata.parentPlanId?.trim();
+    if (!parentId) return undefined;
+
+    let siblingIds: string[];
+    try {
+      siblingIds = await this.deps.taskStore.planListByParent(projectId, parentId);
+    } catch (err) {
+      log.warn("buildSiblingPlanSummaries: planListByParent failed", {
+        err: getErrorMessage(err),
+        planId: plan.metadata.planId,
+      });
+      return undefined;
+    }
+
+    const others = siblingIds.filter((id) => id !== plan.metadata.planId);
+    if (others.length === 0) return undefined;
+
+    const lines: string[] = [];
+    for (const sid of [...others].sort()) {
+      try {
+        const sib = await this.deps.getPlan(projectId, sid);
+        const title =
+          sib.content.trim().split("\n")[0]?.replace(/^#\s*/, "").trim() || sib.metadata.planId;
+        const body = sib.content.replace(/^#[^\n]*\n?/, "").trim();
+        const excerpt = this.truncatePlanningSnippet(body, 240);
+        lines.push(`- **${sid}** (${title}): ${excerpt || "(no body)"}`);
+      } catch (err) {
+        log.warn("buildSiblingPlanSummaries: skipped sibling", {
+          err: getErrorMessage(err),
+          siblingId: sid,
+        });
+        lines.push(`- **${sid}**: (could not load plan)`);
+      }
+    }
+    return lines.join("\n");
   }
 
   /**
@@ -266,11 +345,15 @@ export class PlanDecomposeGenerateService {
   }> {
     const settings = await this.deps.projectService.getSettings(projectId);
     const prdContext = await this.buildPrdContext(projectId);
+    const ancestorChainSummary = await this.buildAncestorChainSummary(projectId, plan);
+    const siblingPlanSummaries = await this.buildSiblingPlanSummaries(projectId, plan);
     return generateAndCreateTasksImpl({
       projectId,
       repoPath,
       plan,
       prdContext,
+      ancestorChainSummary,
+      siblingPlanSummaries,
       settings,
       taskStore: this.deps.taskStore,
     });
@@ -313,12 +396,80 @@ export class PlanDecomposeGenerateService {
       );
     }
 
-    let tasksGenerated = 0;
-    let parseFailureReason: string | undefined;
     const planWithEpic: Plan = {
       ...plan,
       metadata: { ...plan.metadata, epicId: epicId ?? plan.metadata.epicId },
     };
+
+    const settings = await this.deps.projectService.getSettings(projectId);
+    const prdContext = await this.buildPrdContext(projectId);
+    const currentDepth = planWithEpic.metadata.depth ?? planWithEpic.depth ?? 1;
+    const agentConfig = getAgentForPlanningRole(
+      settings as ProjectSettings,
+      "planner",
+      planWithEpic.metadata.complexity
+    );
+    const ancestorChainSummary = await this.buildAncestorChainSummary(projectId, planWithEpic);
+    const siblingPlanSummaries = await this.buildSiblingPlanSummaries(projectId, planWithEpic);
+
+    const decision = await evaluatePlanComplexity({
+      projectId,
+      repoPath,
+      planContent: planWithEpic.content,
+      prdContext,
+      currentDepth,
+      agentConfig,
+      planComplexity: planWithEpic.metadata.complexity,
+      planId: planWithEpic.metadata.planId,
+      ancestorChainSummary,
+      siblingPlanSummaries,
+    });
+
+    if (decision.strategy === "sub_plans") {
+      const sortResult = sortSubPlansTopologically(decision.subPlans);
+      if (!sortResult.ok) {
+        throw new AppError(
+          400,
+          ErrorCodes.DECOMPOSE_PARSE_FAILED,
+          "Sub-plan dependencies contain a cycle (depends_on_plans). Remove the circular ordering between sibling sub-plans and try Plan Tasks again."
+        );
+      }
+      const ordered = sortResult.ordered;
+      const childPlans = await this.createSubPlans(projectId, planWithEpic, ordered);
+      let cumulativeTaskCount = 0;
+      try {
+        for (const child of childPlans) {
+          const updatedChild = await this.planTasks(projectId, child.metadata.planId);
+          cumulativeTaskCount += updatedChild.taskCount ?? 0;
+        }
+      } catch (err) {
+        log.error("Recursive plan tasks failed", { planId, err });
+        throw err;
+      }
+
+      if (cumulativeTaskCount === 0) {
+        throw new AppError(
+          400,
+          ErrorCodes.DECOMPOSE_PARSE_FAILED,
+          "Sub-plans did not yield any implementation tasks. Try refining the plan content."
+        );
+      }
+
+      const generatedForVersion = plan.currentVersionNumber ?? 1;
+      await taskStore.planUpdateMetadata(projectId, planId, {
+        ...planWithEpic.metadata,
+        lastTaskGenerationVersionNumber: generatedForVersion,
+      } as unknown as Record<string, unknown>);
+
+      const updatedPlan = await this.deps.getPlan(projectId, planId);
+      await this.autoReviewPlanAgainstRepo(projectId, [updatedPlan]);
+      broadcastToProject(projectId, { type: "plan.updated", planId });
+      log.info("planTasks sub-plan split complete", { planId, cumulativeTaskCount });
+      return this.deps.getPlan(projectId, planId);
+    }
+
+    let tasksGenerated = 0;
+    let parseFailureReason: string | undefined;
     try {
       const genResult = await this.generateAndCreateTasks(projectId, repoPath, planWithEpic);
       tasksGenerated = genResult.count;
@@ -326,7 +477,7 @@ export class PlanDecomposeGenerateService {
       if (tasksGenerated > 0) {
         const generatedForVersion = plan.currentVersionNumber ?? 1;
         await taskStore.planUpdateMetadata(projectId, planId, {
-          ...plan.metadata,
+          ...planWithEpic.metadata,
           lastTaskGenerationVersionNumber: generatedForVersion,
         } as unknown as Record<string, unknown>);
         const updatedPlan = await this.deps.getPlan(projectId, planId);

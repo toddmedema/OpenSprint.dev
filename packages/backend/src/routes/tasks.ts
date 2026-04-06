@@ -160,27 +160,8 @@ export function createTasksRouter(taskService: TaskService): Router {
     })
   );
 
-  // GET /projects/:projectId/tasks/:taskId — Get task details
-  router.get(
-    "/:taskId",
-    validateParams(taskIdParamSchema),
-    wrapAsync(async (req: Request<TaskParams>, res) => {
-      const start = performance.now();
-      const task = await taskService.getTask(req.params.projectId, req.params.taskId);
-      const durationMs = Math.round(performance.now() - start);
-      res.set("Server-Timing", `task-detail;dur=${durationMs};desc="Task detail load"`);
-      if (durationMs > 500) {
-        log.warn("GET /:taskId slow", {
-          requestId: req.requestId,
-          projectId: req.params.projectId,
-          durationMs,
-          taskId: req.params.taskId,
-        });
-      }
-      const body: ApiResponse<Task> = { data: task };
-      res.json(body);
-    })
-  );
+  // Register all GET /:taskId/... routes before GET /:taskId so paths like …/chat-support are never
+  // mistaken for a task id (defensive across Express / path-to-regexp versions).
 
   // GET /projects/:projectId/tasks/:taskId/sessions — Get agent sessions
   router.get(
@@ -204,18 +185,6 @@ export function createTasksRouter(taskService: TaskService): Router {
         parseInt(req.params.attempt, 10)
       );
       const body: ApiResponse<AgentSession> = { data: session };
-      res.json(body);
-    })
-  );
-
-  // POST /projects/:projectId/tasks/:taskId/open-editor — Resolve worktree path and editor for opening in desktop editor
-  router.post(
-    "/:taskId/open-editor",
-    validateParams(taskIdParamSchema),
-    wrapAsync(async (req: Request<TaskParams>, res) => {
-      const { projectId, taskId } = req.params;
-      const result: OpenEditorResult = await resolveOpenEditor(projectId, taskId);
-      const body: ApiResponse<OpenEditorResult> = { data: result };
       res.json(body);
     })
   );
@@ -264,6 +233,40 @@ export function createTasksRouter(taskService: TaskService): Router {
           reason: support.reason,
         },
       });
+    })
+  );
+
+  // GET /projects/:projectId/tasks/:taskId — Get task details
+  router.get(
+    "/:taskId",
+    validateParams(taskIdParamSchema),
+    wrapAsync(async (req: Request<TaskParams>, res) => {
+      const start = performance.now();
+      const task = await taskService.getTask(req.params.projectId, req.params.taskId);
+      const durationMs = Math.round(performance.now() - start);
+      res.set("Server-Timing", `task-detail;dur=${durationMs};desc="Task detail load"`);
+      if (durationMs > 500) {
+        log.warn("GET /:taskId slow", {
+          requestId: req.requestId,
+          projectId: req.params.projectId,
+          durationMs,
+          taskId: req.params.taskId,
+        });
+      }
+      const body: ApiResponse<Task> = { data: task };
+      res.json(body);
+    })
+  );
+
+  // POST /projects/:projectId/tasks/:taskId/open-editor — Resolve worktree path and editor for opening in desktop editor
+  router.post(
+    "/:taskId/open-editor",
+    validateParams(taskIdParamSchema),
+    wrapAsync(async (req: Request<TaskParams>, res) => {
+      const { projectId, taskId } = req.params;
+      const result: OpenEditorResult = await resolveOpenEditor(projectId, taskId);
+      const body: ApiResponse<OpenEditorResult> = { data: result };
+      res.json(body);
     })
   );
 

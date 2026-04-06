@@ -45,6 +45,7 @@ describe("Models API", () => {
   let originalGoogleKey: string | undefined;
 
   beforeEach(() => {
+    vi.useRealTimers();
     app = createMinimalModelsApp();
     modelListCache.clear();
     clearInFlightFetches();
@@ -387,11 +388,10 @@ describe("Models API", () => {
 
     it("fetches and returns Claude models when API key is set", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
         yield { id: "claude-opus-4", display_name: "Claude Opus 4" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
       expect(res.status).toBe(200);
@@ -404,10 +404,9 @@ describe("Models API", () => {
 
     it("uses cache on second Claude request", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
       expect(res1.status).toBe(200);
@@ -563,10 +562,9 @@ describe("Models API", () => {
 
     it("returns API model list for claude-cli when API key is available", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude-cli`);
       expect(res.status).toBe(200);
@@ -636,10 +634,9 @@ describe("Models API", () => {
 
     it("uses API key from global store when projectId is provided (projectId passed for API compatibility, key resolution is global-only)", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-global-key", keyId: "k1", source: "global" });
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       delete process.env.ANTHROPIC_API_KEY;
       const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude&projectId=proj-123`);
@@ -654,10 +651,9 @@ describe("Models API", () => {
 
     it("resolves API key from global store when projectId is omitted", async () => {
       mockGetNextKey.mockResolvedValue({ key: "sk-ant-global-key", keyId: "k1", source: "global" });
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       delete process.env.ANTHROPIC_API_KEY;
       const res = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
@@ -703,11 +699,10 @@ describe("Models API", () => {
 
     it("coalesces concurrent Claude requests to avoid rate limits", async () => {
       process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         await new Promise((r) => setTimeout(r, 20));
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       const requests = [
         authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`),
@@ -726,10 +721,9 @@ describe("Models API", () => {
 
   describe("validateApiKey", () => {
     it("returns valid: true for Claude when API succeeds", async () => {
-      async function* gen() {
+      mockModelsList.mockImplementation(async function* () {
         yield { id: "claude-1", display_name: "Claude 1" };
-      }
-      mockModelsList.mockReturnValue(gen());
+      });
 
       const result = await validateApiKey("claude", "sk-ant-test");
       expect(result).toEqual({ valid: true });

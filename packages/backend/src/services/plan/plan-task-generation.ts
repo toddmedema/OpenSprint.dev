@@ -29,6 +29,10 @@ export interface PlanTaskGenerationDeps {
   repoPath: string;
   plan: Plan;
   prdContext: string;
+  /** Oldest → newest plan titles on the path to this node (recursive planning). */
+  ancestorChainSummary?: string;
+  /** One line per sibling plan under the same parent (excludes this plan). */
+  siblingPlanSummaries?: string;
   settings: { aiAutonomyLevel?: string; hilConfig?: unknown };
   taskStore: {
     createMany(
@@ -114,7 +118,16 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
   taskRefs: Array<{ id: string; title: string }>;
   parseFailureReason?: string;
 }> {
-  const { projectId, repoPath, plan, prdContext, settings, taskStore } = deps;
+  const {
+    projectId,
+    repoPath,
+    plan,
+    prdContext,
+    ancestorChainSummary,
+    siblingPlanSummaries,
+    settings,
+    taskStore,
+  } = deps;
   const epicId = plan.metadata.epicId;
 
   if (!epicId) {
@@ -125,7 +138,24 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     };
   }
 
-  const prompt = `Break down the following feature plan into implementation tasks.\n\n## Feature Plan\n\n${plan.content}\n\n## PRD Context\n\n${prdContext}`;
+  const promptSections: string[] = [
+    "## Feature Plan",
+    plan.content,
+    "## PRD Context",
+    prdContext,
+  ];
+  const ancestor = ancestorChainSummary?.trim();
+  if (ancestor) {
+    promptSections.push("## Ancestor chain (root → parent)", ancestor);
+  }
+  const siblings = siblingPlanSummaries?.trim();
+  if (siblings) {
+    promptSections.push("## Sibling plans (same parent)", siblings);
+  }
+
+  const prompt =
+    "Break down the following feature plan into implementation tasks.\n\n" +
+    promptSections.join("\n\n");
 
   const agentId = `plan-task-gen-${projectId}-${Date.now()}`;
 

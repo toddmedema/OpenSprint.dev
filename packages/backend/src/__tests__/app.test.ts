@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -8,7 +8,12 @@ import { API_PREFIX, buildSpaContentSecurityPolicyProduction } from "@opensprint
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 import { databaseRuntime } from "../services/database-runtime.service.js";
-import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
+import {
+  ensureLocalSessionToken,
+  setLocalSessionTokenForTesting,
+  VITEST_DEFAULT_LOCAL_SESSION_TOKEN,
+} from "../services/local-session-auth.service.js";
+import { authedSupertest } from "./local-auth-test-helpers.js";
 
 vi.mock("../services/task-store.service.js", () => ({
   taskStore: {
@@ -49,6 +54,11 @@ vi.mock("../services/task-store.service.js", () => ({
 }));
 
 describe("App", () => {
+  beforeEach(() => {
+    setLocalSessionTokenForTesting(VITEST_DEFAULT_LOCAL_SESSION_TOKEN);
+    ensureLocalSessionToken();
+  });
+
   it("should respond to health check at /health", async () => {
     const app = createApp();
     const res = await request(app).get("/health");
@@ -59,7 +69,7 @@ describe("App", () => {
 
   it("should serve API under /api/v1 prefix", async () => {
     const app = createApp();
-    const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/projects`));
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects`);
     expect(res.status).toBe(200);
   });
 
@@ -111,12 +121,10 @@ describe("App", () => {
 
   it("issues ws-upgrade ticket with Bearer auth", async () => {
     const app = createApp();
-    const res = await withLocalSessionAuth(
-      request(app)
-        .post(`${API_PREFIX}/ws-upgrade-ticket`)
-        .set("Content-Type", "application/json")
-        .send({})
-    );
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/ws-upgrade-ticket`)
+      .set("Content-Type", "application/json")
+      .send({});
     expect(res.status).toBe(200);
     expect(typeof res.body?.data?.ticket).toBe("string");
     expect((res.body.data.ticket as string).length).toBeGreaterThan(20);
@@ -133,12 +141,10 @@ describe("App", () => {
 
   it("should parse JSON request bodies", async () => {
     const app = createApp();
-    const res = await withLocalSessionAuth(
-      request(app)
-        .post(`${API_PREFIX}/projects`)
-        .set("Content-Type", "application/json")
-        .send({ name: "Test" })
-    );
+    const res = await authedSupertest(app)
+      .post(`${API_PREFIX}/projects`)
+      .set("Content-Type", "application/json")
+      .send({ name: "Test" });
     // Projects create may return 400/500 without valid setup, but body parsing works
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.body).toBeDefined();
@@ -154,7 +160,7 @@ describe("App", () => {
       )
     );
 
-    const res = await withLocalSessionAuth(request(app).get(`${API_PREFIX}/projects/proj-1/tasks`));
+    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/tasks`);
 
     expect(res.status).toBe(503);
     expect(res.body.error).toMatchObject({

@@ -96,6 +96,29 @@ const planRouteTaskStoreMod = await import("../services/task-store.service.js");
 const planRoutePostgresOk =
   (planRouteTaskStoreMod as { _postgresAvailable?: boolean })._postgresAvailable ?? false;
 
+/** planTasks evaluates complexity (gate) before task generation; integration tests must satisfy both planner contracts. */
+const PLAN_TASKS_COMPLEXITY_GATE_STUB = JSON.stringify({
+  strategy: "tasks",
+  tasks: [
+    { title: "_gate", description: "complexity gate stub", priority: 1, dependsOn: [] },
+  ],
+});
+
+function stubPlanTasksPlannerChain(taskGenPayload: unknown) {
+  const taskGenContent =
+    typeof taskGenPayload === "string" ? taskGenPayload : JSON.stringify(taskGenPayload);
+  mockPlanningAgentInvoke.mockImplementation((opts: { tracking?: { label?: string } }) => {
+    const label = opts.tracking?.label ?? "";
+    if (label === "Complexity gate evaluation") {
+      return Promise.resolve({ content: PLAN_TASKS_COMPLEXITY_GATE_STUB });
+    }
+    if (label === "Task generation") {
+      return Promise.resolve({ content: taskGenContent });
+    }
+    return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+  });
+}
+
 describe.skipIf(!planRoutePostgresOk)("Plan REST endpoints - task decomposition", () => {
   let app: ReturnType<typeof createApp>;
   let suiteTempDir: string;
@@ -611,18 +634,16 @@ Updated description for task two.`;
     const createdPlanId = createRes.body.data.metadata.planId;
     expect(createRes.body.data.taskCount).toBe(0);
 
-    mockPlanningAgentInvoke.mockResolvedValueOnce({
-      content: JSON.stringify({
-        tasks: [
-          { title: "Setup schema", description: "Create DB schema", priority: 0, dependsOn: [] },
-          {
-            title: "Implement API",
-            description: "Build endpoints",
-            priority: 1,
-            dependsOn: ["Setup schema"],
-          },
-        ],
-      }),
+    stubPlanTasksPlannerChain({
+      tasks: [
+        { title: "Setup schema", description: "Create DB schema", priority: 0, dependsOn: [] },
+        {
+          title: "Implement API",
+          description: "Build endpoints",
+          priority: 1,
+          dependsOn: ["Setup schema"],
+        },
+      ],
     });
 
     const planTasksRes = await authedSupertest(app).post(
@@ -649,9 +670,16 @@ Updated description for task two.`;
       expect(readyIds).not.toContain(t.id);
     }
 
-    // Planner was invoked with plan markdown as context
-    expect(mockPlanningAgentInvoke).toHaveBeenCalledTimes(1);
-    const invokeArgs = mockPlanningAgentInvoke.mock.calls[0][0];
+    // Complexity gate + task generation
+    expect(mockPlanningAgentInvoke.mock.calls.length).toBeGreaterThanOrEqual(2);
+    const taskGenCall = mockPlanningAgentInvoke.mock.calls.find(
+      (c) => (c[0] as { tracking?: { label?: string } }).tracking?.label === "Task generation"
+    );
+    expect(taskGenCall).toBeDefined();
+    const invokeArgs = taskGenCall![0] as {
+      messages: Array<{ role: string; content: string }>;
+      tracking: { role?: string };
+    };
     expect(invokeArgs.messages[0].content).toContain("Plan Tasks Test");
     expect(invokeArgs.messages[0].content).toContain("Feature to test plan-tasks");
     expect(invokeArgs.tracking.role).toBe("planner");
@@ -670,6 +698,104 @@ Updated description for task two.`;
       planUpdatedCalls.every((c) => (c[1] as { planId?: string }).planId === createdPlanId)
     ).toBe(true);
   });
+
+  it(
+    "POST /projects/:id/plans/:planId/plan-tasks splits into sub-plans then generates tasks per child",
+    { timeout: 15000 },
+    async () => {
+      mockBroadcastToProject.mockClear();
+      mockPlanningAgentInvoke.mockClear();
+
+      const planBody = {
+        title: "Recursive Split Parent Feature",
+        content:
+          "# Recursive Split Parent\n\n## Overview\n\nLarge scope for sub-plan split.\n\n## Acceptance Criteria\n\n- Children get tasks",
+        complexity: "high",
+      };
+
+      const createRes = await authedSupertest(app)
+        .post(`${API_PREFIX}/projects/${projectId}/plans`)
+        .send(planBody);
+      expect(createRes.status).toBe(201);
+      const rootPlanId = createRes.body.data.metadata.planId as string;
+
+      mockPlanningAgentInvoke.mockImplementation(
+        (opts: { tracking?: { label?: string; planId?: string } }) => {
+          const label = opts.tracking?.label ?? "";
+          const pid = opts.tracking?.planId;
+          if (label === "Complexity gate evaluation") {
+            if (pid === rootPlanId) {
+              return Promise.resolve({
+                content: JSON.stringify({
+                  strategy: "sub_plans",
+                  sub_plans: [
+                    {
+                      title: "Stream A",
+                      overview: "First stream",
+                      content: "## Technical Approach\n\nStream A work.",
+                      dependsOnPlans: [],
+                    },
+                    {
+                      title: "Stream B",
+                      overview: "Second stream",
+                      content: "## Technical Approach\n\nStream B work.",
+                      dependsOnPlans: ["stream-a"],
+                    },
+                  ],
+                }),
+              });
+            }
+            return Promise.resolve({ content: PLAN_TASKS_COMPLEXITY_GATE_STUB });
+          }
+          if (label === "Task generation") {
+            return Promise.resolve({
+              content: JSON.stringify({
+                tasks: [
+                  {
+                    title: `Implement ${pid ?? "plan"}`,
+                    description: "Scoped implementation task",
+                    priority: 1,
+                    dependsOn: [],
+                  },
+                ],
+              }),
+            });
+          }
+          return Promise.resolve({ content: JSON.stringify({ complexity: "medium" }) });
+        }
+      );
+
+      const planTasksRes = await authedSupertest(app).post(
+        `${API_PREFIX}/projects/${projectId}/plans/${rootPlanId}/plan-tasks`
+      );
+      expect(planTasksRes.status).toBe(200);
+      const parentPlan = planTasksRes.body.data as {
+        hasGeneratedPlanTasksForCurrentVersion?: boolean;
+        metadata?: { planId?: string };
+      };
+      expect(parentPlan.hasGeneratedPlanTasksForCurrentVersion).toBe(true);
+
+      const listRes = await authedSupertest(app).get(`${API_PREFIX}/projects/${projectId}/plans`);
+      expect(listRes.status).toBe(200);
+      const plans = listRes.body.data.plans as Array<{
+        metadata: { planId: string };
+        taskCount: number;
+        childPlanIds?: string[];
+      }>;
+      const parentFromList = plans.find((p) => p.metadata.planId === rootPlanId);
+      expect(parentFromList?.childPlanIds?.sort()).toEqual(["stream-a", "stream-b"]);
+
+      const childA = plans.find((p) => p.metadata.planId === "stream-a");
+      const childB = plans.find((p) => p.metadata.planId === "stream-b");
+      expect(childA?.taskCount).toBe(1);
+      expect(childB?.taskCount).toBe(1);
+
+      const planUpdated = mockBroadcastToProject.mock.calls.filter(
+        (c: unknown[]) => (c[1] as { type?: string })?.type === "plan.updated"
+      );
+      expect(planUpdated.length).toBeGreaterThanOrEqual(3);
+    }
+  );
 
   it("POST /projects/:id/plans/:planId/plan-tasks returns parse error when planner output is missing", async () => {
     const planBody = {
@@ -737,14 +863,14 @@ Updated description for task two.`;
       expect(createRes.status).toBe(201);
       const createdPlanId = createRes.body.data.metadata.planId;
 
-      mockPlanningAgentInvoke.mockResolvedValueOnce({
-        content: `\n\`\`\`json\n${JSON.stringify({
+      stubPlanTasksPlannerChain(
+        `\n\`\`\`json\n${JSON.stringify({
           tasks: [
             { title: "Task One", description: "First", priority: 0, dependsOn: [] },
             { title: "Task Two", description: "Second", priority: 1, dependsOn: [] },
           ],
-        })}\n\`\`\``,
-      });
+        })}\n\`\`\``
+      );
 
       const genRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
@@ -770,12 +896,10 @@ Updated description for task two.`;
       expect(createRes.status).toBe(201);
       const createdPlanId = createRes.body.data.metadata.planId;
 
-      mockPlanningAgentInvoke.mockResolvedValueOnce({
-        content: JSON.stringify({
-          result: {
-            tasks: ["bad-entry", null],
-          },
-        }),
+      stubPlanTasksPlannerChain({
+        result: {
+          tasks: ["bad-entry", null],
+        },
       });
 
       const genRes = await authedSupertest(app).post(
@@ -789,7 +913,7 @@ Updated description for task two.`;
   );
 
   it(
-    "POST /projects/:id/plans/:planId/plan-tasks returns plan unchanged when epic metadata is missing",
+    "POST /projects/:id/plans/:planId/plan-tasks recreates epic and generates tasks when epic metadata was cleared",
     { timeout: 15000 },
     async () => {
       const planBody = {
@@ -809,21 +933,22 @@ Updated description for task two.`;
         epicId: "",
       });
 
-      mockPlanningAgentInvoke.mockResolvedValueOnce({
-        content: `\n\`\`\`json\n${JSON.stringify({
+      stubPlanTasksPlannerChain(
+        `\n\`\`\`json\n${JSON.stringify({
           tasks: [
             { title: "Task One", description: "First", priority: 0, dependsOn: [] },
             { title: "Task Two", description: "Second", priority: 1, dependsOn: [] },
           ],
-        })}\n\`\`\``,
-      });
+        })}\n\`\`\``
+      );
 
       const genRes = await authedSupertest(app).post(
         `${API_PREFIX}/projects/${projectId}/plans/${createdPlanId}/plan-tasks`
       );
       expect(genRes.status).toBe(200);
       const plan = genRes.body.data;
-      expect(plan.taskCount).toBe(0);
+      expect(plan.metadata.epicId).toBeTruthy();
+      expect(plan.taskCount).toBe(2);
     }
   );
 

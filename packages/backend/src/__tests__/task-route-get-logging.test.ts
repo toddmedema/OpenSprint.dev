@@ -9,6 +9,24 @@ import { API_PREFIX } from "@opensprint/shared";
 import { resetLogLevelCache } from "../utils/logger.js";
 import { withLocalSessionAuth } from "./local-auth-test-helpers.js";
 
+/**
+ * Slow GET /:taskId can flake under parallel vitest with supertest ("Parse Error: Expected HTTP/…").
+ * Longer timeout + one retry matches the env-route suite pattern for merge-gate stability.
+ */
+async function getTaskDetail(app: express.Express, url: string) {
+  const doRequest = () =>
+    withLocalSessionAuth(request(app).get(url).timeout(10_000));
+  try {
+    return await doRequest();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/socket hang up|Parse Error/i.test(msg)) {
+      return await doRequest();
+    }
+    throw err;
+  }
+}
+
 describe("GET /:taskId logging", () => {
   const originalLogLevel = process.env.LOG_LEVEL;
   let mockGetTask: ReturnType<typeof vi.fn>;
@@ -52,8 +70,9 @@ describe("GET /:taskId logging", () => {
   });
 
   it("does not log info on normal (fast) requests", async () => {
-    const res = await withLocalSessionAuth(
-      request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-abc.1`)
+    const res = await getTaskDetail(
+      app,
+      `${API_PREFIX}/projects/proj-1/tasks/os-abc.1`
     );
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual(fakeTask);
@@ -73,8 +92,9 @@ describe("GET /:taskId logging", () => {
         })
     );
 
-    const res = await withLocalSessionAuth(
-      request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-abc.1`)
+    const res = await getTaskDetail(
+      app,
+      `${API_PREFIX}/projects/proj-1/tasks/os-abc.1`
     );
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual(fakeTask);

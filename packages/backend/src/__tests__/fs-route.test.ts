@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import express from "express";
 import fs from "fs/promises";
@@ -31,6 +31,7 @@ describe("Filesystem API", () => {
   let originalAllowHomeInCi: string | undefined;
 
   beforeEach(async () => {
+    vi.useRealTimers();
     app = createMinimalFsApp();
     const created = await fs.mkdtemp(path.join(os.tmpdir(), "opensprint-fs-route-test-"));
     tempDir = await fs.realpath(created);

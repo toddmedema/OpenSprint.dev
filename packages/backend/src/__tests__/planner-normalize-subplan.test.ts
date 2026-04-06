@@ -3,6 +3,8 @@ import {
   normalizeSubPlan,
   findSubPlanArray,
   parseSubPlanDecompositionResponse,
+  sortSubPlansTopologically,
+  slugifyPlanTitleToId,
 } from "../services/plan/planner-normalize.js";
 
 describe("normalizeSubPlan", () => {
@@ -330,5 +332,44 @@ describe("parseSubPlanDecompositionResponse", () => {
       expect(result!.subPlans[0]!.dependsOnPlans).toEqual([]);
       expect(result!.subPlans[1]!.dependsOnPlans).toEqual(["Base"]);
     }
+  });
+});
+
+describe("sortSubPlansTopologically", () => {
+  const sp = (
+    title: string,
+    overview: string,
+    content: string,
+    dependsOnPlans: string[]
+  ) => ({ title, overview, content, dependsOnPlans });
+
+  it("orders dependents after their dependsOnPlans slugs", () => {
+    const plans = [
+      sp("Stream B", "b", "## Work\n\nb", ["stream-a"]),
+      sp("Stream A", "a", "## Work\n\na", []),
+    ];
+    const result = sortSubPlansTopologically(plans);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.ordered.map((p) => slugifyPlanTitleToId(p.title))).toEqual([
+        "stream-a",
+        "stream-b",
+      ]);
+    }
+  });
+
+  it("returns ok with a single plan unchanged", () => {
+    const plans = [sp("Only", "o", "## C\n\n", [])];
+    const result = sortSubPlansTopologically(plans);
+    expect(result).toEqual({ ok: true, ordered: plans });
+  });
+
+  it("returns cyclic error when depends_on_plans form a cycle between siblings", () => {
+    const plans = [
+      sp("A", "a", "## C\n\n", ["b"]),
+      sp("B", "b", "## C\n\n", ["a"]),
+    ];
+    const result = sortSubPlansTopologically(plans);
+    expect(result).toEqual({ ok: false, reason: "cyclic_depends_on_plans" });
   });
 });

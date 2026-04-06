@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
+import request from "supertest";
 import { createTasksRouter } from "../routes/tasks.js";
 import type { TaskService } from "../services/task.service.js";
 import { API_PREFIX } from "@opensprint/shared";
 import { errorHandler } from "../middleware/error-handler.js";
-import { requireLocalSessionAuth } from "../middleware/require-local-session-auth.js";
-import { ensureLocalSessionToken } from "../services/local-session-auth.service.js";
-import { authedSupertest } from "./local-auth-test-helpers.js";
 
 const mockGetHistory = vi.fn();
 const mockSupportsChat = vi.fn();
@@ -18,13 +16,11 @@ vi.mock("../services/agent-chat.service.js", () => ({
   },
 }));
 
-/** Same auth gate as createApp() for /api/v1 before task routes (avoids unauthenticated supertest flakes). */
+/** Tasks router only — omits `requireLocalSessionAuth` like other router-focused unit tests (see local-auth-test-helpers). */
 function buildApp() {
-  ensureLocalSessionToken();
   const taskService = {} as unknown as TaskService;
   const app = express();
   app.use(express.json());
-  app.use(API_PREFIX, requireLocalSessionAuth);
   app.use(`${API_PREFIX}/projects/:projectId/tasks`, createTasksRouter(taskService));
   app.use(errorHandler);
   return app;
@@ -65,7 +61,7 @@ describe("GET /tasks/:taskId/chat-history", () => {
     mockGetHistory.mockReturnValue(messages);
     mockSupportsChat.mockReturnValue({ supported: true, backend: "claude", reason: null });
 
-    const res = await authedSupertest(app).get(
+    const res = await request(app).get(
       `${API_PREFIX}/projects/proj-1/tasks/os-1234/chat-history?attempt=1`
     );
 
@@ -109,7 +105,7 @@ describe("GET /tasks/:taskId/chat-history", () => {
     mockGetHistory.mockReturnValue(allMessages);
     mockSupportsChat.mockReturnValue({ supported: true, backend: "openai", reason: null });
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-5678/chat-history`);
+    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-5678/chat-history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.attempt).toBe(2);
@@ -127,7 +123,7 @@ describe("GET /tasks/:taskId/chat-history", () => {
       reason: "No active agent found for this task.",
     });
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-empty/chat-history`);
+    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-empty/chat-history`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.attempt).toBe(1);
@@ -144,7 +140,7 @@ describe("GET /tasks/:taskId/chat-history", () => {
         "Chat is not available for CLI-based agent backends. Switch to API mode (Project Settings → Agent Config) to chat with running agents.",
     });
 
-    const res = await authedSupertest(app).get(
+    const res = await request(app).get(
       `${API_PREFIX}/projects/proj-1/tasks/os-cli/chat-history?attempt=1`
     );
 
@@ -153,7 +149,7 @@ describe("GET /tasks/:taskId/chat-history", () => {
   });
 
   it("rejects invalid attempt (non-positive integer)", async () => {
-    const res = await authedSupertest(app).get(
+    const res = await request(app).get(
       `${API_PREFIX}/projects/proj-1/tasks/os-1234/chat-history?attempt=-1`
     );
 
@@ -172,7 +168,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
   it("returns supported=true for API backend (claude)", async () => {
     mockSupportsChat.mockReturnValue({ supported: true, backend: "claude", reason: null });
 
-    const res = await authedSupertest(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-api/chat-support`);
+    const res = await request(app).get(`${API_PREFIX}/projects/proj-1/tasks/os-api/chat-support`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({
@@ -193,7 +189,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
       reason: expectedReason,
     });
 
-    const res = await authedSupertest(app).get(
+    const res = await request(app).get(
       `${API_PREFIX}/projects/proj-1/tasks/os-cli-task/chat-support`
     );
 
@@ -213,7 +209,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
       reason: expectedReason,
     });
 
-    const res = await authedSupertest(app).get(
+    const res = await request(app).get(
       `${API_PREFIX}/projects/proj-1/tasks/os-cursor-task/chat-support`
     );
 
@@ -230,7 +226,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
       reason: "No active agent found for this task.",
     });
 
-    const res = await authedSupertest(app).get(
+    const res = await request(app).get(
       `${API_PREFIX}/projects/proj-1/tasks/os-no-agent/chat-support`
     );
 
@@ -246,7 +242,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
     for (const backend of apiBackends) {
       mockSupportsChat.mockReturnValue({ supported: true, backend, reason: null });
 
-      const res = await authedSupertest(app).get(
+      const res = await request(app).get(
         `${API_PREFIX}/projects/proj-1/tasks/os-${backend}/chat-support`
       );
 
