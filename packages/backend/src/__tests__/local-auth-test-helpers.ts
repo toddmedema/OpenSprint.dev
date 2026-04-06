@@ -24,8 +24,8 @@ import { getLocalSessionToken } from "../services/local-session-auth.service.js"
  * imports `createApp` from `../app.js` and uses raw `request(app)` (except
  * `app.test.ts`, which intentionally covers unauthenticated API cases).
  *
- * **Merge gate parity:** deterministic test runs may set
- * `OPENSPRINT_MERGE_GATE_TEST_MODE=1`, `OPENSPRINT_VITEST_RUN_ID`, and
+ * **Merge gate parity:** deterministic test runs set `NODE_ENV=test`,
+ * `OPENSPRINT_MERGE_GATE_TEST_MODE=1`, optional `OPENSPRINT_VITEST_RUN_ID`, and
  * `OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS` (see `merge-quality-gates.ts`). Reproduce
  * locally with the same env when debugging gate-only flakes:
  *

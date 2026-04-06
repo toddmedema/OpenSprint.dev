@@ -164,6 +164,43 @@ Received: 200
     expect(getExecutedCommands(runCommand)).toEqual(["npm run test"]);
   });
 
+  it("adds local-session auth hint when Vitest reports 401/403 vs 200 assertion drift", async () => {
+    const worktreePath = await makeTempWorktree({ test: "vitest run" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run test") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed with exit code 1",
+            stderr: "AssertionError: expected 401 to be 200",
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-auth-hint",
+        branchName: "opensprint/os-auth-hint",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run test"],
+        runCommand,
+      }
+    );
+
+    expect(failure?.classificationReason).toContain("authedSupertest");
+    expect(failure?.classificationReason).toContain("withLocalSessionAuth");
+  });
+
   it("prefers native module ABI errors over Vitest skipped-suite lines", async () => {
     const worktreePath = await makeTempWorktree({ test: "vitest run" });
     const runCommand = vi.fn(
@@ -1002,6 +1039,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       expect.objectContaining({
         OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
         OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: "2",
+        NODE_ENV: "test",
       })
     );
     expect(env?.OPENSPRINT_VITEST_RUN_ID).toMatch(/^mergegate_/);
@@ -1359,6 +1397,7 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
       expect.objectContaining({
         OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
         PYTEST_ADDOPTS: "--maxfail=1",
+        NODE_ENV: "test",
       })
     );
   });

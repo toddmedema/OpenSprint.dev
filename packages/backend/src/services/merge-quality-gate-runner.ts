@@ -435,6 +435,22 @@ function redactMergeQualityGateFailureSurface(failure: MergeQualityGateFailure):
   };
 }
 
+/**
+ * Vitest assertion text when `expect(res.status).toBe(200)` receives 401/403 (e.g. missing Bearer on /api/v1).
+ */
+function mergeQualityGateLocalSessionAuthAssertionHint(
+  reason: string,
+  output: string,
+  firstErrorLine: string
+): string | null {
+  const text = `${reason}\n${output}\n${firstErrorLine}`;
+  if (!/expected\s+40[13]\s+to\s+be\s+200/i.test(text)) return null;
+  return (
+    "Local-session auth drift: use authedSupertest or withLocalSessionAuth for /api/v1 routes " +
+    "(packages/backend/src/__tests__/local-auth-test-helpers.ts)."
+  );
+}
+
 function classifyQualityGateFailureCategory(failure: {
   reason: string;
   output: string;
@@ -528,6 +544,14 @@ function extractCommandFailure(
     exitCode: typeof commandErr.exitCode === "number" ? commandErr.exitCode : null,
   });
   const category = params.category ?? classification.category;
+  const authHint = mergeQualityGateLocalSessionAuthAssertionHint(reason, output, firstErrorLine);
+  const baseClassificationReason =
+    params.category != null
+      ? `category forced by ${params.category} precheck`
+      : classification.reason;
+  const classificationReason = authHint
+    ? `${baseClassificationReason} | ${authHint}`
+    : baseClassificationReason;
 
   return buildFailure({
     command,
@@ -546,10 +570,7 @@ function extractCommandFailure(
         ? (commandErr.signal ?? null)
         : String(commandErr.signal),
     classificationConfidence: params.category != null ? "high" : classification.confidence,
-    classificationReason:
-      params.category != null
-        ? `category forced by ${params.category} precheck`
-        : classification.reason,
+    classificationReason,
   });
 }
 

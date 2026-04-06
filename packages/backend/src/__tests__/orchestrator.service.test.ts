@@ -535,6 +535,7 @@ vi.mock("../services/merge-quality-gates.js", () => ({
           OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
           OPENSPRINT_VITEST_RUN_ID: options?.testRunId,
           OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(options?.integrationWorkerCap ?? 2),
+          NODE_ENV: "test",
         },
       };
     }),

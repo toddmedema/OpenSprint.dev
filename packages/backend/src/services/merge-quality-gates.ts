@@ -33,15 +33,17 @@ export function getMergeQualityGateExecutionPlan(options?: {
 
   return commands.map((command) => {
     if (!deterministicTestCommand || command !== deterministicTestCommand) return { command };
-    return {
-      command,
-      env: {
-        /** Marker for subprocesses; keep test auth patterns aligned with `local-auth-test-helpers.ts`. */
-        OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
-        OPENSPRINT_VITEST_RUN_ID: runId && runId.length > 0 ? runId : undefined,
-        OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(workerCap),
-        ...deterministicTestEnv,
-      },
+    const env: Record<string, string> = {
+      /** Marker for subprocesses; keep test auth patterns aligned with `local-auth-test-helpers.ts`. */
+      OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
+      OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(workerCap),
+      ...deterministicTestEnv,
+      /** Always last so profile extras cannot override test mode for the gate subprocess. */
+      NODE_ENV: "test",
     };
+    if (runId && runId.length > 0) {
+      env.OPENSPRINT_VITEST_RUN_ID = runId;
+    }
+    return { command, env };
   });
 }

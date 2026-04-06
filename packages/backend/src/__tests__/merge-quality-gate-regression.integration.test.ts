@@ -78,6 +78,7 @@ vi.mock("../services/merge-quality-gates.js", () => ({
           OPENSPRINT_MERGE_GATE_TEST_MODE: "1",
           OPENSPRINT_VITEST_RUN_ID: options?.testRunId,
           OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS: String(options?.integrationWorkerCap ?? 2),
+          NODE_ENV: "test",
         },
       };
     }),
@@ -1568,6 +1569,7 @@ describe("Cross-service quality-gate regression integration", () => {
       expect(env.OPENSPRINT_MERGE_GATE_TEST_MODE).toBe("1");
       expect(env.OPENSPRINT_VITEST_INTEGRATION_MAX_WORKERS).toBe("2");
       expect(env.OPENSPRINT_VITEST_RUN_ID).toMatch(/^mergegate_/);
+      expect(env.NODE_ENV).toBe("test");
     }
   });
 });

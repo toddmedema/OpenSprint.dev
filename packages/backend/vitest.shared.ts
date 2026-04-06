@@ -100,6 +100,13 @@ export function createDrizzleSchemaPgResolvePlugin(): Plugin {
       ) {
         return drizzleSchemaPgSource;
       }
+      // Vitest/Vite can surface bare basenames or mixed roots under tinypool/coverage; pin to source.
+      const base = path.posix.basename(normalized.split("?")[0] ?? normalized);
+      if (base === "drizzle-schema-pg.ts" || base === "drizzle-schema-pg.js") {
+        if (!normalized.includes("node_modules")) {
+          return drizzleSchemaPgSource;
+        }
+      }
       return undefined;
     },
   };
