@@ -35,6 +35,7 @@ export const backendIntegrationInclude = [
   "src/__tests__/orphan-recovery.service.test.ts",
   "src/__tests__/plan-complexity.test.ts",
   "src/__tests__/plan-decompose-auto-review.test.ts",
+  "src/__tests__/plan-backward-compat.test.ts",
   "src/__tests__/plan-route.test.ts",
   "src/__tests__/plan-status.test.ts",
   "src/__tests__/plan-suggest.test.ts",
