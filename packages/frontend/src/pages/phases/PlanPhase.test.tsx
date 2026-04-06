@@ -2422,6 +2422,52 @@ describe("PlanPhase sendPlanMessage thunk", () => {
     expect(screen.getByTestId("plan-graph-view")).toBeInTheDocument();
   });
 
+  it("defaults to tree view when any plan has childPlanIds and opensprint.planView is unset", async () => {
+    const rootPlan = {
+      ...basePlan,
+      metadata: { ...basePlan.metadata, planId: "root-p", epicId: "e-root" },
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+      childPlanIds: ["child-p"],
+    };
+    const childPlan = {
+      ...basePlan,
+      metadata: {
+        ...basePlan.metadata,
+        planId: "child-p",
+        epicId: "e-child",
+        parentPlanId: "root-p",
+      },
+      parentPlanId: "root-p",
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+    };
+    const graph = { plans: [rootPlan, childPlan], edges: [] as { from: string; to: string; type: "blocks" }[] };
+    mockPlansList.mockResolvedValue(graph);
+    const store = createStore([rootPlan, childPlan], undefined, undefined, {
+      selectedPlanId: null,
+    });
+    act(() => {
+      store.dispatch(setPlansAndGraph({ plans: graph.plans, dependencyGraph: graph }));
+    });
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("view-toggle-tree")).toHaveAttribute("aria-checked", "true");
+    });
+    expect(screen.getByTestId("plan-tree-view")).toBeInTheDocument();
+  });
+
   it("positions dependency graph nodes on initial graph-view render without a click", async () => {
     storage["opensprint.planView"] = "graph";
 

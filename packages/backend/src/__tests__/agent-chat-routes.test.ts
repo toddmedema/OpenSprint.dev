@@ -30,6 +30,7 @@ describe("GET /tasks/:taskId/chat-history", () => {
   let app: express.Express;
 
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     app = buildApp();
   });
@@ -161,6 +162,7 @@ describe("GET /tasks/:taskId/chat-support", () => {
   let app: express.Express;
 
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     app = buildApp();
   });
@@ -236,20 +238,20 @@ describe("GET /tasks/:taskId/chat-support", () => {
     expect(res.body.data.reason).toBe("No active agent found for this task.");
   });
 
-  it("returns supported=true for all API backends", async () => {
-    const apiBackends = ["claude", "openai", "google", "lmstudio", "ollama"];
-
-    for (const backend of apiBackends) {
+  it.each(["claude", "openai", "google", "lmstudio", "ollama"] as const)(
+    "returns supported=true for %s API backend",
+    async (backend) => {
       mockSupportsChat.mockReturnValue({ supported: true, backend, reason: null });
 
       const res = await request(app).get(
-        `${API_PREFIX}/projects/proj-1/tasks/os-${backend}/chat-support`
+        `${API_PREFIX}/projects/proj-1/tasks/os-chat-api-${backend}/chat-support`
       );
 
       expect(res.status).toBe(200);
       expect(res.body.data.supported).toBe(true);
       expect(res.body.data.backend).toBe(backend);
       expect(res.body.data.reason).toBeNull();
+      expect(mockSupportsChat).toHaveBeenCalledWith(`os-chat-api-${backend}`);
     }
-  });
+  );
 });

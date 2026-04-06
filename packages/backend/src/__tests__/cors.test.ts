@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request, { type Test } from "supertest";
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
 import { localhostCors } from "../middleware/cors.js";
 import {
   ensureLocalSessionToken,
@@ -29,6 +29,12 @@ function createTestApp() {
   const app = express();
   app.use(localhostCors);
   app.get("/test", (_req, res) => res.json({ ok: true }));
+  // Without this, `cors` may forward `next(err)` into Express default handling, which can vary by
+  // version/load and merge-gate runs have observed intermittent 204 on disallowed preflight.
+  const onError: ErrorRequestHandler = (_err, _req, res, _next) => {
+    res.status(500).end();
+  };
+  app.use(onError);
   return app;
 }
 

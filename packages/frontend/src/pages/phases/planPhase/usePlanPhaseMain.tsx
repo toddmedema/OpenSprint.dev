@@ -78,6 +78,7 @@ import {
 import { useScrollToQuestion } from "../../../hooks/useScrollToQuestion";
 import { useOpenQuestionNotifications } from "../../../hooks/useOpenQuestionNotifications";
 import { formatPlanIdAsTitle } from "../../../lib/formatting";
+import { parsePlanContent } from "../../../lib/planContentUtils";
 import { matchesPlanSearchQuery } from "../../../lib/planSearchFilter";
 import { parseDetailParams, getProjectPhasePath } from "../../../lib/phaseRouting";
 import {
@@ -230,6 +231,39 @@ export function usePlanPhaseMain({
 
   const selectedPlan = plans.find((p) => p.metadata.planId === selectedPlanId) ?? null;
 
+  const planHierarchyNav = useMemo(() => {
+    if (!selectedPlan) {
+      return {
+        parent: null as { planId: string; title: string } | null,
+        children: [] as { planId: string; title: string }[],
+      };
+    }
+    const rawParent =
+      selectedPlan.metadata.parentPlanId ?? selectedPlan.parentPlanId ?? undefined;
+    const pid = typeof rawParent === "string" && rawParent.trim() !== "" ? rawParent.trim() : null;
+    const parentPlan = pid ? plans.find((p) => p.metadata.planId === pid) : undefined;
+    const parentTitle = parentPlan
+      ? (() => {
+          const { title } = parsePlanContent(parentPlan.content ?? "");
+          return title.trim() || formatPlanIdAsTitle(pid!);
+        })()
+      : pid
+        ? formatPlanIdAsTitle(pid)
+        : "";
+
+    const childIds = selectedPlan.childPlanIds ?? [];
+    const children = childIds.map((id) => {
+      const p = plans.find((x) => x.metadata.planId === id);
+      const { title } = p ? parsePlanContent(p.content ?? "") : { title: "" };
+      return { planId: id, title: title.trim() || formatPlanIdAsTitle(id) };
+    });
+
+    return {
+      parent: pid ? { planId: pid, title: parentTitle } : null,
+      children,
+    };
+  }, [selectedPlan, plans]);
+
   /** Resolve plan generation state for a given plan: planning / stale / ready. */
   const getPlanGenStateCallback = useCallback(
     (planId: string): PlanGenState => getPlanGenerationState(planId, activeAgents),
@@ -309,6 +343,8 @@ export function usePlanPhaseMain({
     token: number;
   } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  /** Skip first persist so hierarchy default can choose tree before `opensprint.planView` is written. */
+  const skipInitialPlanViewPersistRef = useRef(true);
 
   useEffect(() => {
     setSelectedVersionNumber(null);
@@ -606,12 +642,33 @@ export function usePlanPhaseMain({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (skipInitialPlanViewPersistRef.current) {
+      skipInitialPlanViewPersistRef.current = false;
+      return;
+    }
     try {
       localStorage.setItem("opensprint.planView", viewMode);
     } catch {
       // ignore
     }
   }, [viewMode]);
+
+  /** When the user has never persisted a view choice, prefer tree if any plan has sub-plans. */
+  useEffect(() => {
+    if (plansQuery.isLoading) return;
+    let hasStored = false;
+    try {
+      const stored = localStorage.getItem("opensprint.planView");
+      hasStored = stored === "card" || stored === "graph" || stored === "tree";
+    } catch {
+      return;
+    }
+    if (hasStored) return;
+
+    const hasHierarchy = plans.some((p) => (p.childPlanIds?.length ?? 0) > 0);
+    const nextMode: PlanViewMode = hasHierarchy ? "tree" : "card";
+    setViewMode((prev) => (prev === nextMode ? prev : nextMode));
+  }, [plans, plansQuery.isLoading]);
 
   // Use selectedPlanId when available so chat can display even before plans load (e.g. deep link)
   const planContext =
@@ -1049,6 +1106,14 @@ export function usePlanPhaseMain({
     [dispatch, onSelectPlanId]
   );
 
+  const handleHierarchyPlanSelect = useCallback(
+    (planId: string) => {
+      const plan = plans.find((p) => p.metadata.planId === planId);
+      if (plan) handleSelectPlan(plan);
+    },
+    [plans, handleSelectPlan]
+  );
+
   const handleClosePlan = useCallback(() => {
     setDismissedControlledPlanId(propSelectedPlanId ?? null);
     setPlanSidebarDismissed(true);
@@ -1365,6 +1430,9 @@ export function usePlanPhaseMain({
               selectedVersionNumber={selectedVersionNumber}
               onVersionSelect={setSelectedVersionNumber}
               sectionExpansionCommand={sectionExpansionCommand}
+              parentPlanNav={planHierarchyNav.parent}
+              childPlansNav={planHierarchyNav.children}
+              onSelectHierarchyPlan={handleHierarchyPlanSelect}
               headerActions={
                 <PlanDetailSidebarActions
                   planId={selectedPlan.metadata.planId}

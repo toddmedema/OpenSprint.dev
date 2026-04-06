@@ -34,6 +34,12 @@ export interface PlanDetailContentProps {
   onVersionSelect?: (versionNumber: number | null) => void;
   /** External command to expand/collapse all plan body sections. */
   sectionExpansionCommand?: { mode: "expand" | "collapse"; token: number } | null;
+  /** Parent plan for hierarchy breadcrumb (sub-plan detail sidebar). */
+  parentPlanNav?: { planId: string; title: string } | null;
+  /** Immediate child plans for hierarchy navigation. */
+  childPlansNav?: { planId: string; title: string }[];
+  /** Select another plan from hierarchy links (parent / sub-plans). */
+  onSelectHierarchyPlan?: (planId: string) => void;
 }
 
 /**
@@ -52,6 +58,9 @@ export function PlanDetailContent({
   selectedVersionNumber,
   onVersionSelect,
   sectionExpansionCommand = null,
+  parentPlanNav = null,
+  childPlansNav = [],
+  onSelectHierarchyPlan,
 }: PlanDetailContentProps) {
   const { title, body } = parsePlanContent(plan.content ?? "");
   const displayTitle = title || formatPlanIdAsTitle(plan.metadata.planId);
@@ -228,6 +237,18 @@ export function PlanDetailContent({
 
   const header = (
     <div className="flex flex-col gap-2 p-4">
+      {parentPlanNav && onSelectHierarchyPlan && (
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => onSelectHierarchyPlan(parentPlanNav.planId)}
+            className="text-left text-sm text-brand-600 hover:underline"
+            data-testid="plan-detail-parent-link"
+          >
+            Parent: {parentPlanNav.title}
+          </button>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-1">
           {isReadOnly ? (
@@ -300,6 +321,31 @@ export function PlanDetailContent({
           {headerActions && <div className="shrink-0 flex items-center gap-2">{headerActions}</div>}
         </div>
       </div>
+      {childPlansNav.length > 0 && onSelectHierarchyPlan && (
+        <div
+          className="rounded-lg border border-theme-border-subtle bg-theme-surface-muted/40 px-3 py-2"
+          data-testid="plan-detail-sub-plans"
+        >
+          <p className="text-xs font-medium text-theme-muted mb-1.5">
+            Sub-plans ({childPlansNav.length})
+          </p>
+          <ul className="space-y-1">
+            {childPlansNav.map((c) => (
+              <li key={c.planId}>
+                <button
+                  type="button"
+                  onClick={() => onSelectHierarchyPlan(c.planId)}
+                  className="text-left text-sm text-brand-600 hover:underline w-full truncate"
+                  title={c.title}
+                  data-testid={`plan-detail-child-link-${c.planId}`}
+                >
+                  {c.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {showVersionSelector && <div data-testid="plan-version-selector" className="sr-only" />}
     </div>
   );

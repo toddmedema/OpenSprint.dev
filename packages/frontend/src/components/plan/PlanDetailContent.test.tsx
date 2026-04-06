@@ -101,6 +101,70 @@ describe("PlanDetailContent", () => {
     expect(risksSection).toHaveAttribute("data-sidebar-section-title", "Risks");
   });
 
+  it("renders parent plan link and calls onSelectHierarchyPlan", async () => {
+    const user = userEvent.setup();
+    const onHierarchy = vi.fn();
+    const childPlan: Plan = {
+      ...mockPlan,
+      metadata: {
+        ...mockPlan.metadata,
+        planId: "child-plan",
+        parentPlanId: "parent-plan",
+      },
+      parentPlanId: "parent-plan",
+    };
+    render(
+      <PlanDetailContent
+        plan={childPlan}
+        onContentSave={onContentSave}
+        parentPlanNav={{ planId: "parent-plan", title: "Upstream epic" }}
+        onSelectHierarchyPlan={onHierarchy}
+      />
+    );
+    const link = screen.getByTestId("plan-detail-parent-link");
+    expect(link).toHaveTextContent("Parent: Upstream epic");
+    await user.click(link);
+    expect(onHierarchy).toHaveBeenCalledWith("parent-plan");
+  });
+
+  it("renders sub-plans section and calls onSelectHierarchyPlan for a child", async () => {
+    const user = userEvent.setup();
+    const onHierarchy = vi.fn();
+    const rootPlan: Plan = {
+      ...mockPlan,
+      metadata: { ...mockPlan.metadata, planId: "root-plan" },
+      childPlanIds: ["child-a", "child-b"],
+    };
+    render(
+      <PlanDetailContent
+        plan={rootPlan}
+        onContentSave={onContentSave}
+        childPlansNav={[
+          { planId: "child-a", title: "Stream A" },
+          { planId: "child-b", title: "Stream B" },
+        ]}
+        onSelectHierarchyPlan={onHierarchy}
+      />
+    );
+    expect(screen.getByTestId("plan-detail-sub-plans")).toHaveTextContent("Sub-plans (2)");
+    await user.click(screen.getByTestId("plan-detail-child-link-child-b"));
+    expect(onHierarchy).toHaveBeenCalledWith("child-b");
+  });
+
+  it("does not render hierarchy nav without onSelectHierarchyPlan", () => {
+    const withKids: Plan = { ...mockPlan, childPlanIds: ["x"] };
+    render(
+      <PlanDetailContent
+        plan={withKids}
+        onContentSave={onContentSave}
+        parentPlanNav={{ planId: "p", title: "P" }}
+        childPlansNav={[{ planId: "x", title: "X" }]}
+      />
+    );
+    expect(screen.queryByTestId("plan-detail-sub-plans")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plan-detail-parent-link")).not.toBeInTheDocument();
+  });
+
   it("applies collapse-all and expand-all section commands", async () => {
     const planWithTwoSections: Plan = {
       ...mockPlan,

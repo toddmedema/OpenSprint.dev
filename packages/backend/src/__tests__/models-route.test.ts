@@ -335,7 +335,8 @@ describe("Models API", () => {
             }),
         });
 
-      const res = await authedSupertest(app).get(
+      const res = await authedGetWithHangupRetry(
+        app,
         `${API_PREFIX}/models?provider=ollama&baseUrl=${encodeURIComponent("http://127.0.0.1:11434/proxy/v1")}`
       );
 
