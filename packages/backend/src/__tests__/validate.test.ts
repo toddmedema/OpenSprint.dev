@@ -5,12 +5,12 @@ import { validateParams, validateQuery, validateBody } from "../middleware/valid
 import { AppError } from "../middleware/error-handler.js";
 import { ErrorCodes } from "../middleware/error-codes.js";
 
-function assertValidationAppError(thrown: unknown, expectedMessage: string): void {
-  expect(thrown).toBeInstanceOf(AppError);
-  const err = thrown as AppError;
-  expect(err.statusCode).toBe(400);
-  expect(err.code).toBe(ErrorCodes.VALIDATION_ERROR);
-  expect(err.message).toBe(expectedMessage);
+function assertValidationAppError(err: unknown, expectedMessage: string): void {
+  expect(err).toBeInstanceOf(AppError);
+  const appErr = err as AppError;
+  expect(appErr.statusCode).toBe(400);
+  expect(appErr.code).toBe(ErrorCodes.VALIDATION_ERROR);
+  expect(appErr.message).toBe(expectedMessage);
 }
 
 describe("validate middleware", () => {
@@ -33,20 +33,15 @@ describe("validate middleware", () => {
       expect(req.params).toEqual({ projectId: id });
     });
 
-    it("throws AppError 400 with VALIDATION_ERROR and first Zod issue message on failure", () => {
+    it("calls next(AppError) with 400 VALIDATION_ERROR and first Zod issue message on failure", () => {
       const req = { params: { projectId: "not-a-uuid" } } as unknown as Request;
       const parsed = schema.safeParse(req.params);
       expect(parsed.success).toBe(false);
       const firstMessage = parsed.error!.issues[0]!.message;
 
-      let thrown: unknown;
-      try {
-        validateParams(schema)(req, mockRes, next);
-      } catch (e) {
-        thrown = e;
-      }
-      assertValidationAppError(thrown, firstMessage);
-      expect(next).not.toHaveBeenCalled();
+      validateParams(schema)(req, mockRes, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      assertValidationAppError(next.mock.calls[0]![0], firstMessage);
     });
 
     it("uses only the first issue message when multiple fields fail", () => {
@@ -59,13 +54,9 @@ describe("validate middleware", () => {
       expect(parsed.success).toBe(false);
       const firstOnly = parsed.error!.issues[0]!.message;
 
-      let thrown: unknown;
-      try {
-        validateParams(multi)(req, mockRes, next);
-      } catch (e) {
-        thrown = e;
-      }
-      assertValidationAppError(thrown, firstOnly);
+      validateParams(multi)(req, mockRes, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      assertValidationAppError(next.mock.calls[0]![0], firstOnly);
     });
   });
 
@@ -81,20 +72,15 @@ describe("validate middleware", () => {
       expect(req.query).toEqual({ page: 3 });
     });
 
-    it("throws AppError 400 with VALIDATION_ERROR and first Zod issue message on failure", () => {
+    it("calls next(AppError) with 400 VALIDATION_ERROR and first Zod issue message on failure", () => {
       const req = { query: { page: "0" } } as unknown as Request;
       const parsed = schema.safeParse(req.query);
       expect(parsed.success).toBe(false);
       const firstMessage = parsed.error!.issues[0]!.message;
 
-      let thrown: unknown;
-      try {
-        validateQuery(schema)(req, mockRes, next);
-      } catch (e) {
-        thrown = e;
-      }
-      assertValidationAppError(thrown, firstMessage);
-      expect(next).not.toHaveBeenCalled();
+      validateQuery(schema)(req, mockRes, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      assertValidationAppError(next.mock.calls[0]![0], firstMessage);
     });
   });
 
@@ -111,20 +97,15 @@ describe("validate middleware", () => {
       expect(req.body).toEqual({ name: "x", count: 2 });
     });
 
-    it("throws AppError 400 with VALIDATION_ERROR and first Zod issue message on failure", () => {
+    it("calls next(AppError) with 400 VALIDATION_ERROR and first Zod issue message on failure", () => {
       const req = { body: { name: "", count: 1.5 } } as unknown as Request;
       const parsed = schema.safeParse(req.body);
       expect(parsed.success).toBe(false);
       const firstMessage = parsed.error!.issues[0]!.message;
 
-      let thrown: unknown;
-      try {
-        validateBody(schema)(req, mockRes, next);
-      } catch (e) {
-        thrown = e;
-      }
-      assertValidationAppError(thrown, firstMessage);
-      expect(next).not.toHaveBeenCalled();
+      validateBody(schema)(req, mockRes, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      assertValidationAppError(next.mock.calls[0]![0], firstMessage);
     });
   });
 });

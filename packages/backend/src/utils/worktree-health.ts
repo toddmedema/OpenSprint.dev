@@ -351,6 +351,49 @@ export async function assertWorktreeIntegrity(
   };
 }
 
+/** Default TTL for {@link WorktreeCheckoutUsabilityCache} in orchestrator recovery paths. */
+export const DEFAULT_WORKTREE_CHECKOUT_USABILITY_CACHE_TTL_MS = 2_500;
+
+/** Correlates a GUPP assignment attempt with cached usability checks (task id + ordinal attempt). */
+export function guppWorktreeUsabilityAttemptId(parts: { taskId: string; attempt: number }): string {
+  return `${parts.taskId}:${parts.attempt}`;
+}
+
+interface WorktreeCheckoutUsabilityCacheEntry {
+  expiresAt: number;
+  value: Promise<boolean>;
+}
+
+/**
+ * Short-lived memo for {@link isWorktreeCheckoutUsable} keyed by repo path, worktree path, and attempt id.
+ * Coalesces duplicate checks in a single orchestrator tick without hiding long-lived filesystem changes.
+ */
+export class WorktreeCheckoutUsabilityCache {
+  private readonly entries = new Map<string, WorktreeCheckoutUsabilityCacheEntry>();
+
+  constructor(private readonly ttlMs: number) {}
+
+  async getOrEvaluate(
+    repoPath: string,
+    worktreePath: string,
+    attemptId: string,
+    evaluate: () => Promise<boolean>
+  ): Promise<boolean> {
+    const key = `${path.resolve(repoPath)}\0${path.resolve(worktreePath)}\0${attemptId}`;
+    const now = Date.now();
+    const hit = this.entries.get(key);
+    if (hit && hit.expiresAt > now) {
+      return hit.value;
+    }
+    const value = evaluate().catch((err: unknown) => {
+      this.entries.delete(key);
+      throw err;
+    });
+    this.entries.set(key, { expiresAt: now + this.ttlMs, value });
+    return value;
+  }
+}
+
 /**
  * Best-effort check that a worktree contains a real source checkout, not just runtime metadata.
  *

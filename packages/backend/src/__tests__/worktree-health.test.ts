@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -8,6 +8,8 @@ import {
   preflightWorktreeForDiff,
   IncompleteWorktreeError,
   worktreePathsResolveEqually,
+  WorktreeCheckoutUsabilityCache,
+  guppWorktreeUsabilityAttemptId,
 } from "../utils/worktree-health.js";
 
 describe("worktree-health", () => {
@@ -164,6 +166,112 @@ describe("worktree-health", () => {
       const result = await preflightWorktreeForDiff(repoDir, worktreeDir);
       expect(result.usable).toBe(false);
       expect(result.failureReason).toBe("source_directories_missing");
+    });
+  });
+
+  describe("guppWorktreeUsabilityAttemptId", () => {
+    it("joins task id and attempt ordinal", () => {
+      expect(guppWorktreeUsabilityAttemptId({ taskId: "os-abcd", attempt: 3 })).toBe("os-abcd:3");
+    });
+  });
+
+  describe("WorktreeCheckoutUsabilityCache", () => {
+    it("calls evaluate once per cache key within TTL", async () => {
+      vi.useFakeTimers({ now: 0 });
+      const cache = new WorktreeCheckoutUsabilityCache(60_000);
+      let calls = 0;
+      const evaluate = async () => {
+        calls += 1;
+        return true;
+      };
+      await expect(cache.getOrEvaluate("/repo", "/worktree", "task:1", evaluate)).resolves.toBe(
+        true
+      );
+      await expect(cache.getOrEvaluate("/repo", "/worktree", "task:1", evaluate)).resolves.toBe(
+        true
+      );
+      expect(calls).toBe(1);
+      vi.useRealTimers();
+    });
+
+    it("uses a distinct entry per attemptId", async () => {
+      vi.useFakeTimers({ now: 0 });
+      const cache = new WorktreeCheckoutUsabilityCache(60_000);
+      let calls = 0;
+      const evaluate = async () => {
+        calls += 1;
+        return true;
+      };
+      await cache.getOrEvaluate("/repo", "/worktree", "t:1", evaluate);
+      await cache.getOrEvaluate("/repo", "/worktree", "t:2", evaluate);
+      expect(calls).toBe(2);
+      vi.useRealTimers();
+    });
+
+    it("re-evaluates after TTL", async () => {
+      vi.useFakeTimers({ now: 0 });
+      const cache = new WorktreeCheckoutUsabilityCache(1000);
+      let calls = 0;
+      const evaluate = async () => {
+        calls += 1;
+        return calls === 1;
+      };
+      await expect(cache.getOrEvaluate("/r", "/w", "a:1", evaluate)).resolves.toBe(true);
+      vi.advanceTimersByTime(1001);
+      await expect(cache.getOrEvaluate("/r", "/w", "a:1", evaluate)).resolves.toBe(false);
+      expect(calls).toBe(2);
+      vi.useRealTimers();
+    });
+
+    it("deduplicates concurrent in-flight evaluations for the same key", async () => {
+      vi.useFakeTimers({ now: 0 });
+      const cache = new WorktreeCheckoutUsabilityCache(60_000);
+      let calls = 0;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const evaluate = async () => {
+        calls += 1;
+        await gate;
+        return true;
+      };
+      const p1 = cache.getOrEvaluate("/r", "/w", "x:1", evaluate);
+      const p2 = cache.getOrEvaluate("/r", "/w", "x:1", evaluate);
+      expect(calls).toBe(1);
+      release!();
+      await expect(Promise.all([p1, p2])).resolves.toEqual([true, true]);
+      expect(calls).toBe(1);
+      vi.useRealTimers();
+    });
+
+    it("does not cache rejected evaluations", async () => {
+      vi.useFakeTimers({ now: 0 });
+      const cache = new WorktreeCheckoutUsabilityCache(60_000);
+      let calls = 0;
+      const evaluate = async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("boom");
+        return true;
+      };
+      await expect(cache.getOrEvaluate("/r", "/w", "z:1", evaluate)).rejects.toThrow("boom");
+      await expect(cache.getOrEvaluate("/r", "/w", "z:1", evaluate)).resolves.toBe(true);
+      expect(calls).toBe(2);
+      vi.useRealTimers();
+    });
+
+    it("normalizes paths so equivalent spellings share one entry", async () => {
+      vi.useFakeTimers({ now: 0 });
+      const cache = new WorktreeCheckoutUsabilityCache(60_000);
+      let calls = 0;
+      const evaluate = async () => {
+        calls += 1;
+        return true;
+      };
+      await cache.getOrEvaluate("/repo/../repo", "/wt", "k:1", evaluate);
+      await cache.getOrEvaluate("/repo", "/wt", "k:1", evaluate);
+      expect(calls).toBe(1);
+      vi.useRealTimers();
     });
   });
 

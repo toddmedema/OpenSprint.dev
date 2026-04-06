@@ -117,7 +117,13 @@ import {
   synthesizeCodingResultFromOutput,
   classifyNoResultReasonCode,
 } from "./no-result-reason.service.js";
-import { isWorktreeCheckoutUsable, preflightWorktreeForDiff } from "../utils/worktree-health.js";
+import {
+  DEFAULT_WORKTREE_CHECKOUT_USABILITY_CACHE_TTL_MS,
+  WorktreeCheckoutUsabilityCache,
+  guppWorktreeUsabilityAttemptId,
+  isWorktreeCheckoutUsable,
+  preflightWorktreeForDiff,
+} from "../utils/worktree-health.js";
 import {
   describeStructuredOutputProblem,
   parseCodingAgentResult,
@@ -255,6 +261,9 @@ type TransitionTarget =
  */
 export class OrchestratorService {
   private state = new Map<string, OrchestratorState>();
+  private readonly worktreeCheckoutUsabilityCache = new WorktreeCheckoutUsabilityCache(
+    DEFAULT_WORKTREE_CHECKOUT_USABILITY_CACHE_TTL_MS
+  );
   /** @internal */ taskStore = taskStoreSingleton;
   private _projectService: ProjectService | null = null;
   /** @internal */ branchManager = new BranchManager();
@@ -1090,6 +1099,22 @@ export class OrchestratorService {
       : this.resumeRecoveredCodingFromTerminalResult(projectId, repoPath, task, assignment);
   }
 
+  /** Coalesces repeated {@link isWorktreeCheckoutUsable} checks per assignment within a short TTL. */
+  private isWorktreeCheckoutUsableCached(
+    repoPath: string,
+    worktreePath: string,
+    taskId: string,
+    attempt: number
+  ): Promise<boolean> {
+    const attemptId = guppWorktreeUsabilityAttemptId({ taskId, attempt });
+    return this.worktreeCheckoutUsabilityCache.getOrEvaluate(
+      repoPath,
+      worktreePath,
+      attemptId,
+      () => isWorktreeCheckoutUsable(repoPath, worktreePath)
+    );
+  }
+
   private async resumeRecoveredCodingFromTerminalResult(
     projectId: string,
     repoPath: string,
@@ -1098,7 +1123,12 @@ export class OrchestratorService {
   ): Promise<boolean> {
     if (
       assignment.worktreePath !== repoPath &&
-      !(await isWorktreeCheckoutUsable(repoPath, assignment.worktreePath))
+      !(await this.isWorktreeCheckoutUsableCached(
+        repoPath,
+        assignment.worktreePath,
+        task.id,
+        assignment.attempt
+      ))
     ) {
       log.warn("Recovery: assignment worktree is missing checkout files; skipping terminal result", {
         taskId: task.id,
@@ -1161,7 +1191,12 @@ export class OrchestratorService {
 
     if (
       assignment.worktreePath !== repoPath &&
-      !(await isWorktreeCheckoutUsable(repoPath, assignment.worktreePath))
+      !(await this.isWorktreeCheckoutUsableCached(
+        repoPath,
+        assignment.worktreePath,
+        task.id,
+        assignment.attempt
+      ))
     ) {
       log.warn("Recovery: review assignment worktree is missing checkout files; skipping", {
         taskId: task.id,
@@ -1388,7 +1423,12 @@ export class OrchestratorService {
 
     if (
       assignment.worktreePath !== repoPath &&
-      !(await isWorktreeCheckoutUsable(repoPath, assignment.worktreePath))
+      !(await this.isWorktreeCheckoutUsableCached(
+        repoPath,
+        assignment.worktreePath,
+        task.id,
+        assignment.attempt
+      ))
     ) {
       log.warn("Recovery: review worktree missing checkout files; cannot resume", {
         taskId: task.id,

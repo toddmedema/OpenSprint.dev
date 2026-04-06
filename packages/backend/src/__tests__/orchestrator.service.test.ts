@@ -436,31 +436,35 @@ vi.mock("../utils/file-utils.js", () => ({
   writeJsonAtomic: (...args: unknown[]) => mockWriteJsonAtomic(...args),
 }));
 
-vi.mock("../utils/worktree-health.js", () => ({
-  isWorktreeCheckoutUsable: vi.fn().mockResolvedValue(true),
-  preflightWorktreeForDiff: (...args: unknown[]) => mockPreflightWorktreeForDiff(...args),
-  assertWorktreeIntegrity: vi.fn().mockResolvedValue({
-    valid: true,
-    phase: "dispatch",
-    worktreePath: "",
-    taskId: "",
-  }),
-  rebuildWorktreeIfInvalid: vi.fn().mockResolvedValue({
-    rebuilt: false,
-    previousPath: "",
-    newPath: "",
-  }),
-  IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
-    worktreePath: string;
-    detail: string;
-    constructor(worktreePath: string, detail: string) {
-      super(`Worktree checkout at ${worktreePath} is incomplete: ${detail}`);
-      this.name = "IncompleteWorktreeError";
-      this.worktreePath = worktreePath;
-      this.detail = detail;
-    }
-  },
-}));
+vi.mock("../utils/worktree-health.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/worktree-health.js")>();
+  return {
+    ...actual,
+    isWorktreeCheckoutUsable: vi.fn().mockResolvedValue(true),
+    preflightWorktreeForDiff: (...args: unknown[]) => mockPreflightWorktreeForDiff(...args),
+    assertWorktreeIntegrity: vi.fn().mockResolvedValue({
+      valid: true,
+      phase: "dispatch",
+      worktreePath: "",
+      taskId: "",
+    }),
+    rebuildWorktreeIfInvalid: vi.fn().mockResolvedValue({
+      rebuilt: false,
+      previousPath: "",
+      newPath: "",
+    }),
+    IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
+      worktreePath: string;
+      detail: string;
+      constructor(worktreePath: string, detail: string) {
+        super(`Worktree checkout at ${worktreePath} is incomplete: ${detail}`);
+        this.name = "IncompleteWorktreeError";
+        this.worktreePath = worktreePath;
+        this.detail = detail;
+      }
+    },
+  };
+});
 
 vi.mock("../services/plan-complexity.js", () => ({
   getComplexityForAgent: (...args: unknown[]) => mockGetComplexityForAgent(...args),

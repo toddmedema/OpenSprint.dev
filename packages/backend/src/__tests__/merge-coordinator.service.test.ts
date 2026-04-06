@@ -152,14 +152,18 @@ vi.mock("../services/final-review.service.js", () => ({
   },
 }));
 
-vi.mock("../utils/worktree-health.js", () => ({
-  assertWorktreeIntegrity: vi
-    .fn()
-    .mockResolvedValue({ valid: true, phase: "merge", worktreePath: "", taskId: "" }),
-  evaluateWorktreeCleanupProtection: vi.fn().mockResolvedValue({ forbid: false }),
-  getWorktreeCleanupAssignmentGuardMs: vi.fn().mockReturnValue(30_000),
-  logWorktreeCleanupBlocked: vi.fn(),
-}));
+vi.mock("../utils/worktree-health.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/worktree-health.js")>();
+  return {
+    ...actual,
+    assertWorktreeIntegrity: vi
+      .fn()
+      .mockResolvedValue({ valid: true, phase: "merge", worktreePath: "", taskId: "" }),
+    evaluateWorktreeCleanupProtection: vi.fn().mockResolvedValue({ forbid: false }),
+    getWorktreeCleanupAssignmentGuardMs: vi.fn().mockReturnValue(30_000),
+    logWorktreeCleanupBlocked: vi.fn(),
+  };
+});
 
 vi.mock("../utils/failure-fingerprint.js", () => ({
   buildFailureFingerprint: vi.fn().mockReturnValue({

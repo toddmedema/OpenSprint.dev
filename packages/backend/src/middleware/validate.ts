@@ -17,7 +17,8 @@ export function validateParams(schema: z.ZodSchema) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.params);
     if (!result.success) {
-      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, firstErrorMessage(result.error));
+      next(new AppError(400, ErrorCodes.VALIDATION_ERROR, firstErrorMessage(result.error)));
+      return;
     }
     req.params = result.data as Record<string, string>;
     next();
@@ -28,7 +29,8 @@ export function validateQuery(schema: z.ZodSchema) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.query);
     if (!result.success) {
-      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, firstErrorMessage(result.error));
+      next(new AppError(400, ErrorCodes.VALIDATION_ERROR, firstErrorMessage(result.error)));
+      return;
     }
     req.query = result.data as Record<string, string>;
     next();
@@ -39,7 +41,8 @@ export function validateBody(schema: z.ZodSchema) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
-      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, firstErrorMessage(result.error));
+      next(new AppError(400, ErrorCodes.VALIDATION_ERROR, firstErrorMessage(result.error)));
+      return;
     }
     req.body = result.data;
     next();

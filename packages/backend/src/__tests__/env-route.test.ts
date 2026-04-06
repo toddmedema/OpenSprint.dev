@@ -91,6 +91,7 @@ describe("Env API", () => {
     );
     app = createMinimalEnvApp();
     vi.clearAllMocks();
+    mockValidateApiKey.mockReset();
     mockExecFile.mockReset();
     mockExecFile.mockImplementation(
       (

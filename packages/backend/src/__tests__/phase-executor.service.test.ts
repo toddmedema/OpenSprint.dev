@@ -26,15 +26,19 @@ vi.mock("../services/execute-replay-metadata.service.js", () => ({
 const { mockIsWorktreeCheckoutUsable } = vi.hoisted(() => ({
   mockIsWorktreeCheckoutUsable: vi.fn(),
 }));
-vi.mock("../utils/worktree-health.js", () => ({
-  isWorktreeCheckoutUsable: mockIsWorktreeCheckoutUsable,
-  IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "IncompleteWorktreeError";
-    }
-  },
-}));
+vi.mock("../utils/worktree-health.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/worktree-health.js")>();
+  return {
+    ...actual,
+    isWorktreeCheckoutUsable: mockIsWorktreeCheckoutUsable,
+    IncompleteWorktreeError: class IncompleteWorktreeError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = "IncompleteWorktreeError";
+      }
+    },
+  };
+});
 
 const mockCreateTaskWorktree = vi.fn();
 const mockCreateOrCheckoutBranch = vi.fn();
