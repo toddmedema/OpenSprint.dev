@@ -13,49 +13,11 @@ import {
 } from "../routes/integrations-todoist.js";
 import { errorHandler } from "../middleware/error-handler.js";
 
-vi.mock("../services/todoist-api-client.service.js", () => {
-  class _TodoistAuthError extends Error {
-    override name = "TodoistAuthError" as const;
-    constructor(
-      message: string,
-      public readonly httpStatusCode: number
-    ) {
-      super(message);
-    }
-  }
-
-  class _TodoistRateLimitError extends Error {
-    override name = "TodoistRateLimitError" as const;
-    constructor(
-      message: string,
-      public readonly retryAfter: number
-    ) {
-      super(message);
-    }
-  }
-
-  return {
-    generateOAuthState: vi.fn().mockReturnValue("mock-state-abc"),
-    buildAuthorizationUrl: vi
-      .fn()
-      .mockReturnValue("https://todoist.example/authorize?state=mock-state-abc"),
-    exchangeCodeForToken: vi.fn().mockResolvedValue({
-      accessToken: "tok-real-123",
-      tokenType: "Bearer",
-    }),
-    revokeAccessToken: vi.fn().mockResolvedValue(true),
-    getTodoistOAuthConfig: vi.fn().mockResolvedValue({
-      clientId: "test-client-id",
-      clientSecret: "test-client-secret",
-      redirectUri:
-        "http://localhost:3000/api/v1/projects/proj-1/integrations/todoist/oauth/callback",
-    }),
-    TodoistApiClient: vi.fn().mockImplementation(() => ({
-      getProjects: vi.fn().mockResolvedValue([{ id: "p1", name: "Inbox" }]),
-    })),
-    TodoistAuthError: _TodoistAuthError,
-    TodoistRateLimitError: _TodoistRateLimitError,
-  };
+vi.mock("../services/todoist-api-client.service.js", async () => {
+  const { createTodoistApiClientVitestMock } = await import(
+    "./mocks/todoist-api-client.service.vitest-mock.js"
+  );
+  return createTodoistApiClientVitestMock();
 });
 
 const mockedService = await import("../services/todoist-api-client.service.js");

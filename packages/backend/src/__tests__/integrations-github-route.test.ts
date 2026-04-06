@@ -80,22 +80,12 @@ vi.mock("../services/deploy-trigger.service.js", () => ({
   triggerDeployForEvent: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../services/todoist-api-client.service.js", () => ({
-  generateOAuthState: vi.fn(),
-  buildAuthorizationUrl: vi.fn(),
-  exchangeCodeForToken: vi.fn(),
-  revokeAccessToken: vi.fn(),
-  getTodoistOAuthConfig: vi.fn().mockReturnValue({
-    clientId: "tid",
-    clientSecret: "tsec",
-    redirectUri: "http://localhost:3000/callback",
-  }),
-  TodoistApiClient: vi.fn().mockImplementation(() => ({
-    getProjects: vi.fn().mockResolvedValue([]),
-  })),
-  TodoistAuthError: class extends Error { override name = "TodoistAuthError" as const; },
-  TodoistRateLimitError: class extends Error { override name = "TodoistRateLimitError" as const; },
-}));
+vi.mock("../services/todoist-api-client.service.js", async () => {
+  const { createTodoistApiClientVitestMock } = await import(
+    "./mocks/todoist-api-client.service.vitest-mock.js"
+  );
+  return createTodoistApiClientVitestMock();
+});
 
 // Mock global fetch for GitHub API calls
 const fetchMock = vi.fn();

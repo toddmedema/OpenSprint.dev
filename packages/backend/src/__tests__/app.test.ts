@@ -131,8 +131,11 @@ describe("App", () => {
   });
 
   it("rejects API requests without Bearer token", async () => {
+    vi.useRealTimers();
     const app = createApp();
-    const res = await request(app).get(`${API_PREFIX}/projects`);
+    const res = await request(app)
+      .get(`${API_PREFIX}/projects`)
+      .unset("Authorization");
     expect(res.status).toBe(403);
   });
 

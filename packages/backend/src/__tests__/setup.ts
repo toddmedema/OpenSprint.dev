@@ -10,7 +10,7 @@
  * ../db/drizzle-schema-pg.js) before importing the module under test. See test files that use
  * createMockDbClient or task-store mocks for examples.
  */
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
 import events from "events";
 import fs from "fs";
 import os from "os";
@@ -48,6 +48,15 @@ if (!setupGlobal.__opensprintTestHomeDir) {
 }
 process.env.HOME = setupGlobal.__opensprintTestHomeDir;
 process.env.USERPROFILE = setupGlobal.__opensprintTestHomeDir;
+
+/**
+ * Fake timers leak across sequential unit-test files in the same worker (Vitest forks,
+ * maxWorkers: 1). Left enabled, they stall real async I/O — e.g. supertest never completes
+ * and hits the default 30s test timeout. Always return to real timers after each test.
+ */
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 vi.mock("@google/genai", () => ({
   GoogleGenAI: vi.fn().mockImplementation(() => ({
