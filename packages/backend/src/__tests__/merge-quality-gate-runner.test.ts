@@ -164,6 +164,52 @@ Received: 200
     expect(getExecutedCommands(runCommand)).toEqual(["npm run test"]);
   });
 
+  it("prefers native module ABI errors over Vitest skipped-suite lines", async () => {
+    const worktreePath = await makeTempWorktree({ test: "vitest run" });
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run test") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed with exit code 1",
+            stderr: `
+RUN  v3.2.4 /tmp/backend
+↓ |backend-unit| src/__tests__/app-db-sqlite.test.ts (4 tests | 4 skipped)
+❯ |backend-integration| src/__tests__/schema-tasks-index.integration.test.ts (1 test | 1 failed)
+   × tasks composite index (SQLite) > creates idx_tasks_project_id_status on tasks
+     → The module '/repo/node_modules/better-sqlite3/build/Release/better_sqlite3.node'
+was compiled against a different Node.js version using
+NODE_MODULE_VERSION 145. This version of Node.js requires
+NODE_MODULE_VERSION 137. Please try re-compiling or re-installing
+the module (for instance, using \`npm rebuild\` or \`npm install\`).
+`,
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-native-abi",
+        branchName: "opensprint/os-native-abi",
+        baseBranch: "main",
+      },
+      {
+        commands: ["npm run test"],
+        runCommand,
+      }
+    );
+
+    expect(failure?.firstErrorLine).toMatch(/compiled against a different Node\.js version/i);
+  });
+
   it("redacts bearer tokens, sk- keys, and integration env assignments from gate failure output", async () => {
     const worktreePath = await makeTempWorktree({ test: "vitest run" });
     const jwt =

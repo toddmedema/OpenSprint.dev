@@ -72,7 +72,15 @@ export async function evaluateWorktreeCleanupProtection(
   resolvedWorktreePath: string,
   taskStoreShow: WorktreeCleanupTaskStoreShow,
   guardMs: number,
-  opts?: { ignoreLiveTaskStatusForTaskIds?: Set<string> }
+  opts?: {
+    ignoreLiveTaskStatusForTaskIds?: Set<string>;
+    /**
+     * Skip the "fresh assignment" grace check for these task IDs. Used when reclaiming a slot
+     * directory for the same task: assignment.json is written *after* `createTaskWorktree`, so
+     * any file on disk here is always from a prior attempt, not the current dispatch's agent.
+     */
+    ignoreFreshAssignmentForTaskIds?: Set<string>;
+  }
 ): Promise<WorktreeCleanupProtectionResult> {
   const summaries = await listAssignmentSummariesInWorktree(resolvedWorktreePath);
   if (summaries.length === 0) return { forbid: false };
@@ -81,6 +89,7 @@ export async function evaluateWorktreeCleanupProtection(
   const referencing: string[] = [];
 
   for (const s of summaries) {
+    if (opts?.ignoreFreshAssignmentForTaskIds?.has(s.taskId)) continue;
     const createdMs = Date.parse(s.createdAt);
     const age = Number.isFinite(createdMs) ? now - createdMs : Number.POSITIVE_INFINITY;
     if (age >= 0 && age < guardMs) {

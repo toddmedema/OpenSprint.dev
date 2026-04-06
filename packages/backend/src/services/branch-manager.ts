@@ -1462,7 +1462,12 @@ export class BranchManager {
           project.id,
           resolvedWt,
           (pid, tid) => this.taskStore.show(pid, tid),
-          getWorktreeCleanupAssignmentGuardMs()
+          getWorktreeCleanupAssignmentGuardMs(),
+          {
+            // Reclaim runs before assignment.json is written for this dispatch; leftovers are stale.
+            ignoreFreshAssignmentForTaskIds: new Set([taskId]),
+            ignoreLiveTaskStatusForTaskIds: new Set([taskId]),
+          }
         );
         if (prot.forbid) {
           logWorktreeCleanupBlocked("create_task_worktree_reclaim", {

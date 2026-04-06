@@ -1,29 +1,12 @@
 /**
  * Tests for SQLite-backed AppDb and DbClient (initAppDb with sqlite dialect).
- * Skipped when better-sqlite3 is not available (e.g. in worktrees where native module resolution fails).
+ * Requires a working better-sqlite3 native binding (run `npm rebuild better-sqlite3` after Node upgrades).
  */
 import { describe, it, expect } from "vitest";
 import { initAppDb } from "../db/app-db.js";
 import { randomUUID } from "crypto";
 
-type SqliteProbeCtor = new (filename: string) => { close: () => void };
-
-const betterSqlite3Available = await (async () => {
-  try {
-    // Import alone can succeed while native loading fails (ABI/arch mismatch).
-    const loaded = await import("better-sqlite3");
-    const Database =
-      (loaded as unknown as { default?: SqliteProbeCtor }).default ??
-      (loaded as unknown as SqliteProbeCtor);
-    const probe = new Database(":memory:");
-    probe.close();
-    return true;
-  } catch {
-    return false;
-  }
-})();
-
-describe.sequential.skipIf(!betterSqlite3Available)("initAppDb (SQLite)", () => {
+describe.sequential("initAppDb (SQLite)", () => {
   it("initializes with in-memory SQLite and runs schema", async () => {
     const appDb = await initAppDb("sqlite://:memory:");
     try {

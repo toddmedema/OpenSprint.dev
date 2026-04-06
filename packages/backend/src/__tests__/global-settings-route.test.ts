@@ -71,6 +71,47 @@ function createGlobalSettingsApp() {
   return app;
 }
 
+function isTransientSupertestTransportError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const code =
+    err && typeof err === "object" && "code" in err && typeof (err as { code: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : "";
+  return (
+    /socket hang up|ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|timeout|ECONNREFUSED|Parse Error/i.test(msg) ||
+    /socket hang up|ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|timeout|ECONNREFUSED/i.test(code)
+  );
+}
+
+/** Same pattern as env-route `getGlobalStatus`: timeout + retries under parallel vitest (merge-gate flakes). */
+const GS_SUPERTEST_TIMEOUT_MS = 10_000;
+
+function gsAuthed(app: ReturnType<typeof createGlobalSettingsApp>) {
+  const base = authedSupertest(app);
+  async function retry<T>(fn: () => Promise<T>): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastErr = err;
+        if (!isTransientSupertestTransportError(err) || attempt === 2) throw err;
+        await new Promise((r) => setTimeout(r, 30 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  }
+  return {
+    get: (url: string) => retry(() => base.get(url).timeout(GS_SUPERTEST_TIMEOUT_MS)),
+    put: (url: string) => ({
+      send: (body: object) => retry(() => base.put(url).send(body).timeout(GS_SUPERTEST_TIMEOUT_MS)),
+    }),
+    post: (url: string) => ({
+      send: (body: object) => retry(() => base.post(url).send(body).timeout(GS_SUPERTEST_TIMEOUT_MS)),
+    }),
+  };
+}
+
 describe("Global Settings API", () => {
   let app: ReturnType<typeof createGlobalSettingsApp>;
   let tmpDir: string;
@@ -98,7 +139,7 @@ describe("Global Settings API", () => {
 
   describe("GET /global-settings", () => {
     it("returns masked default databaseUrl when not configured", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
       expect(res.body.data.databaseUrl).toContain("opensprint.sqlite");
@@ -106,7 +147,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns preferredEditor defaulting to 'auto' when not configured", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.preferredEditor).toBe("auto");
     });
@@ -116,20 +157,10 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://user:secret123@db.example.com:5432/mydb",
       });
 
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
-          expect(res.status).toBe(200);
-          expect(res.body.data.databaseUrl).toBe("postgresql://user:***@db.example.com:5432/mydb");
-          expect(res.body.data.databaseUrl).not.toContain("secret123");
-          return;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          const retryable = msg.includes("Parse Error") || msg.includes("socket hang up");
-          if (!retryable || attempt === 2) throw err;
-          await new Promise((r) => setTimeout(r, 30 * (attempt + 1)));
-        }
-      }
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.databaseUrl).toBe("postgresql://user:***@db.example.com:5432/mydb");
+      expect(res.body.data.databaseUrl).not.toContain("secret123");
     });
 
     it("returns host and port visible in masked URL", async () => {
@@ -137,7 +168,7 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://admin:xyz@remote.host:15432/prod",
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toContain("remote.host");
       expect(res.body.data.databaseUrl).toContain("15432");
@@ -148,7 +179,7 @@ describe("Global Settings API", () => {
 
   describe("PUT /global-settings", () => {
     it("updates databaseUrl and returns masked value", async () => {
-      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      const res = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         databaseUrl: "postgresql://myuser:mypass@supabase.example.com:5432/db",
       });
 
@@ -157,14 +188,14 @@ describe("Global Settings API", () => {
         "postgresql://myuser:***@supabase.example.com:5432/db"
       );
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.databaseUrl).toBe(
         "postgresql://myuser:***@supabase.example.com:5432/db"
       );
     });
 
     it("accepts postgres:// scheme", async () => {
-      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      const res = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         databaseUrl: "postgres://u:secret@localhost:5432/test",
       });
 
@@ -180,14 +211,14 @@ describe("Global Settings API", () => {
         databaseUrl: "postgresql://a:b@host:5432/db",
       });
 
-      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({});
+      const res = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({});
 
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toBe("postgresql://a:***@host:5432/db");
     });
 
     it("returns 400 when databaseUrl is not a string", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({ databaseUrl: 123 });
 
@@ -197,7 +228,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl is empty", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({ databaseUrl: "   " });
 
@@ -207,7 +238,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl has invalid scheme", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({ databaseUrl: "mysql://localhost/db" });
 
@@ -216,7 +247,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl has no host", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({ databaseUrl: "postgresql://" });
 
@@ -227,7 +258,7 @@ describe("Global Settings API", () => {
     it("round-trips global agent defaults on PUT and GET", async () => {
       const simple = { type: "cursor", model: "global-simple", cliCommand: null };
       const complex = { type: "cursor", model: "global-complex", cliCommand: null };
-      const putRes = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      const putRes = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         simpleComplexityAgent: simple,
         complexComplexityAgent: complex,
       });
@@ -235,7 +266,7 @@ describe("Global Settings API", () => {
       expect(putRes.body.data.simpleComplexityAgent).toEqual(simple);
       expect(putRes.body.data.complexComplexityAgent).toEqual(complex);
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.simpleComplexityAgent).toEqual(simple);
       expect(getRes.body.data.complexComplexityAgent).toEqual(complex);
@@ -246,17 +277,17 @@ describe("Global Settings API", () => {
     });
 
     it("round-trips preferredEditor on PUT and GET", async () => {
-      const putRes = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      const putRes = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: "cursor",
       });
       expect(putRes.status).toBe(200);
       expect(putRes.body.data.preferredEditor).toBe("cursor");
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.preferredEditor).toBe("cursor");
     });
 
     it("returns 400 for invalid preferredEditor", async () => {
-      const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      const res = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: "vim",
       });
       expect(res.status).toBe(400);
@@ -264,10 +295,10 @@ describe("Global Settings API", () => {
     });
 
     it("clears preferredEditor when null (reverts to default auto)", async () => {
-      await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: "vscode",
       });
-      const clear = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+      const clear = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
         preferredEditor: null,
       });
       expect(clear.status).toBe(200);
@@ -278,7 +309,7 @@ describe("Global Settings API", () => {
 
     it("accepts all valid preferredEditor values", async () => {
       for (const editor of ["vscode", "cursor", "auto"]) {
-        const res = await authedSupertest(app).put(`${API_PREFIX}/global-settings`).send({
+        const res = await gsAuthed(app).put(`${API_PREFIX}/global-settings`).send({
           preferredEditor: editor,
         });
         expect(res.status).toBe(200);
@@ -291,7 +322,7 @@ describe("Global Settings API", () => {
         simpleComplexityAgent: { type: "cursor", model: "x", cliCommand: null },
         complexComplexityAgent: { type: "cursor", model: "y", cliCommand: null },
       });
-      const putRes = await authedSupertest(app)
+      const putRes = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({ simpleComplexityAgent: null, complexComplexityAgent: null });
       expect(putRes.status).toBe(200);
@@ -300,7 +331,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 for invalid global agent config", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           simpleComplexityAgent: { type: "cursor", model: "ok", cliCommand: null },
@@ -320,7 +351,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys).toBeDefined();
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([{ id: "k1", masked: "••••••••" }]);
@@ -330,7 +361,7 @@ describe("Global Settings API", () => {
     });
 
     it("omits apiKeys when not configured", async () => {
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.databaseUrl).toBeDefined();
       expect(res.body.data.apiKeys).toBeUndefined();
@@ -344,7 +375,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
         { id: "k1", masked: "••••••••", limitHitAt },
@@ -355,7 +386,7 @@ describe("Global Settings API", () => {
 
   describe("PUT /global-settings with apiKeys", () => {
     it("accepts and persists apiKeys, returns masked", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           apiKeys: {
@@ -369,7 +400,7 @@ describe("Global Settings API", () => {
       });
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY[0]).not.toContain("sk-ant-new-key");
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
         { id: "k1", masked: "••••••••" },
       ]);
@@ -382,7 +413,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           apiKeys: {
@@ -393,14 +424,14 @@ describe("Global Settings API", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([{ id: "k1", masked: "••••••••" }]);
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([
         { id: "k1", masked: "••••••••" },
       ]);
     });
 
     it("accepts databaseUrl and apiKeys together", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           databaseUrl: "postgresql://u:p@localhost:5432/db",
@@ -430,7 +461,7 @@ describe("Global Settings API", () => {
         { id: "k1", value: "sk-ant-1" },
         { id: "k2", value: "sk-ant-2" },
       ];
-      const putRes = await authedSupertest(app)
+      const putRes = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           apiKeys: { ANTHROPIC_API_KEY: reordered },
@@ -439,7 +470,7 @@ describe("Global Settings API", () => {
       const putIds = putRes.body.data.apiKeys.ANTHROPIC_API_KEY.map((e: { id: string }) => e.id);
       expect(putIds).toEqual(["k3", "k1", "k2"]);
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.status).toBe(200);
       const getIds = getRes.body.data.apiKeys.ANTHROPIC_API_KEY.map((e: { id: string }) => e.id);
       expect(getIds).toEqual(["k3", "k1", "k2"]);
@@ -454,7 +485,7 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await authedSupertest(app).get(
+      const res = await gsAuthed(app).get(
         `${API_PREFIX}/global-settings/reveal-key/ANTHROPIC_API_KEY/k1`
       );
 
@@ -463,7 +494,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 404 when key not found", async () => {
-      const res = await authedSupertest(app).get(
+      const res = await gsAuthed(app).get(
         `${API_PREFIX}/global-settings/reveal-key/ANTHROPIC_API_KEY/nonexistent`
       );
 
@@ -472,7 +503,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 for invalid provider", async () => {
-      const res = await authedSupertest(app).get(
+      const res = await gsAuthed(app).get(
         `${API_PREFIX}/global-settings/reveal-key/INVALID_PROVIDER/k1`
       );
 
@@ -490,9 +521,9 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await authedSupertest(app).post(
-        `${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`
-      );
+      const res = await gsAuthed(app)
+        .post(`${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`)
+        .send({});
 
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.ANTHROPIC_API_KEY).toEqual([{ id: "k1", masked: "••••••••" }]);
@@ -503,9 +534,9 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 for invalid provider", async () => {
-      const res = await authedSupertest(app).post(
-        `${API_PREFIX}/global-settings/clear-limit-hit/INVALID_PROVIDER/k1`
-      );
+      const res = await gsAuthed(app)
+        .post(`${API_PREFIX}/global-settings/clear-limit-hit/INVALID_PROVIDER/k1`)
+        .send({});
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
@@ -518,9 +549,9 @@ describe("Global Settings API", () => {
         },
       });
 
-      const res = await authedSupertest(app).post(
-        `${API_PREFIX}/global-settings/clear-limit-hit/CURSOR_API_KEY/c1`
-      );
+      const res = await gsAuthed(app)
+        .post(`${API_PREFIX}/global-settings/clear-limit-hit/CURSOR_API_KEY/c1`)
+        .send({});
 
       expect(res.status).toBe(200);
       expect(res.body.data.apiKeys.CURSOR_API_KEY).toEqual([{ id: "c1", masked: "••••••••" }]);
@@ -538,9 +569,9 @@ describe("Global Settings API", () => {
         { id: "proj-b", name: "B", repoPath: "/b", createdAt: new Date().toISOString() },
       ]);
 
-      const res = await authedSupertest(app).post(
-        `${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`
-      );
+      const res = await gsAuthed(app)
+        .post(`${API_PREFIX}/global-settings/clear-limit-hit/ANTHROPIC_API_KEY/k1`)
+        .send({});
 
       expect(res.status).toBe(200);
       expect(mockNudge).toHaveBeenCalledTimes(2);
@@ -551,7 +582,7 @@ describe("Global Settings API", () => {
 
   describe("POST /global-settings/setup-tables", () => {
     it("returns 400 when databaseUrl is missing", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .post(`${API_PREFIX}/global-settings/setup-tables`)
         .send({});
 
@@ -561,7 +592,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl is empty", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .post(`${API_PREFIX}/global-settings/setup-tables`)
         .send({ databaseUrl: "   " });
 
@@ -571,7 +602,7 @@ describe("Global Settings API", () => {
     });
 
     it("returns 400 when databaseUrl has invalid scheme", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .post(`${API_PREFIX}/global-settings/setup-tables`)
         .send({ databaseUrl: "mysql://localhost/db" });
 
@@ -588,7 +619,7 @@ describe("Global Settings API", () => {
         return; // Skip if test DB not available
       }
 
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .post(`${API_PREFIX}/global-settings/setup-tables`)
         .send({ databaseUrl: testUrl });
 
@@ -599,7 +630,7 @@ describe("Global Settings API", () => {
 
   describe("Todoist credentials", () => {
     it("PUT saves todoistOAuth and GET returns masked credentials", async () => {
-      const putRes = await authedSupertest(app)
+      const putRes = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {
@@ -617,7 +648,7 @@ describe("Global Settings API", () => {
         configured: true,
       });
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.todoistOAuth).toEqual({
         clientId: "my-client-id",
         clientSecretMasked: "••••••••",
@@ -627,7 +658,7 @@ describe("Global Settings API", () => {
     });
 
     it("GET /reveal-todoist-secret returns raw secret", async () => {
-      await authedSupertest(app)
+      await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {
@@ -637,31 +668,20 @@ describe("Global Settings API", () => {
           },
         });
 
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const res = await authedSupertest(app).get(
-            `${API_PREFIX}/global-settings/reveal-todoist-secret`
-          );
-          expect(res.status).toBe(200);
-          expect(res.body.data.value).toBe("the-actual-secret");
-          return;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes("socket hang up") || attempt === 2) throw err;
-          await new Promise((r) => setTimeout(r, 40 * (attempt + 1)));
-        }
-      }
+      const res = await gsAuthed(app).get(`${API_PREFIX}/global-settings/reveal-todoist-secret`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.value).toBe("the-actual-secret");
     });
 
     it("GET /reveal-todoist-secret returns 404 when not configured", async () => {
-      const res = await authedSupertest(app).get(
+      const res = await gsAuthed(app).get(
         `${API_PREFIX}/global-settings/reveal-todoist-secret`
       );
       expect(res.status).toBe(404);
     });
 
     it("PUT with todoistOAuth: null clears stored credentials", async () => {
-      await authedSupertest(app)
+      await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {
@@ -671,19 +691,19 @@ describe("Global Settings API", () => {
           },
         });
 
-      const clearRes = await authedSupertest(app)
+      const clearRes = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({ todoistOAuth: null });
 
       expect(clearRes.status).toBe(200);
       expect(clearRes.body.data.todoistOAuth).toBeUndefined();
 
-      const getRes = await authedSupertest(app).get(`${API_PREFIX}/global-settings`);
+      const getRes = await gsAuthed(app).get(`${API_PREFIX}/global-settings`);
       expect(getRes.body.data.todoistOAuth).toBeUndefined();
     });
 
     it("preserves existing secret when updating clientId/redirectUri with empty secret", async () => {
-      await authedSupertest(app)
+      await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {
@@ -693,7 +713,7 @@ describe("Global Settings API", () => {
           },
         });
 
-      const updateRes = await authedSupertest(app)
+      const updateRes = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {
@@ -713,7 +733,7 @@ describe("Global Settings API", () => {
     });
 
     it("rejects todoistOAuth updates missing a usable clientSecret", async () => {
-      const res = await authedSupertest(app)
+      const res = await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {
@@ -729,7 +749,7 @@ describe("Global Settings API", () => {
     });
 
     it("persists todoistOAuth to disk and reads it back", async () => {
-      await authedSupertest(app)
+      await gsAuthed(app)
         .put(`${API_PREFIX}/global-settings`)
         .send({
           todoistOAuth: {

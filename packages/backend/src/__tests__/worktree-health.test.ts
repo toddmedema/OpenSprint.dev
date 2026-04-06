@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import {
   validateWorktreeCheckout,
   isWorktreeCheckoutUsable,
@@ -10,6 +11,7 @@ import {
   worktreePathsResolveEqually,
   WorktreeCheckoutUsabilityCache,
   guppWorktreeUsabilityAttemptId,
+  evaluateWorktreeCleanupProtection,
 } from "../utils/worktree-health.js";
 
 describe("worktree-health", () => {
@@ -272,6 +274,74 @@ describe("worktree-health", () => {
       await cache.getOrEvaluate("/repo", "/wt", "k:1", evaluate);
       expect(calls).toBe(1);
       vi.useRealTimers();
+    });
+  });
+
+  describe("evaluateWorktreeCleanupProtection", () => {
+    it("forbids cleanup when assignment is within grace window", async () => {
+      const tid = "os-test.1";
+      await fs.mkdir(path.join(worktreeDir, OPENSPRINT_PATHS.active, tid), { recursive: true });
+      await fs.writeFile(
+        path.join(worktreeDir, OPENSPRINT_PATHS.active, tid, OPENSPRINT_PATHS.assignment),
+        JSON.stringify({ taskId: tid, createdAt: new Date().toISOString() })
+      );
+      const show = async () => ({ status: "closed" as const });
+      const r = await evaluateWorktreeCleanupProtection("proj", worktreeDir, show, 60_000);
+      expect(r.forbid).toBe(true);
+      expect(r.reason).toBe("fresh_assignment_on_disk");
+    });
+
+    it("allows fresh assignment when task id is in ignoreFreshAssignmentForTaskIds", async () => {
+      const tid = "os-test.1";
+      await fs.mkdir(path.join(worktreeDir, OPENSPRINT_PATHS.active, tid), { recursive: true });
+      await fs.writeFile(
+        path.join(worktreeDir, OPENSPRINT_PATHS.active, tid, OPENSPRINT_PATHS.assignment),
+        JSON.stringify({ taskId: tid, createdAt: new Date().toISOString() })
+      );
+      const show = async () => ({ status: "closed" as const });
+      const r = await evaluateWorktreeCleanupProtection("proj", worktreeDir, show, 60_000, {
+        ignoreFreshAssignmentForTaskIds: new Set([tid]),
+      });
+      expect(r.forbid).toBe(false);
+    });
+
+    it("still forbids when another task has a fresh assignment", async () => {
+      const ours = "os-a.1";
+      const other = "os-b.1";
+      for (const id of [ours, other]) {
+        await fs.mkdir(path.join(worktreeDir, OPENSPRINT_PATHS.active, id), { recursive: true });
+        await fs.writeFile(
+          path.join(worktreeDir, OPENSPRINT_PATHS.active, id, OPENSPRINT_PATHS.assignment),
+          JSON.stringify({ taskId: id, createdAt: new Date().toISOString() })
+        );
+      }
+      const show = async () => ({ status: "closed" as const });
+      const r = await evaluateWorktreeCleanupProtection("proj", worktreeDir, show, 60_000, {
+        ignoreFreshAssignmentForTaskIds: new Set([ours]),
+      });
+      expect(r.forbid).toBe(true);
+      expect(r.reason).toBe("fresh_assignment_on_disk");
+    });
+
+    it("forbids when task is in_progress unless ignored for live status", async () => {
+      const tid = "os-test.1";
+      await fs.mkdir(path.join(worktreeDir, OPENSPRINT_PATHS.active, tid), { recursive: true });
+      await fs.writeFile(
+        path.join(worktreeDir, OPENSPRINT_PATHS.active, tid, OPENSPRINT_PATHS.assignment),
+        JSON.stringify({
+          taskId: tid,
+          createdAt: new Date(Date.now() - 86400000).toISOString(),
+        })
+      );
+      const show = async () => ({ status: "in_progress" as const });
+      const blocked = await evaluateWorktreeCleanupProtection("proj", worktreeDir, show, 60_000);
+      expect(blocked.forbid).toBe(true);
+      expect(blocked.reason?.startsWith("active_task_")).toBe(true);
+
+      const allowed = await evaluateWorktreeCleanupProtection("proj", worktreeDir, show, 60_000, {
+        ignoreLiveTaskStatusForTaskIds: new Set([tid]),
+      });
+      expect(allowed.forbid).toBe(false);
     });
   });
 

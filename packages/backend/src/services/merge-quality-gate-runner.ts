@@ -245,6 +245,8 @@ const QUALITY_GATE_NOISE_PATTERNS: RegExp[] = [
   /^\s*[|\\/-]{2,}\s*$/,
   /^\s*[=-]{3,}\s*$/,
   /^\s*✓\s+/,
+  /** Vitest marks skipped suites/tests with a leading "↓" in TAP-like output. */
+  /^\s*↓\s+/,
   /^\s*at\s+\S+/,
   /^\s*node:/i,
 ];
@@ -264,6 +266,11 @@ const QUALITY_GATE_ACTIONABLE_PATTERNS: Array<{ pattern: RegExp; score: number }
   { pattern: /\berror during build\b/i, score: 90 },
   { pattern: /\b(Command failed|failed)\b/i, score: 75 },
   { pattern: /\bError:/i, score: 70 },
+  {
+    pattern: /\bcompiled against a different Node\.js version\b/i,
+    score: 128,
+  },
+  { pattern: /\bNODE_MODULE_VERSION\b/, score: 127 },
 ];
 
 function isNoiseLine(line: string): boolean {
