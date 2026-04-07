@@ -317,6 +317,17 @@ describe("classifyAgentApiError", () => {
     expect(classifyAgentApiError({ status: 429 })).toBe("rate_limit");
   });
 
+  it("classifies Cursor usage / increase-limits copy as provider limit (not generic failure)", () => {
+    expect(
+      classifyAgentApiError(
+        new Error("b: Increase limits for faster responses You're out of usage.")
+      )
+    ).toBe("out_of_credit");
+    expect(
+      classifyAgentApiError(new Error("Recent agent output: Increase limits for faster responses"))
+    ).toBe("rate_limit");
+  });
+
   it("returns null for non-API errors", () => {
     expect(classifyAgentApiError(new Error("Connection timeout"))).toBe(null);
     expect(classifyAgentApiError(new Error("Something went wrong"))).toBe(null);

@@ -30,10 +30,19 @@ const RATE_LIMIT_PATTERNS = [
   /quota\s+exceeded/i,
   /resource\s+exhausted/i,
   /too\s+many\s+requests/i,
+  /increase\s+limits\s+for\s+faster\s+responses/i,
+  /\bout\s+of\s+usage\b/i,
+  /you'?re\s+out\s+of\s+usage/i,
 ];
 
 const AUTH_PATTERNS = [/api\s*key/i, /unauthorized/i, /authentication/i, /invalid\s*token/i];
-const OUT_OF_CREDIT_PATTERNS = [/out\s*of\s*credit/i, /billing/i, /insufficient\s*(quota|credit)/i];
+const OUT_OF_CREDIT_PATTERNS = [
+  /out\s*of\s*credit/i,
+  /billing/i,
+  /insufficient\s*(quota|credit)/i,
+  /\bout\s+of\s+usage\b/i,
+  /you'?re\s+out\s+of\s+usage/i,
+];
 const SCOPE_COMPLIANCE_PATTERNS = [/scope\s*compliance/i, /scope_compliance/i];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

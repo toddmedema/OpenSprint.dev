@@ -47,6 +47,10 @@ const LIMIT_ERROR_PATTERNS = [
   /insufficient_quota/i,
   /too\s+many\s+requests/i,
   /resource\s+exhausted/i,
+  /** Cursor / IDE when the provider account is out of usage (distinct from "out of credit" billing copy). */
+  /increase\s+limits\s+for\s+faster\s+responses/i,
+  /\bout\s+of\s+usage\b/i,
+  /you'?re\s+out\s+of\s+usage/i,
 ];
 
 /** Extract all string content from an error for limit-pattern matching. */
@@ -152,6 +156,9 @@ const OUT_OF_CREDIT_PATTERNS = [
   /billing/i,
   /credit\s*balance/i,
   /add\s+more\s+tokens/i,
+  /** Same as limit patterns for "usage" quota; kept here so billing vs quota wording both classify. */
+  /\bout\s+of\s+usage\b/i,
+  /you'?re\s+out\s+of\s+usage/i,
 ];
 
 /**

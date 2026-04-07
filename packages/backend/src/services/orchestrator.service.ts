@@ -46,7 +46,7 @@ import { notificationService } from "./notification.service.js";
 import { maybeAutoRespond } from "./open-question-autoresolve.service.js";
 import { broadcastToProject } from "../websocket/index.js";
 import { broadcastAuthoritativeTaskUpdated } from "../task-store-events.js";
-import { getErrorMessage } from "../utils/error-utils.js";
+import { classifyAgentApiError, getErrorMessage } from "../utils/error-utils.js";
 import { extractJsonFromAgentResponse } from "../utils/json-extract.js";
 import { assertSafeTaskWorktreePath } from "../utils/path-safety.js";
 import { TimerRegistry } from "./timer-registry.js";
@@ -2251,7 +2251,11 @@ export class OrchestratorService {
           : undefined;
       const noResultReasonCode =
         failureType === "no_result"
-          ? classifyNoResultReasonCode({ rawResult, readFailure })
+          ? classifyNoResultReasonCode({
+              rawResult,
+              readFailure,
+              agentOutputHint: noResultReason,
+            })
           : undefined;
       slot.agent.killedDueToTimeout = false;
       const noResultMessage =
@@ -2658,17 +2662,36 @@ export class OrchestratorService {
       }
 
       const reason = result.summary || `Agent exited with code ${exitCode}`;
-      await this.failureHandler.handleTaskFailure(
-        projectId,
-        repoPath,
-        task,
-        branchName,
-        reason,
-        null,
-        "coding_failure",
-        undefined,
-        { agentDebugArtifact: result.debugArtifact, exitCode }
-      );
+      const apiFailureKind = classifyAgentApiError(new Error(reason));
+      if (apiFailureKind) {
+        await this.failureHandler.handleTaskFailure(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          reason,
+          null,
+          "no_result",
+          undefined,
+          {
+            noResultReasonCode: "agent_provider_usage_limit",
+            agentDebugArtifact: result.debugArtifact,
+            exitCode,
+          }
+        );
+      } else {
+        await this.failureHandler.handleTaskFailure(
+          projectId,
+          repoPath,
+          task,
+          branchName,
+          reason,
+          null,
+          "coding_failure",
+          undefined,
+          { agentDebugArtifact: result.debugArtifact, exitCode }
+        );
+      }
     }
   }
 

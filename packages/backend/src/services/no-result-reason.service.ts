@@ -9,6 +9,7 @@ import fs from "fs/promises";
 import { OPENSPRINT_PATHS } from "@opensprint/shared";
 import type { CodingAgentResult } from "@opensprint/shared";
 import type { ReviewOutcome } from "./task-phase-coordinator.js";
+import { classifyAgentApiError } from "../utils/error-utils.js";
 
 const DEFAULT_REASON_LIMIT = 240;
 const DEFAULT_OPEN_QUESTION_ID = "q1";
@@ -31,7 +32,9 @@ export type NoResultReasonCode =
   | "result_non_terminal_status"
   | "result_shape_invalid"
   | "result_read_timeout"
-  | "result_read_error";
+  | "result_read_error"
+  /** Agent output or stderr indicates rate limit, quota, or API key / usage limits (not a coding logic failure). */
+  | "agent_provider_usage_limit";
 
 const TERMINAL_RESULT_STATUSES = new Set(["success", "failed", "approved", "rejected"]);
 
@@ -355,9 +358,13 @@ export function synthesizeCodingResultFromOutput(
 
   const summary = summarizeTerminalResultText(notes);
   if (!summary) return undefined;
+  const apiKind = classifyAgentApiError(new Error(notes));
+  const prefix = apiKind
+    ? "API usage or provider limit stopped the agent before result.json was written"
+    : "Agent exited without writing result.json";
   return {
     status: "failed",
-    summary: `Agent exited without writing result.json: ${summary}`.slice(0, DEFAULT_REASON_LIMIT),
+    summary: `${prefix}: ${summary}`.slice(0, DEFAULT_REASON_LIMIT),
     filesChanged: [],
     testsWritten: 0,
     testsPassed: 0,
@@ -495,7 +502,13 @@ export function buildReviewNoResultFailureReason(reviewOutcome: ReviewOutcome): 
 export function classifyNoResultReasonCode(params: {
   rawResult: string | null;
   readFailure?: "timeout" | "error" | null;
+  /** Last-resort agent output snippet when result.json is missing (log-derived). */
+  agentOutputHint?: string | null;
 }): NoResultReasonCode {
+  const hint = params.agentOutputHint?.trim() ?? "";
+  if (hint && classifyAgentApiError(new Error(hint))) {
+    return "agent_provider_usage_limit";
+  }
   if (params.readFailure === "timeout") return "result_read_timeout";
   if (params.readFailure === "error") return "result_read_error";
   if (params.rawResult == null) return "result_missing";

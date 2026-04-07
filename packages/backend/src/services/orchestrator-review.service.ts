@@ -721,7 +721,11 @@ export class OrchestratorReviewService {
           : "no_result";
       const noResultReasonCode =
         failureType === "no_result"
-          ? classifyNoResultReasonCode({ rawResult, readFailure: null })
+          ? classifyNoResultReasonCode({
+              rawResult,
+              readFailure: null,
+              agentOutputHint: noResultReason,
+            })
           : undefined;
       slot.agent.killedDueToTimeout = false;
       if (reviewAgentState) reviewAgentState.agent.killedDueToTimeout = false;

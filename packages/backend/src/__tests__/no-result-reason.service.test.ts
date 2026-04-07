@@ -9,9 +9,25 @@ import {
   extractNoResultReasonFromLogs,
   buildReviewNoResultFailureReason,
   synthesizeCodingResultFromOutput,
+  classifyNoResultReasonCode,
 } from "../services/no-result-reason.service.js";
 
 describe("no-result-reason.service", () => {
+  describe("classifyNoResultReasonCode", () => {
+    it("returns agent_provider_usage_limit when log hint matches API/quota copy", () => {
+      expect(
+        classifyNoResultReasonCode({
+          rawResult: null,
+          agentOutputHint: "b: Increase limits for faster responses You're out of usage.",
+        })
+      ).toBe("agent_provider_usage_limit");
+    });
+
+    it("still classifies JSON parse issues when hint is absent", () => {
+      expect(classifyNoResultReasonCode({ rawResult: "{ not json" })).toBe("result_invalid_json");
+    });
+  });
+
   describe("isMeaningfulNoResultFragment", () => {
     it("returns true for strings with alphanumeric content", () => {
       expect(isMeaningfulNoResultFragment("error")).toBe(true);
@@ -208,6 +224,21 @@ describe("no-result-reason.service", () => {
           summary: expect.stringMatching(
             /Agent exited without writing result\.json:.*Failed to reach the Cursor API/i
           ),
+        })
+      );
+      expect(result?.open_questions).toBeUndefined();
+    });
+
+    it("uses API usage wording when output shows provider quota / usage limits", () => {
+      const result = synthesizeCodingResultFromOutput([
+        "b: Increase limits for faster responses You're out of usage.\n",
+      ]);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: "failed",
+          summary: expect.stringContaining("API usage or provider limit stopped the agent"),
+          notes: "b: Increase limits for faster responses You're out of usage.",
         })
       );
       expect(result?.open_questions).toBeUndefined();
