@@ -82,6 +82,11 @@ export interface Plan {
   parentPlanId?: string | null;
   /** IDs of immediate child plans for tree rendering */
   childPlanIds?: string[];
+  /**
+   * When true, leaf task generation should be deferred or consolidated (e.g. plan body too large).
+   * Set by backend or surfaced after failed batch generation.
+   */
+  tooLargeForLeaf?: boolean;
 
   /**
    * POST /plan-tasks response only: recursive task generation outcome.

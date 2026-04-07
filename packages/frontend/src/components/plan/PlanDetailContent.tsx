@@ -14,6 +14,21 @@ import { usePlanVersions, usePlanVersion } from "../../api/hooks";
 /** Matches PrdSectionEditor / Sketch phase debounce for consistency */
 const DEBOUNCE_MS = 800;
 
+const PARENT_SUBPLANS_SIDEBAR_COPY =
+  "Sub-plans created — generate tasks on each sub-plan";
+
+const PLAN_TOO_LARGE_SIDEBAR_COPY =
+  "This plan may be too large for a single batch — consider narrowing scope in the SPEC";
+
+/** Optional Plan-phase task CTAs and empty states in the detail header (sidebar). */
+export interface PlanDetailPlanTasksHint {
+  showTooLarge?: boolean;
+  blockedBy?: { planId: string; title: string }[];
+  showParentDelegateSubplans?: boolean;
+  showAllSubplansHaveTasks?: boolean;
+  showProminentGenerateTasks?: boolean;
+}
+
 export interface PlanDetailContentProps {
   plan: Plan;
   onContentSave: (content: string) => void;
@@ -40,6 +55,12 @@ export interface PlanDetailContentProps {
   childPlansNav?: { planId: string; title: string }[];
   /** Select another plan from hierarchy links (parent / sub-plans). */
   onSelectHierarchyPlan?: (planId: string) => void;
+  /** Task-generation empty states / CTAs above the plan body. */
+  planTasksHint?: PlanDetailPlanTasksHint | null;
+  onPlanTasksHintGenerate?: () => void;
+  onPlanTasksHintSelectPlan?: (planId: string) => void;
+  /** When true, disable the prominent Generate Tasks control (e.g. generation in flight). */
+  planTasksHintGenerateDisabled?: boolean;
 }
 
 /**
@@ -61,6 +82,10 @@ export function PlanDetailContent({
   parentPlanNav = null,
   childPlansNav = [],
   onSelectHierarchyPlan,
+  planTasksHint = null,
+  onPlanTasksHintGenerate,
+  onPlanTasksHintSelectPlan,
+  planTasksHintGenerateDisabled = false,
 }: PlanDetailContentProps) {
   const { title, body } = parsePlanContent(plan.content ?? "");
   const displayTitle = title || formatPlanIdAsTitle(plan.metadata.planId);
@@ -344,6 +369,71 @@ export function PlanDetailContent({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {planTasksHint && (
+        <div className="px-4 space-y-2" data-testid="plan-detail-tasks-hint">
+          {planTasksHint.showTooLarge && (
+            <p
+              className="text-sm text-theme-warning-text rounded-lg border border-theme-warning-border bg-theme-warning-bg/30 px-3 py-2"
+              data-testid="plan-detail-too-large"
+              role="alert"
+            >
+              {PLAN_TOO_LARGE_SIDEBAR_COPY}
+            </p>
+          )}
+          {planTasksHint.blockedBy && planTasksHint.blockedBy.length > 0 && (
+            <p className="text-sm text-theme-muted" data-testid="plan-detail-blocked-by">
+              <span className="font-medium text-theme-text">Blocked by:</span>{" "}
+              {planTasksHint.blockedBy.map((b, i) => (
+                <span key={b.planId}>
+                  {i > 0 ? ", " : ""}
+                  {onPlanTasksHintSelectPlan ? (
+                    <button
+                      type="button"
+                      className="text-brand-600 hover:underline font-medium"
+                      data-testid={`plan-detail-blocker-link-${b.planId}`}
+                      onClick={() => onPlanTasksHintSelectPlan(b.planId)}
+                    >
+                      {b.title}
+                    </button>
+                  ) : (
+                    <span className="font-medium text-theme-text">{b.title}</span>
+                  )}
+                </span>
+              ))}
+            </p>
+          )}
+          {planTasksHint.showParentDelegateSubplans && (
+            <p
+              className="text-sm text-theme-muted"
+              data-testid="plan-detail-parent-delegate"
+              role="status"
+            >
+              {PARENT_SUBPLANS_SIDEBAR_COPY}
+            </p>
+          )}
+          {planTasksHint.showProminentGenerateTasks && onPlanTasksHintGenerate && (
+            <button
+              type="button"
+              onClick={onPlanTasksHintGenerate}
+              disabled={planTasksHintGenerateDisabled}
+              className="w-full text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 px-4 py-2.5 rounded-lg shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              data-testid="plan-detail-generate-tasks-prominent"
+            >
+              Generate tasks
+            </button>
+          )}
+          {planTasksHint.showAllSubplansHaveTasks && (
+            <p
+              className="text-sm font-medium text-theme-success-text inline-flex items-center gap-1.5"
+              data-testid="plan-detail-all-subplans-tasks"
+              role="status"
+            >
+              <span aria-hidden>✓</span>
+              All sub-plans have tasks
+            </p>
+          )}
         </div>
       )}
       {showVersionSelector && <div data-testid="plan-version-selector" className="sr-only" />}

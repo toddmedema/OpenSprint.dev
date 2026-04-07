@@ -2468,6 +2468,75 @@ describe("PlanPhase sendPlanMessage thunk", () => {
     expect(screen.getByTestId("plan-tree-view")).toBeInTheDocument();
   });
 
+  it("child plan with sub-plans shows delegate sidebar hint without prominent Generate Tasks", async () => {
+    const rootPlan = {
+      ...basePlan,
+      metadata: { ...basePlan.metadata, planId: "root-p", epicId: "e-root" },
+      content: "# Root\n\nContent.",
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+      childPlanIds: ["mid-p"],
+      hasGeneratedPlanTasksForCurrentVersion: false as const,
+    };
+    const midPlan = {
+      ...basePlan,
+      metadata: {
+        ...basePlan.metadata,
+        planId: "mid-p",
+        epicId: "e-mid",
+        parentPlanId: "root-p",
+      },
+      parentPlanId: "root-p",
+      content: "# Mid Plan\n\nContent.",
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+      childPlanIds: ["leaf-p"],
+      hasGeneratedPlanTasksForCurrentVersion: false as const,
+    };
+    const leafPlan = {
+      ...basePlan,
+      metadata: {
+        ...basePlan.metadata,
+        planId: "leaf-p",
+        epicId: "e-leaf",
+        parentPlanId: "mid-p",
+      },
+      parentPlanId: "mid-p",
+      content: "# Leaf Plan\n\nContent.",
+      status: "planning" as const,
+      taskCount: 0,
+      doneTaskCount: 0,
+      hasGeneratedPlanTasksForCurrentVersion: false as const,
+    };
+    const graph = {
+      plans: [rootPlan, midPlan, leafPlan],
+      edges: [] as { from: string; to: string; type: "blocks" }[],
+    };
+    mockPlansList.mockResolvedValue(graph);
+    const store = createStore(graph.plans, undefined, [], {
+      selectedPlanId: "mid-p",
+    });
+    act(() => {
+      store.dispatch(setPlansAndGraph({ plans: graph.plans, dependencyGraph: graph }));
+    });
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <PlanPhase projectId="proj-1" />
+        </Provider>
+      </MemoryRouter>,
+      { wrapper: PlanPhaseWrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-detail-parent-delegate")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("plan-detail-generate-tasks-prominent")).not.toBeInTheDocument();
+  });
+
   it("positions dependency graph nodes on initial graph-view render without a click", async () => {
     storage["opensprint.planView"] = "graph";
 

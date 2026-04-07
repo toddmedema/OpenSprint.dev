@@ -12,7 +12,13 @@ function makePlan(
   status: Plan["status"],
   taskCount = 0,
   hasGeneratedPlanTasksForCurrentVersion = taskCount > 0,
-  opts?: { parentPlanId?: string; depth?: number; childPlanIds?: string[]; content?: string }
+  opts?: {
+    parentPlanId?: string;
+    depth?: number;
+    childPlanIds?: string[];
+    content?: string;
+    tooLargeForLeaf?: boolean;
+  }
 ): Plan {
   return {
     metadata: {
@@ -30,6 +36,7 @@ function makePlan(
     hasGeneratedPlanTasksForCurrentVersion,
     ...(opts?.depth != null ? { depth: opts.depth } : {}),
     ...(opts?.childPlanIds != null ? { childPlanIds: opts.childPlanIds } : {}),
+    ...(opts?.tooLargeForLeaf === true ? { tooLargeForLeaf: true } : {}),
   };
 }
 
@@ -97,6 +104,11 @@ describe("PlanTreeView", () => {
     expect(screen.getByTestId("plan-tree-row-root-plan")).toBeInTheDocument();
     expect(screen.getByTestId("plan-tree-row-child-plan")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: /sub-plans under/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("plan-tree-generate-tasks-root-plan")).not.toBeInTheDocument();
+    expect(screen.getByTestId("plan-tree-parent-delegate-root-plan")).toHaveTextContent(
+      "Sub-plans created"
+    );
+    expect(screen.getByTestId("plan-tree-generate-tasks-cta-row-child-plan")).toBeInTheDocument();
   });
 
   it("expand/collapse hides and shows child rows", async () => {
@@ -199,6 +211,59 @@ describe("PlanTreeView", () => {
     await user.keyboard("{Enter}");
     expect(onSelectPlan).toHaveBeenCalledWith(
       expect.objectContaining({ metadata: expect.objectContaining({ planId: "k2" }) })
+    );
+  });
+
+  it("shows blocked-by sibling plan title as a link that selects the blocker", async () => {
+    const user = userEvent.setup();
+    const onSelectPlan = vi.fn();
+    const plans: Plan[] = [
+      makePlan("root", "planning", 0, false, {
+        childPlanIds: ["sibling-a", "sibling-b"],
+      }),
+      makePlan("sibling-a", "planning", 1, true, {
+        parentPlanId: "root",
+        content: "# Stream A\n",
+      }),
+      makePlan("sibling-b", "planning", 0, false, {
+        parentPlanId: "root",
+        content: "# Stream B\n",
+      }),
+    ];
+    const edges: PlanDependencyEdge[] = [{ from: "sibling-a", to: "sibling-b", type: "blocks" }];
+    renderTree({ plans, edges, onSelectPlan });
+
+    const hint = screen.getByTestId("plan-list-blocked-hint-sibling-b");
+    expect(hint).toHaveTextContent("Blocked by:");
+    expect(hint).toHaveTextContent("Stream A");
+    await user.click(screen.getByTestId("plan-tree-blocker-link-sibling-b-sibling-a"));
+    expect(onSelectPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ planId: "sibling-a" }) })
+    );
+  });
+
+  it("shows too-large message when tooLargeForLeaf is set", () => {
+    const plans: Plan[] = [makePlan("fat-leaf", "planning", 0, false, { tooLargeForLeaf: true })];
+    renderTree({ plans });
+    expect(screen.getByTestId("plan-tree-too-large-fat-leaf")).toHaveTextContent("too large");
+  });
+
+  it("shows too-large message when plan id is in failedPlanIds", () => {
+    const plans: Plan[] = [makePlan("failed-gen", "planning", 0, false)];
+    (plans[0] as Plan & { failedPlanIds?: string[] }).failedPlanIds = ["failed-gen"];
+    renderTree({ plans });
+    expect(screen.getByTestId("plan-tree-too-large-failed-gen")).toBeInTheDocument();
+  });
+
+  it("shows all sub-plans have tasks when every leaf under the parent has tasks", () => {
+    const plans: Plan[] = [
+      makePlan("root", "planning", 0, false, { childPlanIds: ["c1", "c2"] }),
+      makePlan("c1", "planning", 2, true, { parentPlanId: "root" }),
+      makePlan("c2", "planning", 1, true, { parentPlanId: "root" }),
+    ];
+    renderTree({ plans });
+    expect(screen.getByTestId("plan-tree-all-subplans-tasks-root")).toHaveTextContent(
+      "All sub-plans have tasks"
     );
   });
 

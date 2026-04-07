@@ -53,6 +53,7 @@ import { DependencyGraph } from "../../../components/DependencyGraph";
 import {
   PlanDetailContent,
   formatPlanTasksSidebarSectionTitle,
+  type PlanDetailPlanTasksHint,
 } from "../../../components/plan/PlanDetailContent";
 import { AddPlanModal } from "../../../components/plan/AddPlanModal";
 import { PlanFilterToolbar, type PlanViewMode } from "../../../components/plan/PlanFilterToolbar";
@@ -92,6 +93,7 @@ import {
   pollPlanExecuteBatchUntilDone,
   hasGeneratedPlanTasksForCurrentVersion,
   topologicalPlanOrder,
+  computePlanDetailPlanTasksHint,
 } from "./planPhaseUtils";
 import { PlanAuditorOutputSection } from "./PlanAuditorOutputSection";
 import { DeletePlanConfirmModal } from "./DeletePlanConfirmModal";
@@ -288,6 +290,11 @@ export function usePlanPhaseMain({
     !hasGeneratedPlanTasksForCurrentVersion(selectedPlan);
   const selectedPlanTasksGenerating =
     selectedPlan != null && (planTasksPlanIds ?? []).includes(selectedPlan.metadata.planId);
+
+  const selectedPlanTasksHint = useMemo((): PlanDetailPlanTasksHint | null => {
+    if (!selectedPlan) return null;
+    return computePlanDetailPlanTasksHint(selectedPlan, plans, dependencyGraph?.edges);
+  }, [selectedPlan, plans, dependencyGraph?.edges]);
 
   /* ── Local UI state (preserved by mount-all) ── */
   const [addPlanModalOpen, setAddPlanModalOpen] = useState(false);
@@ -1436,6 +1443,14 @@ export function usePlanPhaseMain({
               parentPlanNav={planHierarchyNav.parent}
               childPlansNav={planHierarchyNav.children}
               onSelectHierarchyPlan={handleHierarchyPlanSelect}
+              planTasksHint={selectedPlanTasksHint}
+              onPlanTasksHintGenerate={() => handlePlanTasks(selectedPlan.metadata.planId)}
+              onPlanTasksHintSelectPlan={handleHierarchyPlanSelect}
+              planTasksHintGenerateDisabled={
+                selectedPlanTasksGenerating ||
+                selectedPlanGenState === "planning" ||
+                selectedPlanGenState === "stale"
+              }
               headerActions={
                 <PlanDetailSidebarActions
                   planId={selectedPlan.metadata.planId}
@@ -1539,12 +1554,30 @@ export function usePlanPhaseMain({
                                   Retry
                                 </button>
                               </>
+                            ) : selectedPlanTasksHint?.showParentDelegateSubplans &&
+                              !autoExecutePlans ? (
+                              <p
+                                className="text-sm text-theme-muted"
+                                data-testid="plan-tasks-parent-delegate-sidebar"
+                                role="status"
+                              >
+                                Sub-plans created — generate tasks on each sub-plan
+                              </p>
                             ) : (
                               <>
-                                {!autoExecutePlans && (
+                                {!autoExecutePlans && !selectedPlanTasksHint?.showProminentGenerateTasks && (
                                   <p className="text-sm text-theme-muted">
                                     Use the chat to refine the plan, then click Generate Tasks when
                                     you&apos;re ready to break it down into specific tickets
+                                  </p>
+                                )}
+                                {!autoExecutePlans && selectedPlanTasksHint?.showProminentGenerateTasks && (
+                                  <p
+                                    className="text-sm text-theme-muted"
+                                    data-testid="plan-tasks-child-prominent-hint"
+                                  >
+                                    A prominent <strong className="text-theme-text">Generate tasks</strong>{" "}
+                                    control is in the plan header above; you can also use the tree.
                                   </p>
                                 )}
                                 {autoExecutePlans ? (

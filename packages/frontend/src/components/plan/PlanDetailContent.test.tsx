@@ -127,6 +127,89 @@ describe("PlanDetailContent", () => {
     expect(onHierarchy).toHaveBeenCalledWith("parent-plan");
   });
 
+  describe("planTasksHint", () => {
+    it("renders too-large warning", () => {
+      render(
+        <PlanDetailContent
+          plan={mockPlan}
+          onContentSave={onContentSave}
+          planTasksHint={{ showTooLarge: true }}
+        />
+      );
+      expect(screen.getByTestId("plan-detail-too-large")).toHaveTextContent("too large");
+    });
+
+    it("renders blocked-by with link when handler is provided", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      render(
+        <PlanDetailContent
+          plan={mockPlan}
+          onContentSave={onContentSave}
+          planTasksHint={{
+            blockedBy: [{ planId: "blocker-1", title: "Upstream stream" }],
+          }}
+          onPlanTasksHintSelectPlan={onSelect}
+        />
+      );
+      expect(screen.getByTestId("plan-detail-blocked-by")).toHaveTextContent("Blocked by:");
+      await user.click(screen.getByTestId("plan-detail-blocker-link-blocker-1"));
+      expect(onSelect).toHaveBeenCalledWith("blocker-1");
+    });
+
+    it("renders parent delegate copy for plans with sub-plans", () => {
+      render(
+        <PlanDetailContent
+          plan={mockPlan}
+          onContentSave={onContentSave}
+          planTasksHint={{ showParentDelegateSubplans: true }}
+        />
+      );
+      expect(screen.getByTestId("plan-detail-parent-delegate")).toHaveTextContent("Sub-plans created");
+    });
+
+    it("renders prominent Generate tasks and invokes callback", async () => {
+      const user = userEvent.setup();
+      const onGen = vi.fn();
+      render(
+        <PlanDetailContent
+          plan={mockPlan}
+          onContentSave={onContentSave}
+          planTasksHint={{ showProminentGenerateTasks: true }}
+          onPlanTasksHintGenerate={onGen}
+        />
+      );
+      await user.click(screen.getByTestId("plan-detail-generate-tasks-prominent"));
+      expect(onGen).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables prominent Generate tasks when planTasksHintGenerateDisabled", () => {
+      render(
+        <PlanDetailContent
+          plan={mockPlan}
+          onContentSave={onContentSave}
+          planTasksHint={{ showProminentGenerateTasks: true }}
+          onPlanTasksHintGenerate={vi.fn()}
+          planTasksHintGenerateDisabled
+        />
+      );
+      expect(screen.getByTestId("plan-detail-generate-tasks-prominent")).toBeDisabled();
+    });
+
+    it("renders all sub-plans have tasks indicator", () => {
+      render(
+        <PlanDetailContent
+          plan={mockPlan}
+          onContentSave={onContentSave}
+          planTasksHint={{ showAllSubplansHaveTasks: true }}
+        />
+      );
+      expect(screen.getByTestId("plan-detail-all-subplans-tasks")).toHaveTextContent(
+        "All sub-plans have tasks"
+      );
+    });
+  });
+
   it("renders sub-plans section and calls onSelectHierarchyPlan for a child", async () => {
     const user = userEvent.setup();
     const onHierarchy = vi.fn();

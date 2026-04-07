@@ -48,6 +48,12 @@ const TREE_TOGGLE_CLASSNAME =
 
 const SPLIT_IMPOSSIBLE_TOOLTIP = `Sub-plan split is not possible at maximum depth. Generate tasks (up to ${PLAN_TASK_BATCH_MAX}) to finish decomposition.`;
 
+const PARENT_SUBPLANS_DELEGATE_COPY =
+  "Sub-plans created — generate tasks on each sub-plan";
+
+const PLAN_TOO_LARGE_COPY =
+  "This plan may be too large for a single batch — consider narrowing scope in the SPEC";
+
 export interface PlanTreeViewProps {
   plans: Plan[];
   edges: PlanDependencyEdge[];
@@ -74,6 +80,22 @@ interface PlanTreeNode {
   children: PlanTreeNode[];
 }
 
+function isChildPlanEntity(plan: Plan): boolean {
+  const raw = plan.metadata.parentPlanId ?? plan.parentPlanId;
+  return typeof raw === "string" && raw.trim() !== "";
+}
+
+function subtreeAllLeavesHaveTasks(node: PlanTreeNode): boolean {
+  if (node.children.length === 0) {
+    const p = node.plan;
+    return (
+      p.hasGeneratedPlanTasksForCurrentVersion === true ||
+      (p.taskCount ?? 0) > 0
+    );
+  }
+  return node.children.every(subtreeAllLeavesHaveTasks);
+}
+
 interface RowCallbacks {
   selectedPlanId: string | null;
   executingPlanId: string | null;
@@ -81,6 +103,7 @@ interface RowCallbacks {
   planTasksPlanIds: string[];
   executeError: PlanTreeViewProps["executeError"];
   onSelectPlan: PlanTreeViewProps["onSelectPlan"];
+  onSelectPlanById: (planId: string) => void;
   onShip: PlanTreeViewProps["onShip"];
   onPlanTasks: PlanTreeViewProps["onPlanTasks"];
   onReship: PlanTreeViewProps["onReship"];
@@ -126,21 +149,25 @@ function buildPlanForest(plans: Plan[]): PlanTreeNode[] {
   return sortedChildren(roots).map(toNode);
 }
 
-function useBlockingPlansById(plans: Plan[], edges: PlanDependencyEdge[]) {
+function useBlockingPlanSummariesByPlanId(plans: Plan[], edges: PlanDependencyEdge[]) {
   return useMemo(() => {
-    const map = new Map<string, string[]>();
+    const map = new Map<string, { planId: string; title: string }[]>();
     if (!edges.length) return map;
     const planById = new Map(plans.map((p) => [p.metadata.planId, p]));
     for (const p of plans) {
       const id = p.metadata.planId;
-      const blockers = edges
+      const summaries = edges
         .filter((e) => e.to === id && e.type === "blocks")
         .map((e) => e.from)
         .filter((fromId) => {
           const blocker = planById.get(fromId);
           return blocker != null && blocker.status !== "complete";
+        })
+        .map((fromId) => {
+          const blocker = planById.get(fromId)!;
+          return { planId: fromId, title: planDisplayTitle(blocker) };
         });
-      if (blockers.length) map.set(id, blockers);
+      if (summaries.length) map.set(id, summaries);
     }
     return map;
   }, [plans, edges]);
@@ -212,9 +239,12 @@ function PlanTreeRowInner({
   onRetryPlan,
   treeDepth,
   leadingControl,
-  blockingPlanIds,
+  blockingSummaries,
   showMaxDepthHint,
   subtreeAggregate,
+  hasChildPlans,
+  subtreeLeavesAllHaveTasks,
+  onSelectPlanById,
 }: {
   plan: Plan;
   isSelected: boolean;
@@ -234,9 +264,12 @@ function PlanTreeRowInner({
   onRetryPlan?: (planId: string) => void;
   treeDepth: number;
   leadingControl: ReactNode;
-  blockingPlanIds: string[];
+  blockingSummaries: { planId: string; title: string }[];
   showMaxDepthHint: boolean;
   subtreeAggregate: PlanSubtreeAggregate | null;
+  hasChildPlans: boolean;
+  subtreeLeavesAllHaveTasks: boolean;
+  onSelectPlanById: (planId: string) => void;
 }) {
   const isMarkCompletePending = markCompletePendingPlanId === plan.metadata.planId;
   const planId = plan.metadata.planId;
@@ -248,13 +281,39 @@ function PlanTreeRowInner({
     planTasksPlanIds.includes(planId);
   const isPlannerInFlight = planGenState === "planning";
   const isPlannerStale = planGenState === "stale";
-  const showGenerateTasks =
+  const baseReadyForTaskGeneration =
     plan.status === "planning" &&
     !hasGeneratedTasksForCurrentVersion &&
     !autoExecutePlans &&
     !planTasksPlanIds.includes(planId) &&
     !isPlannerInFlight &&
     !isPlannerStale;
+
+  const showProminentChildGenerate =
+    baseReadyForTaskGeneration &&
+    !hasChildPlans &&
+    isChildPlanEntity(plan) &&
+    plan.taskCount === 0;
+
+  const showGenerateTasks =
+    baseReadyForTaskGeneration &&
+    !hasChildPlans &&
+    !showProminentChildGenerate;
+
+  const showParentDelegateHint =
+    hasChildPlans &&
+    plan.status === "planning" &&
+    !hasGeneratedTasksForCurrentVersion &&
+    !subtreeLeavesAllHaveTasks &&
+    !isPlannerInFlight &&
+    !isPlannerStale;
+
+  const showAllSubplansHaveTasks =
+    hasChildPlans && subtreeLeavesAllHaveTasks;
+
+  const showTooLargeHint =
+    plan.tooLargeForLeaf === true ||
+    (plan.failedPlanIds?.includes(planId) ?? false);
   const showExecute =
     plan.status === "planning" &&
     !isPlannerInFlight &&
@@ -341,6 +400,15 @@ function PlanTreeRowInner({
           {plan.status === "planning" && isPlannerStale && !isPlanningTasks && (
             <span className="shrink-0 text-xs text-theme-warning-text" title={STALE_TOOLTIP}>
               May be stuck
+            </span>
+          )}
+          {showAllSubplansHaveTasks && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-theme-success-text"
+              data-testid={`plan-tree-all-subplans-tasks-${planId}`}
+            >
+              <span aria-hidden>✓</span>
+              All sub-plans have tasks
             </span>
           )}
         </div>
@@ -488,15 +556,69 @@ function PlanTreeRowInner({
           sub-plans
         </div>
       )}
-      {blockingPlanIds.length > 0 && (
+      {showParentDelegateHint && (
+        <div
+          className="px-4 pb-1.5 text-xs text-theme-muted leading-snug"
+          style={{ paddingLeft: `calc(0.75rem + 24px + ${treeDepth * 14}px)` }}
+          data-testid={`plan-tree-parent-delegate-${planId}`}
+          role="status"
+        >
+          {PARENT_SUBPLANS_DELEGATE_COPY}
+        </div>
+      )}
+      {showProminentChildGenerate && (
+        <div
+          className="px-4 pb-2"
+          style={{ paddingLeft: `calc(0.75rem + 24px + ${treeDepth * 14}px)` }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlanTasks(planId);
+            }}
+            title={showMaxDepthHint ? SPLIT_IMPOSSIBLE_TOOLTIP : undefined}
+            className="w-full max-w-sm text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600 px-4 py-2.5 rounded-lg shadow-sm transition-colors"
+            data-testid={`plan-tree-generate-tasks-cta-row-${planId}`}
+          >
+            Generate tasks
+          </button>
+        </div>
+      )}
+      {blockingSummaries.length > 0 && (
         <div
           className="px-4 pb-2 text-xs text-theme-muted"
           style={{ paddingLeft: `calc(0.75rem + 24px + ${treeDepth * 14}px)` }}
           role="status"
           data-testid={`plan-list-blocked-hint-${planId}`}
         >
-          Waiting on {blockingPlanIds.map((bid) => formatPlanIdAsTitle(bid)).join(", ")} before this
-          plan can run.
+          <span className="text-theme-text font-medium">Blocked by:</span>{" "}
+          {blockingSummaries.map((b, i) => (
+            <span key={b.planId}>
+              {i > 0 ? ", " : ""}
+              <button
+                type="button"
+                className="text-brand-600 hover:underline font-medium"
+                data-testid={`plan-tree-blocker-link-${planId}-${b.planId}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectPlanById(b.planId);
+                }}
+              >
+                {b.title}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {showTooLargeHint && (
+        <div
+          className="px-4 pb-2 text-xs text-theme-warning-text"
+          style={{ paddingLeft: `calc(0.75rem + 24px + ${treeDepth * 14}px)` }}
+          role="alert"
+          data-testid={`plan-tree-too-large-${planId}`}
+        >
+          {PLAN_TOO_LARGE_COPY}
         </div>
       )}
       {errorForThisPlan && executeError && (
@@ -527,7 +649,7 @@ function PlanTreeItem({
   treeDepth: number;
   collapsedIds: Set<string>;
   onToggleCollapsed: (planId: string) => void;
-  blockingByPlanId: Map<string, string[]>;
+  blockingByPlanId: Map<string, { planId: string; title: string }[]>;
   rowProps: RowCallbacks;
   focusedPlanId: string | null;
   onTreeKeyDown: (e: KeyboardEvent<HTMLLIElement>, planId: string) => void;
@@ -536,7 +658,8 @@ function PlanTreeItem({
   const planId = node.plan.metadata.planId;
   const hasChildren = node.children.length > 0;
   const collapsed = collapsedIds.has(planId);
-  const blockingPlanIds = blockingByPlanId.get(planId) ?? [];
+  const blockingSummaries = blockingByPlanId.get(planId) ?? [];
+  const subtreeLeavesAllHaveTasks = subtreeAllLeavesHaveTasks(node);
   const depthVal = node.plan.depth ?? node.plan.metadata.depth ?? treeDepth + 1;
   const showMaxDepthHint = depthVal != null && !canCreateSubPlan(depthVal);
   const subtreeAggregate =
@@ -595,9 +718,12 @@ function PlanTreeItem({
         isSelected={isSelected}
         treeDepth={treeDepth}
         leadingControl={leadingControl}
-        blockingPlanIds={blockingPlanIds}
+        blockingSummaries={blockingSummaries}
         showMaxDepthHint={showMaxDepthHint}
         subtreeAggregate={subtreeAggregate}
+        hasChildPlans={hasChildren}
+        subtreeLeavesAllHaveTasks={subtreeLeavesAllHaveTasks}
+        onSelectPlanById={rowProps.onSelectPlanById}
         executingPlanId={rowProps.executingPlanId}
         reExecutingPlanId={rowProps.reExecutingPlanId}
         planTasksPlanIds={rowProps.planTasksPlanIds}
@@ -709,7 +835,15 @@ export function PlanTreeView({
     });
   }, []);
 
-  const blockingByPlanId = useBlockingPlansById(plans, edges);
+  const blockingByPlanId = useBlockingPlanSummariesByPlanId(plans, edges);
+
+  const onSelectPlanById = useCallback(
+    (planId: string) => {
+      const p = plans.find((x) => x.metadata.planId === planId);
+      if (p) onSelectPlan(p);
+    },
+    [plans, onSelectPlan]
+  );
 
   const rowProps: RowCallbacks = {
     selectedPlanId,
@@ -718,6 +852,7 @@ export function PlanTreeView({
     planTasksPlanIds,
     executeError,
     onSelectPlan,
+    onSelectPlanById,
     onShip,
     onPlanTasks,
     onReship,
