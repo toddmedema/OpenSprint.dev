@@ -50,7 +50,10 @@ import { api } from "../../../api/client";
 import { CloseButton } from "../../../components/CloseButton";
 import { CrossEpicConfirmModal } from "../../../components/CrossEpicConfirmModal";
 import { DependencyGraph } from "../../../components/DependencyGraph";
-import { PlanDetailContent } from "../../../components/plan/PlanDetailContent";
+import {
+  PlanDetailContent,
+  formatPlanTasksSidebarSectionTitle,
+} from "../../../components/plan/PlanDetailContent";
 import { AddPlanModal } from "../../../components/plan/AddPlanModal";
 import { PlanFilterToolbar, type PlanViewMode } from "../../../components/plan/PlanFilterToolbar";
 import { PlanListView } from "../../../components/plan/PlanListView";
@@ -1493,7 +1496,7 @@ export function usePlanPhaseMain({
 
                     {/* Tasks — collapsible (matches Execute sidebar section styling) */}
                     <CollapsibleSection
-                      title={`Tasks (${selectedPlanTasks.length})`}
+                      title={formatPlanTasksSidebarSectionTitle(selectedPlanTasks.length)}
                       expanded={tasksSectionExpanded}
                       onToggle={() => setTasksSectionExpanded((e) => !e)}
                       expandAriaLabel="Expand Tasks"

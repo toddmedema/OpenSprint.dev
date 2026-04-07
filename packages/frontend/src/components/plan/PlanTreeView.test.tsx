@@ -146,10 +146,22 @@ describe("PlanTreeView", () => {
     expect(gen).toHaveAttribute("title", expect.stringContaining("maximum depth"));
   });
 
-  it("shows task cap as n/15 max for planning rows", () => {
+  it("shows task batch cap indicator for planning rows", () => {
     const plans = [makePlan("p1", "planning", 3, false)];
     renderTree({ plans });
-    expect(screen.getByTestId("plan-tree-task-cap-p1")).toHaveTextContent("3/15 max");
+    expect(screen.getByTestId("plan-epic-task-cap-p1")).toHaveTextContent("3/15");
+  });
+
+  it("shows aggregate totals for parent plans with children", () => {
+    const plans: Plan[] = [
+      makePlan("root-plan", "planning", 1, true, { childPlanIds: ["child-plan"] }),
+      makePlan("child-plan", "building", 5, true, { parentPlanId: "root-plan" }),
+    ];
+    renderTree({ plans });
+    const rootRow = screen.getByTestId("plan-tree-row-root-plan");
+    expect(
+      within(rootRow).getByTestId("plan-tree-subtree-aggregate-root-plan")
+    ).toHaveTextContent("Total tasks: 6 across 1 sub-plans");
   });
 
   it("uses first # heading as title when present", () => {

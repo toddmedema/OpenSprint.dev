@@ -414,3 +414,9 @@ export function PlanDetailContent({
     </div>
   );
 }
+
+export {
+  PLAN_TASK_BATCH_MAX,
+  PLAN_TASK_BATCH_CAP_TOOLTIP,
+  formatPlanTasksSidebarSectionTitle,
+} from "./planTaskBatchCap";

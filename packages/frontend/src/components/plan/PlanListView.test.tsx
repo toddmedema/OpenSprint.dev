@@ -218,7 +218,7 @@ describe("PlanListView", () => {
     expect(screen.getByTestId("plan-list-go-to-evaluate")).toHaveTextContent(/Review/);
   });
 
-  it("hides task counts for planning rows and shows them otherwise", () => {
+  it("shows batch cap indicator for planning and non-planning rows", () => {
     const plans = [
       makePlan("planning-feature", "planning", 2, false),
       makePlan("building-feature", "building", 2),
@@ -242,8 +242,12 @@ describe("PlanListView", () => {
     const planningRow = screen.getByTestId("plan-list-row-planning-feature");
     const buildingRow = screen.getByTestId("plan-list-row-building-feature");
 
-    expect(within(planningRow).queryByText("0/2 tasks")).not.toBeInTheDocument();
-    expect(within(buildingRow).getByText("0/2 tasks")).toBeInTheDocument();
+    expect(within(planningRow).getByTestId("plan-epic-task-cap-planning-feature")).toHaveTextContent(
+      "2/15"
+    );
+    expect(within(buildingRow).getByTestId("plan-epic-task-cap-building-feature")).toHaveTextContent(
+      "2/15"
+    );
   });
 
   it("shows Planning indicator instead of Generate tasks when planner is in-flight", () => {
@@ -727,30 +731,7 @@ describe("PlanListView", () => {
   });
 
   describe("task count display and cap", () => {
-    it("shows done/total task counts for non-planning plans", () => {
-      const plan = makePlan("building-feature", "building", 10);
-      plan.doneTaskCount = 7;
-      render(
-        <PlanListView
-          plans={[plan]}
-          selectedPlanId={null}
-          executingPlanId={null}
-          reExecutingPlanId={null}
-          planTasksPlanIds={[]}
-          executeError={null}
-          onSelectPlan={vi.fn()}
-          onShip={vi.fn()}
-          onPlanTasks={vi.fn()}
-          onReship={vi.fn()}
-          onClearError={vi.fn()}
-        />
-      );
-
-      const row = screen.getByTestId("plan-list-row-building-feature");
-      expect(within(row).getByText("7/10 tasks")).toBeInTheDocument();
-    });
-
-    it("shows 'No tasks' when task count is zero for non-planning plans", () => {
+    it("shows 0/15 when task count is zero", () => {
       const plan = makePlan("building-empty", "building", 0, true);
       render(
         <PlanListView
@@ -769,7 +750,82 @@ describe("PlanListView", () => {
       );
 
       const row = screen.getByTestId("plan-list-row-building-empty");
-      expect(within(row).getByText("No tasks")).toBeInTheDocument();
+      expect(within(row).getByTestId("plan-epic-task-cap-building-empty")).toHaveTextContent("0/15");
+    });
+
+    it("shows 8/15 for eight tasks", () => {
+      const plan = makePlan("building-eight", "building", 8, true);
+      render(
+        <PlanListView
+          plans={[plan]}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const row = screen.getByTestId("plan-list-row-building-eight");
+      expect(within(row).getByTestId("plan-epic-task-cap-building-eight")).toHaveTextContent("8/15");
+    });
+
+    it("shows cap styling at 15 tasks", () => {
+      const plan = makePlan("building-full", "building", 15, true);
+      render(
+        <PlanListView
+          plans={[plan]}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const cap = within(screen.getByTestId("plan-list-row-building-full")).getByTestId(
+        "plan-epic-task-cap-building-full"
+      );
+      expect(cap).toHaveTextContent("15/15");
+      expect(cap.querySelector(".text-theme-warning-text")).toBeTruthy();
+    });
+
+    it("shows aggregate totals for parent plans with children", () => {
+      const plans: Plan[] = [
+        makePlan("root-plan", "planning", 2, true, { childPlanIds: ["child-a", "child-b"] }),
+        makePlan("child-a", "planning", 3, true, { parentPlanId: "root-plan" }),
+        makePlan("child-b", "planning", 4, true, { parentPlanId: "root-plan" }),
+      ];
+      render(
+        <PlanListView
+          plans={plans}
+          selectedPlanId={null}
+          executingPlanId={null}
+          reExecutingPlanId={null}
+          planTasksPlanIds={[]}
+          executeError={null}
+          onSelectPlan={vi.fn()}
+          onShip={vi.fn()}
+          onPlanTasks={vi.fn()}
+          onReship={vi.fn()}
+          onClearError={vi.fn()}
+        />
+      );
+
+      const rootRow = screen.getByTestId("plan-list-row-root-plan");
+      expect(
+        within(rootRow).getByTestId("plan-list-subtree-aggregate-root-plan")
+      ).toHaveTextContent("Total tasks: 9 across 2 sub-plans");
     });
 
     it("max-depth hint tooltip explains the depth restriction", () => {

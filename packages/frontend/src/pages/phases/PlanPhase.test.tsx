@@ -705,9 +705,9 @@ describe("PlanPhase Redux integration", () => {
       { wrapper: PlanPhaseWrapper }
     );
     // Sidebar Tasks count is 2 (epic-a only); if filter failed it would show 3
-    expect(screen.getByText("Tasks (2)")).toBeInTheDocument();
+    expect(screen.getByText("Tasks: 2 of 15 max per batch")).toBeInTheDocument();
     // Epic B Task appears only in Plan B card, not in sidebar (selectTasksForEpic filters by epicId)
-    const tasksHeading = screen.getByText("Tasks (2)");
+    const tasksHeading = screen.getByText("Tasks: 2 of 15 max per batch");
     expect(tasksHeading).toBeInTheDocument();
     const tasksSection = tasksHeading.closest("div")?.parentElement;
     expect(tasksSection).toBeInTheDocument();

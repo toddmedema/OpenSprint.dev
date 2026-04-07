@@ -20,6 +20,11 @@ import {
   phaseQueueRowSurfaceClassName,
   phaseQueueRowPrimaryButtonClassName,
 } from "../../lib/phaseQueueListView";
+import {
+  PlanEpicTaskCapIndicator,
+  computePlanSubtreeTaskAggregate,
+  type PlanSubtreeAggregate,
+} from "./planTaskBatchCap";
 
 const PLAN_STATUS_ORDER: PlanStatus[] = ["planning", "building", "in_review", "complete"];
 
@@ -157,6 +162,7 @@ function PlanListRowInner({
   leadingControl,
   blockingPlanIds,
   showMaxDepthHint,
+  subtreeAggregate,
 }: {
   plan: Plan;
   isSelected: boolean;
@@ -178,6 +184,7 @@ function PlanListRowInner({
   leadingControl: ReactNode;
   blockingPlanIds: string[];
   showMaxDepthHint: boolean;
+  subtreeAggregate: PlanSubtreeAggregate | null;
 }) {
   const isMarkCompletePending = markCompletePendingPlanId === plan.metadata.planId;
   const planId = plan.metadata.planId;
@@ -238,11 +245,7 @@ function PlanListRowInner({
               Max depth
             </span>
           )}
-          {plan.status !== "planning" && (
-            <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME}>
-              {plan.taskCount > 0 ? `${plan.doneTaskCount}/${plan.taskCount} tasks` : "No tasks"}
-            </span>
-          )}
+          <PlanEpicTaskCapIndicator taskCount={plan.taskCount} testIdSuffix={planId} />
           {plan.status === "planning" && isPlanningTasks && (
             <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} aria-hidden>
               Generating tasks...
@@ -399,6 +402,16 @@ function PlanListRowInner({
           )}
         </span>
       </div>
+      {subtreeAggregate != null && (
+        <div
+          className="px-4 pb-2 text-xs text-theme-muted"
+          style={{ paddingLeft: `calc(1rem + 24px + ${treeDepth * 12}px)` }}
+          data-testid={`plan-list-subtree-aggregate-${planId}`}
+        >
+          Total tasks: {subtreeAggregate.totalIncludingSelf} across {subtreeAggregate.descendantPlanCount}{" "}
+          sub-plans
+        </div>
+      )}
       {blockingPlanIds.length > 0 && (
         <div
           className="px-4 pb-2 text-xs text-theme-muted"
@@ -459,6 +472,8 @@ function PlanTreeItem({
   const blockingPlanIds = blockingByPlanId.get(planId) ?? [];
   const depthVal = node.plan.depth;
   const showMaxDepthHint = depthVal != null && !canCreateSubPlan(depthVal);
+  const subtreeAggregate =
+    node.children.length > 0 ? computePlanSubtreeTaskAggregate(node) : null;
 
   const title = formatPlanIdAsTitle(planId);
   const leadingControl = hasChildren ? (
@@ -514,6 +529,7 @@ function PlanTreeItem({
         leadingControl={leadingControl}
         blockingPlanIds={blockingPlanIds}
         showMaxDepthHint={showMaxDepthHint}
+        subtreeAggregate={subtreeAggregate}
         executingPlanId={rowProps.executingPlanId}
         reExecutingPlanId={rowProps.reExecutingPlanId}
         planTasksPlanIds={rowProps.planTasksPlanIds}

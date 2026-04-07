@@ -22,9 +22,12 @@ import {
   phaseQueueRowSurfaceClassName,
   phaseQueueRowPrimaryButtonClassName,
 } from "../../lib/phaseQueueListView";
-
-/** Matches backend `MAX_TASKS_PER_PLAN` (planner cap per plan node). */
-const MAX_TASKS_PER_PLAN_NODE = 15;
+import {
+  PlanEpicTaskCapIndicator,
+  PLAN_TASK_BATCH_MAX,
+  computePlanSubtreeTaskAggregate,
+  type PlanSubtreeAggregate,
+} from "./planTaskBatchCap";
 
 const STATUS_BADGE_LABEL: Record<PlanStatus, string> = {
   planning: "Planning",
@@ -43,8 +46,7 @@ const STATUS_BADGE_CLASS: Record<PlanStatus, string> = {
 const TREE_TOGGLE_CLASSNAME =
   "shrink-0 inline-flex h-6 w-6 items-center justify-center rounded text-theme-muted hover:bg-theme-border-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500";
 
-const SPLIT_IMPOSSIBLE_TOOLTIP =
-  "Sub-plan split is not possible at maximum depth. Generate tasks (up to 15) to finish decomposition.";
+const SPLIT_IMPOSSIBLE_TOOLTIP = `Sub-plan split is not possible at maximum depth. Generate tasks (up to ${PLAN_TASK_BATCH_MAX}) to finish decomposition.`;
 
 export interface PlanTreeViewProps {
   plans: Plan[];
@@ -212,6 +214,7 @@ function PlanTreeRowInner({
   leadingControl,
   blockingPlanIds,
   showMaxDepthHint,
+  subtreeAggregate,
 }: {
   plan: Plan;
   isSelected: boolean;
@@ -233,6 +236,7 @@ function PlanTreeRowInner({
   leadingControl: ReactNode;
   blockingPlanIds: string[];
   showMaxDepthHint: boolean;
+  subtreeAggregate: PlanSubtreeAggregate | null;
 }) {
   const isMarkCompletePending = markCompletePendingPlanId === plan.metadata.planId;
   const planId = plan.metadata.planId;
@@ -316,21 +320,7 @@ function PlanTreeRowInner({
               {SPLIT_IMPOSSIBLE_TOOLTIP}
             </span>
           )}
-          {plan.status !== "planning" && (
-            <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME}>
-              {plan.taskCount > 0
-                ? `${plan.doneTaskCount}/${plan.taskCount} tasks`
-                : "No tasks"}
-            </span>
-          )}
-          {plan.status === "planning" && (
-            <span
-              className={`${PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} tabular-nums`}
-              data-testid={`plan-tree-task-cap-${planId}`}
-            >
-              {`${Math.min(plan.taskCount, MAX_TASKS_PER_PLAN_NODE)}/${MAX_TASKS_PER_PLAN_NODE} max`}
-            </span>
-          )}
+          <PlanEpicTaskCapIndicator taskCount={plan.taskCount} testIdSuffix={planId} />
           {plan.status === "planning" && isPlanningTasks && (
             <span className={PHASE_QUEUE_ROW_META_MUTED_CLASSNAME} aria-hidden>
               Generating tasks...
@@ -488,6 +478,16 @@ function PlanTreeRowInner({
           )}
         </span>
       </div>
+      {subtreeAggregate != null && (
+        <div
+          className="px-4 pb-2 text-xs text-theme-muted"
+          style={{ paddingLeft: `calc(0.75rem + 24px + ${treeDepth * 14}px)` }}
+          data-testid={`plan-tree-subtree-aggregate-${planId}`}
+        >
+          Total tasks: {subtreeAggregate.totalIncludingSelf} across {subtreeAggregate.descendantPlanCount}{" "}
+          sub-plans
+        </div>
+      )}
       {blockingPlanIds.length > 0 && (
         <div
           className="px-4 pb-2 text-xs text-theme-muted"
@@ -539,6 +539,8 @@ function PlanTreeItem({
   const blockingPlanIds = blockingByPlanId.get(planId) ?? [];
   const depthVal = node.plan.depth ?? node.plan.metadata.depth ?? treeDepth + 1;
   const showMaxDepthHint = depthVal != null && !canCreateSubPlan(depthVal);
+  const subtreeAggregate =
+    node.children.length > 0 ? computePlanSubtreeTaskAggregate(node) : null;
 
   const title = planDisplayTitle(node.plan);
   const leadingControl = hasChildren ? (
@@ -595,6 +597,7 @@ function PlanTreeItem({
         leadingControl={leadingControl}
         blockingPlanIds={blockingPlanIds}
         showMaxDepthHint={showMaxDepthHint}
+        subtreeAggregate={subtreeAggregate}
         executingPlanId={rowProps.executingPlanId}
         reExecutingPlanId={rowProps.reExecutingPlanId}
         planTasksPlanIds={rowProps.planTasksPlanIds}
