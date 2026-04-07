@@ -7,8 +7,13 @@ import {
 } from "../services/plan/plan-dependency-graph.js";
 import type { StoredTask } from "../services/task-store.service.js";
 
-function makePlanInfo(planId: string, epicId: string, content = ""): PlanInfo {
-  return { planId, epicId, content };
+function makePlanInfo(
+  planId: string,
+  epicId: string,
+  content = "",
+  parentPlanId?: string | null
+): PlanInfo {
+  return { planId, epicId, content, parentPlanId };
 }
 
 function block(from: string, to: string): PlanDependencyEdge {
@@ -53,6 +58,25 @@ describe("validatePlanDependencyDAG", () => {
 
 describe("buildDependencyEdgesCore", () => {
   describe("task-store blocker edges", () => {
+    it("child-plan-B task blocked by child-plan-A task yields cross-sub-plan edge (same parent metadata)", () => {
+      const parent = "root-plan";
+      const plans: PlanInfo[] = [
+        makePlanInfo("child-plan-a", "epic-a", "# Plan A", parent),
+        makePlanInfo("child-plan-b", "epic-b", "# Plan B", parent),
+      ];
+      const issues: StoredTask[] = [
+        {
+          id: "epic-b.1",
+          title: "Implement B",
+          status: "open",
+          dependencies: [{ depends_on_id: "epic-a.1", type: "blocks" }],
+        } as unknown as StoredTask,
+      ];
+      expect(buildDependencyEdgesCore(plans, issues)).toEqual([
+        { from: "child-plan-a", to: "child-plan-b", type: "blocks" },
+      ]);
+    });
+
     it("creates cross-plan edge when task in one epic blocks task in another", () => {
       const plans: PlanInfo[] = [
         makePlanInfo("plan-a", "epic-a"),
@@ -147,6 +171,39 @@ describe("buildDependencyEdgesCore", () => {
         []
       );
       expect(edges).toEqual([{ from: "api-layer", to: "consumer", type: "blocks" }]);
+    });
+
+    it("does not match a root plan slug when the consumer is a child of a different parent group", () => {
+      const edges = buildDependencyEdgesCore(
+        [
+          makePlanInfo("shared-slug", "e-root", "# Shared\n\nRoot plan.", null),
+          makePlanInfo(
+            "consumer-child",
+            "e-child",
+            "# Child\n\n## Dependencies\n\nshared-slug.",
+            "parent-subtree"
+          ),
+        ],
+        []
+      );
+      expect(edges).toHaveLength(0);
+    });
+
+    it("still links siblings under the same parent when markdown references a plan id", () => {
+      const parent = "parent-plan";
+      const edges = buildDependencyEdgesCore(
+        [
+          makePlanInfo("plan-a", "ea", "# A\n\nBase.", parent),
+          makePlanInfo(
+            "plan-b",
+            "eb",
+            "# B\n\n## Dependencies\n\nDepends on plan-a.",
+            parent
+          ),
+        ],
+        []
+      );
+      expect(edges).toEqual([{ from: "plan-a", to: "plan-b", type: "blocks" }]);
     });
   });
 

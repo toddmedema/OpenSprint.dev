@@ -156,6 +156,7 @@ describe("PlanDecomposeGenerateService.generateAndCreateTasks hierarchy wiring",
       };
       ancestorChainSummary?: string;
       siblingPlanSummaries?: string;
+      crossEpicDependsTitleToId?: Record<string, string>;
     };
 
     expect(passed.hierarchyContext).toBeDefined();
@@ -168,5 +169,9 @@ describe("PlanDecomposeGenerateService.generateAndCreateTasks hierarchy wiring",
 
     expect(passed.ancestorChainSummary).toBeUndefined();
     expect(passed.siblingPlanSummaries).toBeUndefined();
+
+    expect(passed.crossEpicDependsTitleToId).toEqual({
+      "Sibling implementation task": "os-epic-2.1",
+    });
   });
 });

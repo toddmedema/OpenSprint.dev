@@ -118,4 +118,74 @@ describe("generateAndCreateTasks hierarchyContext", () => {
     expect(content).not.toContain("NEITHER THIS");
     expect(content).toMatch(/## Hierarchy:[\s\S]*Break down the following feature plan/);
   });
+
+  it("resolves dependsOn to sibling epic task ids via crossEpicDependsTitleToId", async () => {
+    vi.mocked(agentService.invokePlanningAgent).mockResolvedValue({
+      content: JSON.stringify({
+        tasks: [
+          {
+            title: "B depends on A",
+            description: "d",
+            priority: 1,
+            dependsOn: ["Task from plan A"],
+            complexity: 3,
+            files: { modify: [], create: [], test: [] },
+          },
+        ],
+      }),
+    } as never);
+
+    const plan: Plan = {
+      metadata: {
+        planId: "child-b",
+        epicId: "os-epic-b",
+        shippedAt: null,
+        complexity: "medium",
+        parentPlanId: "root-plan",
+      },
+      content: "# Child B\n\n## Dependencies\n\n- child-plan-a",
+      status: "planning",
+      taskCount: 0,
+      doneTaskCount: 0,
+      dependencyCount: 0,
+      lastModified: "",
+      currentVersionNumber: 1,
+      hasGeneratedPlanTasksForCurrentVersion: false,
+    };
+
+    const addDependencies = vi.fn();
+    await generateAndCreateTasks({
+      projectId: "proj",
+      repoPath: "/tmp/r",
+      plan,
+      prdContext: "PRD",
+      settings: {},
+      crossEpicDependsTitleToId: { "Task from plan A": "os-epic-a.1" },
+      taskStore: {
+        createMany: vi.fn().mockResolvedValue([{ id: "os-epic-b.1" }]),
+        addDependencies,
+        addLabel: vi.fn(),
+      },
+    });
+
+    expect(addDependencies).toHaveBeenCalledWith("proj", [
+      { childId: "os-epic-b.1", parentId: "os-epic-a.1", type: "blocks" },
+    ]);
+  });
+});
+
+describe("formatPlanTaskHierarchyContextForPrompt cross-epic hint", () => {
+  it("mentions cross-epic dependsOn when siblings are present", () => {
+    const block = formatPlanTaskHierarchyContextForPrompt({
+      ancestors: [],
+      siblings: [
+        {
+          title: "Sibling A",
+          taskSummary: "## Plan: a (epic: e1)\n- **e1.1**: Do A\n",
+        },
+      ],
+    });
+    expect(block).toContain("Cross-epic dependencies");
+    expect(block).toContain("dependsOn");
+  });
 });

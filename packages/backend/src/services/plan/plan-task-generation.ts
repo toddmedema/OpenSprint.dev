@@ -80,6 +80,9 @@ export function formatPlanTaskHierarchyContextForPrompt(ctx: PlanTaskHierarchyCo
           `**Scope (generated tasks):** ${scope || "(no task lines)"}\n`
       );
     }
+    parts.push(
+      "\n**Cross-epic dependencies:** If this plan’s Dependencies section orders it after a sibling sub-plan, you may add that sibling’s implementation tasks to `dependsOn` using the **exact task title** strings shown above (same spelling as in **Scope**). The system resolves those titles to task IDs across epics. Still use exact titles from your own task list for dependencies within this plan.\n"
+    );
   }
 
   return parts.join("\n").trim();
@@ -101,6 +104,11 @@ export interface PlanTaskGenerationDeps {
   siblingPlanSummaries?: string;
   /** Appended to the user message (e.g. max-depth consolidation). */
   extraUserPromptSuffix?: string;
+  /**
+   * Task titles from sibling sub-plan epics (already created) → task ids, for cross-epic
+   * `dependsOn` in the same planner batch. First title wins when duplicates exist.
+   */
+  crossEpicDependsTitleToId?: Readonly<Record<string, string>>;
   settings: { aiAutonomyLevel?: string; hilConfig?: unknown };
   taskStore: {
     createMany(
@@ -195,6 +203,7 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
     ancestorChainSummary,
     siblingPlanSummaries,
     extraUserPromptSuffix,
+    crossEpicDependsTitleToId,
     settings,
     taskStore,
   } = deps;
@@ -340,12 +349,19 @@ export async function generateAndCreateTasks(deps: PlanTaskGenerationDeps): Prom
   const taskIdMap = new Map<string, string>();
   created.forEach((t, i) => taskIdMap.set(tasks[i]!.title, t.id));
 
+  const resolveDepTaskId = (depTitle: string): string | undefined => {
+    const local = taskIdMap.get(depTitle);
+    if (local) return local;
+    const external = crossEpicDependsTitleToId?.[depTitle];
+    return typeof external === "string" && external.trim() ? external.trim() : undefined;
+  };
+
   const interDeps: Array<{ childId: string; parentId: string; type?: string }> = [];
   for (const task of tasks) {
     const childId = taskIdMap.get(task.title);
     if (!childId || !task.dependsOn.length) continue;
     for (const depTitle of task.dependsOn) {
-      const parentId = taskIdMap.get(depTitle);
+      const parentId = resolveDepTaskId(depTitle);
       if (parentId) interDeps.push({ childId, parentId, type: "blocks" });
     }
   }

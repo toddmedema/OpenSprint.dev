@@ -51,7 +51,7 @@ For each task:
    - **Acceptance criteria:** A numbered list of concrete, verifiable conditions that define "done" for this task (e.g. "1. POST /api/login returns 200 with valid JWT; 2. Returns 401 for invalid credentials; 3. Unit tests cover both paths")
    - Verification step: the test command or build check to run (e.g. "Run the project's configured test command with a login-focused filter")
 3. Priority: 0 (highest — foundational/blocking) to 4 (lowest — polish/optional)
-4. dependsOn: Array of other task titles this task is blocked by. Use exact task titles from your output for dependsOn entries — copy them character-for-character so the system can resolve references reliably. Do not paraphrase or abbreviate.
+4. dependsOn: Array of other task titles this task is blocked by. Use exact task titles from your output for dependsOn entries within this plan — copy them character-for-character so the system can resolve references reliably. When the prompt includes **Hierarchy: Sibling sub-plans** and your plan depends on work from a sibling, you may also list that sibling’s task titles (exact titles from the sibling scope section) in dependsOn for stable cross-epic ordering. Do not paraphrase or abbreviate.
 5. files: Required object with { modify?: string[], create?: string[], test?: string[] } describing the task's expected file scope
 
 Guidelines:

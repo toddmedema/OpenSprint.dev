@@ -383,6 +383,56 @@ export class PlanDecomposeGenerateService {
   }
 
   /**
+   * Titles of implementation tasks under sibling plans (same parent) → task ids. Used so a child
+   * plan’s generated tasks can use dependsOn pointing at sibling tasks. First wins on title clash.
+   */
+  private async buildCrossEpicSiblingTaskTitleToIdMap(
+    projectId: string,
+    plan: Plan,
+    parentPlanId: string,
+    allIssues: StoredTask[]
+  ): Promise<Record<string, string>> {
+    const selfId = plan.metadata.planId;
+    let siblingIds: string[];
+    try {
+      siblingIds = await this.deps.taskStore.planListByParent(projectId, parentPlanId);
+    } catch (err) {
+      log.warn("buildCrossEpicSiblingTaskTitleToIdMap: planListByParent failed", {
+        err: getErrorMessage(err),
+        planId: plan.metadata.planId,
+      });
+      return {};
+    }
+
+    const out: Record<string, string> = {};
+    for (const sid of [...siblingIds].filter((id) => id !== selfId).sort()) {
+      try {
+        const sib = await this.deps.getPlan(projectId, sid);
+        if ((sib.taskCount ?? 0) === 0) continue;
+        const epicId = sib.metadata.epicId?.trim();
+        if (!epicId) continue;
+        const ver = sib.currentVersionNumber ?? 1;
+        const children = allIssues.filter((issue) => {
+          if (!issue.id.startsWith(`${epicId}.`)) return false;
+          if ((issue.issue_type ?? issue.type) === "epic") return false;
+          return taskPlanVersionForTaskGeneration(issue) === ver;
+        });
+        for (const c of children) {
+          if (!(c.title in out)) {
+            out[c.title] = c.id;
+          }
+        }
+      } catch (err) {
+        log.warn("buildCrossEpicSiblingTaskTitleToIdMap: skipped sibling", {
+          err: getErrorMessage(err),
+          siblingId: sid,
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
    * Persist child plans + epics for a sub-plan split. Runs sequentially so epic IDs stay unique.
    * Injects cross-sub-plan ordering into markdown via `ensureDependenciesSection`, broadcasts
    * `plan.updated` for each child and the parent.
@@ -473,6 +523,29 @@ export class PlanDecomposeGenerateService {
     const hierarchyContext = await this.buildTaskGenerationHierarchyContext(projectId, plan);
     const ancestorChainSummary = await this.buildAncestorChainSummary(projectId, plan);
     const siblingPlanSummaries = await this.buildSiblingPlanSummaries(projectId, plan);
+
+    let crossEpicDependsTitleToId: Record<string, string> | undefined;
+    const parentPlanId = plan.metadata.parentPlanId?.trim();
+    if (parentPlanId) {
+      try {
+        const allIssues = await this.deps.taskStore.listAll(projectId);
+        const map = await this.buildCrossEpicSiblingTaskTitleToIdMap(
+          projectId,
+          plan,
+          parentPlanId,
+          allIssues
+        );
+        if (Object.keys(map).length > 0) {
+          crossEpicDependsTitleToId = map;
+        }
+      } catch (err) {
+        log.warn("cross-epic task title map failed", {
+          err: getErrorMessage(err),
+          planId: plan.metadata.planId,
+        });
+      }
+    }
+
     return generateAndCreateTasksImpl({
       projectId,
       repoPath,
@@ -482,6 +555,7 @@ export class PlanDecomposeGenerateService {
       ancestorChainSummary: hierarchyContext ? undefined : ancestorChainSummary,
       siblingPlanSummaries: hierarchyContext ? undefined : siblingPlanSummaries,
       extraUserPromptSuffix: opts?.extraUserPromptSuffix,
+      crossEpicDependsTitleToId,
       settings,
       taskStore: this.deps.taskStore,
     });

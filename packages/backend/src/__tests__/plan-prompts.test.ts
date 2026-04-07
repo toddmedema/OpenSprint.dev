@@ -42,7 +42,7 @@ describe("TASK_GENERATION_SYSTEM_PROMPT", () => {
 
   it("requires stable dependency references using exact titles", () => {
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain(
-      "Use exact task titles from your output for dependsOn entries"
+      "Use exact task titles from your output for dependsOn entries within this plan"
     );
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain("copy them character-for-character");
     expect(TASK_GENERATION_SYSTEM_PROMPT).toContain("Do not paraphrase or abbreviate");

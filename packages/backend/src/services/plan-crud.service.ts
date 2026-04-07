@@ -127,7 +127,13 @@ export class PlanCrudService {
       const row = await this.taskStore.planGet(projectId, planId);
       if (!row) continue;
       const epicId = (row.metadata.epicId as string) ?? "";
-      infos.push({ planId, epicId, content: row.content });
+      const parentPlanId = row.parent_plan_id ?? (row.metadata.parentPlanId as string) ?? null;
+      infos.push({
+        planId,
+        epicId,
+        content: row.content,
+        parentPlanId: parentPlanId || undefined,
+      });
     }
     return infos;
   }

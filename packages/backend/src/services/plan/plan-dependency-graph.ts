@@ -150,6 +150,11 @@ export interface PlanInfo {
   planId: string;
   epicId: string;
   content: string;
+  /**
+   * When set, markdown `## Dependencies` edges only match other plans with the same
+   * parent (sibling group). Roots use undefined/null — they match each other only.
+   */
+  parentPlanId?: string | null;
 }
 
 /**
@@ -187,12 +192,15 @@ export function buildDependencyEdgesCore(
     }
   }
 
+  const parentKey = (p: PlanInfo) => (p.parentPlanId ?? "").trim();
   for (const plan of planInfos) {
     const depsSection = plan.content.match(/## Dependencies[\s\S]*?(?=##|$)/i);
     if (!depsSection) continue;
     const text = depsSection[0].toLowerCase();
+    const planParent = parentKey(plan);
     for (const other of planInfos) {
       if (other.planId === plan.planId) continue;
+      if (parentKey(other) !== planParent) continue;
       const slug = other.planId.replace(/-/g, "[\\s-]*");
       if (new RegExp(slug, "i").test(text)) {
         addEdge(other.planId, plan.planId);
