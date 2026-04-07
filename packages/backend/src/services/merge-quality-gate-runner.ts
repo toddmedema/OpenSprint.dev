@@ -1,3 +1,4 @@
+import { realpathSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 import { createLogger } from "../utils/logger.js";
@@ -18,7 +19,11 @@ import {
   type MergeQualityGateProfile,
 } from "./merge-quality-gates.js";
 import type { ToolchainProfile } from "@opensprint/shared";
-import { isNodeDependencyStrategy, resolveToolchainProfile } from "./toolchain-profile.service.js";
+import {
+  isNodeDependencyStrategy,
+  resolveToolchainProfile,
+  usesHermeticWorktreeNodeModules,
+} from "./toolchain-profile.service.js";
 import { ValidationWorkspaceService } from "./validation-workspace.service.js";
 import { redactSecretsForUserDisplay } from "../utils/secret-redaction.js";
 
@@ -54,7 +59,7 @@ const QUALITY_GATE_ENV_AMBIGUOUS_FINGERPRINTS: RegExp[] = [
   /\bmodule_not_found\b/i,
   /\bcannot find module\b/i,
   /\bcannot find package\b/i,
-  /\benoent\b/i,
+  /** Bare `enoent` is handled in {@link classifyQualityGateFailureCategory} (worktree source vs env). */
 ];
 
 export interface MergeQualityGateRunOptions {
@@ -88,6 +93,128 @@ export interface MergeQualityGateFailure {
   signal?: string | null;
   classificationConfidence?: "high" | "low";
   classificationReason?: string;
+  /** Bounded `git status --porcelain` captured when a gate fails (post-mortem). */
+  gitStatusPorcelainSnippet?: string;
+  /** Bounded `git diff --name-status HEAD` for post-mortem (first N lines). */
+  gitNameStatusSnippet?: string;
+}
+
+const GATE_FAILURE_GIT_TELEMETRY_MAX = 2000;
+
+function pathUnderWorktreeRoot(candidate: string, worktreeRoot: string): boolean {
+  const relFromRoots = (absFile: string, absRoot: string) => {
+    const rel = path.relative(absRoot, absFile);
+    return rel !== "" && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  };
+  let realRoot: string;
+  try {
+    realRoot = realpathSync(worktreeRoot);
+  } catch {
+    realRoot = path.resolve(worktreeRoot);
+  }
+  const absCandidate = path.resolve(candidate);
+  if (relFromRoots(absCandidate, path.resolve(worktreeRoot)) || relFromRoots(absCandidate, realRoot)) {
+    return true;
+  }
+  // Missing path segments: walk up until realpathSync succeeds, then re-append suffixes.
+  let cur = absCandidate;
+  const tail: string[] = [];
+  for (;;) {
+    try {
+      const realPrefix = realpathSync(cur);
+      const combined =
+        tail.length > 0 ? path.join(realPrefix, ...tail) : realPrefix;
+      return relFromRoots(combined, realRoot);
+    } catch {
+      tail.unshift(path.basename(cur));
+      const parent = path.dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
+  }
+  return false;
+}
+
+function isToolishOrDependencyPath(normalizedPosix: string): boolean {
+  const n = normalizedPosix.toLowerCase();
+  return (
+    n.includes("/node_modules/") ||
+    n.endsWith("/node_modules") ||
+    n.includes("/.git/") ||
+    n.includes("/dist/") ||
+    n.includes("/coverage/") ||
+    n.includes("/build/") ||
+    n.includes("/.vite/") ||
+    n.includes("/tmp/") ||
+    n.endsWith("/package-lock.json") ||
+    n.endsWith("/pnpm-lock.yaml") ||
+    n.endsWith("/yarn.lock")
+  );
+}
+
+/**
+ * True when failure text indicates ENOENT while opening a source file under the worktree
+ * (typically inconsistent refactor: importer exists, module file missing).
+ */
+export function looksLikeEnoentOpeningMissingWorktreeSource(text: string, worktreePath: string): boolean {
+  if (!text.trim() || !worktreePath.trim()) return false;
+  if (!/\bENOENT\b|no such file or directory/i.test(text)) return false;
+
+  const absRoot = path.resolve(worktreePath);
+  const pathPatterns = [
+    /,\s*open\s+['"]([^'"]+)['"]/gi,
+    /open\s*\(\s*['"]([^'"]+)['"]/gi,
+    /['"]([/][^'"]+\.(?:ts|tsx|mts|cts))['"]/gi,
+  ];
+  for (const pathLike of pathPatterns) {
+    let m: RegExpExecArray | null;
+    pathLike.lastIndex = 0;
+    while ((m = pathLike.exec(text)) !== null) {
+      const raw = (m[1] ?? "").trim();
+      if (!raw) continue;
+      if (!raw.startsWith(path.sep) && !/^[A-Za-z]:[\\/]/.test(raw)) continue;
+      if (!/\.(?:ts|tsx|mts|cts)$/i.test(raw)) continue;
+      const posix = raw.replace(/\\/g, "/");
+      if (isToolishOrDependencyPath(posix)) continue;
+      if (pathUnderWorktreeRoot(raw, absRoot)) return true;
+    }
+  }
+  return false;
+}
+
+async function stripWorktreeNodeModulePaths(worktreePath: string): Promise<void> {
+  const rootNm = path.join(worktreePath, "node_modules");
+  await fs.rm(rootNm, { recursive: true, force: true }).catch(() => undefined);
+  const packagesDir = path.join(worktreePath, "packages");
+  let names: string[];
+  try {
+    names = await fs.readdir(packagesDir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const pkgDir = path.join(packagesDir, name);
+    const st = await fs.stat(pkgDir).catch(() => null);
+    if (!st?.isDirectory()) continue;
+    await fs.rm(path.join(pkgDir, "node_modules"), { recursive: true, force: true }).catch(
+      () => undefined
+    );
+  }
+}
+
+async function prepareHermeticWorktreeNodeModules(
+  worktreePath: string,
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+): Promise<void> {
+  await stripWorktreeNodeModulePaths(worktreePath);
+  await runCommand(
+    { command: "npm", args: ["ci"] },
+    {
+      cwd: worktreePath,
+      timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+      env: NPM_INCLUDE_DEV_ENV,
+    }
+  );
 }
 
 interface MergeQualityGateRunnerDeps {
@@ -175,7 +302,8 @@ async function runDependencyHealthCheck(
   let command = resolvedProfile.dependencyHealthCheckCommand;
   let spec = parseCommandSpec(command);
   if (
-    resolvedProfile.dependencyStrategy === "npm" &&
+    (resolvedProfile.dependencyStrategy === "npm" ||
+      resolvedProfile.dependencyStrategy === "npm_ci_worktree") &&
     command.trim() === "npm ls --depth=0 --include=dev"
   ) {
     const args = await resolveDependencyHealthCheckArgs(workspacePath);
@@ -432,7 +560,74 @@ function redactMergeQualityGateFailureSurface(failure: MergeQualityGateFailure):
       ? redactSecretsForUserDisplay(failure.executable)
       : failure.executable,
     cwd: failure.cwd ? redactSecretsForUserDisplay(failure.cwd) : failure.cwd,
+    gitStatusPorcelainSnippet:
+      failure.gitStatusPorcelainSnippet !== undefined
+        ? redactSecretsForUserDisplay(failure.gitStatusPorcelainSnippet).slice(
+            0,
+            GATE_FAILURE_GIT_TELEMETRY_MAX
+          )
+        : undefined,
+    gitNameStatusSnippet:
+      failure.gitNameStatusSnippet !== undefined
+        ? redactSecretsForUserDisplay(failure.gitNameStatusSnippet).slice(
+            0,
+            GATE_FAILURE_GIT_TELEMETRY_MAX
+          )
+        : undefined,
   };
+}
+
+async function enrichMergeGateFailureWithGitTelemetry(
+  failure: MergeQualityGateFailure,
+  gitCwd: string,
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+): Promise<MergeQualityGateFailure> {
+  if (process.env.NODE_ENV === "test") return failure;
+  let statusSnippet = "";
+  let nameStatusSnippet = "";
+  try {
+    const st = await runCommand(
+      { command: "git", args: ["status", "--porcelain"] },
+      {
+        cwd: gitCwd,
+        timeout: QUALITY_GATE_PRECHECK_TIMEOUT_MS,
+      }
+    );
+    statusSnippet = [st.stdout, st.stderr].filter(Boolean).join("\n").trim();
+  } catch {
+    // non-fatal
+  }
+  try {
+    const diff = await runCommand(
+      { command: "git", args: ["diff", "--name-status", "HEAD"] },
+      { cwd: gitCwd, timeout: QUALITY_GATE_PRECHECK_TIMEOUT_MS }
+    );
+    nameStatusSnippet = [diff.stdout, diff.stderr].filter(Boolean).join("\n").trim();
+  } catch {
+    // non-fatal
+  }
+
+  const lines = nameStatusSnippet.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const boundedNameStatus = lines.slice(0, 80).join("\n").slice(0, GATE_FAILURE_GIT_TELEMETRY_MAX);
+
+  return {
+    ...failure,
+    gitStatusPorcelainSnippet: redactSecretsForUserDisplay(statusSnippet).slice(
+      0,
+      GATE_FAILURE_GIT_TELEMETRY_MAX
+    ),
+    gitNameStatusSnippet: redactSecretsForUserDisplay(boundedNameStatus),
+  };
+}
+
+async function withMergeGateFailureTelemetry(
+  failure: MergeQualityGateFailure | null,
+  gitCwd: string,
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+): Promise<MergeQualityGateFailure | null> {
+  if (!failure) return null;
+  const enriched = await enrichMergeGateFailureWithGitTelemetry(failure, gitCwd, runCommand);
+  return redactMergeQualityGateFailureSurface(enriched);
 }
 
 /**
@@ -457,12 +652,21 @@ function classifyQualityGateFailureCategory(failure: {
   firstErrorLine: string;
   code?: string;
   exitCode?: number | null;
+  worktreePath?: string;
 }): {
   category: "environment_setup" | "quality_gate";
   confidence: "high" | "low";
   reason: string;
 } {
   const text = `${failure.reason}\n${failure.output}\n${failure.firstErrorLine}`;
+  const wt = failure.worktreePath?.trim();
+  if (wt && looksLikeEnoentOpeningMissingWorktreeSource(text, wt)) {
+    return {
+      category: "quality_gate",
+      confidence: "high",
+      reason: "missing_worktree_source_file",
+    };
+  }
   if (
     /\berror TS\d+\b/i.test(text) ||
     /\b\d+:\d+\s+error\b/i.test(text) ||
@@ -475,6 +679,13 @@ function classifyQualityGateFailureCategory(failure: {
     };
   }
   if (failure.code === "ENOENT" || failure.code === "EACCES") {
+    if (failure.code === "ENOENT" && wt && looksLikeEnoentOpeningMissingWorktreeSource(text, wt)) {
+      return {
+        category: "quality_gate",
+        confidence: "high",
+        reason: "missing_worktree_source_file",
+      };
+    }
     return {
       category: "environment_setup",
       confidence: "high",
@@ -496,10 +707,24 @@ function classifyQualityGateFailureCategory(failure: {
     };
   }
   if (QUALITY_GATE_ENV_AMBIGUOUS_FINGERPRINTS.some((fingerprint) => fingerprint.test(text))) {
+    if (wt && looksLikeEnoentOpeningMissingWorktreeSource(text, wt)) {
+      return {
+        category: "quality_gate",
+        confidence: "high",
+        reason: "missing_worktree_source_file",
+      };
+    }
     return {
       category: "environment_setup",
       confidence: "low",
       reason: "matched ambiguous environment fingerprint",
+    };
+  }
+  if (/\benoent\b/i.test(text) && wt && looksLikeEnoentOpeningMissingWorktreeSource(text, wt)) {
+    return {
+      category: "quality_gate",
+      confidence: "high",
+      reason: "missing_worktree_source_file",
     };
   }
   return {
@@ -542,6 +767,7 @@ function extractCommandFailure(
     firstErrorLine,
     code: typeof commandErr.code === "string" ? commandErr.code : undefined,
     exitCode: typeof commandErr.exitCode === "number" ? commandErr.exitCode : null,
+    worktreePath: params.worktreePath,
   });
   const category = params.category ?? classification.category;
   const authHint = mergeQualityGateLocalSessionAuthAssertionHint(reason, output, firstErrorLine);
@@ -817,6 +1043,9 @@ async function repairQualityGateEnvironment(
   const commands: string[] = [];
   const worktreePath = options.worktreePath;
   const npmGate = parseCommandSpec(gateCommand).command === "npm";
+  const hermetic = usesHermeticWorktreeNodeModules(
+    resolveToolchainProfile(options.toolchainProfile).dependencyStrategy
+  );
   let recreateSucceeded = true;
 
   if (validationWorkspace === "baseline") {
@@ -916,6 +1145,47 @@ async function repairQualityGateEnvironment(
   if (!npmGate) {
     commands.push("skip npm-specific auto-repair (non-npm gate)");
   } else if (validationWorkspace === "merged_candidate") {
+    if (hermetic) {
+      commands.push("stripWorktreeNodeModulePaths", "npm ci (hermetic merged_candidate)");
+      await stripWorktreeNodeModulePaths(worktreePath);
+      try {
+        const result = await deps.runCommand(
+          { command: "npm", args: ["ci"] },
+          {
+            cwd: worktreePath,
+            timeout: QUALITY_GATE_AUTO_REPAIR_TIMEOUT_MS,
+            env: NPM_INCLUDE_DEV_ENV,
+          }
+        );
+        npmCiSucceeded = true;
+        const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+        if (out) outputParts.push(`[npm ci @ ${worktreePath}] ${out}`);
+      } catch (err) {
+        const fail = extractCommandFailure("npm ci", err, {
+          worktreePath,
+          validationWorkspace,
+          category: "environment_setup",
+        });
+        outputParts.push([fail.reason, fail.output].filter(Boolean).join("\n").trim());
+        npmCiSucceeded = false;
+      }
+      const nodeModulesUsable = await isNodeModulesUsable(path.join(worktreePath, "node_modules"));
+      if (nodeModulesUsable) {
+        const worktreeDependencyHealth = await runDependencyHealthCheck(
+          worktreePath,
+          deps.runCommand,
+          options.toolchainProfile
+        );
+        worktreeDependencyHealthy = worktreeDependencyHealth.healthy;
+        if (!worktreeDependencyHealth.healthy) {
+          outputParts.push(
+            `[worktree dependency health @ ${worktreePath}] ${worktreeDependencyHealth.output}`
+          );
+        }
+      } else {
+        worktreeDependencyHealthy = false;
+      }
+    } else {
     // merged_candidate repair: symlink from main repo is the primary fast path.
     // 1) Check if repo already has healthy node_modules (skip npm ci if so).
     // 2) If not, run npm ci in repo root.
@@ -1038,6 +1308,7 @@ async function repairQualityGateEnvironment(
         worktreeDependencyHealthy = false;
       }
     }
+    }
   } else {
     // Non-merged_candidate, non-baseline: npm ci in worktree + re-symlink.
     const installCwd = options.worktreePath;
@@ -1067,12 +1338,16 @@ async function repairQualityGateEnvironment(
       if (npmCiOutput) outputParts.push(`[npm ci @ ${installCwd}] ${npmCiOutput}`);
     }
 
-    commands.push("symlinkNodeModules");
-    try {
-      await deps.symlinkNodeModules(options.repoPath, worktreePath);
-    } catch (err) {
-      symlinkSucceeded = false;
-      outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
+    if (hermetic) {
+      commands.push("skip symlinkNodeModules (hermetic npm_ci_worktree)");
+    } else {
+      commands.push("symlinkNodeModules");
+      try {
+        await deps.symlinkNodeModules(options.repoPath, worktreePath);
+      } catch (err) {
+        symlinkSucceeded = false;
+        outputParts.push(`[symlinkNodeModules] ${getErrorMessage(err)}`);
+      }
     }
   }
 
@@ -1080,7 +1355,7 @@ async function repairQualityGateEnvironment(
   if (validationWorkspace === "merged_candidate") {
     succeeded = recreateSucceeded && worktreeDependencyHealthy;
   } else {
-    succeeded = recreateSucceeded && npmCiSucceeded && symlinkSucceeded;
+    succeeded = recreateSucceeded && npmCiSucceeded && (hermetic || symlinkSucceeded);
   }
 
   if (succeeded && npmGate) {
@@ -1207,16 +1482,20 @@ export async function runMergeQualityGates(
       );
 
       if (!rebuildResult.rebuilt) {
-        return redactMergeQualityGateFailureSurface({
-          command: "(pre-gate integrity check)",
-          reason: `Worktree integrity check failed and auto-rebuild unsuccessful: ${integrity.detail}${rebuildResult.error ? ` | rebuild error: ${rebuildResult.error}` : ""}`,
-          output: "",
-          worktreePath: normWt,
-          validationWorkspace: options.validationWorkspace,
-          category: "environment_setup",
-          autoRepairAttempted: true,
-          autoRepairSucceeded: false,
-        });
+        return await withMergeGateFailureTelemetry(
+          redactMergeQualityGateFailureSurface({
+            command: "(pre-gate integrity check)",
+            reason: `Worktree integrity check failed and auto-rebuild unsuccessful: ${integrity.detail}${rebuildResult.error ? ` | rebuild error: ${rebuildResult.error}` : ""}`,
+            output: "",
+            worktreePath: normWt,
+            validationWorkspace: options.validationWorkspace,
+            category: "environment_setup",
+            autoRepairAttempted: true,
+            autoRepairSucceeded: false,
+          }),
+          normWt,
+          deps.runCommand ?? runCommandDefault
+        );
       }
 
       log.info("Worktree auto-rebuilt before quality gates", {
@@ -1231,6 +1510,29 @@ export async function runMergeQualityGates(
     repoPath: normRepo,
   };
 
+  const runCommand = deps.runCommand ?? runCommandDefault;
+  const resolvedProfileEarly = resolveToolchainProfile(gateOptions.toolchainProfile);
+  const gateValidationWorkspace =
+    gateOptions.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree");
+
+  if (
+    usesHermeticWorktreeNodeModules(resolvedProfileEarly.dependencyStrategy) &&
+    (gateValidationWorkspace === "task_worktree" || gateValidationWorkspace === "repo_root")
+  ) {
+    try {
+      await prepareHermeticWorktreeNodeModules(normWt, runCommand);
+    } catch (err) {
+      return await withMergeGateFailureTelemetry(
+        extractCommandFailure("npm ci (hermetic pre-gate)", err, {
+          worktreePath: normWt,
+          validationWorkspace: gateValidationWorkspace,
+        }),
+        normWt,
+        runCommand
+      );
+    }
+  }
+
   const validationService = new ValidationWorkspaceService();
   const healthCheck = await validationService.verifyWorkspaceHealth(
     normRepo,
@@ -1243,19 +1545,23 @@ export async function runMergeQualityGates(
       worktreePath: normWt,
       errors: healthCheck.errors,
     });
-    return redactMergeQualityGateFailureSurface({
-      command: "workspace_health_check",
-      reason: `Workspace not ready: ${healthCheck.errors.join("; ")}`,
-      output: healthCheck.errors.join("\n"),
-      worktreePath: normWt,
-      validationWorkspace: gateOptions.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree"),
-      category: "environment_setup",
-      classificationConfidence: "high",
-      classificationReason: "unified workspace health check failed before gate execution",
-    });
+    return await withMergeGateFailureTelemetry(
+      redactMergeQualityGateFailureSurface({
+        command: "workspace_health_check",
+        reason: `Workspace not ready: ${healthCheck.errors.join("; ")}`,
+        output: healthCheck.errors.join("\n"),
+        worktreePath: normWt,
+        validationWorkspace:
+          gateOptions.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree"),
+        category: "environment_setup",
+        classificationConfidence: "high",
+        classificationReason: "unified workspace health check failed before gate execution",
+      }),
+      normWt,
+      runCommand
+    );
   }
 
-  const runCommand = deps.runCommand ?? runCommandDefault;
   const qualityGateProfile = gateOptions.qualityGateProfile ?? "deterministic";
   const executionPlan: MergeQualityGateExecutionPlanEntry[] = deps.commands
     ? deps.commands.map((command) => ({ command }))
@@ -1268,7 +1574,7 @@ export async function runMergeQualityGates(
   const validationWorkspace =
     gateOptions.validationWorkspace ??
     (normWt === normRepo ? "repo_root" : "task_worktree");
-  const resolvedProfile = resolveToolchainProfile(gateOptions.toolchainProfile);
+  const resolvedProfile = resolvedProfileEarly;
   const symlinkNodeModules =
     deps.symlinkNodeModules ??
     (async (repoPath: string, wtPath: string) => {
@@ -1297,13 +1603,13 @@ export async function runMergeQualityGates(
     if ("failure" in preparedOrFailure) {
       const initialFailure = preparedOrFailure.failure;
       if (initialFailure.category !== "environment_setup") {
-        return initialFailure;
+        return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
       }
       if (
         !isNodeDependencyStrategy(resolvedProfile.dependencyStrategy) ||
         parseCommandSpec(command).command !== "npm"
       ) {
-        return initialFailure;
+        return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
       }
 
       const autoRepair = await repairQualityGateEnvironment(
@@ -1325,13 +1631,17 @@ export async function runMergeQualityGates(
         continue;
       }
       if ("failure" in retryPreparedOrFailure) {
-        return {
-          ...retryPreparedOrFailure.failure,
-          autoRepairAttempted: true,
-          autoRepairSucceeded: autoRepair.succeeded,
-          autoRepairCommands: autoRepair.commands,
-          autoRepairOutput: autoRepair.output,
-        };
+        return await withMergeGateFailureTelemetry(
+          {
+            ...retryPreparedOrFailure.failure,
+            autoRepairAttempted: true,
+            autoRepairSucceeded: autoRepair.succeeded,
+            autoRepairCommands: autoRepair.commands,
+            autoRepairOutput: autoRepair.output,
+          },
+          normWt,
+          runCommand
+        );
       }
       const retryFailure = await executePreparedGate(
         retryPreparedOrFailure.prepared,
@@ -1341,13 +1651,17 @@ export async function runMergeQualityGates(
         commandEnv
       );
       if (retryFailure) {
-        return {
-          ...retryFailure,
-          autoRepairAttempted: true,
-          autoRepairSucceeded: autoRepair.succeeded,
-          autoRepairCommands: autoRepair.commands,
-          autoRepairOutput: autoRepair.output,
-        };
+        return await withMergeGateFailureTelemetry(
+          {
+            ...retryFailure,
+            autoRepairAttempted: true,
+            autoRepairSucceeded: autoRepair.succeeded,
+            autoRepairCommands: autoRepair.commands,
+            autoRepairOutput: autoRepair.output,
+          },
+          normWt,
+          runCommand
+        );
       }
       continue;
     }
@@ -1374,13 +1688,13 @@ export async function runMergeQualityGates(
         command,
         reason: initialFailure.reason,
       });
-      return initialFailure;
+      return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
     }
     if (
       !isNodeDependencyStrategy(resolvedProfile.dependencyStrategy) ||
       parseCommandSpec(command).command !== "npm"
     ) {
-      return initialFailure;
+      return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
     }
 
     const autoRepair = await repairQualityGateEnvironment(
@@ -1402,13 +1716,17 @@ export async function runMergeQualityGates(
       continue;
     }
     if ("failure" in retryPreparedOrFailure) {
-      return {
-        ...retryPreparedOrFailure.failure,
-        autoRepairAttempted: true,
-        autoRepairSucceeded: autoRepair.succeeded,
-        autoRepairCommands: autoRepair.commands,
-        autoRepairOutput: autoRepair.output,
-      };
+      return await withMergeGateFailureTelemetry(
+        {
+          ...retryPreparedOrFailure.failure,
+          autoRepairAttempted: true,
+          autoRepairSucceeded: autoRepair.succeeded,
+          autoRepairCommands: autoRepair.commands,
+          autoRepairOutput: autoRepair.output,
+        },
+        normWt,
+        runCommand
+      );
     }
 
     log.info("Retrying merge quality gate after environment auto-repair", {
@@ -1434,13 +1752,17 @@ export async function runMergeQualityGates(
       reason: retryFailure.reason,
       category: retryFailure.category,
     });
-    return {
-      ...retryFailure,
-      autoRepairAttempted: true,
-      autoRepairSucceeded: autoRepair.succeeded,
-      autoRepairCommands: autoRepair.commands,
-      autoRepairOutput: autoRepair.output,
-    };
+    return await withMergeGateFailureTelemetry(
+      {
+        ...retryFailure,
+        autoRepairAttempted: true,
+        autoRepairSucceeded: autoRepair.succeeded,
+        autoRepairCommands: autoRepair.commands,
+        autoRepairOutput: autoRepair.output,
+      },
+      normWt,
+      runCommand
+    );
   }
 
   return null;

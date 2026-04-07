@@ -14,7 +14,29 @@ vi.mock("../services/validation-workspace.service.js", () => ({
   },
 }));
 
-import { runMergeQualityGates } from "../services/merge-quality-gate-runner.js";
+import {
+  looksLikeEnoentOpeningMissingWorktreeSource,
+  runMergeQualityGates,
+} from "../services/merge-quality-gate-runner.js";
+
+describe("looksLikeEnoentOpeningMissingWorktreeSource", () => {
+  const wt = "/Users/me/proj/.opensprint/runtime/worktrees/os-abc";
+
+  it("returns true for Node-style open path under worktree", () => {
+    const msg = `Error: ENOENT: no such file or directory, open '${wt}/packages/frontend/src/lib/mermaidDiagram.ts'`;
+    expect(looksLikeEnoentOpeningMissingWorktreeSource(msg, wt)).toBe(true);
+  });
+
+  it("returns false for node_modules paths", () => {
+    const msg = `ENOENT: no such file or directory, open '${wt}/node_modules/foo/bar.ts'`;
+    expect(looksLikeEnoentOpeningMissingWorktreeSource(msg, wt)).toBe(false);
+  });
+
+  it("returns false when worktree path does not prefix the opened file", () => {
+    const msg = `Error: ENOENT: no such file or directory, open '/other/repo/src/a.ts'`;
+    expect(looksLikeEnoentOpeningMissingWorktreeSource(msg, wt)).toBe(false);
+  });
+});
 
 describe("runMergeQualityGates", () => {
   let previousNodeEnv: string | undefined;
@@ -56,7 +78,10 @@ describe("runMergeQualityGates", () => {
       .map((call) => commandLabel(call[0] as { command: string; args?: string[] }))
       .filter(
         (label) =>
-          label !== "git rev-parse --verify HEAD" && label !== "git rev-parse --show-toplevel"
+          label !== "git rev-parse --verify HEAD" &&
+          label !== "git rev-parse --show-toplevel" &&
+          label !== "git status --porcelain" &&
+          label !== "git diff --name-status HEAD"
       );
 
   const makeTempWorktree = async (
@@ -1400,5 +1425,42 @@ src/server.ts(19,3): error TS2552: Cannot find name 'handler'. Did you mean 'Hea
         NODE_ENV: "test",
       })
     );
+  });
+
+  it("classifies ENOENT opening a worktree .ts file as quality_gate (not environment_setup)", async () => {
+    const worktreePath = await makeTempWorktree({ lint: "eslint ." });
+    const wt = worktreePath;
+    const runCommand = vi.fn(
+      async (spec: { command: string; args?: string[] }, options: { cwd: string }) => {
+        const label = commandLabel(spec);
+        if (label === "git rev-parse --verify HEAD") {
+          return makeCommandResult(spec, options.cwd);
+        }
+        if (label === "npm run lint") {
+          throw makeCommandFailure(spec, options.cwd, {
+            message: "Command failed: npm run lint",
+            stderr: `Error: ENOENT: no such file or directory, open '${wt}/packages/frontend/src/lib/mermaidDiagram.ts'`,
+            exitCode: 1,
+          });
+        }
+        return makeCommandResult(spec, options.cwd);
+      }
+    );
+
+    const failure = await runMergeQualityGates(
+      {
+        projectId: "proj-1",
+        repoPath: worktreePath,
+        worktreePath,
+        taskId: "os-enoent-classify",
+        branchName: "opensprint/os-enoent-classify",
+        baseBranch: "main",
+      },
+      { runCommand }
+    );
+
+    expect(failure?.category).toBe("quality_gate");
+    expect(failure?.classificationReason).toContain("missing_worktree_source_file");
+    expect(failure?.gitStatusPorcelainSnippet).toBeDefined();
   });
 });

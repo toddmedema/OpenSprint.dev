@@ -313,6 +313,7 @@ vi.mock("../services/branch-manager.js", () => {
       mergeContinue: vi.fn().mockResolvedValue(undefined),
       mergeAbort: vi.fn().mockResolvedValue(undefined),
       commitWip: mockCommitWip,
+      listGitIndexFilesDeletedOnDisk: vi.fn().mockResolvedValue([]),
       getGitRev: vi.fn().mockImplementation(async (_cwd: string, ref: string) => {
         if (ref === "HEAD") return "mockheadsha0000000000000000000000000001";
         return "mockbasesha0000000000000000000000000002";
@@ -634,7 +635,13 @@ describe("OrchestratorService (slot-based model)", () => {
   const getExecutedCommands = (): string[] =>
     mockRunCommand.mock.calls
       .map((call) => commandLabel(call[0] as { command: string; args?: string[] }))
-      .filter((label) => label !== "git rev-parse --verify HEAD");
+      .filter(
+        (label) =>
+          label !== "git rev-parse --verify HEAD" &&
+          label !== "git rev-parse --show-toplevel" &&
+          label !== "git status --porcelain" &&
+          label !== "git diff --name-status HEAD"
+      );
 
   const defaultSettings = {
     testFramework: "vitest",

@@ -376,6 +376,17 @@ describe("parseSettings", () => {
     });
   });
 
+  it("should parse toolchainProfile with npm_ci_worktree dependency strategy", () => {
+    const parsed = parseSettings({
+      simpleComplexityAgent: lowAgent,
+      complexComplexityAgent: highAgent,
+      toolchainProfile: {
+        dependencyStrategy: "npm_ci_worktree",
+      },
+    });
+    expect(parsed.toolchainProfile?.dependencyStrategy).toBe("npm_ci_worktree");
+  });
+
   it("should parse and preserve valid reviewAngles", () => {
     const raw = {
       simpleComplexityAgent: lowAgent,

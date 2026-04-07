@@ -1237,21 +1237,21 @@ export function WorkflowSettingsContent({
                   {historyRuns.map((run, i) => (
                     <li
                       key={run.runId ?? i}
-                      className="flex items-center gap-2 text-xs"
+                      className="flex items-start gap-2 text-xs"
                       data-testid="self-improvement-history-row"
                     >
-                      <span className="text-theme-muted shrink-0 w-28">
+                      <span className="text-theme-muted shrink-0 w-28 pt-0.5">
                         {formatTimestamp(run.timestamp)}
                       </span>
                       <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${OUTCOME_COLORS[run.outcome]}`}
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 mt-0.5 ${OUTCOME_COLORS[run.outcome]}`}
                         data-testid="history-outcome-badge"
                       >
                         {OUTCOME_LABELS[run.outcome]}
                       </span>
                       {run.summary && (
                         <span
-                          className="text-theme-muted truncate"
+                          className="text-theme-muted min-w-0 flex-1 break-words whitespace-pre-wrap max-h-32 overflow-y-auto [overflow-wrap:anywhere]"
                           title={run.summary}
                           data-testid="history-summary"
                         >

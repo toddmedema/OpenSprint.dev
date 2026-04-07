@@ -1092,6 +1092,18 @@ export class BranchManager {
   }
 
   /**
+   * Tracked paths that are missing on disk but still listed in the index (`git ls-files -d`).
+   * Indicates disk/index drift before merge gates (e.g. partial delete without staging).
+   */
+  async listGitIndexFilesDeletedOnDisk(gitCwd: string): Promise<string[]> {
+    const { stdout } = await this.gitExec(gitCwd, ["ls-files", "-d"], { timeout: 10_000 });
+    return stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((line) => line.length > 0);
+  }
+
+  /**
    * Get a summary of files changed between the base branch and a branch.
    * @param baseBranch - Base branch for diff (default: "main")
    */

@@ -2409,6 +2409,37 @@ export class OrchestratorService {
 
       if (settings.enforceMergeGatesOnCodingSuccess !== false) {
         await this.branchManager.commitWip(wtPath, task.id);
+        const deletedOnDisk = await this.branchManager.listGitIndexFilesDeletedOnDisk(wtPath);
+        if (deletedOnDisk.length > 0) {
+          const maxShow = 40;
+          const snippet = deletedOnDisk.slice(0, maxShow).join("\n");
+          const more =
+            deletedOnDisk.length > maxShow
+              ? `\n... and ${deletedOnDisk.length - maxShow} more`
+              : "";
+          const preflightFailure: MergeQualityGateFailure = {
+            command: "git_index_deleted_files_preflight",
+            reason: `Working tree is missing ${deletedOnDisk.length} tracked file(s) that remain in the git index (restore files or stage deletions before merge gates).`,
+            output: `${snippet}${more}`,
+            worktreePath: wtPath,
+            firstErrorLine: deletedOnDisk[0],
+            validationWorkspace: "task_worktree",
+            category: "quality_gate",
+            classificationConfidence: "high",
+            classificationReason: "tracked_files_deleted_on_disk_before_gates",
+          };
+          const detail = this.applyQualityGateFailure(slot.phaseResult, preflightFailure, wtPath);
+          await this.failureHandler.handleTaskFailure(
+            projectId,
+            repoPath,
+            task,
+            branchName,
+            this.formatQualityGateFailureReason(detail, "merge_quality_gate"),
+            null,
+            "merge_quality_gate"
+          );
+          return;
+        }
         const { failure: earlyGateFailure, artifact: earlyArtifact } =
           await runMergeQualityGatesWithArtifact(
             (opts) => this.runMergeQualityGates(opts),

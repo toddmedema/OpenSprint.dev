@@ -144,6 +144,8 @@ export interface MergeQualityGateFailure {
   signal?: string | null;
   classificationConfidence?: "high" | "low";
   classificationReason?: string;
+  gitStatusPorcelainSnippet?: string;
+  gitNameStatusSnippet?: string;
 }
 
 export interface MergeSlot {

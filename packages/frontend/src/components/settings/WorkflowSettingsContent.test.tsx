@@ -366,6 +366,30 @@ describe("WorkflowSettingsContent", () => {
       expect(summaries[1]).toHaveTextContent("No actionable findings");
     });
 
+    it("wraps multi-line run summaries instead of single-line truncation", async () => {
+      const multiLineSummary =
+        "Baseline: merge gates passed.\nCandidate: npm run test failed — AssertionError in orchestrator.\nNext: fix test isolation.";
+      vi.mocked(api.projects.getSelfImprovementHistory).mockResolvedValue([
+        {
+          ...sampleHistory[0],
+          summary: multiLineSummary,
+        },
+      ]);
+      renderWorkflowContent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("self-improvement-recent-runs")).toBeInTheDocument();
+      });
+
+      const summary = screen.getByTestId("history-summary");
+      expect(summary).toHaveTextContent("Baseline: merge gates passed.");
+      expect(summary).toHaveTextContent("Candidate: npm run test failed");
+      expect(summary).toHaveTextContent("Next: fix test isolation.");
+      expect(summary.className).toContain("whitespace-pre-wrap");
+      expect(summary.className).toContain("break-words");
+      expect(summary.className).not.toContain("truncate");
+    });
+
     it("does not duplicate last run / outcome in a summary grid when only history exists", async () => {
       vi.mocked(api.projects.getSelfImprovementHistory).mockResolvedValue(sampleHistory);
       renderWorkflowContent({

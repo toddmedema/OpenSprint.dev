@@ -216,6 +216,21 @@ describe("BranchManager", () => {
     });
   });
 
+  describe("listGitIndexFilesDeletedOnDisk", () => {
+    it("lists tracked files removed from disk but still in the index", async () => {
+      await execAsync("git init", { cwd: repoPath });
+      await execAsync("git branch -M main", { cwd: repoPath });
+      await execAsync('git config user.email "test@test.com"', { cwd: repoPath });
+      await execAsync('git config user.name "Test"', { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "gone.ts"), "// x");
+      await execAsync("git add gone.ts && git commit -m initial", { cwd: repoPath });
+      await fs.unlink(path.join(repoPath, "gone.ts"));
+
+      const deleted = await branchManager.listGitIndexFilesDeletedOnDisk(repoPath);
+      expect(deleted).toEqual(["gone.ts"]);
+    });
+  });
+
   describe("checkDependencyIntegrity", () => {
     it("skips dependency checks when root package.json is missing", async () => {
       const runSpy = vi.spyOn(commandRunnerModule, "runCommand");

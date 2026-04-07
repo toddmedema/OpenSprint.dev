@@ -102,6 +102,14 @@ export function toRetryQualityGateDetail(
     cwd: failure.cwd ?? null,
     exitCode: failure.exitCode ?? null,
     signal: failure.signal ?? null,
+    classificationConfidence: failure.classificationConfidence ?? null,
+    classificationReason: failure.classificationReason ?? null,
+    gitStatusPorcelainSnippet: failure.gitStatusPorcelainSnippet
+      ? compactExecutionText(failure.gitStatusPorcelainSnippet.trim(), 2000)
+      : null,
+    gitNameStatusSnippet: failure.gitNameStatusSnippet
+      ? compactExecutionText(failure.gitNameStatusSnippet.trim(), 2000)
+      : null,
   };
 }
 

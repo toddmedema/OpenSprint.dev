@@ -834,6 +834,7 @@ function finalAttemptFromSessions(
 
 function buildAttemptItem(
   attempt: number,
+  cumulativeAttempts: number,
   sessions: AgentSession[],
   attemptEvents: TaskExecutionEventItem[]
 ): TaskExecutionAttemptItem {
@@ -851,7 +852,7 @@ function buildAttemptItem(
   const reviewModel =
     attemptEvents.find((event) => event.phase === "review" && event.model)?.model ?? null;
 
-  const finalOutcome = terminalEvent?.outcome ?? sessionDerived?.finalOutcome ?? "running";
+  let finalOutcome = terminalEvent?.outcome ?? sessionDerived?.finalOutcome ?? "running";
   const noTerminalFallback =
     finalOutcome === "running"
       ? `Attempt ${attempt} is in progress`
@@ -881,7 +882,28 @@ function buildAttemptItem(
     conflictedFiles: terminalEvent?.conflictedFiles ?? [],
     sessionAttemptStatuses: sessionDerived?.sessionAttemptStatuses ?? [],
   };
-  return withAttemptQualityGateDetail(item, latestAttemptDetail);
+  const withDetail = withAttemptQualityGateDetail(item, latestAttemptDetail);
+
+  // attempts:N expands placeholder rows for 1..N; older rows often have no stored
+  // events/sessions. They must not appear "running" once a later attempt exists.
+  if (
+    withDetail.finalOutcome === "running" &&
+    cumulativeAttempts > 0 &&
+    attempt < cumulativeAttempts
+  ) {
+    return {
+      ...withDetail,
+      finalPhase: "orchestrator",
+      finalOutcome: "requeued",
+      finalSummary: `Attempt ${attempt} has no recorded outcome (superseded by a later attempt)`,
+      failureType: null,
+      blockReason: null,
+      mergeStage: null,
+      conflictedFiles: [],
+    };
+  }
+
+  return withDetail;
 }
 
 export class TaskExecutionDiagnosticsService {
@@ -916,6 +938,7 @@ export class TaskExecutionDiagnosticsService {
     const attempts = attemptNumbers.map((attempt) =>
       buildAttemptItem(
         attempt,
+        cumulativeAttempts,
         sessions.filter((session) => session.attempt === attempt),
         timeline.filter((event) => event.attempt === attempt)
       )

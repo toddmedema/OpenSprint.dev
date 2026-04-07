@@ -36,6 +36,8 @@ export interface RetryQualityGateDetail {
   signal?: string | null;
   classificationConfidence?: "high" | "low" | null;
   classificationReason?: string | null;
+  gitStatusPorcelainSnippet?: string | null;
+  gitNameStatusSnippet?: string | null;
 }
 
 /** Condensed prior failure for multi-attempt prompts (avoids ping-pong regressions). */

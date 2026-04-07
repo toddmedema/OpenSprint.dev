@@ -598,6 +598,7 @@ export class ContextAssembler {
     prompt += `${config.useExistingBranch ? "6" : "5"}. **Commit after each logical unit** — with descriptive messages (e.g., "Add login API endpoint", "Add auth tests"). Do not wait until the end to commit. This protects your work if the process is interrupted.\n`;
     prompt += `${config.useExistingBranch ? "7" : "6"}. Run the smallest relevant non-watch verification for the workspaces you touch while iterating. Prefer scoped tests first, and add scoped build/typecheck and lint commands whenever your changes could affect them (for example TypeScript, exported interfaces, build config, or linted frontend/backend code).\n`;
     prompt += `   Before writing \`result.json\`, run the project's configured merge quality gate commands from the repository root so your changes do not break the build. The server **re-runs those same merge gate commands** after you report success (unless the project disables enforcement): if they fail, your \`success\` outcome is rejected and the task is failed/requeued. Never use watch mode or leave test processes running in the background.\n`;
+    prompt += `   If you delete or rename a module, update every importer and test in the same change set; leaving stale imports breaks lint and gates with missing-file errors.\n`;
     if (config.attempt > 1) {
       prompt += `   **Retry:** Your previous attempt failed validation. Ensure every merge gate command above passes locally before you write \`result.json\`.\n`;
     }

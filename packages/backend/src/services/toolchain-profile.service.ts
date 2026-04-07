@@ -36,14 +36,14 @@ function normalizePathspecs(values: string[] | undefined): string[] {
 }
 
 function defaultInstallCommand(strategy: DependencyStrategy): string | null {
-  if (strategy === "npm") return "npm ci";
+  if (strategy === "npm" || strategy === "npm_ci_worktree") return "npm ci";
   if (strategy === "pnpm") return "pnpm install --frozen-lockfile";
   if (strategy === "yarn") return "yarn install --immutable";
   return null;
 }
 
 function defaultHealthCommand(strategy: DependencyStrategy): string | null {
-  if (strategy === "npm") return "npm ls --depth=0 --include=dev";
+  if (strategy === "npm" || strategy === "npm_ci_worktree") return "npm ls --depth=0 --include=dev";
   if (strategy === "pnpm") return "pnpm list --depth -1";
   if (strategy === "yarn") return "yarn list --depth=0";
   return null;
@@ -68,5 +68,10 @@ export function resolveToolchainProfile(
 }
 
 export function isNodeDependencyStrategy(strategy: DependencyStrategy): boolean {
-  return strategy === "npm" || strategy === "pnpm" || strategy === "yarn";
+  return strategy === "npm" || strategy === "npm_ci_worktree" || strategy === "pnpm" || strategy === "yarn";
+}
+
+/** When set, merge gates install dependencies with `npm ci` in the worktree instead of symlinking host `node_modules`. */
+export function usesHermeticWorktreeNodeModules(strategy: DependencyStrategy): boolean {
+  return strategy === "npm_ci_worktree";
 }

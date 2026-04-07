@@ -446,7 +446,7 @@ export type MergeStrategy = "per_task" | "per_epic";
 export const VALID_MERGE_STRATEGIES: MergeStrategy[] = ["per_task", "per_epic"];
 
 /** Dependency strategy used by merge/review preflight and auto-repair. */
-export type DependencyStrategy = "npm" | "none" | "pnpm" | "yarn";
+export type DependencyStrategy = "npm" | "npm_ci_worktree" | "none" | "pnpm" | "yarn";
 
 /**
  * Per-project toolchain profile used to keep merge/review/orchestration language-agnostic.
@@ -455,7 +455,11 @@ export type DependencyStrategy = "npm" | "none" | "pnpm" | "yarn";
 export interface ToolchainProfile {
   /** Ordered quality-gate commands to run before merge. */
   mergeQualityGateCommands?: string[];
-  /** Dependency management strategy for health checks and repairs. */
+  /**
+   * Dependency management strategy for health checks and repairs.
+   * Use `npm_ci_worktree` to run `npm ci` inside the validation worktree before gates (hermetic
+   * `node_modules` instead of symlinking from the host repo).
+   */
   dependencyStrategy?: DependencyStrategy;
   /** Optional override command for dependency installation/repair. */
   dependencyInstallCommand?: string | null;
@@ -1053,7 +1057,13 @@ export function getAgentForComplexity(
 }
 
 const VALID_AI_AUTONOMY_LEVELS: AiAutonomyLevel[] = ["confirm_all", "major_only", "full"];
-const VALID_DEPENDENCY_STRATEGIES: DependencyStrategy[] = ["npm", "none", "pnpm", "yarn"];
+const VALID_DEPENDENCY_STRATEGIES: DependencyStrategy[] = [
+  "npm",
+  "npm_ci_worktree",
+  "none",
+  "pnpm",
+  "yarn",
+];
 
 /** Valid branch name: alphanumeric, slash, underscore, hyphen, dot */
 const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;

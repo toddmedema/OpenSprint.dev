@@ -780,6 +780,57 @@ describe("TaskExecutionDiagnosticsService", () => {
     );
   });
 
+  it("does not mark placeholder lower attempt rows as running when attempts:N expands sparse history", async () => {
+    taskStore.show.mockResolvedValue({
+      id: taskId,
+      status: "in_progress",
+      labels: ["attempts:6"],
+      block_reason: null,
+      last_execution_summary: null,
+    });
+    taskStore.getCumulativeAttemptsFromIssue.mockReturnValue(6);
+    sessionManager.listSessions.mockResolvedValue([]);
+    mockReadForTask.mockResolvedValue([
+      {
+        timestamp: "2026-03-02T10:00:00.000Z",
+        projectId,
+        taskId,
+        event: "transition.start_task",
+        data: { attempt: 6 },
+      },
+      {
+        timestamp: "2026-03-02T10:02:00.000Z",
+        projectId,
+        taskId,
+        event: "agent.waiting_on_tool",
+        data: {
+          attempt: 6,
+          phase: "coding",
+          summary: "npm test -- --runInBand",
+        },
+      },
+    ]);
+
+    const service = new TaskExecutionDiagnosticsService(
+      projectService as never,
+      taskStore as never,
+      sessionManager as never
+    );
+
+    const diagnostics = await service.getDiagnostics(projectId, taskId);
+
+    expect(diagnostics.attempts).toHaveLength(6);
+    const superseded = diagnostics.attempts.filter((a) => a.attempt >= 1 && a.attempt <= 5);
+    expect(superseded.every((a) => a.finalOutcome === "requeued")).toBe(true);
+    const current = diagnostics.attempts.find((a) => a.attempt === 6);
+    expect(current).toEqual(
+      expect.objectContaining({
+        finalOutcome: "running",
+        attempt: 6,
+      })
+    );
+  });
+
   it("surfaces suspended and resumed diagnostics for recoverable interruptions", async () => {
     taskStore.show.mockResolvedValue({
       id: taskId,

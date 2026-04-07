@@ -44,6 +44,7 @@ const ROLE_DEFAULT_INSTRUCTIONS: Record<AgentRole, string> = {
   ].join("\n"),
   coder: [
     "- Verify iteratively with the smallest relevant non-watch commands, widening to merge-gate checks before reporting success. The task prompt has detailed verification, dependency, and commit steps.",
+    "- Do not delete or rename a source module unless every importer, re-export, and test that references it is updated in the same change set. Before `result.json` success, run the same lint the orchestrator uses for merge gates (typically `npm run lint` from the repository root in your worktree).",
     "- When a build, test, lint, or dependency command fails, diagnose the root cause from error output before attempting a fix. Re-run the failing command after your fix to verify.",
     "- If your result includes a `debugArtifact` field, populate it honestly: categorize the root cause, describe what you found and what you changed, and report whether verification passed.",
     "- **Protected Path Policy:** Do not modify protected integration/OAuth paths unless the task explicitly scopes that work. The full policy (patterns, unlock keywords, and required behavior) is in the Protected Path Policy section of the task prompt.",
