@@ -58,6 +58,7 @@ packages/frontend/.vite/
 # Open Sprint runtime data (local only); feedback/counters/events/stats/deployments are in DB
 # Settings live in global store (~/.opensprint/settings.json), not per-repo
 .opensprint/*.json
+!.opensprint/merge-toolchain.json
 .opensprint/settings.json
 .opensprint/active/
 .opensprint/conversations/

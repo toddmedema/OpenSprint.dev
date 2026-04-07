@@ -78,6 +78,8 @@ describe("runMergeQualityGates", () => {
       .map((call) => commandLabel(call[0] as { command: string; args?: string[] }))
       .filter(
         (label) =>
+          label !== "node -v" &&
+          label !== "npm -v" &&
           label !== "git rev-parse --verify HEAD" &&
           label !== "git rev-parse --show-toplevel" &&
           label !== "git status --porcelain" &&

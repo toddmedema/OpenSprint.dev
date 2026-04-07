@@ -28,6 +28,10 @@ export type QualityGateFailureForHelpers = {
   signal?: string | null;
   classificationConfidence?: "high" | "low";
   classificationReason?: string;
+  gateNodeVersion?: string;
+  gateNpmVersion?: string;
+  gateDependencyStrategy?: string;
+  gateHermeticNodeModules?: boolean;
 };
 
 export type MergeJobQualityGateAttachment = NonNullable<MergeJobError["qualityGateFailure"]>;
@@ -68,6 +72,10 @@ export type QualityGateStructuredDetails = {
     signal: string | null;
     classificationConfidence: "high" | "low" | null;
     classificationReason: string | null;
+    gateNodeVersion: string | null;
+    gateNpmVersion: string | null;
+    gateDependencyStrategy: string | null;
+    gateHermeticNodeModules: boolean | null;
   } | null;
 };
 
@@ -137,6 +145,10 @@ export function buildQualityGateStructuredDetails(
   const qualityGateSignal = qualityGateFailure?.signal?.trim() || null;
   const qualityGateClassificationConfidence = qualityGateFailure?.classificationConfidence ?? null;
   const qualityGateClassificationReason = qualityGateFailure?.classificationReason?.trim() || null;
+  const gateNodeVersion = qualityGateFailure?.gateNodeVersion?.trim() || null;
+  const gateNpmVersion = qualityGateFailure?.gateNpmVersion?.trim() || null;
+  const gateDependencyStrategy = qualityGateFailure?.gateDependencyStrategy?.trim() || null;
+  const gateHermeticNodeModules = qualityGateFailure?.gateHermeticNodeModules ?? null;
   const hasDetail =
     failedGateCommand != null ||
     failedGateReason != null ||
@@ -152,7 +164,11 @@ export function buildQualityGateStructuredDetails(
     qualityGateExitCode != null ||
     qualityGateSignal != null ||
     qualityGateClassificationConfidence != null ||
-    qualityGateClassificationReason != null;
+    qualityGateClassificationReason != null ||
+    gateNodeVersion != null ||
+    gateNpmVersion != null ||
+    gateDependencyStrategy != null ||
+    gateHermeticNodeModules != null;
   return {
     failedGateCommand,
     failedGateReason,
@@ -185,6 +201,10 @@ export function buildQualityGateStructuredDetails(
           signal: qualityGateSignal,
           classificationConfidence: qualityGateClassificationConfidence,
           classificationReason: qualityGateClassificationReason,
+          gateNodeVersion,
+          gateNpmVersion,
+          gateDependencyStrategy,
+          gateHermeticNodeModules,
         }
       : null,
   };
@@ -222,6 +242,10 @@ export function buildMergeQualityGateJobError(
       signal: failure.signal ?? null,
       classificationConfidence: failure.classificationConfidence,
       classificationReason: failure.classificationReason,
+      gateNodeVersion: failure.gateNodeVersion,
+      gateNpmVersion: failure.gateNpmVersion,
+      gateDependencyStrategy: failure.gateDependencyStrategy,
+      gateHermeticNodeModules: failure.gateHermeticNodeModules,
     }
   );
 }

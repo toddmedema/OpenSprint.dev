@@ -438,12 +438,12 @@ describe("Models API", () => {
         yield { id: "claude-sonnet-4", display_name: "Claude Sonnet 4" };
       });
 
-      const res1 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res1 = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=claude`);
       expect(res1.status).toBe(200);
       expect(res1.body.data).toHaveLength(1);
       expect(mockModelsList).toHaveBeenCalledTimes(1);
 
-      const res2 = await authedSupertest(app).get(`${API_PREFIX}/models?provider=claude`);
+      const res2 = await authedGetWithHangupRetry(app, `${API_PREFIX}/models?provider=claude`);
       expect(res2.status).toBe(200);
       expect(res2.body.data).toHaveLength(1);
       expect(mockModelsList).toHaveBeenCalledTimes(1); // no additional call

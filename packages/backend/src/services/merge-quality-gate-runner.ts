@@ -18,7 +18,7 @@ import {
   getMergeQualityGateExecutionPlan,
   type MergeQualityGateProfile,
 } from "./merge-quality-gates.js";
-import type { ToolchainProfile } from "@opensprint/shared";
+import type { DependencyStrategy, ToolchainProfile } from "@opensprint/shared";
 import {
   isNodeDependencyStrategy,
   resolveToolchainProfile,
@@ -62,6 +62,21 @@ const QUALITY_GATE_ENV_AMBIGUOUS_FINGERPRINTS: RegExp[] = [
   /** Bare `enoent` is handled in {@link classifyQualityGateFailureCategory} (worktree source vs env). */
 ];
 
+/** Matched before compiler/linter heuristics so npm `validate-engines` paths are not misclassified. */
+const QUALITY_GATE_NODE_ENGINE_FINGERPRINTS: RegExp[] = [
+  /validate-engines\.js/i,
+  /\bEBADENGINE\b/i,
+  /\bUnsupported engine\b/i,
+  /\bengine\s+"node"\s+is\s+incompatible\b/i,
+  /\bThe engine "node" is incompatible\b/i,
+  /\brequired:\s*\{[^}]*node/i,
+];
+
+/** Exported for unit tests; used by {@link classifyQualityGateFailureCategory}. */
+export function looksLikeNodeEngineQualityGateFailure(text: string): boolean {
+  return QUALITY_GATE_NODE_ENGINE_FINGERPRINTS.some((re) => re.test(text));
+}
+
 export interface MergeQualityGateRunOptions {
   projectId: string;
   repoPath: string;
@@ -97,6 +112,11 @@ export interface MergeQualityGateFailure {
   gitStatusPorcelainSnippet?: string;
   /** Bounded `git diff --name-status HEAD` for post-mortem (first N lines). */
   gitNameStatusSnippet?: string;
+  /** Toolchain snapshot at gate time (orchestrator / event telemetry). */
+  gateNodeVersion?: string;
+  gateNpmVersion?: string;
+  gateDependencyStrategy?: string;
+  gateHermeticNodeModules?: boolean;
 }
 
 const GATE_FAILURE_GIT_TELEMETRY_MAX = 2000;
@@ -620,13 +640,86 @@ async function enrichMergeGateFailureWithGitTelemetry(
   };
 }
 
+type MergeGateRuntimeTelemetryFields = Pick<
+  MergeQualityGateFailure,
+  "gateNodeVersion" | "gateNpmVersion" | "gateDependencyStrategy" | "gateHermeticNodeModules"
+>;
+
+function mergeRuntimeTelemetryIntoFailure(
+  failure: MergeQualityGateFailure,
+  runtime: MergeGateRuntimeTelemetryFields | null | undefined
+): MergeQualityGateFailure {
+  if (!runtime) return failure;
+  return {
+    ...failure,
+    ...(runtime.gateNodeVersion != null && { gateNodeVersion: runtime.gateNodeVersion }),
+    ...(runtime.gateNpmVersion != null && { gateNpmVersion: runtime.gateNpmVersion }),
+    ...(runtime.gateDependencyStrategy != null && {
+      gateDependencyStrategy: runtime.gateDependencyStrategy,
+    }),
+    ...(runtime.gateHermeticNodeModules != null && {
+      gateHermeticNodeModules: runtime.gateHermeticNodeModules,
+    }),
+  };
+}
+
+async function captureMergeGateRuntimeTelemetry(
+  cwd: string,
+  validationWorkspace: MergeQualityGateFailure["validationWorkspace"],
+  dependencyStrategy: DependencyStrategy,
+  hermeticNodeModules: boolean,
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+): Promise<{
+  fields: MergeGateRuntimeTelemetryFields;
+  preflightFailure: MergeQualityGateFailure | null;
+}> {
+  const baseFields: MergeGateRuntimeTelemetryFields = {
+    gateDependencyStrategy: dependencyStrategy,
+    gateHermeticNodeModules: hermeticNodeModules,
+  };
+  if (!isNodeDependencyStrategy(dependencyStrategy)) {
+    return { fields: baseFields, preflightFailure: null };
+  }
+  try {
+    const nodeRun = await runCommand({ command: "node", args: ["-v"] }, { cwd, timeout: 15_000 });
+    const npmRun = await runCommand(
+      { command: "npm", args: ["-v"] },
+      { cwd, timeout: 15_000, env: NPM_INCLUDE_DEV_ENV }
+    );
+    return {
+      fields: {
+        ...baseFields,
+        gateNodeVersion: (nodeRun.stdout ?? "").trim() || undefined,
+        gateNpmVersion: (npmRun.stdout ?? "").trim() || undefined,
+      },
+      preflightFailure: null,
+    };
+  } catch (err) {
+    const preflightFailure = extractCommandFailure("node/npm toolchain preflight", err, {
+      worktreePath: cwd,
+      validationWorkspace: validationWorkspace ?? "task_worktree",
+      category: "environment_setup",
+    });
+    return {
+      fields: {
+        ...baseFields,
+        gateNodeVersion: "unavailable",
+        gateNpmVersion: "unavailable",
+      },
+      preflightFailure,
+    };
+  }
+}
+
 async function withMergeGateFailureTelemetry(
   failure: MergeQualityGateFailure | null,
   gitCwd: string,
-  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>
+  runCommand: NonNullable<MergeQualityGateRunnerDeps["runCommand"]>,
+  runtimeTelemetry?: MergeGateRuntimeTelemetryFields | null
 ): Promise<MergeQualityGateFailure | null> {
   if (!failure) return null;
-  const enriched = await enrichMergeGateFailureWithGitTelemetry(failure, gitCwd, runCommand);
+  const withRuntime = mergeRuntimeTelemetryIntoFailure(failure, runtimeTelemetry ?? undefined);
+  const enriched = await enrichMergeGateFailureWithGitTelemetry(withRuntime, gitCwd, runCommand);
   return redactMergeQualityGateFailureSurface(enriched);
 }
 
@@ -665,6 +758,13 @@ function classifyQualityGateFailureCategory(failure: {
       category: "quality_gate",
       confidence: "high",
       reason: "missing_worktree_source_file",
+    };
+  }
+  if (looksLikeNodeEngineQualityGateFailure(text)) {
+    return {
+      category: "environment_setup",
+      confidence: "high",
+      reason: "node_npm_engine_mismatch",
     };
   }
   if (
@@ -1562,6 +1662,23 @@ export async function runMergeQualityGates(
     );
   }
 
+  const runtimeCapture = await captureMergeGateRuntimeTelemetry(
+    normWt,
+    gateOptions.validationWorkspace ?? (normWt === normRepo ? "repo_root" : "task_worktree"),
+    resolvedProfileEarly.dependencyStrategy,
+    usesHermeticWorktreeNodeModules(resolvedProfileEarly.dependencyStrategy),
+    runCommand
+  );
+  if (runtimeCapture.preflightFailure) {
+    return await withMergeGateFailureTelemetry(
+      runtimeCapture.preflightFailure,
+      normWt,
+      runCommand,
+      runtimeCapture.fields
+    );
+  }
+  const gateRuntimeFields = runtimeCapture.fields;
+
   const qualityGateProfile = gateOptions.qualityGateProfile ?? "deterministic";
   const executionPlan: MergeQualityGateExecutionPlanEntry[] = deps.commands
     ? deps.commands.map((command) => ({ command }))
@@ -1603,13 +1720,13 @@ export async function runMergeQualityGates(
     if ("failure" in preparedOrFailure) {
       const initialFailure = preparedOrFailure.failure;
       if (initialFailure.category !== "environment_setup") {
-        return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
+        return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand, gateRuntimeFields);
       }
       if (
         !isNodeDependencyStrategy(resolvedProfile.dependencyStrategy) ||
         parseCommandSpec(command).command !== "npm"
       ) {
-        return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
+        return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand, gateRuntimeFields);
       }
 
       const autoRepair = await repairQualityGateEnvironment(
@@ -1640,7 +1757,8 @@ export async function runMergeQualityGates(
             autoRepairOutput: autoRepair.output,
           },
           normWt,
-          runCommand
+          runCommand,
+          gateRuntimeFields
         );
       }
       const retryFailure = await executePreparedGate(
@@ -1660,7 +1778,8 @@ export async function runMergeQualityGates(
             autoRepairOutput: autoRepair.output,
           },
           normWt,
-          runCommand
+          runCommand,
+          gateRuntimeFields
         );
       }
       continue;
@@ -1688,13 +1807,13 @@ export async function runMergeQualityGates(
         command,
         reason: initialFailure.reason,
       });
-      return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
+      return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand, gateRuntimeFields);
     }
     if (
       !isNodeDependencyStrategy(resolvedProfile.dependencyStrategy) ||
       parseCommandSpec(command).command !== "npm"
     ) {
-      return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand);
+      return await withMergeGateFailureTelemetry(initialFailure, normWt, runCommand, gateRuntimeFields);
     }
 
     const autoRepair = await repairQualityGateEnvironment(
@@ -1725,7 +1844,8 @@ export async function runMergeQualityGates(
           autoRepairOutput: autoRepair.output,
         },
         normWt,
-        runCommand
+        runCommand,
+        gateRuntimeFields
       );
     }
 
@@ -1761,7 +1881,8 @@ export async function runMergeQualityGates(
         autoRepairOutput: autoRepair.output,
       },
       normWt,
-      runCommand
+      runCommand,
+      gateRuntimeFields
     );
   }
 

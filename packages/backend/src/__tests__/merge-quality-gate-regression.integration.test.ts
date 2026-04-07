@@ -8,6 +8,44 @@ import { OrchestratorService } from "../services/orchestrator.service.js";
 import { BranchManager } from "../services/branch-manager.js";
 import { TaskExecutionDiagnosticsService } from "../services/task-execution-diagnostics.service.js";
 
+/** Merge gate runner runs node/npm preflight before gates; integration mocks must accept these. */
+function mergeGateToolchainPreflightOk(
+  spec: { command: string; args?: string[] },
+  options?: { cwd?: string }
+):
+  | {
+      stdout: string;
+      stderr: string;
+      executable: string;
+      cwd: string;
+      exitCode: number;
+      signal: null;
+    }
+  | undefined {
+  const command = [spec.command, ...(spec.args ?? [])].join(" ");
+  if (command === "node -v") {
+    return {
+      stdout: "v24.0.0\n",
+      stderr: "",
+      executable: spec.command,
+      cwd: options?.cwd ?? "",
+      exitCode: 0,
+      signal: null,
+    };
+  }
+  if (command === "npm -v") {
+    return {
+      stdout: "10.0.0\n",
+      stderr: "",
+      executable: spec.command,
+      cwd: options?.cwd ?? "",
+      exitCode: 0,
+      signal: null,
+    };
+  }
+  return undefined;
+}
+
 const mockRunCommand = vi.fn();
 const mockGetMergeQualityGateCommands = vi.fn();
 const mockEventAppend = vi.fn();
@@ -246,6 +284,8 @@ describe("Cross-service quality-gate regression integration", () => {
         spec: { command: string; args?: string[] },
         options?: { cwd?: string; timeout?: number }
       ) => {
+        const preflight = mergeGateToolchainPreflightOk(spec, options);
+        if (preflight) return preflight;
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
           return {
@@ -504,6 +544,8 @@ describe("Cross-service quality-gate regression integration", () => {
         spec: { command: string; args?: string[] },
         options?: { cwd?: string; timeout?: number }
       ) => {
+        const preflight = mergeGateToolchainPreflightOk(spec, options);
+        if (preflight) return preflight;
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
           return {
@@ -768,6 +810,8 @@ describe("Cross-service quality-gate regression integration", () => {
         spec: { command: string; args?: string[] },
         options?: { cwd?: string; timeout?: number }
       ) => {
+        const preflight = mergeGateToolchainPreflightOk(spec, options);
+        if (preflight) return preflight;
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
           return {
@@ -953,6 +997,8 @@ describe("Cross-service quality-gate regression integration", () => {
         spec: { command: string; args?: string[] },
         options?: { cwd?: string; timeout?: number }
       ) => {
+        const preflight = mergeGateToolchainPreflightOk(spec, options);
+        if (preflight) return preflight;
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
           return {
@@ -1151,6 +1197,8 @@ describe("Cross-service quality-gate regression integration", () => {
           spec: { command: string; args?: string[] },
           options?: { cwd?: string; timeout?: number }
         ) => {
+          const preflight = mergeGateToolchainPreflightOk(spec, options);
+          if (preflight) return preflight;
           const command = [spec.command, ...(spec.args ?? [])].join(" ");
           if (command === "git rev-parse --verify HEAD") {
             return {
@@ -1310,6 +1358,8 @@ describe("Cross-service quality-gate regression integration", () => {
           spec: { command: string; args?: string[] },
           options?: { cwd?: string; timeout?: number }
         ) => {
+          const preflight = mergeGateToolchainPreflightOk(spec, options);
+          if (preflight) return preflight;
           const command = [spec.command, ...(spec.args ?? [])].join(" ");
           if (command === "git rev-parse --verify HEAD") {
             return {
@@ -1508,6 +1558,8 @@ describe("Cross-service quality-gate regression integration", () => {
         spec: { command: string; args?: string[] },
         options?: { cwd?: string; timeout?: number; env?: Record<string, string | undefined> }
       ) => {
+        const preflight = mergeGateToolchainPreflightOk(spec, options);
+        if (preflight) return preflight;
         const command = [spec.command, ...(spec.args ?? [])].join(" ");
         if (command === "git rev-parse --verify HEAD") {
           return {

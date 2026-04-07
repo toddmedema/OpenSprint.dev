@@ -65,6 +65,10 @@ export class MergeJobError extends Error {
       signal?: string | null;
       classificationConfidence?: "high" | "low";
       classificationReason?: string;
+      gateNodeVersion?: string;
+      gateNpmVersion?: string;
+      gateDependencyStrategy?: string;
+      gateHermeticNodeModules?: boolean;
     },
     public readonly rebaseContinueDiagnostics?: RebaseContinueDiagnostics
   ) {
@@ -268,6 +272,12 @@ class GitCommitQueueImpl implements GitCommitQueueService {
       cwd?: string;
       exitCode?: number | null;
       signal?: string | null;
+      classificationConfidence?: "high" | "low";
+      classificationReason?: string;
+      gateNodeVersion?: string;
+      gateNpmVersion?: string;
+      gateDependencyStrategy?: string;
+      gateHermeticNodeModules?: boolean;
     },
     worktreePath: string
   ): MergeJobError {
@@ -303,6 +313,12 @@ class GitCommitQueueImpl implements GitCommitQueueService {
         cwd: failure.cwd,
         exitCode: failure.exitCode ?? null,
         signal: failure.signal ?? null,
+        classificationConfidence: failure.classificationConfidence,
+        classificationReason: failure.classificationReason,
+        gateNodeVersion: failure.gateNodeVersion,
+        gateNpmVersion: failure.gateNpmVersion,
+        gateDependencyStrategy: failure.gateDependencyStrategy,
+        gateHermeticNodeModules: failure.gateHermeticNodeModules,
       }
     );
   }

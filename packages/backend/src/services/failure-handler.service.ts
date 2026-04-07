@@ -913,6 +913,25 @@ export class FailureHandlerService {
           }).slice(0, 300)
         : null;
 
+    const qgDetail = slot.phaseResult.qualityGateDetail;
+    const gateRuntimeEventFields =
+      qgDetail &&
+      (failureType === "merge_quality_gate" || failureType === "environment_setup")
+        ? {
+            ...(qgDetail.gateNodeVersion != null && { gateNodeVersion: qgDetail.gateNodeVersion }),
+            ...(qgDetail.gateNpmVersion != null && { gateNpmVersion: qgDetail.gateNpmVersion }),
+            ...(qgDetail.gateDependencyStrategy != null && {
+              gateDependencyStrategy: qgDetail.gateDependencyStrategy,
+            }),
+            ...(qgDetail.gateHermeticNodeModules != null && {
+              gateHermeticNodeModules: qgDetail.gateHermeticNodeModules,
+            }),
+            ...(qgDetail.validationWorkspace != null && {
+              qualityGateValidationWorkspace: qgDetail.validationWorkspace,
+            }),
+          }
+        : {};
+
     // Log all failures (including review rejections) to event log for Execution Diagnostics
     fireAndForget(
       eventLogService.append(repoPath, {
@@ -933,6 +952,7 @@ export class FailureHandlerService {
           signal: options?.signal ?? null,
           ...(preflightSubCode ? { preflightSubCode } : {}),
           ...(earlyFailureFingerprint ? { failureFingerprint: earlyFailureFingerprint } : {}),
+          ...gateRuntimeEventFields,
           ...commonFailureContext,
           ...this.failureDiagnosticFields(redactedDiagnostic),
         },

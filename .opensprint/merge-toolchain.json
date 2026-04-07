@@ -1,0 +1,5 @@
+{
+  "toolchainProfile": {
+    "mergeQualityGateCommands": ["npm run verify:merge-gates"]
+  }
+}

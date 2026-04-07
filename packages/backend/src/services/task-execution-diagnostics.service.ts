@@ -34,6 +34,10 @@ type QualityGateDetail = {
   signal?: string | null;
   userTitle?: string | null;
   userSummary?: string | null;
+  gateNodeVersion?: string | null;
+  gateNpmVersion?: string | null;
+  gateDependencyStrategy?: string | null;
+  gateHermeticNodeModules?: boolean | null;
 };
 type TaskExecutionEventItemWithQualityGate = TaskExecutionEventItem & {
   qualityGateDetail?: QualityGateDetail | null;
@@ -157,6 +161,12 @@ function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
   const cwd = asString(data.qualityGateCwd) ?? asString(nested?.cwd);
   const exitCode = asNumber(data.qualityGateExitCode) ?? asNumber(nested?.exitCode);
   const signal = asString(data.qualityGateSignal) ?? asString(nested?.signal);
+  const gateNodeVersion = asString(data.gateNodeVersion) ?? asString(nested?.gateNodeVersion);
+  const gateNpmVersion = asString(data.gateNpmVersion) ?? asString(nested?.gateNpmVersion);
+  const gateDependencyStrategy =
+    asString(data.gateDependencyStrategy) ?? asString(nested?.gateDependencyStrategy);
+  const gateHermeticNodeModules =
+    asBoolean(data.gateHermeticNodeModules) ?? asBoolean(nested?.gateHermeticNodeModules);
   if (
     !command &&
     !reason &&
@@ -170,7 +180,11 @@ function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
     !executable &&
     !cwd &&
     exitCode == null &&
-    !signal
+    !signal &&
+    !gateNodeVersion &&
+    !gateNpmVersion &&
+    !gateDependencyStrategy &&
+    gateHermeticNodeModules == null
   ) {
     return null;
   }
@@ -188,6 +202,10 @@ function extractQualityGateDetail(data: JsonRecord): QualityGateDetail | null {
     cwd: cwd ?? null,
     exitCode: exitCode ?? null,
     signal: signal ?? null,
+    gateNodeVersion: gateNodeVersion ?? null,
+    gateNpmVersion: gateNpmVersion ?? null,
+    gateDependencyStrategy: gateDependencyStrategy ?? null,
+    gateHermeticNodeModules: gateHermeticNodeModules ?? null,
   });
 }
 
@@ -852,7 +870,7 @@ function buildAttemptItem(
   const reviewModel =
     attemptEvents.find((event) => event.phase === "review" && event.model)?.model ?? null;
 
-  let finalOutcome = terminalEvent?.outcome ?? sessionDerived?.finalOutcome ?? "running";
+  const finalOutcome = terminalEvent?.outcome ?? sessionDerived?.finalOutcome ?? "running";
   const noTerminalFallback =
     finalOutcome === "running"
       ? `Attempt ${attempt} is in progress`

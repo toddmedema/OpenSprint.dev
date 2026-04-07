@@ -146,6 +146,10 @@ export interface MergeQualityGateFailure {
   classificationReason?: string;
   gitStatusPorcelainSnippet?: string;
   gitNameStatusSnippet?: string;
+  gateNodeVersion?: string;
+  gateNpmVersion?: string;
+  gateDependencyStrategy?: string;
+  gateHermeticNodeModules?: boolean;
 }
 
 export interface MergeSlot {
@@ -1397,6 +1401,10 @@ export class MergeCoordinatorService {
       signal: failure.signal ?? null,
       classificationConfidence: failure.classificationConfidence ?? null,
       classificationReason: failure.classificationReason ?? null,
+      gateNodeVersion: failure.gateNodeVersion ?? null,
+      gateNpmVersion: failure.gateNpmVersion ?? null,
+      gateDependencyStrategy: failure.gateDependencyStrategy ?? null,
+      gateHermeticNodeModules: failure.gateHermeticNodeModules ?? null,
     };
     const attempt = Math.max(1, this.host.taskStore.getCumulativeAttemptsFromIssue(task) + 1) || 1;
     const {

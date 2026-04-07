@@ -95,6 +95,8 @@ The policy is enforced in:
 
 **Local verification:** From the repository root, `npm run verify:merge-gates` runs those three commands in sequence so human checks match what the orchestrator expects on `main`.
 
+**Open Sprint repo dogfooding:** Optional [`.opensprint/merge-toolchain.json`](.opensprint/merge-toolchain.json) is merged into loaded project settings (see [`packages/backend/src/services/project/repo-toolchain-override.ts`](packages/backend/src/services/project/repo-toolchain-override.ts)). This repo sets `mergeQualityGateCommands` to `npm run verify:merge-gates`. The orchestrator expands that single command to `build`, `lint`, and `test` when running the deterministic gate profile so merge-gate test mode (`OPENSPRINT_MERGE_GATE_TEST_MODE` / Vitest env) applies only to the test step (see [`packages/backend/src/services/merge-quality-gates.ts`](packages/backend/src/services/merge-quality-gates.ts)).
+
 **Flaky HTTP route tests:** [`packages/backend/src/__tests__/env-route.test.ts`](packages/backend/src/__tests__/env-route.test.ts) runs in an isolated Vitest project ([`packages/backend/vitest.env-route.config.ts`](packages/backend/vitest.env-route.config.ts)) because of `vi.mock` ordering. `GET /env/global-status` uses a shared helper with request timeout and a single retry on supertest `socket hang up` so merge-gate test runs do not fail intermittently. If you add new supertest coverage that mutates `process.env` and hits the same Express app, reuse that pattern instead of raw `authedSupertest(app).get(...)` for `/global-status`.
 
 Other tests that assign `process.env` are mostly unit-level (no in-process HTTP listener); they are lower risk for the same failure mode.

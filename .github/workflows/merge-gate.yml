@@ -15,6 +15,41 @@ permissions:
   actions: read
 
 jobs:
+  # Parity with orchestrator default gates: single script matches `npm run verify:merge-gates` (build && lint && test).
+  verify-merge-gates:
+    name: verify-merge-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: opensprint
+          POSTGRES_PASSWORD: opensprint
+          POSTGRES_DB: opensprint
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "sh -c \"PGPASSWORD=$POSTGRES_PASSWORD psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'SELECT 1' || exit 1\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Wait for Postgres TCP
+        run: node scripts/ci/wait-for-tcp.mjs 127.0.0.1 5432 60
+      - name: Run verify:merge-gates (orchestrator parity)
+        env:
+          DATABASE_URL: postgres://opensprint:opensprint@localhost:5432/opensprint
+          NODE_ENV: test
+        run: npm run verify:merge-gates
+
   quality-gates:
     name: "${{ matrix.gate }}"
     runs-on: ubuntu-latest

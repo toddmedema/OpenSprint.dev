@@ -38,6 +38,10 @@ export interface RetryQualityGateDetail {
   classificationReason?: string | null;
   gitStatusPorcelainSnippet?: string | null;
   gitNameStatusSnippet?: string | null;
+  gateNodeVersion?: string | null;
+  gateNpmVersion?: string | null;
+  gateDependencyStrategy?: string | null;
+  gateHermeticNodeModules?: boolean | null;
 }
 
 /** Condensed prior failure for multi-attempt prompts (avoids ping-pong regressions). */

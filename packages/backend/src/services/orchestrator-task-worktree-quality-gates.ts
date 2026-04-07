@@ -110,6 +110,10 @@ export function toRetryQualityGateDetail(
     gitNameStatusSnippet: failure.gitNameStatusSnippet
       ? compactExecutionText(failure.gitNameStatusSnippet.trim(), 2000)
       : null,
+    gateNodeVersion: failure.gateNodeVersion ?? null,
+    gateNpmVersion: failure.gateNpmVersion ?? null,
+    gateDependencyStrategy: failure.gateDependencyStrategy ?? null,
+    gateHermeticNodeModules: failure.gateHermeticNodeModules ?? null,
   };
 }
 

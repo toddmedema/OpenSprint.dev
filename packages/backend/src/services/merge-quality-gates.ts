@@ -8,6 +8,20 @@ export interface MergeQualityGateExecutionPlanEntry {
   env?: NodeJS.ProcessEnv;
 }
 
+/**
+ * Matches root `package.json` script `verify:merge-gates` (build && lint && test).
+ * Expanded in the deterministic execution plan so `OPENSPRINT_MERGE_GATE_TEST_MODE` applies only to `npm run test`.
+ */
+export const VERIFY_MERGE_GATES_NPM_COMMAND = "npm run verify:merge-gates";
+
+function expandVerifyMergeGateCommands(commands: string[]): string[] {
+  const trimmed = commands.map((c) => c.trim()).filter((c) => c.length > 0);
+  if (trimmed.length === 1 && trimmed[0] === VERIFY_MERGE_GATES_NPM_COMMAND) {
+    return ["npm run build", "npm run lint", "npm run test"];
+  }
+  return commands;
+}
+
 export function getMergeQualityGateCommands(toolchainProfile?: ToolchainProfile | null): string[] {
   return resolveToolchainProfile(toolchainProfile).mergeQualityGateCommands;
 }
@@ -19,7 +33,7 @@ export function getMergeQualityGateExecutionPlan(options?: {
   toolchainProfile?: ToolchainProfile | null;
 }): MergeQualityGateExecutionPlanEntry[] {
   const resolved = resolveToolchainProfile(options?.toolchainProfile);
-  const commands = resolved.mergeQualityGateCommands;
+  const commands = expandVerifyMergeGateCommands(resolved.mergeQualityGateCommands);
   if ((options?.profile ?? "default") !== "deterministic") {
     return commands.map((command) => ({ command }));
   }

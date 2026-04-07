@@ -24,6 +24,7 @@ import {
   VALIDATION_TIMEOUT_MULTIPLIER,
 } from "./project-settings-helpers.js";
 import { projectSettingsFromRaw } from "./project-settings-from-raw.js";
+import { mergeRepoToolchainProfileOverride } from "./repo-toolchain-override.js";
 
 export async function loadProjectSettingsFromStore(
   projectId: string,
@@ -43,10 +44,12 @@ export async function loadProjectSettingsFromStore(
     canonicalDefaults.testCommand =
       detected?.testCommand ?? (getTestCommandForFramework(null) || null);
     await setSettingsInStore(projectId, canonicalDefaults as unknown as ProjectSettings);
-    return projectSettingsFromRaw(canonicalDefaults, gs);
+    const initial = projectSettingsFromRaw(canonicalDefaults, gs);
+    return mergeRepoToolchainProfileOverride(repoPath, initial);
   }
   const raw = await getRawSettingsRecord(projectId);
-  return projectSettingsFromRaw(raw, gs);
+  const loaded = projectSettingsFromRaw(raw, gs);
+  return mergeRepoToolchainProfileOverride(repoPath, loaded);
 }
 
 export async function recordValidationDurationInStore(
