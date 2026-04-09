@@ -4,8 +4,8 @@ import { formatSectionKey, formatTimestamp } from "../../lib/formatting";
 import { getPrdSourceColor, PRD_SOURCE_LABELS } from "../../lib/constants";
 import { api, isApiError } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
-import { ServerDiffView } from "./ServerDiffView";
-import type { ServerDiffResult } from "./ServerDiffView";
+import { DiffView } from "../diff/DiffView";
+import type { DiffResult } from "../diff/DiffView";
 import { useModalA11y } from "../../hooks/useModalA11y";
 
 export interface PrdHistoryEntry {
@@ -69,9 +69,11 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
     : null;
 
   const diffResult = useMemo((): {
-    diff: ServerDiffResult;
+    diff: DiffResult;
     fromVersion: string;
     toVersion: string;
+    fromContent?: string;
+    toContent?: string;
   } | null => {
     if (!versionDiffPages?.pages.length) return null;
     const lines = versionDiffPages.pages.flatMap((p) => p.diff.lines);
@@ -81,6 +83,8 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
       diff: { lines, summary },
       fromVersion: first.fromVersion,
       toVersion: first.toVersion,
+      fromContent: first.fromContent,
+      toContent: first.toContent,
     };
   }, [versionDiffPages]);
 
@@ -130,9 +134,9 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                         setDiffModalFromVersion(entry.documentVersion!);
                       }}
                       className="text-theme-accent hover:underline shrink-0"
-                      data-testid="compare-to-current"
+                      data-testid="prd-version-view-diff"
                     >
-                      Compare to current
+                      View Diff
                     </button>
                   )}
                 </div>
@@ -174,7 +178,7 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                 Close
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-auto p-4">
+            <div className="flex-1 min-h-0 overflow-hidden p-4 flex flex-col gap-2">
               {diffLoading && (
                 <p className="text-sm text-theme-muted" data-testid="version-diff-loading">
                   Loading diff…
@@ -199,14 +203,30 @@ export function PrdChangeLog({ projectId, entries, expanded, onToggle }: PrdChan
                 </div>
               )}
               {!diffLoading && !diffError && diffResult && (
-                <ServerDiffView
-                  diff={diffResult.diff}
-                  fromVersion={diffResult.fromVersion}
-                  toVersion={diffResult.toVersion}
-                  fetchMoreAvailable={hasNextPage}
-                  onFetchMoreDiff={hasNextPage ? () => fetchNextPage() : undefined}
-                  isFetchingMoreDiff={isFetchingNextPage}
-                />
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <DiffView
+                      embedFullHeight
+                      diff={diffResult.diff}
+                      fromContent={diffResult.fromContent}
+                      toContent={diffResult.toContent}
+                      defaultMode="rendered"
+                    />
+                  </div>
+                  {hasNextPage ? (
+                    <div className="shrink-0 pt-2 border-t border-theme-border">
+                      <button
+                        type="button"
+                        onClick={() => fetchNextPage()}
+                        disabled={isFetchingNextPage}
+                        className="text-sm text-accent-primary hover:underline disabled:opacity-50"
+                        data-testid="prd-version-diff-load-more"
+                      >
+                        {isFetchingNextPage ? "Loading…" : "Load more diff"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               )}
             </div>
           </div>

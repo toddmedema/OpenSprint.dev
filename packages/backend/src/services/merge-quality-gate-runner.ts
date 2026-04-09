@@ -165,7 +165,6 @@ function isToolishOrDependencyPath(normalizedPosix: string): boolean {
     n.includes("/coverage/") ||
     n.includes("/build/") ||
     n.includes("/.vite/") ||
-    n.includes("/tmp/") ||
     n.endsWith("/package-lock.json") ||
     n.endsWith("/pnpm-lock.yaml") ||
     n.endsWith("/yarn.lock")

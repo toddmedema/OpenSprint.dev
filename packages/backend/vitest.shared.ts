@@ -96,7 +96,9 @@ export function createDrizzleSchemaPgResolvePlugin(): Plugin {
         normalized === "/src/db/drizzle-schema-pg.ts" ||
         normalized === "/src/db/drizzle-schema-pg.js" ||
         normalized.endsWith("/src/db/drizzle-schema-pg.ts") ||
-        normalized.endsWith("/src/db/drizzle-schema-pg.js")
+        normalized.endsWith("/src/db/drizzle-schema-pg.js") ||
+        // Coverage / tinypool sometimes emit ids without a leading slash or with repo-relative roots.
+        (normalized.includes("/db/drizzle-schema-pg.") && !normalized.includes("node_modules"))
       ) {
         return drizzleSchemaPgSource;
       }

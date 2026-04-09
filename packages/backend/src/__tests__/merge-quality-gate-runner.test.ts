@@ -27,6 +27,12 @@ describe("looksLikeEnoentOpeningMissingWorktreeSource", () => {
     expect(looksLikeEnoentOpeningMissingWorktreeSource(msg, wt)).toBe(true);
   });
 
+  it("returns true for worktrees rooted under /tmp", () => {
+    const tmpWorktree = "/tmp/opensprint-worktrees/os-abc";
+    const msg = `Error: ENOENT: no such file or directory, open '${tmpWorktree}/packages/backend/src/app.ts'`;
+    expect(looksLikeEnoentOpeningMissingWorktreeSource(msg, tmpWorktree)).toBe(true);
+  });
+
   it("returns false for node_modules paths", () => {
     const msg = `ENOENT: no such file or directory, open '${wt}/node_modules/foo/bar.ts'`;
     expect(looksLikeEnoentOpeningMissingWorktreeSource(msg, wt)).toBe(false);

@@ -62,7 +62,7 @@ describe("PrdChangeLog", () => {
     expect(screen.getByText("Updated section")).toBeInTheDocument();
   });
 
-  it("shows Compare to current only for entries with documentVersion", () => {
+  it("shows View Diff only for entries with documentVersion", () => {
     renderWithQueryClient(
       <PrdChangeLog
         projectId="proj-1"
@@ -71,11 +71,11 @@ describe("PrdChangeLog", () => {
         onToggle={() => {}}
       />
     );
-    const compareButtons = screen.getAllByTestId("compare-to-current");
-    expect(compareButtons).toHaveLength(1);
+    const viewDiffButtons = screen.getAllByTestId("prd-version-view-diff");
+    expect(viewDiffButtons).toHaveLength(1);
   });
 
-  it("opens diff modal and fetches version diff when Compare to current is clicked", async () => {
+  it("opens diff modal and fetches version diff when View Diff is clicked", async () => {
     const user = userEvent.setup();
     mockGetVersionDiff.mockResolvedValue({
       fromVersion: "3",
@@ -96,7 +96,7 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
 
     expect(mockGetVersionDiff).toHaveBeenCalledWith("proj-1", "3", undefined, { lineOffset: 0 });
     expect(screen.getByTestId("version-diff-modal-content")).toBeInTheDocument();
@@ -123,12 +123,14 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
     expect(await screen.findByTestId("version-diff-loading")).toBeInTheDocument();
 
     resolveDiff?.({
       fromVersion: "3",
       toVersion: "current",
+      fromContent: "",
+      toContent: "New line",
       diff: {
         lines: [
           {
@@ -142,9 +144,9 @@ describe("PrdChangeLog", () => {
       },
     });
 
-    await screen.findByTestId("server-diff-view");
+    await screen.findByTestId("diff-view");
     expect(screen.queryByTestId("version-diff-loading")).not.toBeInTheDocument();
-    expect(screen.getByText(/New line/)).toBeInTheDocument();
+    expect(screen.getByTestId("diff-view")).toBeInTheDocument();
   });
 
   it("closes modal when Close is clicked", async () => {
@@ -168,7 +170,7 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
     expect(screen.getByTestId("version-diff-modal-content")).toBeInTheDocument();
 
     await user.click(screen.getByTestId("version-diff-modal-close"));
@@ -195,7 +197,7 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
     await user.click(screen.getByTestId("version-diff-modal-backdrop"));
     expect(screen.queryByTestId("version-diff-modal-content")).not.toBeInTheDocument();
   });
@@ -220,7 +222,7 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
     expect(screen.getByTestId("version-diff-modal-content")).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "Escape" });
@@ -240,7 +242,7 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
     expect(await screen.findByTestId("version-diff-error")).toHaveTextContent("Network error");
   });
 
@@ -260,7 +262,7 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
+    await user.click(screen.getByTestId("prd-version-view-diff"));
     expect(await screen.findByTestId("version-diff-error-block")).toBeInTheDocument();
     expect(screen.getByTestId("version-diff-error")).toHaveTextContent("Version not found.");
     expect(screen.getByTestId("version-diff-error-close")).toBeInTheDocument();
@@ -274,6 +276,8 @@ describe("PrdChangeLog", () => {
     mockGetVersionDiff.mockResolvedValue({
       fromVersion: "3",
       toVersion: "current",
+      fromContent: "# Same",
+      toContent: "# Same",
       diff: {
         lines: [],
         summary: { additions: 0, deletions: 0 },
@@ -290,8 +294,9 @@ describe("PrdChangeLog", () => {
       />
     );
 
-    await user.click(screen.getByTestId("compare-to-current"));
-    expect(await screen.findByTestId("server-diff-view")).toBeInTheDocument();
-    expect(screen.getByTestId("server-diff-no-changes")).toHaveTextContent("No changes");
+    await user.click(screen.getByTestId("prd-version-view-diff"));
+    expect(await screen.findByTestId("diff-view")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Raw/i }));
+    expect(await screen.findByTestId("diff-view-no-changes")).toHaveTextContent("No changes");
   });
 });
