@@ -139,6 +139,27 @@ async function postEnvKeys(app: EnvMinimalApp, body: object) {
   throw lastErr;
 }
 
+/**
+ * POST `/env/keys/validate` with timeout and limited retries on transient supertest transport errors.
+ * Same flake class as `getGlobalStatus` / `postEnvKeys` when this suite runs in the full test graph.
+ */
+async function postEnvKeysValidate(app: EnvMinimalApp, body: object) {
+  const url = `${API_PREFIX}/env/keys/validate`;
+  const maxAttempts = 3;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await authedSupertest(app).post(url).send(body).timeout(10_000);
+    } catch (err: unknown) {
+      lastErr = err;
+      if (!isTransientSupertestTransportError(err) || attempt === maxAttempts - 1) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
+}
+
 describe("Env API", () => {
   let app: ReturnType<typeof createMinimalEnvApp>;
   let tmpDir: string;
@@ -201,7 +222,7 @@ describe("Env API", () => {
     });
 
     it("returns 400 when provider and value are missing", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({});
+      const res = await postEnvKeysValidate(app, {});
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
       expect(res.body.error?.message).toMatch(/provider|value|required|option|invalid/i);
@@ -209,7 +230,7 @@ describe("Env API", () => {
     });
 
     it("returns 400 when provider is not claude, cursor, openai, or google", async () => {
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({ provider: "unknown", value: "sk-test" });
+      const res = await postEnvKeysValidate(app, { provider: "unknown", value: "sk-test" });
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
       expect(res.body.error?.message).toMatch(
@@ -221,7 +242,7 @@ describe("Env API", () => {
     it("returns valid: true when validation succeeds for Google", async () => {
       mockValidateApiKey.mockResolvedValue({ valid: true });
 
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({ provider: "google", value: "AIza-test" });
+      const res = await postEnvKeysValidate(app, { provider: "google", value: "AIza-test" });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ valid: true });
@@ -231,7 +252,7 @@ describe("Env API", () => {
     it("returns valid: true when validation succeeds for OpenAI", async () => {
       mockValidateApiKey.mockResolvedValue({ valid: true });
 
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({ provider: "openai", value: "sk-openai-test" });
+      const res = await postEnvKeysValidate(app, { provider: "openai", value: "sk-openai-test" });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ valid: true });
@@ -241,7 +262,7 @@ describe("Env API", () => {
     it("returns valid: true when validation succeeds for Claude", async () => {
       mockValidateApiKey.mockResolvedValue({ valid: true });
 
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({ provider: "claude", value: "sk-ant-test" });
+      const res = await postEnvKeysValidate(app, { provider: "claude", value: "sk-ant-test" });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ valid: true });
@@ -251,7 +272,7 @@ describe("Env API", () => {
     it("returns valid: true when validation succeeds for Cursor", async () => {
       mockValidateApiKey.mockResolvedValue({ valid: true });
 
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({ provider: "cursor", value: "cursor-key-123" });
+      const res = await postEnvKeysValidate(app, { provider: "cursor", value: "cursor-key-123" });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ valid: true });
@@ -264,7 +285,7 @@ describe("Env API", () => {
         error: "Invalid API key",
       });
 
-      const res = await authedSupertest(app).post(`${API_PREFIX}/env/keys/validate`).send({ provider: "claude", value: "bad-key" });
+      const res = await postEnvKeysValidate(app, { provider: "claude", value: "bad-key" });
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({ valid: false, error: "Invalid API key" });
